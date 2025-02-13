@@ -1,35 +1,39 @@
-import { defineRouter } from '#q-app/wrappers';
-import {
-  createMemoryHistory,
-  createRouter,
-  createWebHashHistory,
-  createWebHistory,
-} from 'vue-router';
-import routes from './routes';
+import { createRouter, createWebHistory } from '@ionic/vue-router';
+import { RouteRecordRaw } from 'vue-router';
+import TabsPage from '../views/TabsPage.vue'
 
-/*
- * If not building with SSR mode, you can
- * directly export the Router instantiation;
- *
- * The function below can be async too; either use
- * async/await or return a Promise which resolves
- * with the Router instance.
- */
+const routes: Array<RouteRecordRaw> = [
+  {
+    path: '/',
+    redirect: '/tabs/tab1'
+  },
+  {
+    path: '/tabs/',
+    component: TabsPage,
+    children: [
+      {
+        path: '',
+        redirect: '/tabs/tab1'
+      },
+      {
+        path: 'tab1',
+        component: () => import('@/views/Tab1Page.vue')
+      },
+      {
+        path: 'tab2',
+        component: () => import('@/views/Tab2Page.vue')
+      },
+      {
+        path: 'tab3',
+        component: () => import('@/views/Tab3Page.vue')
+      }
+    ]
+  }
+]
 
-export default defineRouter(function (/* { store, ssrContext } */) {
-  const createHistory = process.env.SERVER
-    ? createMemoryHistory
-    : (process.env.VUE_ROUTER_MODE === 'history' ? createWebHistory : createWebHashHistory);
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes
+})
 
-  const Router = createRouter({
-    scrollBehavior: () => ({ left: 0, top: 0 }),
-    routes,
-
-    // Leave this as is and make changes in quasar.conf.js instead!
-    // quasar.conf.js -> build -> vueRouterMode
-    // quasar.conf.js -> build -> publicPath
-    history: createHistory(process.env.VUE_ROUTER_BASE),
-  });
-
-  return Router;
-});
+export default router

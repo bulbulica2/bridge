@@ -1,21 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <title><%= productName %></title>
+    <meta charset="utf-8" />
+    <title>Ionic App</title>
 
-    <meta charset="utf-8">
-    <meta name="description" content="<%= productDescription %>">
-    <meta name="format-detection" content="telephone=no">
-    <meta name="msapplication-tap-highlight" content="no">
-    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width<% if (ctx.mode.cordova || ctx.mode.capacitor) { %>, viewport-fit=cover<% } %>">
+    <base href="/" />
 
-    <link rel="icon" type="image/png" sizes="128x128" href="icons/favicon-128x128.png">
-    <link rel="icon" type="image/png" sizes="96x96" href="icons/favicon-96x96.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
-    <link rel="icon" type="image/ico" href="favicon.ico">
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="viewport"
+      content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
+
+    <link rel="shortcut icon" type="image/png" href="/favicon.png" />
+
+    <!-- add to homescreen for ios -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Ionic App" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   </head>
+
   <body>
-    <!-- quasar:entry-point -->
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
   </body>
+
 </html>
+
