@@ -1,8 +1,14 @@
+<!--
+  Form page template: the Login page pattern (src/views/LoginPage.vue).
+  Replace every __PLACEHOLDER__, add/remove fields, point submit() at the right
+  store action and adjust the secondary links (delete that block if none).
+  Content is centered horizontally and vertically on purpose; the user asked for it.
+-->
 <template>
   <ion-page>
-    <AppHeader title="Login" />
+    <AppHeader title="__TITLE__" />
     <ion-content :fullscreen="true" class="ion-padding">
-      <div class="login">
+      <div class="form-page">
         <form @submit.prevent="submit">
           <ion-list>
             <ion-item>
@@ -15,16 +21,7 @@
                 required
               />
             </ion-item>
-            <ion-item>
-              <ion-input
-                v-model="password"
-                type="password"
-                label="Password"
-                label-placement="stacked"
-                autocomplete="current-password"
-                required
-              />
-            </ion-item>
+            <!-- more <ion-item><ion-input .../></ion-item> fields -->
           </ion-list>
 
           <ion-text v-if="error" color="danger">
@@ -33,13 +30,12 @@
 
           <ion-button type="submit" expand="block" :disabled="submitting">
             <ion-spinner v-if="submitting" name="crescent" />
-            <span v-else>Log in</span>
+            <span v-else>__SUBMIT_LABEL__</span>
           </ion-button>
         </form>
 
         <div class="secondary">
-          <ion-button fill="clear" router-link="/create-account">Create account</ion-button>
-          <ion-button fill="clear" router-link="/reset-password">Reset password</ion-button>
+          <ion-button fill="clear" router-link="__LINK_PATH__">__LINK_LABEL__</ion-button>
         </div>
       </div>
     </ion-content>
@@ -61,13 +57,12 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
-import { useAuthStore } from '@/stores/auth';
+import { use__Domain__Store } from '@/stores/__domain__';
 
-const auth = useAuthStore();
+const store = use__Domain__Store();
 const ionRouter = useIonRouter();
 
 const email = ref('');
-const password = ref('');
 const error = ref('');
 const submitting = ref(false);
 
@@ -75,17 +70,17 @@ async function submit() {
   error.value = '';
   submitting.value = true;
   try {
-    await auth.login({ email: email.value, password: password.value });
-    password.value = '';
-    ionRouter.navigate('/home', 'root', 'replace');
+    await store.__action__({ email: email.value });
+    ionRouter.navigate('__SUCCESS_PATH__', 'root', 'replace');
   } catch (e) {
-    error.value = loginErrorMessage(e);
+    error.value = errorMessage(e);
   } finally {
     submitting.value = false;
   }
 }
 
-function loginErrorMessage(e: unknown): string {
+// Laravel validation errors come back as 422 {message, errors: {field: [msg]}}.
+function errorMessage(e: unknown): string {
   if (isAxiosError(e)) {
     if (!e.response) {
       return 'Cannot reach the server. Please try again later.';
@@ -96,12 +91,12 @@ function loginErrorMessage(e: unknown): string {
       return firstError || data.message!;
     }
   }
-  return 'Login failed. Please try again.';
+  return 'Something went wrong. Please try again.';
 }
 </script>
 
 <style scoped>
-.login {
+.form-page {
   display: flex;
   flex-direction: column;
   justify-content: center;
