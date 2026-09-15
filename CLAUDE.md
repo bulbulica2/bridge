@@ -29,12 +29,16 @@ Cypress e2e specs hit `baseUrl: http://localhost:5173` (see `cypress.config.ts`)
 
 ## Architecture
 
-- **Routing is tabs-based**: `src/router/index.ts` defines `/` → redirect to
-  `/tabs/tab1`, with `/tabs/` as a parent route wrapping `TabsPage.vue` and
-  three lazy-loaded child routes (`tab1`/`tab2`/`tab3`). Adding a new
-  top-level section means adding both a view and a route entry here, plus a
-  tab button in `TabsPage.vue` if it belongs in the tab bar.
-- **App shell**: `App.vue` is just `<ion-app><ion-router-outlet /></ion-app>` — all real layout lives in routed views, not the root component.
+- **Routing is flat, driven by a side menu**: `src/router/index.ts` defines
+  `/` → redirect to `/home`, plus lazy-loaded `/home` (`HomePage.vue`) and
+  `/login` (`LoginPage.vue`) routes. Adding a new top-level section means
+  adding both a view and a route entry here, plus an `ion-item` in
+  `src/components/AppMenu.vue` if it belongs in the menu.
+- **App shell**: `App.vue` renders `<AppMenu />` (the left `ion-menu`) next to
+  `<ion-router-outlet id="main-content" />`; the menu's `content-id` must match
+  that outlet id. Every page wraps its content in `<ion-page>` and uses
+  `src/components/AppHeader.vue` (menu button + `title` prop, with an `end`
+  slot reserved for header actions such as a future Account button).
 - **Bootstrap**: `src/main.ts` installs `IonicVue` and the router on the Vue
   app, and imports Ionic's core/theme CSS module-by-module (core, normalize,
   structure, typography, plus optional utility CSS). Dark mode is wired via
