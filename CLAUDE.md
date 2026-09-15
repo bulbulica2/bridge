@@ -10,7 +10,7 @@ wrapped with Capacitor for native (iOS/Android) builds.
 ## Commands
 
 ```bash
-npm run dev          # start Vite dev server at http://localhost:5173 (hot reload)
+npm run dev          # start Vite dev server at http://localhost:3000 (hot reload)
 npm run build         # type-check (vue-tsc) then production build to dist/
 npm run preview        # serve the production build locally
 npm run lint          # eslint .
@@ -25,7 +25,7 @@ npx vitest run -t "test name"          # by test name
 npx cypress open                  # interactive Cypress runner (pick one spec)
 npx cypress run --spec "tests/e2e/specs/test.cy.ts"  # single e2e spec headlessly
 ```
-Cypress e2e specs hit `baseUrl: http://localhost:5173` (see `cypress.config.ts`), so `npm run dev` must be running first.
+Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`), so `npm run dev` must be running first.
 
 ## Architecture
 
@@ -39,7 +39,17 @@ Cypress e2e specs hit `baseUrl: http://localhost:5173` (see `cypress.config.ts`)
   that outlet id. Every page wraps its content in `<ion-page>` and uses
   `src/components/AppHeader.vue` (menu button + `title` prop, with an `end`
   slot reserved for header actions such as a future Account button).
-- **Bootstrap**: `src/main.ts` installs `IonicVue` and the router on the Vue
+- **Auth / HTTP**: `src/services/http.ts` is the shared axios instance
+  (`baseURL` from `VITE_API_BASE_URL` in `.env`, `withCredentials` +
+  `withXSRFToken` for Sanctum's cookie flow). `src/services/auth.ts` wraps the
+  Sanctum SPA calls (`GET /sanctum/csrf-cookie` → `POST /login`, `GET /api/user`),
+  and the Pinia store `src/stores/auth.ts` holds the logged-in user. Views call
+  the store, not the services directly.
+- **Dev server port is 3000 on purpose** (`vite.config.ts`, `strictPort`): the
+  backend's CORS `allowed_origins` defaults to `http://localhost:3000` and that
+  host is a Sanctum stateful domain. Keep `VITE_API_BASE_URL` on `localhost`
+  (not `127.0.0.1`) so session/XSRF cookies are shared with the SPA.
+- **Bootstrap**: `src/main.ts` installs `IonicVue`, Pinia and the router on the Vue
   app, and imports Ionic's core/theme CSS module-by-module (core, normalize,
   structure, typography, plus optional utility CSS). Dark mode is wired via
   `@ionic/vue/css/palettes/dark.system.css` (follows OS setting) — swap this

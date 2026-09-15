@@ -19,7 +19,9 @@
     "@capacitor/status-bar": "7.0.0",
     "@ionic/vue": "8.4.3",
     "@ionic/vue-router": "8.4.3",
+    "axios": "^1.20.0",
     "ionicons": "7.4.0",
+    "pinia": "^4.0.3",
     "vue": "3.5.13",
     "vue-router": "4.5.0"
   },
