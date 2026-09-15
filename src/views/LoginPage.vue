@@ -102,7 +102,11 @@ function loginErrorMessage(e: unknown): string {
 
 <style scoped>
 .login {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   max-width: 420px;
+  min-height: 100%;
   margin: 0 auto;
 }
 
