@@ -30,25 +30,46 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
 ## Architecture
 
 - **Routing is flat, driven by a side menu**: `src/router/index.ts` defines
-  `/` → redirect to `/home`, plus lazy-loaded `/home` (`HomePage.vue`) and
-  `/login` (`LoginPage.vue`) routes, `/create-account`
-  (`CreateAccountPage.vue`, `meta.guestOnly`, linked only from the Login page)
-  and `/tables` (`TablesPage.vue`, `meta.requiresAuth`, listed in the menu only
-  while logged in). Adding a new top-level section means
-  adding both a view and a route entry here, plus an `ion-item` in
+  `/` → redirect to `/home`, plus lazy-loaded `/home` (`HomePage.vue`),
+  `/login` (`LoginPage.vue`, `meta.guestOnly`), `/create-account`
+  (`CreateAccountPage.vue`, `meta.guestOnly`, linked only from the Login page),
+  `/reset-password` and `/password-reset/:token` (both `ResetPasswordPage.vue`,
+  `meta.guestOnly`, reached from the Login page or the emailed link),
+  `/account` (`AccountPage.vue`, `meta.requiresAuth`) and `/tables`
+  (`TablesPage.vue`, `meta.requiresAuth`, the menu's logged-in entry). Adding a
+  new top-level section means adding both a view and a route entry here, plus an `ion-item` in
   `src/components/AppMenu.vue` if it belongs in the menu.
+- **Route guard**: a single `router.beforeEach` in `src/router/index.ts` enforces
+  the route meta declared in the same file (`RouteMeta` is augmented there):
+  `requiresAuth` sends guests to `/login`, `guestOnly` sends logged-in users to
+  `/account`. It awaits `authStore.loadSession()` first, which calls
+  `GET /api/user` once per page load so a reload on an auth-only page doesn't
+  bounce a user whose Sanctum session cookie is still valid.
 - **App shell**: `App.vue` renders `<AppMenu />` (the left `ion-menu`) next to
   `<ion-router-outlet id="main-content" />`; the menu's `content-id` must match
   that outlet id. Every page wraps its content in `<ion-page>` and uses
-  `src/components/AppHeader.vue` (menu button + `title` prop, with an `end`
-  slot reserved for header actions such as a future Account button).
+  `src/components/AppHeader.vue` (menu button + `title` prop, an `end` slot for
+  per-page header actions, and an "Account" button linking to `/account` that
+  the header itself renders whenever the auth store says somebody is logged in).
+  `AppMenu.vue` is auth-aware too: "Login" while logged out, "Tables" once
+  logged in. Because both read the auth store, mounting any page in a unit test
+  needs an active Pinia.
 - **Auth / HTTP**: `src/services/http.ts` is the shared axios instance
   (`baseURL` from `VITE_API_BASE_URL` in `.env`, `withCredentials` +
   `withXSRFToken` for Sanctum's cookie flow). `src/services/auth.ts` wraps the
-  Sanctum SPA calls (`GET /sanctum/csrf-cookie` → `POST /login` / `POST /register`,
-  `GET /api/user`),
-  and the Pinia store `src/stores/auth.ts` holds the logged-in user. Views call
+  Sanctum SPA calls (`GET /sanctum/csrf-cookie` → `POST /login` / `POST /register`
+  / `POST /logout` / `POST /forgot-password` / `POST /reset-password`,
+  `GET /api/user`), and the Pinia store `src/stores/auth.ts` holds the logged-in
+  user and exposes `login`, `register`, `logout`, `loadSession`,
+  `requestPasswordReset` and `resetPassword`. Views call
   the store, not the services directly.
+- **Password reset is a two-stage guest flow**: `/reset-password` posts the email
+  to `/forgot-password`; the backend emails a link to
+  `<FRONTEND_URL>/password-reset/<token>?email=<email>`
+  (`AppServiceProvider::boot` in bridge_backend), which the
+  `/password-reset/:token` route renders as the "choose a new password" stage.
+  Both endpoints answer `200 {"status": "<message>"}` and the reset does **not**
+  start a session, so the page redirects to `/login` afterwards.
 - **Game domain (tables)**: `src/services/tables.ts` wraps the session-authenticated
   table endpoints (`GET /tables`, `POST /tables`, `POST /tables/{id}/seats`) and
   `src/stores/tables.ts` keeps the list. These endpoints sit at the root (not

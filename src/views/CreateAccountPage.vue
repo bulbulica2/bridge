@@ -87,7 +87,6 @@ import {
   IonButton,
   IonText,
   IonSpinner,
-  onIonViewWillEnter,
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
@@ -103,13 +102,6 @@ const password = ref('');
 const passwordConfirmation = ref('');
 const error = ref('');
 const submitting = ref(false);
-
-// Guest-only page. The app-wide router guard comes with issue #7.
-onIonViewWillEnter(() => {
-  if (auth.isAuthenticated) {
-    ionRouter.navigate('/home', 'root', 'replace');
-  }
-});
 
 async function submit() {
   error.value = '';
@@ -128,7 +120,7 @@ async function submit() {
     });
     password.value = '';
     passwordConfirmation.value = '';
-    ionRouter.navigate('/home', 'root', 'replace');
+    ionRouter.navigate('/account', 'root', 'replace');
   } catch (e) {
     error.value = errorMessage(e);
   } finally {

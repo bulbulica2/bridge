@@ -11,6 +11,14 @@
   `/login` and `/register` return **204** with no body.
 - Validation failures: **422** `{"message": "...", "errors": {"field": ["..."]}}`.
   Unauthenticated: **401** `{"message": "Unauthenticated."}`.
+- The two password-reset routes answer **200** `{"status": "<human message>"}`
+  (not 204 like login/register), so the page can show the backend's own wording:
+  - `POST /forgot-password` `{email}` -> "We have emailed your password reset link."
+    Unknown address -> 422 `errors.email` "We can't find a user with that email address."
+  - `POST /reset-password` `{token, email, password, password_confirmation}` ->
+    "Your password has been reset." A spent or wrong token -> 422 `errors.email`
+    "This password reset token is invalid."; a bad confirmation -> 422
+    `errors.password`. The reset does **not** log the user in, so send them to `/login`.
 - CORS (`config/cors.php`): `allowed_origins = FRONTEND_URL` (`http://localhost:3000`),
   `supports_credentials = true`. That's why Vite runs on port 3000 with `strictPort`.
 - `.env` → `VITE_API_BASE_URL=http://localhost:8000`. Keep `localhost`, not
@@ -18,19 +26,33 @@
   `localhost:3000` can only read the XSRF cookie if the API is also `localhost`.
 - New env vars need a type in `src/env.d.ts`.
 - Seeded user: `email@email.com` / `pass` (`database/seeders/game/UserSeeder.php`)
-  — **but the dev DB is shared and gets rebuilt**, so that login can answer 422
-  "These credentials do not match our records." Check with
-  `timeout 20 /c/xampp/mysql/bin/mysql.exe -u root -e "SELECT id,username,email FROM bridge.users LIMIT 10;"`;
-  if the seed users are gone, `POST /register` a throwaway user
-  (`password123` / `password_confirmation`) and verify with that instead of
-  re-seeding, which would wipe other sessions' data.
+  — **but don't trust it**: the dev DB is shared with every other worktree and
+  parallel session, gets rebuilt, and can change **mid-run** (the issue #6 run
+  found `User::count()` 0; the issue #7 run found a single row another session
+  had created minutes earlier, with the seeded admin gone). A missing user makes
+  login/forgot-password answer 422 ("These credentials do not match our records."
+  / "we can't find a user"). Check with
+  `php artisan tinker --execute="echo App\Models\User::count();"` or
+  `timeout 20 /c/xampp/mysql/bin/mysql.exe -u root -e "SELECT id,username,email FROM bridge.users LIMIT 10;"`.
+  Don't re-run the seeder — migrations/seeders touch the shared XAMPP DB and
+  would wipe other sessions' data. Instead `POST /register` a throwaway user
+  (`password123` / `password_confirmation`), which is what the SPA does anyway,
+  and re-register if a login you made earlier in the same session starts 422ing.
+- **Password reset links go to the frontend, not the backend.**
+  `AppServiceProvider::boot` calls `ResetPassword::createUrlUsing` to build
+  `<FRONTEND_URL>/password-reset/<token>?email=<email>`, i.e.
+  `http://localhost:3000/password-reset/...`. Any page completing a reset must
+  own that route (token as a path param, email as a query param).
+- `MAIL_MAILER=log`, so no mail is sent: the rendered email, **including the
+  reset link and its token**, lands in `bridge_backend/storage/logs/laravel.log`.
+  Grab the newest link with
+  `grep -o '[^ "<]*password-reset[^ "<]*' storage/logs/laravel.log | tail -1`.
 
 ## Game endpoints (tables)
 
 - They live at the **root**, not under `/api`: `/tables`, `/tables/{id}/seats`.
   Only `/api/user` is under `/api`. They're `auth` (session) routes, so an
-  anonymous call gets `401 {"message": "Unauthenticated."}` — which is what an
-  auth-required page keys its redirect on.
+  anonymous call gets `401 {"message": "Unauthenticated."}`.
 - Every game response is an envelope: `{"status": 200, "message": "...", "data": ...}`.
   The service unwraps `data.data`; the frontend `Table` type is the inner object.
 - `GET /tables` is newest first, each table carrying `seats` (with `seats.user`)
@@ -69,12 +91,29 @@ curl -s -w ' HTTP %{http_code}\n' -c jar -b jar "${H[@]}" -H "X-XSRF-TOKEN: $X" 
 curl -s -w ' HTTP %{http_code}\n' -b jar "${H[@]}" $B/api/user
 ```
 
+For an auth-state change, verify the **whole session cycle** rather than one
+call, because that is what the router guard and `loadSession()` depend on
+(each state-changing call needs a fresh `X-XSRF-TOKEN`, so re-read the cookie
+between them):
+
+```bash
+# register → 204, /api/user → 200, logout → 204, /api/user → 401, login → 204, /api/user → 200
+curl -s -w ' HTTP %{http_code}
+' -c jar -b jar "${H[@]}" -H "X-XSRF-TOKEN: $X" -X POST $B/logout
+curl -s -w ' HTTP %{http_code}
+' -b jar "${H[@]}" $B/api/user   # {"message":"Unauthenticated."} HTTP 401
+```
+
 Check both the happy path and one failure (bad input → 422 with the message the
-page will display). For a flow that involves two people (one creates a table,
-another joins it), register two users and keep **one cookie jar per user**
-(`-c jarA -b jarA`), switching jars instead of logging in and out. Re-read the
-XSRF token from the jar before every state-changing call; a stale or missing
-`X-XSRF-TOKEN` is `419 "CSRF token mismatch."`, not a 401. Checking CORS alone:
+page will display). For a multi-step flow verify the *effect*, not just the
+final 200: the issue #6 run proved the reset by logging in afterwards with the
+new password (204) and with the old one (422, "These credentials do not match
+our records"), plus replaying the spent token (422). For a flow that involves
+two people (one creates a table, another joins it), register two users and keep
+**one cookie jar per user** (`-c jarA -b jarA`), switching jars instead of
+logging in and out. Re-read the XSRF token from the jar before every
+state-changing call; a stale or missing `X-XSRF-TOKEN` is
+`419 "CSRF token mismatch."`, not a 401. Checking CORS alone:
 `curl -si -H "Origin: http://localhost:3000" http://127.0.0.1:8000/sanctum/csrf-cookie`
 should show `Access-Control-Allow-Origin: http://localhost:3000` and
 `Access-Control-Allow-Credentials: true`.

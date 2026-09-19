@@ -81,8 +81,8 @@ onIonViewWillEnter(() => {
   load();
 });
 
-// Auth-required page: until issue #7's guard + session restore land, the
-// backend's 401 is what sends a logged-out visitor to the login page.
+// The router guard handles auth on the way in; a 401 here means the session
+// expired while the page was open.
 async function load() {
   loading.value = true;
   loadError.value = '';

@@ -11,11 +11,17 @@
           <ion-item button router-link="/home" router-direction="root">
             <ion-label>Home</ion-label>
           </ion-item>
-          <ion-item v-if="auth.isAuthenticated" button router-link="/tables" router-direction="root">
-            <ion-label>Tables</ion-label>
-          </ion-item>
-          <ion-item button router-link="/login" router-direction="root">
+          <!-- Login while logged out, Tables once logged in. -->
+          <ion-item
+            v-if="!auth.isAuthenticated"
+            button
+            router-link="/login"
+            router-direction="root"
+          >
             <ion-label>Login</ion-label>
+          </ion-item>
+          <ion-item v-else button router-link="/tables" router-direction="root">
+            <ion-label>Tables</ion-label>
           </ion-item>
         </ion-menu-toggle>
       </ion-list>
@@ -37,6 +43,5 @@ import {
 } from '@ionic/vue';
 import { useAuthStore } from '@/stores/auth';
 
-// Tables needs a session; issue #7 owns the rest of the logged-in menu/header state.
 const auth = useAuthStore();
 </script>

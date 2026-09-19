@@ -38,6 +38,12 @@ wondering what's happening.
   If a dependency is merged but this branch predates it, `git fetch origin` and
   `git merge --ff-only origin/main` (or a normal merge if it can't fast-forward).
   Branches are often cut before their dependencies land, which is why this matters.
+- **Fetch and merge `origin/main` again right before pushing.** Sibling branches
+  are often built in parallel sessions and can land mid-run: on the issue #7 run,
+  #6 merged while the page was being built and conflicted in `src/router/index.ts`,
+  `src/stores/auth.ts`, the auth store spec, `CLAUDE.md` and this skill. Resolve by
+  keeping **both** sides (both routes, both sets of store actions and tests), then
+  re-run build + lint + tests before the PR.
 - Don't use bare `git stash`; the stash is shared across worktrees.
 - If the issue leaves a real product decision open (e.g. where to redirect after
   success when no page exists yet), pick the least surprising option, follow
@@ -83,21 +89,45 @@ Read in parallel:
 
 ### Route: `src/router/index.ts`
 Add a lazy-loaded entry: `{ path: '/foo', component: () => import('@/views/FooPage.vue') }`.
-If the issue mentions guest-only / auth-required, add `meta: { guestOnly: true }`
-or `meta: { requiresAuth: true }`. Only add the `router.beforeEach` guard itself
-if the issue asks for it (issue #7 owns the guard).
-Until #7 lands, a guest-only page redirects itself with `onIonViewWillEnter`
-(see CreateAccountPage.vue). For an **auth-required** page, don't gate on
-`auth.isAuthenticated`: nothing restores the store from the session cookie yet
-(that's #7 too), so a reload would bounce a logged-in user out. Let the request
-run and redirect to `/login` only on a real `401` (see TablesPage.vue).
+If the page is guest-only / auth-required, add `meta: { guestOnly: true }` or
+`meta: { requiresAuth: true }` — nothing else. The app-wide `router.beforeEach`
+guard (added in issue #7) already enforces both: `requiresAuth` → `/login`,
+`guestOnly` → `/account`. Declare any new meta key in the `RouteMeta`
+augmentation at the top of the same file so `to.meta.x` stays typed.
+The guard awaits `authStore.loadSession()`, which calls `GET /api/user` once per
+page load, so a reload straight onto an auth-only page keeps a valid Sanctum
+session instead of bouncing to `/login`. Don't add per-page
+`onIonViewWillEnter` redirects for auth any more. A `401` coming back **while
+the page is open** is a different case — the session expired after the guard let
+the user in — and belongs where the request is made (`TablesPage.vue` redirects
+to `/login` there).
+**One page can own more than one route.** If the backend emails or links to a
+URL the issue didn't name, add that route too and point it at the same view,
+switching stages on a route param (ResetPasswordPage.vue serves both
+`/reset-password` and `/password-reset/:token`). Check for such URLs before
+designing the page — grep the backend for `createUrlUsing` / notification
+classes — otherwise the feature looks done but the emailed link 404s.
 
 ### Menu: `src/components/AppMenu.vue`
 Add an `ion-item` only if the page belongs in the side menu. Pages reached from
 another page's button (Create account, Reset password) are **not** menu items.
-A menu entry for an auth-required page gets `v-if="auth.isAuthenticated"`
-(`useAuthStore()` in the menu's `<script setup>`); #7 owns the rest of the
-logged-in menu/header state, so keep the change to that one item.
+The menu is auth-aware (Login while logged out, Tables once logged in), so put a
+new item in the branch it belongs to, guarded by `auth.isAuthenticated`.
+
+### Auth-aware shell
+`AppHeader.vue` and `AppMenu.vue` both call `useAuthStore()`, which means **any**
+unit test that mounts a page now needs `setActivePinia(createPinia())` in
+`beforeEach` — otherwise it fails with "getActivePinia() was called but there was
+no active Pinia" (this bit `tests/unit/example.spec.ts`). The header renders the
+"Account" button itself when logged in; the `end` slot stays free for per-page
+actions and is rendered before it.
+
+### Removing a stopgap the issue supersedes
+When the issue introduces the real mechanism, delete the placeholders earlier
+pages left behind, in the same PR: issue #7's router guard replaced the
+`onIonViewWillEnter` guest-only redirects in `CreateAccountPage.vue` and
+`ResetPasswordPage.vue`. Grep for the note the earlier page left
+(`grep -rn "issue #7" src/`) — each page's stopgap comment names its owner.
 
 ### Backend wiring (only if the page calls the API)
 - **Service** (`src/services/<domain>.ts`, see `assets/service-template.ts`): thin
@@ -112,6 +142,11 @@ logged-in menu/header state, so keep the change to that one item.
   unreachable.
 - **Unit test** (`tests/unit/<domain>Store.spec.ts`, see `assets/store.spec-template.ts`):
   mock the service with `vi.mock`, and cover success and failure.
+  `vi.clearAllMocks()` clears calls but **not** implementations, so a
+  `mockRejectedValue` set in one test still applies in the next one. Don't set a
+  test's fixture up by calling an action an earlier test made reject (e.g. reusing
+  `login()` to get a logged-in store); seed the state through the action you're
+  actually testing around, or re-mock explicitly.
 
 ### Links to pages that don't exist yet
 Link to the route the owning issue names (e.g. `/create-account`), but don't
@@ -129,9 +164,16 @@ Fix anything that fails before committing. Don't commit red.
 
 ## 5. Commit, push, PR
 
-- The user reviews the running page before anything leaves the machine: commit
-  locally, launch (step 6), and push + open the PR once they say "commit and
-  push". That command means: commit, push and create the PR in one go.
+- Default order: commit locally, launch (step 6), then push + PR. But on the last
+  two runs the user asked to go straight to the PR, so when they say "commit and
+  push", "do it now" or anything similar, do the whole flow — commit, push,
+  create the PR — and show them the running page afterwards. Only hold the commit
+  back if they ask to review first. Either way, ask before doing something that
+  affects another session (e.g. taking over port 3000).
+  **Exception — if they say up front to "go to the PR" / "take it all the way",
+  don't pause for review**: verify, commit, push and open the PR in one run, then
+  launch the app and report. Asking again after they've said that is the friction
+  they were removing.
 - Commit message style (the user's rule, also in CLAUDE.md "Git workflow"):
   first line is the branch name, a space, then a short summary, e.g.
   `5-create-account-page Add Create Account page`, then a bullet body,
@@ -159,8 +201,8 @@ Fix anything that fails before committing. Don't commit red.
   `Get-NetTCPConnection -State Listen -LocalPort 3000,8000` and
   `Get-CimInstance Win32_Process -Filter "ProcessId = <pid>" | Select CommandLine`
   — the command line says which worktree owns it. A backend already on 8000 is
-  fine to reuse; a Vite owned by **another** worktree is someone else's session,
-  so ask the user before stopping it instead of killing it.
+  fine to reuse; a Vite owned by **another** worktree is a parallel session's dev
+  server, so ask the user before stopping it instead of killing it.
 - Open the new page for them: `Start-Process http://localhost:3000/<route>`.
 - If the page hits the backend, prove the real flow works with sequential
   `curl` calls (details and a ready script in the reference file). Seeded login:
@@ -211,8 +253,22 @@ history below, and commit the skill changes on the page's branch (a separate
   store, page-level guest-only redirect, note on the local backend lagging origin/main,
   and the user reviews the page before push/PR.
   Commit messages now start with the full branch name (user's rule, 5-create-account-page).
-- Issue #8 (Tables page): first list page — `assets/ListPageTemplate.vue`, the game
-  endpoints' `{status, message, data}` envelope, auth-required pages redirecting on
-  401 rather than on store state, auth-gated menu item, modal/refresher/toast notes,
+- Issue #6 (Reset password): first page serving two routes (request stage +
+  emailed-token stage), driven by `useRoute()` params/query. Learned that the
+  backend's reset link targets the SPA, that `MAIL_MAILER=log` puts the token in
+  `laravel.log`, and that the local DB may hold zero users (register a throwaway
+  one via the API instead of seeding the shared DB). Verified a multi-step flow
+  by its effect (old password stops working). User asked to go straight to the PR.
+- Issue #7 (Account header, PR #13): `/account` page with logout, the app-wide
+  `requiresAuth`/`guestOnly` guard plus `loadSession()` session restore, auth-aware
+  header and menu. Learned: mounting any page in a test now needs an active Pinia,
+  `vi.clearAllMocks()` keeps mock implementations, and port 3000 can be held by
+  another worktree's dev server driven by a parallel session. Branches cut before
+  their siblings land: merge `origin/main` again right before pushing (#6 landed
+  mid-session and conflicted in the router, auth store, tests, CLAUDE.md and this
+  file). User again asked to go straight to the PR.
+- Issue #8 (Tables page, PR #14): first list page — `assets/ListPageTemplate.vue`, the game
+  endpoints' `{status, message, data}` envelope, a pre-guard 401 redirect (now
+  superseded by #7's `requiresAuth`), auth-gated menu item, modal/refresher/toast notes,
   and verifying against a dev DB whose seed users are gone (register a throwaway user
   and clean up after).

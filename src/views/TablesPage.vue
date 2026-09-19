@@ -126,9 +126,8 @@ const creating = ref(false);
 const createError = ref('');
 const name = ref('');
 
-// Auth-required page. The app-wide guard and the session restore that would
-// keep the store filled across a reload come with issue #7, so until then the
-// backend's 401 is what sends a logged-out visitor to the login page.
+// The router guard (meta.requiresAuth) already keeps guests out; this only
+// re-fetches the list every time the page is shown.
 onIonViewWillEnter(() => {
   load();
 });
@@ -139,6 +138,7 @@ async function load() {
   try {
     await tablesStore.load();
   } catch (e) {
+    // A 401 here means the session expired while the page was open.
     if (isAxiosError(e) && e.response?.status === 401) {
       ionRouter.navigate('/login', 'root', 'replace');
       return;
