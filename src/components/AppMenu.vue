@@ -11,8 +11,17 @@
           <ion-item button router-link="/home" router-direction="root">
             <ion-label>Home</ion-label>
           </ion-item>
-          <ion-item button router-link="/login" router-direction="root">
+          <!-- Login while logged out, Tables once logged in. -->
+          <ion-item
+            v-if="!auth.isAuthenticated"
+            button
+            router-link="/login"
+            router-direction="root"
+          >
             <ion-label>Login</ion-label>
+          </ion-item>
+          <ion-item v-else button router-link="/tables" router-direction="root">
+            <ion-label>Tables</ion-label>
           </ion-item>
         </ion-menu-toggle>
       </ion-list>
@@ -32,4 +41,7 @@ import {
   IonLabel,
   IonMenuToggle,
 } from '@ionic/vue';
+import { useAuthStore } from '@/stores/auth';
+
+const auth = useAuthStore();
 </script>
