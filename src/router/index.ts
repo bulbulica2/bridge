@@ -13,6 +13,11 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/login',
     component: () => import('@/views/LoginPage.vue')
+  },
+  {
+    path: '/create-account',
+    component: () => import('@/views/CreateAccountPage.vue'),
+    meta: { guestOnly: true }
   }
 ]
 

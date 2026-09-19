@@ -31,7 +31,8 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
 
 - **Routing is flat, driven by a side menu**: `src/router/index.ts` defines
   `/` → redirect to `/home`, plus lazy-loaded `/home` (`HomePage.vue`) and
-  `/login` (`LoginPage.vue`) routes. Adding a new top-level section means
+  `/login` (`LoginPage.vue`) routes, and `/create-account`
+  (`CreateAccountPage.vue`, `meta.guestOnly`, linked only from the Login page). Adding a new top-level section means
   adding both a view and a route entry here, plus an `ion-item` in
   `src/components/AppMenu.vue` if it belongs in the menu.
 - **App shell**: `App.vue` renders `<AppMenu />` (the left `ion-menu`) next to
@@ -42,7 +43,8 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
 - **Auth / HTTP**: `src/services/http.ts` is the shared axios instance
   (`baseURL` from `VITE_API_BASE_URL` in `.env`, `withCredentials` +
   `withXSRFToken` for Sanctum's cookie flow). `src/services/auth.ts` wraps the
-  Sanctum SPA calls (`GET /sanctum/csrf-cookie` → `POST /login`, `GET /api/user`),
+  Sanctum SPA calls (`GET /sanctum/csrf-cookie` → `POST /login` / `POST /register`,
+  `GET /api/user`),
   and the Pinia store `src/stores/auth.ts` holds the logged-in user. Views call
   the store, not the services directly.
 - **Dev server port is 3000 on purpose** (`vite.config.ts`, `strictPort`): the
@@ -61,6 +63,24 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
 - **Tests live under `tests/`, not colocated with source**: `tests/unit/`
   (Vitest) and `tests/e2e/` (Cypress specs/support/fixtures) — see
   `cypress.config.ts` for the exact path wiring.
+
+## Git workflow: "commit and push"
+
+When the user says to commit and push (in any wording), do the whole flow
+without asking again:
+
+1. Stage all changes and commit. The first line of every commit message is the
+   current branch name, a space, then a short summary, e.g.
+   `5-create-account-page Add Create Account page with registration flow`.
+   Add a bullet body when useful, `Closes #N` on the issue's main commit
+   (N = the branch's leading number), and the Co-Authored-By trailer.
+2. `git push -u origin <branch>`.
+3. If the branch has no open PR yet, create one against `main`: write the body
+   to a file and run `gh pr create --base main --head <branch> --title "<issue title>"
+   --body-file <file>` (a long inline `--body` breaks in Windows PowerShell 5.1).
+   Body: `Closes #N`, a summary per file, anything deferred to other issues,
+   and a test plan. If a PR is already open, the push updates it; don't create another.
+4. Reply with the PR link.
 
 ## Backend API
 

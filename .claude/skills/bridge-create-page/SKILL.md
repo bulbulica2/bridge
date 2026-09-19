@@ -55,6 +55,10 @@ Read in parallel:
   `FormRequest` rules). The docs are maintained separately and can lag, and the
   controller is the truth for field names, status codes (e.g. 204 No Content)
   and validation messages.
+  The local backend checkout can lag `origin/main` too: after `git fetch`,
+  compare with `git -C C:\xampp\htdocs\bridge_backend log -1 origin/main`. If docs and
+  local code disagree, origin/main decides. Build against it and tell the user the
+  local backend needs pulling. Don't pull it yourself, because migrations touch the shared DB.
 - Existing `src/services/*.ts` and `src/stores/*.ts`, so you extend them rather
   than duplicate them (e.g. registration belongs in `services/auth.ts` +
   `stores/auth.ts`, not a new auth module).
@@ -76,6 +80,8 @@ Add a lazy-loaded entry: `{ path: '/foo', component: () => import('@/views/FooPa
 If the issue mentions guest-only / auth-required, add `meta: { guestOnly: true }`
 or `meta: { requiresAuth: true }`. Only add the `router.beforeEach` guard itself
 if the issue asks for it (issue #7 owns the guard).
+Until #7 lands, a guest-only page redirects itself with `onIonViewWillEnter`
+(see CreateAccountPage.vue).
 
 ### Menu: `src/components/AppMenu.vue`
 Add an `ion-item` only if the page belongs in the side menu. Pages reached from
@@ -111,7 +117,12 @@ Fix anything that fails before committing. Don't commit red.
 
 ## 5. Commit, push, PR
 
-- Commit message style: `N-slug - short imperative summary`, then a bullet body,
+- The user reviews the running page before anything leaves the machine: commit
+  locally, launch (step 6), and push + open the PR once they say "commit and
+  push". That command means: commit, push and create the PR in one go.
+- Commit message style (the user's rule, also in CLAUDE.md "Git workflow"):
+  first line is the branch name, a space, then a short summary, e.g.
+  `5-create-account-page Add Create Account page`, then a bullet body,
   `Closes #N` if it's the issue's main commit, and the Co-Authored-By trailer
   from the session's attribution instructions.
 - `git push origin <branch>`.
@@ -177,3 +188,7 @@ history below, and commit the skill changes on the page's branch (a separate
 - Issue #4 (Login form, PR #10): initial version. Captured form page pattern,
   Sanctum auth service/store, port-3000 CORS fix, vertical centering preference,
   `--body-file` PR creation, MySQL-hang troubleshooting.
+- Issue #5 (Create account): register flow added to the existing auth service and
+  store, page-level guest-only redirect, note on the local backend lagging origin/main,
+  and the user reviews the page before push/PR.
+  Commit messages now start with the full branch name (user's rule, 5-create-account-page).
