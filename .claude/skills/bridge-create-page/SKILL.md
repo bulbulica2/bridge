@@ -38,6 +38,12 @@ wondering what's happening.
   If a dependency is merged but this branch predates it, `git fetch origin` and
   `git merge --ff-only origin/main` (or a normal merge if it can't fast-forward).
   Branches are often cut before their dependencies land, which is why this matters.
+- **Fetch and merge `origin/main` again right before pushing.** Sibling branches
+  are often built in parallel sessions and can land mid-run: on the issue #7 run,
+  #6 merged while the page was being built and conflicted in `src/router/index.ts`,
+  `src/stores/auth.ts`, the auth store spec, `CLAUDE.md` and this skill. Resolve by
+  keeping **both** sides (both routes, both sets of store actions and tests), then
+  re-run build + lint + tests before the PR.
 - Don't use bare `git stash`; the stash is shared across worktrees.
 - If the issue leaves a real product decision open (e.g. where to redirect after
   success when no page exists yet), pick the least surprising option, follow
@@ -107,6 +113,13 @@ no active Pinia" (this bit `tests/unit/example.spec.ts`). The header renders the
 "Account" button itself when logged in; the `end` slot stays free for per-page
 actions and is rendered before it.
 
+### Removing a stopgap the issue supersedes
+When the issue introduces the real mechanism, delete the placeholders earlier
+pages left behind, in the same PR: issue #7's router guard replaced the
+`onIonViewWillEnter` guest-only redirects in `CreateAccountPage.vue` and
+`ResetPasswordPage.vue`. Grep for the note the earlier page left
+(`grep -rn "issue #7" src/`) — each page's stopgap comment names its owner.
+
 ### Backend wiring (only if the page calls the API)
 - **Service** (`src/services/<domain>.ts`, see `assets/service-template.ts`): thin
   functions over the shared axios instance `@/services/http`. Never create another
@@ -142,9 +155,12 @@ Fix anything that fails before committing. Don't commit red.
 
 ## 5. Commit, push, PR
 
-- The user reviews the running page before anything leaves the machine: commit
-  locally, launch (step 6), and push + open the PR once they say "commit and
-  push". That command means: commit, push and create the PR in one go.
+- Default order: commit locally, launch (step 6), then push + PR. But on the last
+  two runs the user asked to go straight to the PR, so when they say "commit and
+  push", "do it now" or anything similar, do the whole flow — commit, push,
+  create the PR — and show them the running page afterwards. Only hold the commit
+  back if they ask to review first. Either way, ask before doing something that
+  affects another session (e.g. taking over port 3000).
   **Exception — if they say up front to "go to the PR" / "take it all the way",
   don't pause for review**: verify, commit, push and open the PR in one run, then
   launch the app and report. Asking again after they've said that is the friction

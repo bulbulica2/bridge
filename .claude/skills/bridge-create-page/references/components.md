@@ -41,6 +41,9 @@ and router outlet to work.
 - `AppHeader` (`src/components/AppHeader.vue`) = toolbar with the menu button,
   `title` prop, and an `end` slot for header actions:
   `<AppHeader title="X"><template #end><ion-button>…</ion-button></template></AppHeader>`.
+  The header also renders its own "Account" button (→ `/account`) whenever the
+  auth store says somebody is logged in, after the slot content. A shared action
+  that belongs on every page goes **in** the header behind `v-if`, not in each page.
 - **Centering content (user preference for form pages)**: inside `ion-content`,
   a wrapper with `display:flex; flex-direction:column; justify-content:center;
   min-height:100%; max-width:420px; margin:0 auto`. `min-height` (not `height`)
@@ -75,6 +78,19 @@ and router outlet to work.
 - Navigate on click without JS: `router-link="/create-account"`
   (optionally `router-direction="root"`).
 
+### `ion-icon`
+Icons come from the `ionicons` package as imported strings, not names:
+
+```vue
+<ion-icon :icon="personCircleOutline" slot="start" />
+```
+```ts
+import { IonIcon } from '@ionic/vue';
+import { personCircleOutline } from 'ionicons/icons';
+```
+- `slot="start"` / `slot="end"` places it inside an `ion-button` next to the label.
+- Size it with CSS `font-size` (e.g. `.avatar { font-size: 72px; }`), not width/height.
+
 ### `useIonRouter()`
 Programmatic navigation that keeps Ionic's page stack/animations in sync:
 ```ts
@@ -102,8 +118,28 @@ const hasToken = computed(() => token.value !== '');   // picks the stage to ren
 
 ### `onIonViewWillEnter`
 Ionic keeps visited pages alive in the stack, so `onMounted` runs only once.
-Use `onIonViewWillEnter` (from `@ionic/vue`) for checks that must run every time
-the page is shown, e.g. the guest-only redirect in `CreateAccountPage.vue`.
+Use `onIonViewWillEnter` (from `@ionic/vue`) for work that must run every time
+the page is shown, e.g. reading `route.query` in `ResetPasswordPage.vue`.
+Auth redirects are **not** such a case any more: the router guard owns them.
+
+### Read-only detail rows
+For showing values rather than editing them (the Account page), keep `ion-list` /
+`ion-item` but put a label/value pair in `ion-label` instead of an input:
+
+```vue
+<ion-list inset>
+  <ion-item>
+    <ion-label>
+      <p>Email</p>
+      <h2>{{ auth.user?.email }}</h2>
+    </ion-label>
+  </ion-item>
+</ion-list>
+```
+- `inset` gives the list rounded, inset cards — reads as a panel, not a form.
+- `ion-label` truncates by default; add `white-space: normal` on the value for
+  free text (a description) that must wrap.
+- Values from the store can be null for a tick, so use `?.` in the template.
 
 ## Feedback
 
@@ -131,4 +167,15 @@ the page is shown, e.g. the guest-only redirect in `CreateAccountPage.vue`.
 - Views call store actions; stores call `src/services/*`; services use the shared
   axios instance `src/services/http.ts`.
 - In unit tests: `setActivePinia(createPinia())` in `beforeEach` and
-  `vi.mock('@/services/…')`.
+  `vi.mock('@/services/…')`. Needed even for a plain page mount, because
+  `AppHeader`/`AppMenu` call `useAuthStore()`.
+- `vi.clearAllMocks()` clears calls but keeps implementations, so a
+  `mockRejectedValue` set in one test leaks into the next.
+
+### Auth state across a reload
+The store is memory-only while the Sanctum session is a cookie, so
+`useAuthStore().loadSession()` fetches `GET /api/user` once per page load and
+caches the in-flight promise; `router.beforeEach` awaits it before applying
+`requiresAuth`/`guestOnly`. Views never need to check auth themselves — read
+`auth.isAuthenticated` only to *show* or *hide* things. `logout()` clears the
+local user in a `finally`, so a failed request still leaves the SPA logged out.
