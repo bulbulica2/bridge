@@ -77,7 +77,7 @@ async function submit() {
   try {
     await auth.login({ email: email.value, password: password.value });
     password.value = '';
-    ionRouter.navigate('/home', 'root', 'replace');
+    ionRouter.navigate('/account', 'root', 'replace');
   } catch (e) {
     error.value = loginErrorMessage(e);
   } finally {

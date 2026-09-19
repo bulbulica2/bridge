@@ -33,6 +33,10 @@
   Don't run the seeder to fix it: migrations/seeders touch the shared XAMPP DB.
   Instead create a throwaway user through the API (`POST /register`), which is
   what the SPA does anyway and leaves the rest of the data alone.
+  The DB is shared with every other worktree and parallel session, so it can also
+  change **mid-run**: on the issue #7 run `users` held exactly one row created by
+  another session minutes earlier, and the seeded admin was gone. Don't trust a
+  user you verified earlier in the same session; re-register if a login 422s.
 - **Password reset links go to the frontend, not the backend.**
   `AppServiceProvider::boot` calls `ResetPassword::createUrlUsing` to build
   `<FRONTEND_URL>/password-reset/<token>?email=<email>`, i.e.
@@ -60,6 +64,19 @@ X=$(awk '$6=="XSRF-TOKEN"{print $7}' jar | sed 's/%3D/=/g;s/%2F/\//g;s/%2B/+/g')
 curl -s -w ' HTTP %{http_code}\n' -c jar -b jar "${H[@]}" -H "X-XSRF-TOKEN: $X" \
   -H 'Content-Type: application/json' -d '{"email":"email@email.com","password":"pass"}' $B/login
 curl -s -w ' HTTP %{http_code}\n' -b jar "${H[@]}" $B/api/user
+```
+
+For an auth-state change, verify the **whole session cycle** rather than one
+call, because that is what the router guard and `loadSession()` depend on
+(each state-changing call needs a fresh `X-XSRF-TOKEN`, so re-read the cookie
+between them):
+
+```bash
+# register → 204, /api/user → 200, logout → 204, /api/user → 401, login → 204, /api/user → 200
+curl -s -w ' HTTP %{http_code}
+' -c jar -b jar "${H[@]}" -H "X-XSRF-TOKEN: $X" -X POST $B/logout
+curl -s -w ' HTTP %{http_code}
+' -b jar "${H[@]}" $B/api/user   # {"message":"Unauthenticated."} HTTP 401
 ```
 
 Check both the happy path and one failure (bad input → 422 with the message the

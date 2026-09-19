@@ -126,12 +126,8 @@ const error = ref('');
 const status = ref('');
 const submitting = ref(false);
 
-// Guest-only page. The app-wide router guard comes with issue #7.
+// Guest-only is enforced by the router guard; this only reads the link.
 onIonViewWillEnter(() => {
-  if (auth.isAuthenticated) {
-    ionRouter.navigate('/home', 'root', 'replace');
-    return;
-  }
   // The emailed link carries the address the token was issued for.
   const fromLink = route.query.email;
   if (typeof fromLink === 'string' && fromLink !== '') {
