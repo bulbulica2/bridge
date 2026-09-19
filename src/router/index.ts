@@ -15,6 +15,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('@/views/LoginPage.vue')
   },
   {
+    path: '/tables',
+    component: () => import('@/views/TablesPage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/create-account',
     component: () => import('@/views/CreateAccountPage.vue'),
     meta: { guestOnly: true }

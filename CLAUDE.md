@@ -31,8 +31,10 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
 
 - **Routing is flat, driven by a side menu**: `src/router/index.ts` defines
   `/` → redirect to `/home`, plus lazy-loaded `/home` (`HomePage.vue`) and
-  `/login` (`LoginPage.vue`) routes, and `/create-account`
-  (`CreateAccountPage.vue`, `meta.guestOnly`, linked only from the Login page). Adding a new top-level section means
+  `/login` (`LoginPage.vue`) routes, `/create-account`
+  (`CreateAccountPage.vue`, `meta.guestOnly`, linked only from the Login page)
+  and `/tables` (`TablesPage.vue`, `meta.requiresAuth`, listed in the menu only
+  while logged in). Adding a new top-level section means
   adding both a view and a route entry here, plus an `ion-item` in
   `src/components/AppMenu.vue` if it belongs in the menu.
 - **App shell**: `App.vue` renders `<AppMenu />` (the left `ion-menu`) next to
@@ -47,6 +49,11 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `GET /api/user`),
   and the Pinia store `src/stores/auth.ts` holds the logged-in user. Views call
   the store, not the services directly.
+- **Game domain (tables)**: `src/services/tables.ts` wraps the session-authenticated
+  table endpoints (`GET /tables`, `POST /tables`, `POST /tables/{id}/seats`) and
+  `src/stores/tables.ts` keeps the list. These endpoints sit at the root (not
+  under `/api`) and answer with an envelope, `{status, message, data}`, so the
+  service returns `data.data`; 409s carry their reason in `message`.
 - **Dev server port is 3000 on purpose** (`vite.config.ts`, `strictPort`): the
   backend's CORS `allowed_origins` defaults to `http://localhost:3000` and that
   host is a Sanctum stateful domain. Keep `VITE_API_BASE_URL` on `localhost`
