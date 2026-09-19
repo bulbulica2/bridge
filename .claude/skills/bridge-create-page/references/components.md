@@ -83,6 +83,11 @@ ionRouter.navigate('/home', 'root', 'replace'); // after login: no back to form
 ```
 Prefer it over `useRouter().push` inside Ionic pages.
 
+### `onIonViewWillEnter`
+Ionic keeps visited pages alive in the stack, so `onMounted` runs only once.
+Use `onIonViewWillEnter` (from `@ionic/vue`) for checks that must run every time
+the page is shown, e.g. the guest-only redirect in `CreateAccountPage.vue`.
+
 ## Feedback
 
 - Error text: `<ion-text v-if="error" color="danger"><p class="error">{{ error }}</p></ion-text>`.
