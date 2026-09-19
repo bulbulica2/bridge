@@ -71,6 +71,12 @@ Read in parallel:
   pattern: stacked Ionic inputs, submit button with spinner, danger-colored error
   text, secondary `router-link` buttons, content centered horizontally **and
   vertically**; the user explicitly asked for that centering and approved it).
+- List page (a collection + a create modal + per-row actions): start from
+  `assets/ListPageTemplate.vue` (the Tables page pattern: load on
+  `onIonViewWillEnter`, spinner / error / empty-state / list branches,
+  pull-to-refresh, an `ion-modal` for creation, toast for row-action failures).
+  List pages are **not** vertically centered — that preference is about forms;
+  a list starts at the top and only caps its width (`max-width` + `margin: 0 auto`).
 - Conventions: `<script setup lang="ts">`, import every Ionic component you use
   from `@ionic/vue` explicitly, wrap in `<ion-page>` with `<AppHeader title="…" />`,
   navigate programmatically with `useIonRouter().navigate(path, 'root', 'replace')`.
@@ -81,11 +87,17 @@ If the issue mentions guest-only / auth-required, add `meta: { guestOnly: true }
 or `meta: { requiresAuth: true }`. Only add the `router.beforeEach` guard itself
 if the issue asks for it (issue #7 owns the guard).
 Until #7 lands, a guest-only page redirects itself with `onIonViewWillEnter`
-(see CreateAccountPage.vue).
+(see CreateAccountPage.vue). For an **auth-required** page, don't gate on
+`auth.isAuthenticated`: nothing restores the store from the session cookie yet
+(that's #7 too), so a reload would bounce a logged-in user out. Let the request
+run and redirect to `/login` only on a real `401` (see TablesPage.vue).
 
 ### Menu: `src/components/AppMenu.vue`
 Add an `ion-item` only if the page belongs in the side menu. Pages reached from
 another page's button (Create account, Reset password) are **not** menu items.
+A menu entry for an auth-required page gets `v-if="auth.isAuthenticated"`
+(`useAuthStore()` in the menu's `<script setup>`); #7 owns the rest of the
+logged-in menu/header state, so keep the change to that one item.
 
 ### Backend wiring (only if the page calls the API)
 - **Service** (`src/services/<domain>.ts`, see `assets/service-template.ts`): thin
@@ -142,6 +154,13 @@ Fix anything that fails before committing. Don't commit red.
   from `C:\xampp\htdocs\bridge_backend` (use `php` if it's on PATH).
 - Frontend, in the background: `npm run dev` → http://localhost:3000 (fixed port,
   `strictPort`, because backend CORS only allows `localhost:3000`).
+  **One dev server per machine**: sibling worktrees (`workspaces/bridge/<branch>`)
+  share ports 3000 and 8000. Check with
+  `Get-NetTCPConnection -State Listen -LocalPort 3000,8000` and
+  `Get-CimInstance Win32_Process -Filter "ProcessId = <pid>" | Select CommandLine`
+  — the command line says which worktree owns it. A backend already on 8000 is
+  fine to reuse; a Vite owned by **another** worktree is someone else's session,
+  so ask the user before stopping it instead of killing it.
 - Open the new page for them: `Start-Process http://localhost:3000/<route>`.
 - If the page hits the backend, prove the real flow works with sequential
   `curl` calls (details and a ready script in the reference file). Seeded login:
@@ -192,3 +211,8 @@ history below, and commit the skill changes on the page's branch (a separate
   store, page-level guest-only redirect, note on the local backend lagging origin/main,
   and the user reviews the page before push/PR.
   Commit messages now start with the full branch name (user's rule, 5-create-account-page).
+- Issue #8 (Tables page): first list page — `assets/ListPageTemplate.vue`, the game
+  endpoints' `{status, message, data}` envelope, auth-required pages redirecting on
+  401 rather than on store state, auth-gated menu item, modal/refresher/toast notes,
+  and verifying against a dev DB whose seed users are gone (register a throwaway user
+  and clean up after).
