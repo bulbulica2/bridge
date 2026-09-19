@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as authService from '@/services/auth';
-import type { LoginCredentials, User } from '@/services/auth';
+import type { LoginCredentials, RegistrationData, User } from '@/services/auth';
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null);
@@ -12,5 +12,10 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = await authService.fetchUser();
   }
 
-  return { user, isAuthenticated, login };
+  async function register(data: RegistrationData) {
+    await authService.register(data);
+    user.value = await authService.fetchUser();
+  }
+
+  return { user, isAuthenticated, login, register };
 });
