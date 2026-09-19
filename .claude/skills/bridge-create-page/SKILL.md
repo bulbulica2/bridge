@@ -77,15 +77,29 @@ Read in parallel:
 
 ### Route: `src/router/index.ts`
 Add a lazy-loaded entry: `{ path: '/foo', component: () => import('@/views/FooPage.vue') }`.
-If the issue mentions guest-only / auth-required, add `meta: { guestOnly: true }`
-or `meta: { requiresAuth: true }`. Only add the `router.beforeEach` guard itself
-if the issue asks for it (issue #7 owns the guard).
-Until #7 lands, a guest-only page redirects itself with `onIonViewWillEnter`
-(see CreateAccountPage.vue).
+If the page is guest-only / auth-required, add `meta: { guestOnly: true }` or
+`meta: { requiresAuth: true }` — nothing else. The app-wide `router.beforeEach`
+guard (added in issue #7) already enforces both: `requiresAuth` → `/login`,
+`guestOnly` → `/account`. Declare any new meta key in the `RouteMeta`
+augmentation at the top of the same file so `to.meta.x` stays typed.
+The guard awaits `authStore.loadSession()`, which calls `GET /api/user` once per
+page load, so a reload straight onto an auth-only page keeps a valid Sanctum
+session instead of bouncing to `/login`. Don't add per-page
+`onIonViewWillEnter` redirects for auth any more.
 
 ### Menu: `src/components/AppMenu.vue`
 Add an `ion-item` only if the page belongs in the side menu. Pages reached from
 another page's button (Create account, Reset password) are **not** menu items.
+The menu is auth-aware (Login while logged out, Tables once logged in), so put a
+new item in the branch it belongs to, guarded by `auth.isAuthenticated`.
+
+### Auth-aware shell
+`AppHeader.vue` and `AppMenu.vue` both call `useAuthStore()`, which means **any**
+unit test that mounts a page now needs `setActivePinia(createPinia())` in
+`beforeEach` — otherwise it fails with "getActivePinia() was called but there was
+no active Pinia" (this bit `tests/unit/example.spec.ts`). The header renders the
+"Account" button itself when logged in; the `end` slot stays free for per-page
+actions and is rendered before it.
 
 ### Backend wiring (only if the page calls the API)
 - **Service** (`src/services/<domain>.ts`, see `assets/service-template.ts`): thin
@@ -100,6 +114,11 @@ another page's button (Create account, Reset password) are **not** menu items.
   unreachable.
 - **Unit test** (`tests/unit/<domain>Store.spec.ts`, see `assets/store.spec-template.ts`):
   mock the service with `vi.mock`, and cover success and failure.
+  `vi.clearAllMocks()` clears calls but **not** implementations, so a
+  `mockRejectedValue` set in one test still applies in the next one. Don't set a
+  test's fixture up by calling an action an earlier test made reject (e.g. reusing
+  `login()` to get a logged-in store); seed the state through the action you're
+  actually testing around, or re-mock explicitly.
 
 ### Links to pages that don't exist yet
 Link to the route the owning issue names (e.g. `/create-account`), but don't
@@ -141,7 +160,12 @@ Fix anything that fails before committing. Don't commit red.
 - Backend, in the background: `C:\xampp\php\php.exe artisan serve --port=8000`
   from `C:\xampp\htdocs\bridge_backend` (use `php` if it's on PATH).
 - Frontend, in the background: `npm run dev` → http://localhost:3000 (fixed port,
-  `strictPort`, because backend CORS only allows `localhost:3000`).
+  `strictPort`, because backend CORS only allows `localhost:3000`). If port 3000
+  is busy, check **who** owns it before killing anything
+  (`Get-CimInstance Win32_Process -Filter "ProcessId=$pid"` → `CommandLine`
+  names the worktree): it is often another worktree's dev server driven by a
+  parallel session, and only the user can say whether that one may be stopped.
+  Only one bridge frontend can run at a time.
 - Open the new page for them: `Start-Process http://localhost:3000/<route>`.
 - If the page hits the backend, prove the real flow works with sequential
   `curl` calls (details and a ready script in the reference file). Seeded login:
@@ -192,3 +216,9 @@ history below, and commit the skill changes on the page's branch (a separate
   store, page-level guest-only redirect, note on the local backend lagging origin/main,
   and the user reviews the page before push/PR.
   Commit messages now start with the full branch name (user's rule, 5-create-account-page).
+- Issue #7 (Account header, PR #13): `/account` page with logout, the app-wide
+  `requiresAuth`/`guestOnly` guard plus `loadSession()` session restore, auth-aware
+  header and menu. Learned: mounting any page in a test now needs an active Pinia,
+  `vi.clearAllMocks()` keeps mock implementations, the shared dev database gets
+  wiped by parallel sessions (register a throwaway user instead of trusting the
+  seeded one), and port 3000 can be held by another worktree's dev server.
