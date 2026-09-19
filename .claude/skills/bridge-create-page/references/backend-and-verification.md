@@ -11,13 +11,37 @@
   `/login` and `/register` return **204** with no body.
 - Validation failures: **422** `{"message": "...", "errors": {"field": ["..."]}}`.
   Unauthenticated: **401** `{"message": "Unauthenticated."}`.
+- The two password-reset routes answer **200** `{"status": "<human message>"}`
+  (not 204 like login/register), so the page can show the backend's own wording:
+  - `POST /forgot-password` `{email}` -> "We have emailed your password reset link."
+    Unknown address -> 422 `errors.email` "We can't find a user with that email address."
+  - `POST /reset-password` `{token, email, password, password_confirmation}` ->
+    "Your password has been reset." A spent or wrong token -> 422 `errors.email`
+    "This password reset token is invalid."; a bad confirmation -> 422
+    `errors.password`. The reset does **not** log the user in, so send them to `/login`.
 - CORS (`config/cors.php`): `allowed_origins = FRONTEND_URL` (`http://localhost:3000`),
   `supports_credentials = true`. That's why Vite runs on port 3000 with `strictPort`.
 - `.env` → `VITE_API_BASE_URL=http://localhost:8000`. Keep `localhost`, not
   `127.0.0.1`: cookies are scoped by host (not port), so the SPA on
   `localhost:3000` can only read the XSRF cookie if the API is also `localhost`.
 - New env vars need a type in `src/env.d.ts`.
-- Seeded user: `email@email.com` / `pass` (`database/seeders/game/UserSeeder.php`).
+- Seeded user: `email@email.com` / `pass` (`database/seeders/game/UserSeeder.php`)
+  , **but the local DB is often not seeded at all** (`User::count()` returned 0
+  on the issue #6 run, so every login/forgot-password 422s with "we can't find a
+  user"). Check with
+  `php artisan tinker --execute="echo App\Models\User::count();"`.
+  Don't run the seeder to fix it: migrations/seeders touch the shared XAMPP DB.
+  Instead create a throwaway user through the API (`POST /register`), which is
+  what the SPA does anyway and leaves the rest of the data alone.
+- **Password reset links go to the frontend, not the backend.**
+  `AppServiceProvider::boot` calls `ResetPassword::createUrlUsing` to build
+  `<FRONTEND_URL>/password-reset/<token>?email=<email>`, i.e.
+  `http://localhost:3000/password-reset/...`. Any page completing a reset must
+  own that route (token as a path param, email as a query param).
+- `MAIL_MAILER=log`, so no mail is sent: the rendered email, **including the
+  reset link and its token**, lands in `bridge_backend/storage/logs/laravel.log`.
+  Grab the newest link with
+  `grep -o '[^ "<]*password-reset[^ "<]*' storage/logs/laravel.log | tail -1`.
 
 ## Proving a backend flow works
 
@@ -39,7 +63,10 @@ curl -s -w ' HTTP %{http_code}\n' -b jar "${H[@]}" $B/api/user
 ```
 
 Check both the happy path and one failure (bad input → 422 with the message the
-page will display). Checking CORS alone:
+page will display). For a multi-step flow verify the *effect*, not just the
+final 200: the issue #6 run proved the reset by logging in afterwards with the
+new password (204) and with the old one (422, "These credentials do not match
+our records"), plus replaying the spent token (422). Checking CORS alone:
 `curl -si -H "Origin: http://localhost:3000" http://127.0.0.1:8000/sanctum/csrf-cookie`
 should show `Access-Control-Allow-Origin: http://localhost:3000` and
 `Access-Control-Allow-Credentials: true`.
