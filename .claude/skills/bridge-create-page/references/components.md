@@ -83,6 +83,23 @@ ionRouter.navigate('/home', 'root', 'replace'); // after login: no back to form
 ```
 Prefer it over `useRouter().push` inside Ionic pages.
 
+### `useRoute()` — reading path params and query strings
+For a page whose content depends on the URL (e.g. the reset link
+`/password-reset/:token?email=...`), read the route with vue-router's
+`useRoute()` and derive state with `computed`, so one component can serve two
+routes:
+
+```ts
+import { useRoute } from 'vue-router';
+const route = useRoute();
+const token = computed(() => (route.params.token as string | undefined) ?? '');
+const hasToken = computed(() => token.value !== '');   // picks the stage to render
+```
+- `route.params.x` is typed `string | string[]`, so cast/normalize before use or
+  `vue-tsc` fails the build.
+- Read `route.query` in `onIonViewWillEnter`, not at setup time: Ionic keeps the
+  page alive, so setup won't re-run when the user arrives with a different link.
+
 ### `onIonViewWillEnter`
 Ionic keeps visited pages alive in the stack, so `onMounted` runs only once.
 Use `onIonViewWillEnter` (from `@ionic/vue`) for checks that must run every time
@@ -91,6 +108,11 @@ the page is shown, e.g. the guest-only redirect in `CreateAccountPage.vue`.
 ## Feedback
 
 - Error text: `<ion-text v-if="error" color="danger"><p class="error">{{ error }}</p></ion-text>`.
+- Success text: the same with `color="success"`. Use it when the backend returns
+  a human-readable `status` (the password endpoints do) and the user stays on
+  the page instead of being redirected.
+- One `errorMessage(e, fallback)` helper per page, with the fallback passed in,
+  covers several submit handlers without duplicating the 422 parsing.
 - Loading inside a button: `<ion-spinner v-if="submitting" name="crescent" />`
   with the label in `v-else`, plus `:disabled="submitting"` to stop double submits.
 

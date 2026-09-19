@@ -18,6 +18,18 @@ const routes: Array<RouteRecordRaw> = [
     path: '/create-account',
     component: () => import('@/views/CreateAccountPage.vue'),
     meta: { guestOnly: true }
+  },
+  {
+    path: '/reset-password',
+    component: () => import('@/views/ResetPasswordPage.vue'),
+    meta: { guestOnly: true }
+  },
+  {
+    // Target of the reset link bridge_backend emails
+    // (/password-reset/:token?email=…); same page, second stage.
+    path: '/password-reset/:token',
+    component: () => import('@/views/ResetPasswordPage.vue'),
+    meta: { guestOnly: true }
   }
 ]
 

@@ -82,6 +82,12 @@ or `meta: { requiresAuth: true }`. Only add the `router.beforeEach` guard itself
 if the issue asks for it (issue #7 owns the guard).
 Until #7 lands, a guest-only page redirects itself with `onIonViewWillEnter`
 (see CreateAccountPage.vue).
+**One page can own more than one route.** If the backend emails or links to a
+URL the issue didn't name, add that route too and point it at the same view,
+switching stages on a route param (ResetPasswordPage.vue serves both
+`/reset-password` and `/password-reset/:token`). Check for such URLs before
+designing the page — grep the backend for `createUrlUsing` / notification
+classes — otherwise the feature looks done but the emailed link 404s.
 
 ### Menu: `src/components/AppMenu.vue`
 Add an `ion-item` only if the page belongs in the side menu. Pages reached from
@@ -120,6 +126,10 @@ Fix anything that fails before committing. Don't commit red.
 - The user reviews the running page before anything leaves the machine: commit
   locally, launch (step 6), and push + open the PR once they say "commit and
   push". That command means: commit, push and create the PR in one go.
+  **Exception — if they say up front to "go to the PR" / "take it all the way",
+  don't pause for review**: verify, commit, push and open the PR in one run, then
+  launch the app and report. Asking again after they've said that is the friction
+  they were removing.
 - Commit message style (the user's rule, also in CLAUDE.md "Git workflow"):
   first line is the branch name, a space, then a short summary, e.g.
   `5-create-account-page Add Create Account page`, then a bullet body,
@@ -192,3 +202,9 @@ history below, and commit the skill changes on the page's branch (a separate
   store, page-level guest-only redirect, note on the local backend lagging origin/main,
   and the user reviews the page before push/PR.
   Commit messages now start with the full branch name (user's rule, 5-create-account-page).
+- Issue #6 (Reset password): first page serving two routes (request stage +
+  emailed-token stage), driven by `useRoute()` params/query. Learned that the
+  backend's reset link targets the SPA, that `MAIL_MAILER=log` puts the token in
+  `laravel.log`, and that the local DB may hold zero users (register a throwaway
+  one via the API instead of seeding the shared DB). Verified a multi-step flow
+  by its effect (old password stops working). User asked to go straight to the PR.
