@@ -8,6 +8,8 @@ vi.mock('@/services/auth', () => ({
   register: vi.fn(),
   logout: vi.fn(),
   fetchUser: vi.fn(),
+  requestPasswordReset: vi.fn(),
+  resetPassword: vi.fn(),
 }))
 
 describe('auth store', () => {
@@ -127,5 +129,61 @@ describe('auth store', () => {
     await auth.loadSession()
 
     expect(authService.fetchUser).toHaveBeenCalledTimes(1)
+  })
+
+  test('requesting a reset link returns the backend status and does not log anyone in', async () => {
+    vi.mocked(authService.requestPasswordReset).mockResolvedValue(
+      'We have emailed your password reset link.',
+    )
+
+    const auth = useAuthStore()
+    const status = await auth.requestPasswordReset({ email: 'ana@example.com' })
+
+    expect(authService.requestPasswordReset).toHaveBeenCalledWith({ email: 'ana@example.com' })
+    expect(status).toBe('We have emailed your password reset link.')
+    expect(authService.fetchUser).not.toHaveBeenCalled()
+    expect(auth.isAuthenticated).toBe(false)
+  })
+
+  test('an unknown email surfaces the backend validation error', async () => {
+    vi.mocked(authService.requestPasswordReset).mockRejectedValue(new Error('422'))
+
+    const auth = useAuthStore()
+    await expect(auth.requestPasswordReset({ email: 'nobody@example.com' })).rejects.toThrow()
+
+    expect(auth.isAuthenticated).toBe(false)
+  })
+
+  test('resetting the password returns the status but leaves the user logged out', async () => {
+    vi.mocked(authService.resetPassword).mockResolvedValue('Your password has been reset.')
+    const data = {
+      token: 'reset-token',
+      email: 'ana@example.com',
+      password: 'new-secret123',
+      password_confirmation: 'new-secret123',
+    }
+
+    const auth = useAuthStore()
+    const status = await auth.resetPassword(data)
+
+    expect(authService.resetPassword).toHaveBeenCalledWith(data)
+    expect(status).toBe('Your password has been reset.')
+    // The backend does not start a session on reset; the page sends them to /login.
+    expect(authService.fetchUser).not.toHaveBeenCalled()
+    expect(auth.isAuthenticated).toBe(false)
+  })
+
+  test('an invalid or expired token rejects', async () => {
+    vi.mocked(authService.resetPassword).mockRejectedValue(new Error('422'))
+
+    const auth = useAuthStore()
+    await expect(auth.resetPassword({
+      token: 'expired',
+      email: 'ana@example.com',
+      password: 'new-secret123',
+      password_confirmation: 'new-secret123',
+    })).rejects.toThrow()
+
+    expect(auth.isAuthenticated).toBe(false)
   })
 })

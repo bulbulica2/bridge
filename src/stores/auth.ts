@@ -1,7 +1,13 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as authService from '@/services/auth';
-import type { LoginCredentials, RegistrationData, User } from '@/services/auth';
+import type {
+  LoginCredentials,
+  PasswordResetData,
+  PasswordResetRequest,
+  RegistrationData,
+  User,
+} from '@/services/auth';
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null);
@@ -52,5 +58,24 @@ export const useAuthStore = defineStore('auth', () => {
     return sessionCheck;
   }
 
-  return { user, isAuthenticated, login, register, logout, loadSession };
+  // Password reset is a guest flow: neither call authenticates anyone, so the
+  // user stays untouched. Both return the backend's human-readable status.
+  async function requestPasswordReset(data: PasswordResetRequest) {
+    return authService.requestPasswordReset(data);
+  }
+
+  async function resetPassword(data: PasswordResetData) {
+    return authService.resetPassword(data);
+  }
+
+  return {
+    user,
+    isAuthenticated,
+    login,
+    register,
+    logout,
+    loadSession,
+    requestPasswordReset,
+    resetPassword,
+  };
 });

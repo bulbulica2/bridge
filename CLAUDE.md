@@ -32,8 +32,10 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
 - **Routing is flat, driven by a side menu**: `src/router/index.ts` defines
   `/` → redirect to `/home`, plus lazy-loaded `/home` (`HomePage.vue`),
   `/login` (`LoginPage.vue`, `meta.guestOnly`), `/create-account`
-  (`CreateAccountPage.vue`, `meta.guestOnly`, linked only from the Login page)
-  and `/account` (`AccountPage.vue`, `meta.requiresAuth`). Adding a new top-level
+  (`CreateAccountPage.vue`, `meta.guestOnly`, linked only from the Login page),
+  `/reset-password` and `/password-reset/:token` (both `ResetPasswordPage.vue`,
+  `meta.guestOnly`, reached from the Login page or the emailed link), and
+  `/account` (`AccountPage.vue`, `meta.requiresAuth`). Adding a new top-level
   section means adding both a view and a route entry here, plus an `ion-item` in
   `src/components/AppMenu.vue` if it belongs in the menu.
 - **Route guard**: a single `router.beforeEach` in `src/router/index.ts` enforces
@@ -55,10 +57,18 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   (`baseURL` from `VITE_API_BASE_URL` in `.env`, `withCredentials` +
   `withXSRFToken` for Sanctum's cookie flow). `src/services/auth.ts` wraps the
   Sanctum SPA calls (`GET /sanctum/csrf-cookie` → `POST /login` / `POST /register`
-  / `POST /logout`, `GET /api/user`),
-  and the Pinia store `src/stores/auth.ts` holds the logged-in user and exposes
-  `login`, `register`, `logout` and `loadSession`. Views call
+  / `POST /logout` / `POST /forgot-password` / `POST /reset-password`,
+  `GET /api/user`), and the Pinia store `src/stores/auth.ts` holds the logged-in
+  user and exposes `login`, `register`, `logout`, `loadSession`,
+  `requestPasswordReset` and `resetPassword`. Views call
   the store, not the services directly.
+- **Password reset is a two-stage guest flow**: `/reset-password` posts the email
+  to `/forgot-password`; the backend emails a link to
+  `<FRONTEND_URL>/password-reset/<token>?email=<email>`
+  (`AppServiceProvider::boot` in bridge_backend), which the
+  `/password-reset/:token` route renders as the "choose a new password" stage.
+  Both endpoints answer `200 {"status": "<message>"}` and the reset does **not**
+  start a session, so the page redirects to `/login` afterwards.
 - **Dev server port is 3000 on purpose** (`vite.config.ts`, `strictPort`): the
   backend's CORS `allowed_origins` defaults to `http://localhost:3000` and that
   host is a Sanctum stateful domain. Keep `VITE_API_BASE_URL` on `localhost`

@@ -86,6 +86,12 @@ The guard awaits `authStore.loadSession()`, which calls `GET /api/user` once per
 page load, so a reload straight onto an auth-only page keeps a valid Sanctum
 session instead of bouncing to `/login`. Don't add per-page
 `onIonViewWillEnter` redirects for auth any more.
+**One page can own more than one route.** If the backend emails or links to a
+URL the issue didn't name, add that route too and point it at the same view,
+switching stages on a route param (ResetPasswordPage.vue serves both
+`/reset-password` and `/password-reset/:token`). Check for such URLs before
+designing the page — grep the backend for `createUrlUsing` / notification
+classes — otherwise the feature looks done but the emailed link 404s.
 
 ### Menu: `src/components/AppMenu.vue`
 Add an `ion-item` only if the page belongs in the side menu. Pages reached from
@@ -139,6 +145,10 @@ Fix anything that fails before committing. Don't commit red.
 - The user reviews the running page before anything leaves the machine: commit
   locally, launch (step 6), and push + open the PR once they say "commit and
   push". That command means: commit, push and create the PR in one go.
+  **Exception — if they say up front to "go to the PR" / "take it all the way",
+  don't pause for review**: verify, commit, push and open the PR in one run, then
+  launch the app and report. Asking again after they've said that is the friction
+  they were removing.
 - Commit message style (the user's rule, also in CLAUDE.md "Git workflow"):
   first line is the branch name, a space, then a short summary, e.g.
   `5-create-account-page Add Create Account page`, then a bullet body,
@@ -216,9 +226,17 @@ history below, and commit the skill changes on the page's branch (a separate
   store, page-level guest-only redirect, note on the local backend lagging origin/main,
   and the user reviews the page before push/PR.
   Commit messages now start with the full branch name (user's rule, 5-create-account-page).
+- Issue #6 (Reset password): first page serving two routes (request stage +
+  emailed-token stage), driven by `useRoute()` params/query. Learned that the
+  backend's reset link targets the SPA, that `MAIL_MAILER=log` puts the token in
+  `laravel.log`, and that the local DB may hold zero users (register a throwaway
+  one via the API instead of seeding the shared DB). Verified a multi-step flow
+  by its effect (old password stops working). User asked to go straight to the PR.
 - Issue #7 (Account header, PR #13): `/account` page with logout, the app-wide
   `requiresAuth`/`guestOnly` guard plus `loadSession()` session restore, auth-aware
   header and menu. Learned: mounting any page in a test now needs an active Pinia,
-  `vi.clearAllMocks()` keeps mock implementations, the shared dev database gets
-  wiped by parallel sessions (register a throwaway user instead of trusting the
-  seeded one), and port 3000 can be held by another worktree's dev server.
+  `vi.clearAllMocks()` keeps mock implementations, and port 3000 can be held by
+  another worktree's dev server driven by a parallel session. Branches cut before
+  their siblings land: merge `origin/main` again right before pushing (#6 landed
+  mid-session and conflicted in the router, auth store, tests, CLAUDE.md and this
+  file). User again asked to go straight to the PR.
