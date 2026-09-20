@@ -26,17 +26,18 @@
   `localhost:3000` can only read the XSRF cookie if the API is also `localhost`.
 - New env vars need a type in `src/env.d.ts`.
 - Seeded user: `email@email.com` / `pass` (`database/seeders/game/UserSeeder.php`)
-  , **but the local DB is often not seeded at all** (`User::count()` returned 0
-  on the issue #6 run, so every login/forgot-password 422s with "we can't find a
-  user"). Check with
-  `php artisan tinker --execute="echo App\Models\User::count();"`.
-  Don't run the seeder to fix it: migrations/seeders touch the shared XAMPP DB.
-  Instead create a throwaway user through the API (`POST /register`), which is
-  what the SPA does anyway and leaves the rest of the data alone.
-  The DB is shared with every other worktree and parallel session, so it can also
-  change **mid-run**: on the issue #7 run `users` held exactly one row created by
-  another session minutes earlier, and the seeded admin was gone. Don't trust a
-  user you verified earlier in the same session; re-register if a login 422s.
+  — **but don't trust it**: the dev DB is shared with every other worktree and
+  parallel session, gets rebuilt, and can change **mid-run** (the issue #6 run
+  found `User::count()` 0; the issue #7 run found a single row another session
+  had created minutes earlier, with the seeded admin gone). A missing user makes
+  login/forgot-password answer 422 ("These credentials do not match our records."
+  / "we can't find a user"). Check with
+  `php artisan tinker --execute="echo App\Models\User::count();"` or
+  `timeout 20 /c/xampp/mysql/bin/mysql.exe -u root -e "SELECT id,username,email FROM bridge.users LIMIT 10;"`.
+  Don't re-run the seeder — migrations/seeders touch the shared XAMPP DB and
+  would wipe other sessions' data. Instead `POST /register` a throwaway user
+  (`password123` / `password_confirmation`), which is what the SPA does anyway,
+  and re-register if a login you made earlier in the same session starts 422ing.
 - **Password reset links go to the frontend, not the backend.**
   `AppServiceProvider::boot` calls `ResetPassword::createUrlUsing` to build
   `<FRONTEND_URL>/password-reset/<token>?email=<email>`, i.e.
@@ -46,6 +47,30 @@
   reset link and its token**, lands in `bridge_backend/storage/logs/laravel.log`.
   Grab the newest link with
   `grep -o '[^ "<]*password-reset[^ "<]*' storage/logs/laravel.log | tail -1`.
+
+## Game endpoints (tables)
+
+- They live at the **root**, not under `/api`: `/tables`, `/tables/{id}/seats`.
+  Only `/api/user` is under `/api`. They're `auth` (session) routes, so an
+  anonymous call gets `401 {"message": "Unauthenticated."}`.
+- Every game response is an envelope: `{"status": 200, "message": "...", "data": ...}`.
+  The service unwraps `data.data`; the frontend `Table` type is the inner object.
+- `GET /tables` is newest first, each table carrying `seats` (with `seats.user`)
+  and `free_seats` (the unoccupied ones in `N, E, S, W` order). Only occupied
+  seats appear in `seats`, so the view builds the four-seat row itself.
+- `POST /tables` (201, `name` optional, `seat` defaults to `N`) seats the creator.
+  `POST /tables/{id}/seats` (201, `seat` required) takes a free seat. Both answer
+  with the same full table object, which is what lets the list update in place.
+- **409s carry the reason in `message`**, in the same envelope, e.g.
+  "You are already seated at a table." (a user holds exactly one seat across all
+  tables), "You are already seated at a table. Leave it before creating another.",
+  "You already have 3 active tables.", "Seat E is already taken.". Showing
+  `message` verbatim is the right behavior; they're user-facing sentences.
+- Bad `seat` values are a normal Laravel `422 {message, errors}`
+  ("The selected seat is invalid."), not the envelope.
+- A table exists only while someone sits at it: `DELETE /tables/{id}/seats`
+  frees the user and deletes the table when the last player leaves — which is
+  also how to **clean up after verifying** on the shared dev DB.
 
 ## Proving a backend flow works
 
@@ -83,7 +108,12 @@ Check both the happy path and one failure (bad input → 422 with the message th
 page will display). For a multi-step flow verify the *effect*, not just the
 final 200: the issue #6 run proved the reset by logging in afterwards with the
 new password (204) and with the old one (422, "These credentials do not match
-our records"), plus replaying the spent token (422). Checking CORS alone:
+our records"), plus replaying the spent token (422). For a flow that involves
+two people (one creates a table, another joins it), register two users and keep
+**one cookie jar per user** (`-c jarA -b jarA`), switching jars instead of
+logging in and out. Re-read the XSRF token from the jar before every
+state-changing call; a stale or missing `X-XSRF-TOKEN` is
+`419 "CSRF token mismatch."`, not a 401. Checking CORS alone:
 `curl -si -H "Origin: http://localhost:3000" http://127.0.0.1:8000/sanctum/csrf-cookie`
 should show `Access-Control-Allow-Origin: http://localhost:3000` and
 `Access-Control-Allow-Credentials: true`.
@@ -109,6 +139,14 @@ should show `Access-Control-Allow-Origin: http://localhost:3000` and
 **Backend not running / connection refused.** Start it (see SKILL.md step 6).
 First-time DB setup is in `bridge_docs/backend/RUNNING.md`
 (`php artisan migrate --seed`; after migration edits, `migrate:fresh --seed`).
+
+**Port 3000/8000 already in use by another worktree.** Each branch worktree
+under `workspaces/bridge/` is a separate checkout but they share the machine's
+ports. `Get-CimInstance Win32_Process -Filter "ProcessId = <pid>" | Select CommandLine`
+shows which worktree a `node`/`php` process belongs to. Reuse a backend that's
+already on 8000 (it serves the same `bridge_backend` checkout); for a Vite owned
+by another worktree, ask the user before stopping it — that's another session's
+running app.
 
 **Port 3000 already in use.** `strictPort` makes Vite fail instead of silently
 switching ports (which would break CORS). Find the owner with

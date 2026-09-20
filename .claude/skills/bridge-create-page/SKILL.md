@@ -77,6 +77,12 @@ Read in parallel:
   pattern: stacked Ionic inputs, submit button with spinner, danger-colored error
   text, secondary `router-link` buttons, content centered horizontally **and
   vertically**; the user explicitly asked for that centering and approved it).
+- List page (a collection + a create modal + per-row actions): start from
+  `assets/ListPageTemplate.vue` (the Tables page pattern: load on
+  `onIonViewWillEnter`, spinner / error / empty-state / list branches,
+  pull-to-refresh, an `ion-modal` for creation, toast for row-action failures).
+  List pages are **not** vertically centered — that preference is about forms;
+  a list starts at the top and only caps its width (`max-width` + `margin: 0 auto`).
 - Conventions: `<script setup lang="ts">`, import every Ionic component you use
   from `@ionic/vue` explicitly, wrap in `<ion-page>` with `<AppHeader title="…" />`,
   navigate programmatically with `useIonRouter().navigate(path, 'root', 'replace')`.
@@ -91,7 +97,10 @@ augmentation at the top of the same file so `to.meta.x` stays typed.
 The guard awaits `authStore.loadSession()`, which calls `GET /api/user` once per
 page load, so a reload straight onto an auth-only page keeps a valid Sanctum
 session instead of bouncing to `/login`. Don't add per-page
-`onIonViewWillEnter` redirects for auth any more.
+`onIonViewWillEnter` redirects for auth any more. A `401` coming back **while
+the page is open** is a different case — the session expired after the guard let
+the user in — and belongs where the request is made (`TablesPage.vue` redirects
+to `/login` there).
 **One page can own more than one route.** If the backend emails or links to a
 URL the issue didn't name, add that route too and point it at the same view,
 switching stages on a route param (ResetPasswordPage.vue serves both
@@ -186,12 +195,14 @@ Fix anything that fails before committing. Don't commit red.
 - Backend, in the background: `C:\xampp\php\php.exe artisan serve --port=8000`
   from `C:\xampp\htdocs\bridge_backend` (use `php` if it's on PATH).
 - Frontend, in the background: `npm run dev` → http://localhost:3000 (fixed port,
-  `strictPort`, because backend CORS only allows `localhost:3000`). If port 3000
-  is busy, check **who** owns it before killing anything
-  (`Get-CimInstance Win32_Process -Filter "ProcessId=$pid"` → `CommandLine`
-  names the worktree): it is often another worktree's dev server driven by a
-  parallel session, and only the user can say whether that one may be stopped.
-  Only one bridge frontend can run at a time.
+  `strictPort`, because backend CORS only allows `localhost:3000`).
+  **One dev server per machine**: sibling worktrees (`workspaces/bridge/<branch>`)
+  share ports 3000 and 8000. Check with
+  `Get-NetTCPConnection -State Listen -LocalPort 3000,8000` and
+  `Get-CimInstance Win32_Process -Filter "ProcessId = <pid>" | Select CommandLine`
+  — the command line says which worktree owns it. A backend already on 8000 is
+  fine to reuse; a Vite owned by **another** worktree is a parallel session's dev
+  server, so ask the user before stopping it instead of killing it.
 - Open the new page for them: `Start-Process http://localhost:3000/<route>`.
 - If the page hits the backend, prove the real flow works with sequential
   `curl` calls (details and a ready script in the reference file). Seeded login:
@@ -256,3 +267,8 @@ history below, and commit the skill changes on the page's branch (a separate
   their siblings land: merge `origin/main` again right before pushing (#6 landed
   mid-session and conflicted in the router, auth store, tests, CLAUDE.md and this
   file). User again asked to go straight to the PR.
+- Issue #8 (Tables page, PR #14): first list page — `assets/ListPageTemplate.vue`, the game
+  endpoints' `{status, message, data}` envelope, a pre-guard 401 redirect (now
+  superseded by #7's `requiresAuth`), auth-gated menu item, modal/refresher/toast notes,
+  and verifying against a dev DB whose seed users are gone (register a throwaway user
+  and clean up after).

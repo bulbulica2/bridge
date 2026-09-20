@@ -9,7 +9,9 @@ A growing guide. Every page built with this skill adds what it learned
 - [Layout: ion-page, ion-content, AppHeader](#layout)
 - [Forms: ion-list, ion-item, ion-input](#forms)
 - [Buttons & navigation: ion-button, useIonRouter](#buttons--navigation)
-- [Feedback: ion-text, ion-spinner](#feedback)
+- [Lists & rows: ion-list, ion-item rows](#lists--rows)
+- [Modals: ion-modal](#modals)
+- [Feedback: ion-text, ion-spinner, toastController, ion-refresher](#feedback)
 - [App shell: AppMenu, ion-menu](#app-shell)
 - [State: Pinia stores](#state)
 
@@ -68,6 +70,60 @@ and router outlet to work.
 - Set `type` and `autocomplete` (`email`, `current-password`, `new-password`,
   `username`) so browsers and password managers behave.
 - Wrap in a real `<form @submit.prevent>` so Enter submits.
+
+## Lists & rows
+
+A collection renders as `ion-list` + one `ion-item` per row. Put the row's own
+markup in a plain `<div>` inside the item (not inside `ion-label`) when the row
+contains buttons: `ion-label` is for text, and nesting interactive elements in
+it fights the item's own layout.
+
+```vue
+<ion-list>
+  <ion-item v-for="table in tables" :key="table.id" lines="full">
+    <div class="table-row">
+      <h2 class="table-title">#{{ table.id }} {{ table.name || 'Unnamed table' }}</h2>
+      <div class="seats">…</div>
+    </div>
+  </ion-item>
+</ion-list>
+```
+
+- Give that div `width: 100%`; an `ion-item` child doesn't stretch by itself.
+- Don't add `button` to the `ion-item` unless the whole row navigates; a row
+  with per-cell buttons must not be a button itself.
+- Always render a fixed set of slots (e.g. the four seats `N, E, S, W`) from a
+  helper that maps the constant order onto the data, so rows line up even when
+  the backend only sends the occupied ones.
+- Branch the body explicitly: loading spinner → error text → empty state → list.
+  The empty state is a sentence telling the user what to do next
+  ("No tables yet. Create the first one.").
+
+## Modals
+
+### `ion-modal`
+Inline modal driven by a ref; it brings its own header and content.
+
+```vue
+<ion-modal :is-open="createOpen" @did-dismiss="closeCreate">
+  <ion-header>
+    <ion-toolbar>
+      <ion-title>Create table</ion-title>
+      <ion-buttons slot="end"><ion-button @click="closeCreate">Cancel</ion-button></ion-buttons>
+    </ion-toolbar>
+  </ion-header>
+  <ion-content class="ion-padding">
+    <form @submit.prevent="submitCreate">…</form>
+  </ion-content>
+</ion-modal>
+```
+
+- Use `@did-dismiss` (not only the Cancel handler) to reset state: the user can
+  also dismiss by swiping or with Esc, and `:is-open` must be set back to false
+  or the modal can't reopen.
+- Reset the form fields **and** the error in that one handler, so reopening
+  never shows the previous attempt's message.
+- The modal has its own `ion-content`, so the page's scroll position is kept.
 
 ## Buttons & navigation
 
@@ -151,6 +207,40 @@ For showing values rather than editing them (the Account page), keep `ion-list` 
   covers several submit handlers without duplicating the 422 parsing.
 - Loading inside a button: `<ion-spinner v-if="submitting" name="crescent" />`
   with the label in `v-else`, plus `:disabled="submitting"` to stop double submits.
+  For per-row buttons, key the "busy" state by row + action
+  (`joining.value === `${tableId}-${seat}``) so only the clicked one spins.
+
+### `toastController`
+For failures that aren't attached to a form field — a row action on data that
+may be stale (someone took the seat first):
+
+```ts
+import { toastController } from '@ionic/vue';
+const toast = await toastController.create({
+  message, duration: 4000, color: 'danger', position: 'bottom',
+});
+await toast.present();
+```
+Inline `ion-text` stays the rule inside forms and modals; a toast is for the
+list itself, which has no obvious place to put the message.
+
+### `ion-refresher` (pull to refresh)
+```vue
+<ion-refresher slot="fixed" @ionRefresh="refresh($event)">
+  <ion-refresher-content />
+</ion-refresher>
+```
+```ts
+async function refresh(event: CustomEvent) {
+  await load();
+  (event.target as HTMLIonRefresherElement).complete();
+}
+```
+- `slot="fixed"` is required, and the refresher must be a direct child of
+  `ion-content`.
+- Always `complete()`, including after a failed load, or the spinner never
+  retracts. Type the handler's argument as `CustomEvent` and cast `event.target`;
+  `vue-tsc` rejects the bare `RefresherCustomEvent` import path.
 
 ## App shell
 
@@ -167,10 +257,19 @@ For showing values rather than editing them (the Account page), keep `ion-list` 
 - Views call store actions; stores call `src/services/*`; services use the shared
   axios instance `src/services/http.ts`.
 - In unit tests: `setActivePinia(createPinia())` in `beforeEach` and
-  `vi.mock('@/services/…')`. Needed even for a plain page mount, because
-  `AppHeader`/`AppMenu` call `useAuthStore()`.
+  `vi.mock('@/services/…')`. The Pinia part is needed even for a plain page
+  mount, because `AppHeader`/`AppMenu` call `useAuthStore()`. When the view also
+  imports a **value** from that service (a constant such as `SEATS`, not just
+  types), mock with
+  `vi.mock('@/services/x', async (importOriginal) => ({ ...(await importOriginal<typeof x>()), fn: vi.fn() }))`
+  so the constant survives while the calls are stubbed.
 - `vi.clearAllMocks()` clears calls but keeps implementations, so a
   `mockRejectedValue` set in one test leaks into the next.
+- Mutate list state by replacing the array (`items.value = [item, ...items.value]`,
+  `items.value.map(...)`) rather than by splicing in place: the reactivity is the
+  same and the store action reads as "what the list becomes".
+- A store action that talks to the backend should let the error propagate; the
+  view decides between inline text, a toast and a redirect.
 
 ### Auth state across a reload
 The store is memory-only while the Sanctum session is a cookie, so

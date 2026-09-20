@@ -34,9 +34,10 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `/login` (`LoginPage.vue`, `meta.guestOnly`), `/create-account`
   (`CreateAccountPage.vue`, `meta.guestOnly`, linked only from the Login page),
   `/reset-password` and `/password-reset/:token` (both `ResetPasswordPage.vue`,
-  `meta.guestOnly`, reached from the Login page or the emailed link), and
-  `/account` (`AccountPage.vue`, `meta.requiresAuth`). Adding a new top-level
-  section means adding both a view and a route entry here, plus an `ion-item` in
+  `meta.guestOnly`, reached from the Login page or the emailed link),
+  `/account` (`AccountPage.vue`, `meta.requiresAuth`) and `/tables`
+  (`TablesPage.vue`, `meta.requiresAuth`, the menu's logged-in entry). Adding a
+  new top-level section means adding both a view and a route entry here, plus an `ion-item` in
   `src/components/AppMenu.vue` if it belongs in the menu.
 - **Route guard**: a single `router.beforeEach` in `src/router/index.ts` enforces
   the route meta declared in the same file (`RouteMeta` is augmented there):
@@ -69,6 +70,11 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `/password-reset/:token` route renders as the "choose a new password" stage.
   Both endpoints answer `200 {"status": "<message>"}` and the reset does **not**
   start a session, so the page redirects to `/login` afterwards.
+- **Game domain (tables)**: `src/services/tables.ts` wraps the session-authenticated
+  table endpoints (`GET /tables`, `POST /tables`, `POST /tables/{id}/seats`) and
+  `src/stores/tables.ts` keeps the list. These endpoints sit at the root (not
+  under `/api`) and answer with an envelope, `{status, message, data}`, so the
+  service returns `data.data`; 409s carry their reason in `message`.
 - **Dev server port is 3000 on purpose** (`vite.config.ts`, `strictPort`): the
   backend's CORS `allowed_origins` defaults to `http://localhost:3000` and that
   host is a Sanctum stateful domain. Keep `VITE_API_BASE_URL` on `localhost`
