@@ -5,9 +5,42 @@ import type { CreateTablePayload, Seat, Table } from '@/services/tables';
 
 export const useTablesStore = defineStore('tables', () => {
   const tables = ref<Table[]>([]);
+  // The table the detail page is showing, held next to the list so both stay
+  // truthful when a seat changes from either page.
+  const currentTable = ref<Table | null>(null);
+
+  // Replace only, never append: the list is ordered by the backend (newest
+  // first), so a table we only ever opened by URL has no correct position in
+  // it. load() brings it in properly.
+  function upsertInList(table: Table) {
+    tables.value = tables.value.map((t) => (t.id === table.id ? table : t));
+  }
+
+  // A table came back from the backend: refresh every copy we hold.
+  function syncTable(table: Table) {
+    upsertInList(table);
+    if (currentTable.value?.id === table.id) {
+      currentTable.value = table;
+    }
+  }
+
+  // The table is gone (the last player left, or it 404s): forget it everywhere.
+  function forget(tableId: number) {
+    tables.value = tables.value.filter((t) => t.id !== tableId);
+    if (currentTable.value?.id === tableId) {
+      currentTable.value = null;
+    }
+  }
 
   async function load() {
     tables.value = await tablesService.listTables();
+  }
+
+  async function loadTable(tableId: number) {
+    const table = await tablesService.getTable(tableId);
+    currentTable.value = table;
+    upsertInList(table);
+    return table;
   }
 
   // The list is newest first (as the backend orders it), so a new table goes on top.
@@ -20,9 +53,21 @@ export const useTablesStore = defineStore('tables', () => {
   // Replaces the table in place so the page doesn't have to reload the list.
   async function join(tableId: number, seat: Seat) {
     const table = await tablesService.joinSeat(tableId, seat);
-    tables.value = tables.value.map((t) => (t.id === table.id ? table : t));
+    syncTable(table);
     return table;
   }
 
-  return { tables, load, create, join };
+  // Giving up the last seat deletes the table, so the caller has to know which
+  // of the two happened before deciding whether to stay on the page.
+  async function leave(tableId: number) {
+    const result = await tablesService.leaveSeat(tableId);
+    if (tablesService.isTableDeleted(result)) {
+      forget(tableId);
+      return { tableDeleted: true };
+    }
+    syncTable(result);
+    return { tableDeleted: false };
+  }
+
+  return { tables, currentTable, load, loadTable, create, join, leave, forget };
 });

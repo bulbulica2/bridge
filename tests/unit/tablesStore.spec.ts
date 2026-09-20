@@ -9,6 +9,8 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   listTables: vi.fn(),
   createTable: vi.fn(),
   joinSeat: vi.fn(),
+  getTable: vi.fn(),
+  leaveSeat: vi.fn(),
 }))
 
 function makeTable(id: number, seats: Partial<Record<Seat, string>> = {}): Table {
@@ -96,5 +98,133 @@ describe('tables store', () => {
     await expect(store.join(1, 'E')).rejects.toThrow()
 
     expect(store.tables).toEqual([table])
+  })
+
+  test('loadTable sets the current table', async () => {
+    const table = makeTable(1, { N: 'ana' })
+    vi.mocked(tablesService.getTable).mockResolvedValue(table)
+
+    const store = useTablesStore()
+    await store.loadTable(1)
+
+    expect(tablesService.getTable).toHaveBeenCalledWith(1)
+    expect(store.currentTable).toEqual(table)
+  })
+
+  test('loadTable refreshes the row already in the list', async () => {
+    const other = makeTable(2)
+    const stale = makeTable(1, { N: 'ana' })
+    const fresh = makeTable(1, { N: 'ana', E: 'bob' })
+    vi.mocked(tablesService.listTables).mockResolvedValue([other, stale])
+    vi.mocked(tablesService.getTable).mockResolvedValue(fresh)
+
+    const store = useTablesStore()
+    await store.load()
+    await store.loadTable(1)
+
+    expect(store.tables).toEqual([other, fresh])
+  })
+
+  test('loadTable does not add a table the list never had', async () => {
+    const listed = makeTable(2)
+    const opened = makeTable(7, { N: 'ana' })
+    vi.mocked(tablesService.listTables).mockResolvedValue([listed])
+    vi.mocked(tablesService.getTable).mockResolvedValue(opened)
+
+    const store = useTablesStore()
+    await store.load()
+    await store.loadTable(7)
+
+    // The list is ordered by the backend, so a deep-linked table has no
+    // correct position in it; only load() may grow the list.
+    expect(store.tables).toEqual([listed])
+    expect(store.currentTable).toEqual(opened)
+  })
+
+  test('join also updates the current table when it is the open one', async () => {
+    const opened = makeTable(1, { N: 'ana' })
+    const joined = makeTable(1, { N: 'ana', E: 'bob' })
+    vi.mocked(tablesService.getTable).mockResolvedValue(opened)
+    vi.mocked(tablesService.joinSeat).mockResolvedValue(joined)
+
+    const store = useTablesStore()
+    await store.loadTable(1)
+    await store.join(1, 'E')
+
+    expect(store.currentTable).toEqual(joined)
+  })
+
+  test('join leaves a different open table alone', async () => {
+    const opened = makeTable(1, { N: 'ana' })
+    const joined = makeTable(2, { E: 'bob' })
+    vi.mocked(tablesService.getTable).mockResolvedValue(opened)
+    vi.mocked(tablesService.joinSeat).mockResolvedValue(joined)
+
+    const store = useTablesStore()
+    await store.loadTable(1)
+    await store.join(2, 'E')
+
+    expect(store.currentTable).toEqual(opened)
+  })
+
+  test('leave replaces the table when other players remain', async () => {
+    const before = makeTable(1, { N: 'ana', E: 'bob' })
+    const after = makeTable(1, { N: 'ana' })
+    vi.mocked(tablesService.listTables).mockResolvedValue([before])
+    vi.mocked(tablesService.getTable).mockResolvedValue(before)
+    vi.mocked(tablesService.leaveSeat).mockResolvedValue(after)
+
+    const store = useTablesStore()
+    await store.load()
+    await store.loadTable(1)
+    const result = await store.leave(1)
+
+    expect(result).toEqual({ tableDeleted: false })
+    expect(store.tables).toEqual([after])
+    expect(store.currentTable).toEqual(after)
+  })
+
+  test('leave forgets the table when the last player walks out', async () => {
+    const other = makeTable(2)
+    const mine = makeTable(1, { N: 'ana' })
+    vi.mocked(tablesService.listTables).mockResolvedValue([other, mine])
+    vi.mocked(tablesService.getTable).mockResolvedValue(mine)
+    vi.mocked(tablesService.leaveSeat).mockResolvedValue({ table_deleted: true })
+
+    const store = useTablesStore()
+    await store.load()
+    await store.loadTable(1)
+    const result = await store.leave(1)
+
+    expect(result).toEqual({ tableDeleted: true })
+    expect(store.tables).toEqual([other])
+    expect(store.currentTable).toBeNull()
+  })
+
+  test('failed leave keeps the seat', async () => {
+    const table = makeTable(1, { N: 'ana' })
+    vi.mocked(tablesService.getTable).mockResolvedValue(table)
+    vi.mocked(tablesService.leaveSeat).mockRejectedValue(new Error('409'))
+
+    const store = useTablesStore()
+    await store.loadTable(1)
+    await expect(store.leave(1)).rejects.toThrow()
+
+    expect(store.currentTable).toEqual(table)
+  })
+
+  test('forget drops a table that no longer exists', async () => {
+    const other = makeTable(2)
+    const gone = makeTable(1, { N: 'ana' })
+    vi.mocked(tablesService.listTables).mockResolvedValue([other, gone])
+    vi.mocked(tablesService.getTable).mockResolvedValue(gone)
+
+    const store = useTablesStore()
+    await store.load()
+    await store.loadTable(1)
+    store.forget(1)
+
+    expect(store.tables).toEqual([other])
+    expect(store.currentTable).toBeNull()
   })
 })

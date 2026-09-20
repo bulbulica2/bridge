@@ -24,10 +24,24 @@
         <ion-list v-else>
           <ion-item v-for="table in tablesStore.tables" :key="table.id" lines="full">
             <div class="table-row">
-              <h2 class="table-title">
-                <span class="table-id">#{{ table.id }}</span>
-                {{ table.name || 'Unnamed table' }}
-              </h2>
+              <div class="table-heading">
+                <h2 class="table-title">
+                  <span class="table-id">#{{ table.id }}</span>
+                  {{ table.name || 'Unnamed table' }}
+                </h2>
+                <!-- An explicit link, not a tappable row: the row already owns
+                     four seat buttons, and a button inside a button swallows
+                     their taps. -->
+                <ion-button
+                  fill="clear"
+                  size="small"
+                  :router-link="`/tables/${table.id}`"
+                  router-direction="forward"
+                >
+                  Open
+                  <ion-icon slot="end" :icon="chevronForwardOutline" />
+                </ion-button>
+              </div>
               <div class="seats">
                 <div v-for="{ seat, user } in seatsOf(table)" :key="seat" class="seat">
                   <span class="seat-name">{{ seat }}</span>
@@ -89,7 +103,6 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { isAxiosError } from 'axios';
 import {
   IonPage,
   IonContent,
@@ -101,6 +114,7 @@ import {
   IonItem,
   IonInput,
   IonButton,
+  IonIcon,
   IonModal,
   IonRefresher,
   IonRefresherContent,
@@ -110,10 +124,12 @@ import {
   toastController,
   useIonRouter,
 } from '@ionic/vue';
+import { chevronForwardOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
 import { useTablesStore } from '@/stores/tables';
-import { SEATS } from '@/services/tables';
-import type { Seat, Table } from '@/services/tables';
+import { seatsOf } from '@/services/tables';
+import type { Seat } from '@/services/tables';
+import { errorMessage, statusOf } from '@/utils/errors';
 
 const tablesStore = useTablesStore();
 const ionRouter = useIonRouter();
@@ -139,7 +155,7 @@ async function load() {
     await tablesStore.load();
   } catch (e) {
     // A 401 here means the session expired while the page was open.
-    if (isAxiosError(e) && e.response?.status === 401) {
+    if (statusOf(e) === 401) {
       ionRouter.navigate('/login', 'root', 'replace');
       return;
     }
@@ -152,14 +168,6 @@ async function load() {
 async function refresh(event: CustomEvent) {
   await load();
   (event.target as HTMLIonRefresherElement).complete();
-}
-
-// Always N, E, S, W, so every row shows the four seats in the same order.
-function seatsOf(table: Table) {
-  return SEATS.map((seat) => ({
-    seat,
-    user: table.seats.find((s) => s.seat === seat)?.user ?? null,
-  }));
 }
 
 function isJoining(tableId: number, seat: Seat) {
@@ -206,22 +214,6 @@ async function showError(message: string) {
     position: 'bottom',
   });
   await toast.present();
-}
-
-// Game endpoints send {status, message, data} (409s included); Laravel
-// validation still answers 422 {message, errors: {field: [msg]}}.
-function errorMessage(e: unknown, fallback: string): string {
-  if (isAxiosError(e)) {
-    if (!e.response) {
-      return 'Cannot reach the server. Please try again later.';
-    }
-    const data = e.response.data as { message?: string; errors?: Record<string, string[]> };
-    const firstError = data.errors && Object.values(data.errors)[0]?.[0];
-    if (firstError || data.message) {
-      return firstError || data.message!;
-    }
-  }
-  return fallback;
 }
 </script>
 

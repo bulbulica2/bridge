@@ -93,7 +93,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { isAxiosError } from 'axios';
 import {
   IonPage,
   IonContent,
@@ -107,6 +106,7 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
+import { errorMessage } from '@/utils/errors';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -174,20 +174,6 @@ async function submitNewPassword() {
   }
 }
 
-// Laravel validation errors come back as 422 {message, errors: {field: [msg]}}.
-function errorMessage(e: unknown, fallback: string): string {
-  if (isAxiosError(e)) {
-    if (!e.response) {
-      return 'Cannot reach the server. Please try again later.';
-    }
-    const data = e.response.data as { message?: string; errors?: Record<string, string[]> };
-    const firstError = data.errors && Object.values(data.errors)[0]?.[0];
-    if (firstError || data.message) {
-      return firstError || data.message!;
-    }
-  }
-  return fallback;
-}
 </script>
 
 <style scoped>
