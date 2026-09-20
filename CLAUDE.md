@@ -35,8 +35,10 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   (`CreateAccountPage.vue`, `meta.guestOnly`, linked only from the Login page),
   `/reset-password` and `/password-reset/:token` (both `ResetPasswordPage.vue`,
   `meta.guestOnly`, reached from the Login page or the emailed link),
-  `/account` (`AccountPage.vue`, `meta.requiresAuth`) and `/tables`
-  (`TablesPage.vue`, `meta.requiresAuth`, the menu's logged-in entry). Adding a
+  `/account` (`AccountPage.vue`, `meta.requiresAuth`), `/tables`
+  (`TablesPage.vue`, `meta.requiresAuth`, the menu's logged-in entry) and
+  `/tables/:id` (`TableDetailPage.vue`, `meta.requiresAuth`, one table's four
+  seats, reached from the list's "Open" button, not from the menu). Adding a
   new top-level section means adding both a view and a route entry here, plus an `ion-item` in
   `src/components/AppMenu.vue` if it belongs in the menu.
 - **Route guard**: a single `router.beforeEach` in `src/router/index.ts` enforces
@@ -71,10 +73,22 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   Both endpoints answer `200 {"status": "<message>"}` and the reset does **not**
   start a session, so the page redirects to `/login` afterwards.
 - **Game domain (tables)**: `src/services/tables.ts` wraps the session-authenticated
-  table endpoints (`GET /tables`, `POST /tables`, `POST /tables/{id}/seats`) and
-  `src/stores/tables.ts` keeps the list. These endpoints sit at the root (not
-  under `/api`) and answer with an envelope, `{status, message, data}`, so the
-  service returns `data.data`; 409s carry their reason in `message`.
+  table endpoints (`GET /tables`, `POST /tables`, `GET /tables/{id}`,
+  `POST /tables/{id}/seats`, `DELETE /tables/{id}/seats`) and
+  `src/stores/tables.ts` keeps both the list (`tables`) and the table the detail
+  page is showing (`currentTable`), syncing a changed table into both. These
+  endpoints sit at the root (not under `/api`) and answer with an envelope,
+  `{status, message, data}`, so the service returns `data.data`; 409s carry
+  their reason in `message`. A table exists only while somebody sits at it, so
+  the last player leaving **deletes** it: that response's `data` is
+  `{table_deleted: true}` instead of a table, and the id 404s afterwards.
+  `canManage()` mirrors the backend's `TablePolicy::manage`, but only as a hint —
+  `is_admin` is hidden from `GET /api/user`, so admins read as non-managers.
+- **Error handling**: `src/utils/errors.ts` is the one axios-error reader —
+  `errorMessage(e, fallback)` for the text to show and `statusOf(e)` for the
+  status to branch on. Three envelopes reach the SPA: the game endpoints'
+  `{status, message, data}`, Laravel's 422 `{message, errors}`, and a bare
+  `{message}` from auth/policy failures.
 - **Dev server port is 3000 on purpose** (`vite.config.ts`, `strictPort`): the
   backend's CORS `allowed_origins` defaults to `http://localhost:3000` and that
   host is a Sanctum stateful domain. Keep `VITE_API_BASE_URL` on `localhost`

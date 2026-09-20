@@ -31,6 +31,13 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    // One table: its four seats and the actions on them. Reached from the
+    // Tables list, not from the menu.
+    path: '/tables/:id',
+    component: () => import('@/views/TableDetailPage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/create-account',
     component: () => import('@/views/CreateAccountPage.vue'),
     meta: { guestOnly: true }

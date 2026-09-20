@@ -48,7 +48,6 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { isAxiosError } from 'axios';
 import {
   IonPage,
   IonContent,
@@ -61,6 +60,7 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
+import { errorMessage } from '@/utils/errors';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -79,25 +79,12 @@ async function submit() {
     password.value = '';
     ionRouter.navigate('/account', 'root', 'replace');
   } catch (e) {
-    error.value = loginErrorMessage(e);
+    error.value = errorMessage(e, 'Login failed. Please try again.');
   } finally {
     submitting.value = false;
   }
 }
 
-function loginErrorMessage(e: unknown): string {
-  if (isAxiosError(e)) {
-    if (!e.response) {
-      return 'Cannot reach the server. Please try again later.';
-    }
-    const data = e.response.data as { message?: string; errors?: Record<string, string[]> };
-    const firstError = data.errors && Object.values(data.errors)[0]?.[0];
-    if (firstError || data.message) {
-      return firstError || data.message!;
-    }
-  }
-  return 'Login failed. Please try again.';
-}
 </script>
 
 <style scoped>
