@@ -68,9 +68,30 @@
   `message` verbatim is the right behavior; they're user-facing sentences.
 - Bad `seat` values are a normal Laravel `422 {message, errors}`
   ("The selected seat is invalid."), not the envelope.
+- `GET /tables/{id}` returns one table in the same envelope and shape as the
+  list. An unknown or already-deleted id is a **plain Laravel 404**
+  (`{"message": "No query results for model [App\\Models\\Table] 9", "exception": …}`),
+  not the envelope — so a page must supply its own "no longer exists" wording
+  instead of echoing `message` like it does for a 409.
 - A table exists only while someone sits at it: `DELETE /tables/{id}/seats`
   frees the user and deletes the table when the last player leaves — which is
-  also how to **clean up after verifying** on the shared dev DB.
+  also how to **clean up after verifying** on the shared dev DB. All verified
+  against the running backend on the issue #15 run:
+  - someone else still seated → **200** with the full table, `message`
+    "You left the table.", and `moderated_by` **handed to the earliest-joined
+    remaining player** (seen going 318 → 319), so manager status changes under
+    an open page;
+  - last player out → **200** whose `data` is `{"table_deleted": true}`
+    **instead of a table**, message "… Nobody was left, so the table was
+    deleted."; the id 404s from then on, so don't re-fetch it;
+  - not seated but the table still exists → **409** "You are not seated at this
+    table.". Note the asymmetry: `DELETE /tables/{id}/seats/{user}` answers
+    **404** for that same condition, because there the seat is named in the URL.
+- `is_admin` is **hidden from `GET /api/user`**, so the SPA cannot tell whether
+  the current user is an admin and cannot fully evaluate `TablePolicy::manage`
+  (moderator, or creator while still seated, **or any admin**). Compute manager
+  status as a hint for what to render and let a 403 correct it. The clean fix is
+  a computed `can_manage` on the backend's `TableResource`.
 
 ## Proving a backend flow works
 
@@ -78,6 +99,20 @@ Use the Bash tool with `curl`, **one request at a time**. `php artisan serve` is
 single-threaded on Windows, so parallel or keep-alive clients (PowerShell's
 `Invoke-WebRequest` sessions) can block it. Hit `127.0.0.1:8000` directly;
 `localhost` tries `::1` first, which the server doesn't listen on.
+
+Three things that cost time on the issue #15 run:
+
+- **The Bash tool resets its working directory between calls**, so `cd "$(mktemp -d)"`
+  in one call leaves the cookie jar unreachable in the next. Put jars at an
+  absolute path in the session scratchpad (`$S/jarA`) and pass `-c "$J" -b "$J"`,
+  or keep a whole flow inside one call.
+- **Don't scrape ids with `sed`.** `sed -n 's/.*"id":\([0-9]*\).*/\1/p'` is
+  greedy and returns the *last* `"id":` in the payload — the nested `user.id`,
+  not the table's — so the rest of the flow then probes a table that never
+  existed. Parse properly: `python -c "import json;print(json.load(open(r'$S/r.json'))['data']['id'])"`.
+- **Always truncate error bodies** (`| head -c 200`, or parse out `message`).
+  `APP_DEBUG=true` makes a 404 answer with a full stack trace that is tens of
+  thousands of characters.
 
 ```bash
 cd "$(mktemp -d)"; B=http://127.0.0.1:8000

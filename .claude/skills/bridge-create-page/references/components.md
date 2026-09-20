@@ -91,13 +91,58 @@ it fights the item's own layout.
 
 - Give that div `width: 100%`; an `ion-item` child doesn't stretch by itself.
 - Don't add `button` to the `ion-item` unless the whole row navigates; a row
-  with per-cell buttons must not be a button itself.
+  with per-cell buttons must not be a button itself. To open a row's detail
+  page, give it its own link instead — nesting a button inside a button
+  swallows the inner taps:
+  ```vue
+  <ion-button fill="clear" size="small"
+              :router-link="`/tables/${table.id}`" router-direction="forward">
+    Open <ion-icon slot="end" :icon="chevronForwardOutline" />
+  </ion-button>
+  ```
+  `router-direction="forward"` (and `"back"` on the way out) keeps Ionic's page
+  stack and its transition animation right.
 - Always render a fixed set of slots (e.g. the four seats `N, E, S, W`) from a
   helper that maps the constant order onto the data, so rows line up even when
   the backend only sends the occupied ones.
 - Branch the body explicitly: loading spinner → error text → empty state → list.
   The empty state is a sentence telling the user what to do next
   ("No tables yet. Create the first one.").
+
+## Detail pages
+
+A page addressed by a route param (`/tables/:id`) reads the id in
+`onIonViewWillEnter`, not at setup — Ionic keeps the page alive, so arriving at
+a different record would otherwise reuse the previous id. Two rules that are
+easy to get wrong:
+
+- **Derive the record by id, don't read the store's `current…` directly.**
+  ```ts
+  const table = computed(() =>
+    store.currentTable && store.currentTable.id === tableId.value ? store.currentTable : null);
+  ```
+  Without the id check, moving from one record to another flashes the old one
+  while the new request is in flight.
+- **Give a deleted record its own branch**, separate from the error branch:
+  loading → gone → error → content. A backend that deletes records (a table
+  with nobody at it) makes 404 a normal end of life, and Laravel's 404 body is
+  a raw `No query results for model [App\Models\Table] 9` — never show it.
+  A non-numeric param goes to the same branch without firing a request.
+
+### Laying out a fixed arrangement (the bridge compass)
+Four seats around a middle cell, rather than a row, is a 3×3 grid with explicit
+placement — it keeps N/E/S/W where a bridge player expects them at any width:
+
+```css
+.compass { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 12px; }
+.seat-n { grid-column: 2; grid-row: 1; }
+.seat-w { grid-column: 1; grid-row: 2; }
+.table-info { grid-column: 2; grid-row: 2; }
+.seat-e { grid-column: 3; grid-row: 2; }
+.seat-s { grid-column: 2; grid-row: 3; }
+```
+Use `var(--ion-color-step-150, …)` / `var(--ion-color-light, …)` for borders and
+fills so the cells follow the dark palette instead of hardcoding grey.
 
 ## Modals
 
@@ -203,8 +248,15 @@ For showing values rather than editing them (the Account page), keep `ion-list` 
 - Success text: the same with `color="success"`. Use it when the backend returns
   a human-readable `status` (the password endpoints do) and the user stays on
   the page instead of being redirected.
-- One `errorMessage(e, fallback)` helper per page, with the fallback passed in,
-  covers several submit handlers without duplicating the 422 parsing.
+- **Don't write an error helper per page.** `src/utils/errors.ts` owns both:
+  `errorMessage(e, fallback)` for the sentence to show and `statusOf(e)` for the
+  status to branch on. (It used to be copy-pasted into every view; issue #15
+  extracted it once the detail page needed to tell 401/404/409 apart.)
+  ```ts
+  import { errorMessage, statusOf } from '@/utils/errors';
+  if (statusOf(e) === 401) { ionRouter.navigate('/login', 'root', 'replace'); return; }
+  error.value = errorMessage(e, 'Could not do the thing. Please try again.');
+  ```
 - Loading inside a button: `<ion-spinner v-if="submitting" name="crescent" />`
   with the label in `v-else`, plus `:disabled="submitting"` to stop double submits.
   For per-row buttons, key the "busy" state by row + action
@@ -223,6 +275,28 @@ await toast.present();
 ```
 Inline `ion-text` stays the rule inside forms and modals; a toast is for the
 list itself, which has no obvious place to put the message.
+
+### `alertController` (confirm before something destructive)
+For an action the user can't undo — leaving a seat, which may delete the table:
+
+```ts
+import { alertController } from '@ionic/vue';
+const alert = await alertController.create({
+  header: 'Leave this table?',
+  message: 'Your seat will be freed. If nobody is left, the table is deleted.',
+  buttons: [
+    { text: 'Cancel', role: 'cancel' },
+    { text: 'Leave', role: 'destructive' },
+  ],
+});
+await alert.present();
+const { role } = await alert.onDidDismiss();
+if (role !== 'destructive') return;
+```
+- The answer comes from `onDidDismiss()`, **not** from a button handler; check
+  `role`, because a backdrop tap or Esc also resolves it (with `'backdrop'`).
+- `role: 'destructive'` colors the button on iOS; it carries no behavior, so the
+  `role !== 'destructive'` guard is what actually stops the action.
 
 ### `ion-refresher` (pull to refresh)
 ```vue

@@ -83,6 +83,12 @@ Read in parallel:
   pull-to-refresh, an `ion-modal` for creation, toast for row-action failures).
   List pages are **not** vertically centered — that preference is about forms;
   a list starts at the top and only caps its width (`max-width` + `margin: 0 auto`).
+- Detail page (one record behind a route param, e.g. `/tables/:id`): start from
+  `assets/DetailPageTemplate.vue` (the Table detail pattern: read the id in
+  `onIonViewWillEnter`, derive the record by comparing ids against the store's
+  `current…`, four branches loading / gone / error / content, `alertController`
+  before anything destructive, and a Refresh button next to the refresher
+  because pull-to-refresh is unusable with a mouse). Width-capped like a list.
 - Conventions: `<script setup lang="ts">`, import every Ionic component you use
   from `@ionic/vue` explicitly, wrap in `<ion-page>` with `<AppHeader title="…" />`,
   navigate programmatically with `useIonRouter().navigate(path, 'root', 'replace')`.
@@ -159,8 +165,10 @@ var), update `CLAUDE.md` in the same commit.
 ## 4. Verify
 
 Run in parallel: `npm run build` (vue-tsc + vite), `npm run lint`, `npx vitest run`.
-Run `npm install` first if `node_modules` is missing (fresh worktrees don't have it).
-Fix anything that fails before committing. Don't commit red.
+Run `npm install` first if `node_modules` is missing (fresh worktrees don't have it)
+**or if Vite reports a dependency it "could not resolve"** — a `node_modules` that
+exists can still be stale after the lockfile changes, and `pinia`/`axios` went
+missing exactly that way. Fix anything that fails before committing. Don't commit red.
 
 ## 5. Commit, push, PR
 
@@ -192,6 +200,11 @@ Fix anything that fails before committing. Don't commit red.
 
 ## 6. Launch the app so the user can see it
 
+- **MySQL first.** XAMPP's MySQL is not registered as a Windows service here, so
+  nothing starts it for you: `C:\xampp\mysql\bin\mysqld.exe --defaults-file=C:\xampp\mysql\bin\my.ini --standalone`
+  in the background. `SESSION_DRIVER=database`, so without it every backend
+  request 500s on `select * from sessions` and the SPA looks broken for a reason
+  that has nothing to do with the page. Check with `Get-Process mysqld`.
 - Backend, in the background: `C:\xampp\php\php.exe artisan serve --port=8000`
   from `C:\xampp\htdocs\bridge_backend` (use `php` if it's on PATH).
 - Frontend, in the background: `npm run dev` → http://localhost:3000 (fixed port,
@@ -267,6 +280,18 @@ history below, and commit the skill changes on the page's branch (a separate
   their siblings land: merge `origin/main` again right before pushing (#6 landed
   mid-session and conflicted in the router, auth store, tests, CLAUDE.md and this
   file). User again asked to go straight to the PR.
+- Issue #15 (Table detail page): first **detail** page —
+  `assets/DetailPageTemplate.vue`, the compass grid, `alertController`, the
+  `AppHeader` `end` slot's first real use, and an "Open" button per row instead
+  of a tappable row (the row's seat buttons would swallow the taps). Learned:
+  `GET /tables/{id}` 404s with a raw Laravel body, leaving can delete the table
+  (`{table_deleted: true}`) and hands `moderated_by` on, `is_admin` is hidden so
+  manager status is only a hint, and the per-page `errorMessage` copies were
+  extracted to `src/utils/errors.ts` + `statusOf` once one page had to branch on
+  the status. Also: the Bash tool resets cwd between calls (keep cookie jars in
+  the scratchpad), never `sed`-scrape a nested `"id"`, and truncate debug error
+  bodies. Issue numbering shares a counter with PRs, so the next issue was #15,
+  not #9 — read the number back from `gh issue create` before naming the branch.
 - Issue #8 (Tables page, PR #14): first list page — `assets/ListPageTemplate.vue`, the game
   endpoints' `{status, message, data}` envelope, a pre-guard 401 redirect (now
   superseded by #7's `requiresAuth`), auth-gated menu item, modal/refresher/toast notes,
