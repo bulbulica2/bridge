@@ -5,7 +5,7 @@ import LoginPage from '@/views/LoginPage.vue'
 import AccountPage from '@/views/AccountPage.vue'
 import * as authService from '@/services/auth'
 import { navigateAndSettle } from '@/router/loading'
-import { showToast } from '@/utils/toast'
+import { showToast, showWelcomeToast } from '@/utils/toast'
 
 vi.mock('@/services/auth', () => ({
   login: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock('@/services/auth', () => ({
   fetchUser: vi.fn(),
 }))
 vi.mock('@/router/loading', () => ({ navigateAndSettle: vi.fn() }))
-vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
+vi.mock('@/utils/toast', () => ({ showToast: vi.fn(), showWelcomeToast: vi.fn() }))
 vi.mock('@ionic/vue', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ionic/vue')>()),
   useIonRouter: () => ({ navigate: vi.fn() }),
@@ -62,9 +62,11 @@ describe('Login form busy state', () => {
       expect(isDisabled(button)).toBe(true)
     }
     expect(wrapper.find('ion-spinner').exists()).toBe(true)
+    expect(showWelcomeToast).not.toHaveBeenCalled()
 
     navigation.resolve()
     await flushPromises()
+    expect(showWelcomeToast).toHaveBeenCalledWith('Welcome back, Ana!')
     expect(wrapper.find('ion-spinner').exists()).toBe(false)
     expect(isDisabled(wrapper.find('ion-input'))).toBe(false)
   })
@@ -91,6 +93,7 @@ describe('Login form busy state', () => {
     await flushPromises()
 
     expect(navigateAndSettle).not.toHaveBeenCalled()
+    expect(showWelcomeToast).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('Login failed')
     expect(isDisabled(wrapper.find('ion-input'))).toBe(false)
   })

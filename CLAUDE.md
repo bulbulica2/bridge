@@ -56,7 +56,10 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `loadSession()`), so `index.html` carries a plain-CSS boot bar until then.
   After the first page shows, the router prefetches every lazy page chunk.
   Toasts go through `src/utils/toast.ts`; they outlive a navigation, so
-  logout presents its toast once `/login` is up.
+  logout presents its toast once `/login` is up, and login/sign-up greet the
+  user with `showWelcomeToast` once `/account` is up. Its styles live in
+  `src/theme/toasts.css`: toasts render outside the pages, so the CSS is
+  global and styles the toast's shadow parts through `::part()`.
 - **App shell**: `App.vue` renders `<AppMenu />` (the left `ion-menu`) next to
   `<ion-router-outlet id="main-content" />`; the menu's `content-id` must match
   that outlet id. Every page wraps its content in `<ion-page>` and uses

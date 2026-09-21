@@ -96,6 +96,7 @@ import {
 import AppHeader from '@/components/AppHeader.vue';
 import { navigateAndSettle } from '@/router/loading';
 import { errorMessage } from '@/utils/errors';
+import { showWelcomeToast } from '@/utils/toast';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -132,6 +133,7 @@ async function submit() {
     // Stay busy until /account is up, so the form can't be edited or
     // resubmitted while its chunk loads.
     await navigateAndSettle(ionRouter, '/account');
+    showWelcomeToast(`Welcome, ${auth.user?.name}! Your account is ready.`);
   } catch (e) {
     error.value = errorMessage(e, 'Could not create the account. Please try again.');
   } finally {
