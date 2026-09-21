@@ -11,6 +11,7 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   joinSeat: vi.fn(),
   getTable: vi.fn(),
   leaveSeat: vi.fn(),
+  removePlayer: vi.fn(),
 }))
 
 function makeTable(id: number, seats: Partial<Record<Seat, string>> = {}): Table {
@@ -209,6 +210,52 @@ describe('tables store', () => {
     const store = useTablesStore()
     await store.loadTable(1)
     await expect(store.leave(1)).rejects.toThrow()
+
+    expect(store.currentTable).toEqual(table)
+  })
+
+  test('removePlayer replaces the table in the list and the open page', async () => {
+    const before = makeTable(1, { N: 'ana', E: 'bob' })
+    const after = makeTable(1, { N: 'ana' })
+    vi.mocked(tablesService.listTables).mockResolvedValue([before])
+    vi.mocked(tablesService.getTable).mockResolvedValue(before)
+    vi.mocked(tablesService.removePlayer).mockResolvedValue(after)
+
+    const store = useTablesStore()
+    await store.load()
+    await store.loadTable(1)
+    const result = await store.removePlayer(1, 2)
+
+    expect(tablesService.removePlayer).toHaveBeenCalledWith(1, 2)
+    expect(result).toEqual({ tableDeleted: false })
+    expect(store.tables).toEqual([after])
+    expect(store.currentTable).toEqual(after)
+  })
+
+  test('removePlayer forgets the table when it empties it', async () => {
+    const table = makeTable(1, { N: 'ana' })
+    vi.mocked(tablesService.listTables).mockResolvedValue([table])
+    vi.mocked(tablesService.getTable).mockResolvedValue(table)
+    vi.mocked(tablesService.removePlayer).mockResolvedValue({ table_deleted: true })
+
+    const store = useTablesStore()
+    await store.load()
+    await store.loadTable(1)
+    const result = await store.removePlayer(1, 1)
+
+    expect(result).toEqual({ tableDeleted: true })
+    expect(store.tables).toEqual([])
+    expect(store.currentTable).toBeNull()
+  })
+
+  test('failed removePlayer keeps the player seated', async () => {
+    const table = makeTable(1, { N: 'ana', E: 'bob' })
+    vi.mocked(tablesService.getTable).mockResolvedValue(table)
+    vi.mocked(tablesService.removePlayer).mockRejectedValue(new Error('403'))
+
+    const store = useTablesStore()
+    await store.loadTable(1)
+    await expect(store.removePlayer(1, 2)).rejects.toThrow()
 
     expect(store.currentTable).toEqual(table)
   })

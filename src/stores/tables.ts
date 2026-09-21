@@ -60,7 +60,15 @@ export const useTablesStore = defineStore('tables', () => {
   // Giving up the last seat deletes the table, so the caller has to know which
   // of the two happened before deciding whether to stay on the page.
   async function leave(tableId: number) {
-    const result = await tablesService.leaveSeat(tableId);
+    return applyRemoval(tableId, await tablesService.leaveSeat(tableId));
+  }
+
+  // A manager kicking someone else answers exactly like leaving does.
+  async function removePlayer(tableId: number, userId: number) {
+    return applyRemoval(tableId, await tablesService.removePlayer(tableId, userId));
+  }
+
+  function applyRemoval(tableId: number, result: tablesService.SeatRemovalResult) {
     if (tablesService.isTableDeleted(result)) {
       forget(tableId);
       return { tableDeleted: true };
@@ -69,5 +77,5 @@ export const useTablesStore = defineStore('tables', () => {
     return { tableDeleted: false };
   }
 
-  return { tables, currentTable, load, loadTable, create, join, leave, forget };
+  return { tables, currentTable, load, loadTable, create, join, leave, removePlayer, forget };
 });

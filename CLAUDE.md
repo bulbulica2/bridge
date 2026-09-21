@@ -74,7 +74,9 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   start a session, so the page redirects to `/login` afterwards.
 - **Game domain (tables)**: `src/services/tables.ts` wraps the session-authenticated
   table endpoints (`GET /tables`, `POST /tables`, `GET /tables/{id}`,
-  `POST /tables/{id}/seats`, `DELETE /tables/{id}/seats`) and
+  `POST /tables/{id}/seats`, `DELETE /tables/{id}/seats`, and the manager-only
+  `DELETE /tables/{id}/seats/{user}` that kicks another player: 403 for
+  non-managers, 404 when that player already left) and
   `src/stores/tables.ts` keeps both the list (`tables`) and the table the detail
   page is showing (`currentTable`), syncing a changed table into both. These
   endpoints sit at the root (not under `/api`) and answer with an envelope,

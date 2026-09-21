@@ -67,6 +67,19 @@
                 <ion-spinner v-if="busySeat === seat" name="crescent" />
                 <span v-else>Sit here</span>
               </ion-button>
+
+              <!-- Managers only; the backend has the final say (403). -->
+              <ion-button
+                v-else-if="user && isManager"
+                size="small"
+                fill="clear"
+                color="danger"
+                :disabled="busySeat !== null"
+                @click="confirmRemove(seat, user)"
+              >
+                <ion-spinner v-if="busySeat === seat" name="crescent" />
+                <span v-else>Remove</span>
+              </ion-button>
             </div>
 
             <div class="table-info">
@@ -114,6 +127,7 @@ import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
 import { canManage, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
+import type { User } from '@/services/auth';
 import { errorMessage, statusOf } from '@/utils/errors';
 
 const route = useRoute();
@@ -235,6 +249,43 @@ async function confirmLeave(seat: Seat) {
   } catch (e) {
     if (!handleExpiredSession(e)) {
       await showToast(errorMessage(e, 'Could not leave the table. Please try again.'), 'danger');
+      await load();
+    }
+  } finally {
+    busySeat.value = null;
+  }
+}
+
+async function confirmRemove(seat: Seat, user: User) {
+  const alert = await alertController.create({
+    header: `Remove ${user.username}?`,
+    message: `${user.username} loses seat ${seat}. They can sit down again afterwards.`,
+    buttons: [
+      { text: 'Cancel', role: 'cancel' },
+      { text: 'Remove', role: 'destructive' },
+    ],
+  });
+  await alert.present();
+  const { role } = await alert.onDidDismiss();
+  if (role !== 'destructive') {
+    return;
+  }
+
+  busySeat.value = seat;
+  try {
+    const { tableDeleted } = await store.removePlayer(tableId.value, user.id);
+    if (tableDeleted) {
+      // Can't normally happen (a manager is still seated), but the id is dead.
+      await showToast(`${user.username} was removed and the table was deleted.`, 'success');
+      ionRouter.navigate('/tables', 'back', 'replace');
+      return;
+    }
+    await showToast(`${user.username} was removed from the table.`, 'success');
+  } catch (e) {
+    if (!handleExpiredSession(e)) {
+      // 403: you no longer manage this table (the role moves when a manager
+      // leaves). 404: they already left. Either way the page is stale.
+      await showToast(errorMessage(e, 'Could not remove that player. Please try again.'), 'danger');
       await load();
     }
   } finally {
