@@ -23,7 +23,47 @@
   </head>
 
   <body>
-    <div id="app"></div>
+    <!-- main.ts mounts only after the first navigation resolves, which on a
+         reload includes the guard's GET /api/user. Until then this bar is the
+         only thing on screen; Vue replaces it on mount. -->
+    <div id="app">
+      <div class="boot-progress" role="progressbar" aria-label="Loading"></div>
+    </div>
+    <style>
+      /* Hidden for the first 150 ms so a fast start never flickers. */
+      .boot-progress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        overflow: hidden;
+        opacity: 0;
+        animation: boot-show 0s linear 150ms forwards;
+      }
+      .boot-progress::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 40%;
+        background: #0054e9;
+        animation: boot-slide 1.2s ease-in-out infinite;
+      }
+      @keyframes boot-show {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes boot-slide {
+        from {
+          left: -40%;
+        }
+        to {
+          left: 100%;
+        }
+      }
+    </style>
     <script type="module" src="/src/main.ts"></script>
   </body>
 

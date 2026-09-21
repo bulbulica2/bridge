@@ -13,6 +13,7 @@
                 label-placement="stacked"
                 autocomplete="name"
                 required
+                :disabled="submitting"
               />
             </ion-item>
             <ion-item>
@@ -23,6 +24,7 @@
                 label-placement="stacked"
                 autocomplete="username"
                 required
+                :disabled="submitting"
               />
             </ion-item>
             <ion-item>
@@ -33,6 +35,7 @@
                 label-placement="stacked"
                 autocomplete="email"
                 required
+                :disabled="submitting"
               />
             </ion-item>
             <ion-item>
@@ -43,6 +46,7 @@
                 label-placement="stacked"
                 autocomplete="new-password"
                 required
+                :disabled="submitting"
               />
             </ion-item>
             <ion-item>
@@ -53,6 +57,7 @@
                 label-placement="stacked"
                 autocomplete="new-password"
                 required
+                :disabled="submitting"
               />
             </ion-item>
           </ion-list>
@@ -68,7 +73,7 @@
         </form>
 
         <div class="secondary">
-          <ion-button fill="clear" router-link="/login">Already have an account? Log in</ion-button>
+          <ion-button fill="clear" router-link="/login" :disabled="submitting">Already have an account? Log in</ion-button>
         </div>
       </div>
     </ion-content>
@@ -89,6 +94,7 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
+import { navigateAndSettle } from '@/router/loading';
 import { errorMessage } from '@/utils/errors';
 import { useAuthStore } from '@/stores/auth';
 
@@ -104,6 +110,9 @@ const error = ref('');
 const submitting = ref(false);
 
 async function submit() {
+  if (submitting.value) {
+    return;
+  }
   error.value = '';
   if (password.value !== passwordConfirmation.value) {
     error.value = 'Passwords do not match.';
@@ -120,7 +129,9 @@ async function submit() {
     });
     password.value = '';
     passwordConfirmation.value = '';
-    ionRouter.navigate('/account', 'root', 'replace');
+    // Stay busy until /account is up, so the form can't be edited or
+    // resubmitted while its chunk loads.
+    await navigateAndSettle(ionRouter, '/account');
   } catch (e) {
     error.value = errorMessage(e, 'Could not create the account. Please try again.');
   } finally {

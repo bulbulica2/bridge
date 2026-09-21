@@ -26,10 +26,6 @@
           </ion-item>
         </ion-list>
 
-        <ion-text v-if="error" color="danger">
-          <p class="error">{{ error }}</p>
-        </ion-text>
-
         <ion-button expand="block" color="danger" :disabled="loggingOut" @click="logOut">
           <ion-spinner v-if="loggingOut" name="crescent" />
           <span v-else>Log out</span>
@@ -55,26 +51,35 @@ import {
 } from '@ionic/vue';
 import { personCircleOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
+import { navigateAndSettle } from '@/router/loading';
 import { useAuthStore } from '@/stores/auth';
+import { showToast } from '@/utils/toast';
 
 const auth = useAuthStore();
 const ionRouter = useIonRouter();
 
-const error = ref('');
 const loggingOut = ref(false);
 
 // The store clears the user even if the request fails, so we always end up
-// logged out locally; the message only tells the user the server wasn't told.
+// logged out locally; the warning only tells the user the server wasn't told.
+// This page is gone once /login is up, so the outcome goes in a toast there.
 async function logOut() {
-  error.value = '';
+  if (loggingOut.value) {
+    return;
+  }
   loggingOut.value = true;
+  let reachedServer = true;
   try {
     await auth.logout();
   } catch {
-    error.value = 'Could not reach the server, so you were logged out locally.';
-  } finally {
-    loggingOut.value = false;
-    ionRouter.navigate('/login', 'root', 'replace');
+    reachedServer = false;
+  }
+  await navigateAndSettle(ionRouter, '/login');
+  loggingOut.value = false;
+  if (reachedServer) {
+    await showToast('You have been logged out.', 'success');
+  } else {
+    await showToast('Could not reach the server, so you were logged out locally.', 'warning');
   }
 }
 </script>
@@ -107,9 +112,5 @@ async function logOut() {
 
 .wrap {
   white-space: normal;
-}
-
-.error {
-  margin: 8px 16px;
 }
 </style>

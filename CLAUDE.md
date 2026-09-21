@@ -47,6 +47,16 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `/account`. It awaits `authStore.loadSession()` first, which calls
   `GET /api/user` once per page load so a reload on an auth-only page doesn't
   bounce a user whose Sanctum session cookie is still valid.
+- **Loading feedback**: `src/router/loading.ts` holds the route-loading flag.
+  `beforeEach`/`afterEach`/`onError` in `src/router/index.ts` drive it, and
+  `App.vue` shows it as an indeterminate `ion-progress-bar` after 150 ms. Forms
+  that navigate on success call `navigateAndSettle(ionRouter, path)` (Ionic's
+  `navigate()` returns nothing) and stay disabled until it resolves. `main.ts`
+  mounts only after the first navigation (which on a reload includes
+  `loadSession()`), so `index.html` carries a plain-CSS boot bar until then.
+  After the first page shows, the router prefetches every lazy page chunk.
+  Toasts go through `src/utils/toast.ts`; they outlive a navigation, so
+  logout presents its toast once `/login` is up.
 - **App shell**: `App.vue` renders `<AppMenu />` (the left `ion-menu`) next to
   `<ion-router-outlet id="main-content" />`; the menu's `content-id` must match
   that outlet id. Every page wraps its content in `<ion-page>` and uses

@@ -8,6 +8,9 @@ export const useTablesStore = defineStore('tables', () => {
   // The table the detail page is showing, held next to the list so both stay
   // truthful when a seat changes from either page.
   const currentTable = ref<Table | null>(null);
+  // Whether `tables` has come from the backend at least once, so the page can
+  // tell "nothing loaded yet" (skeleton) from "loaded, and empty".
+  const loaded = ref(false);
 
   // Replace only, never append: the list is ordered by the backend (newest
   // first), so a table we only ever opened by URL has no correct position in
@@ -34,6 +37,7 @@ export const useTablesStore = defineStore('tables', () => {
 
   async function load() {
     tables.value = await tablesService.listTables();
+    loaded.value = true;
   }
 
   async function loadTable(tableId: number) {
@@ -77,5 +81,5 @@ export const useTablesStore = defineStore('tables', () => {
     return { tableDeleted: false };
   }
 
-  return { tables, currentTable, load, loadTable, create, join, leave, removePlayer, forget };
+  return { tables, currentTable, loaded, load, loadTable, create, join, leave, removePlayer, forget };
 });

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from '@ionic/vue-router';
 import { RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { navigationEnded, navigationStarted } from './loading';
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -70,6 +71,7 @@ const router = createRouter({
 // backend once per page load whether the Sanctum session cookie is still valid,
 // so a reload on an auth-only page doesn't bounce a logged-in user to /login.
 router.beforeEach(async (to) => {
+  navigationStarted(to.fullPath);
   const auth = useAuthStore();
   await auth.loadSession();
 
@@ -81,5 +83,35 @@ router.beforeEach(async (to) => {
   }
   return true;
 })
+
+// afterEach also runs for aborted and duplicated navigations; onError covers
+// the ones that throw (e.g. a lazy chunk that fails to load).
+router.afterEach((to) => {
+  navigationEnded(to.fullPath);
+  prefetchPages();
+})
+router.onError(() => {
+  navigationEnded();
+})
+
+// Every page is a lazy chunk, and the first visit to one waits for it (in dev,
+// Vite even compiles it on that first request). Once the first page is up,
+// fetch the rest in the background so later navigations don't pay that cost.
+let prefetched = false;
+function prefetchPages() {
+  if (prefetched) {
+    return;
+  }
+  prefetched = true;
+  setTimeout(() => {
+    for (const route of routes) {
+      if (typeof route.component === 'function') {
+        (route.component as () => Promise<unknown>)().catch(() => {
+          // Only a head start; the real navigation retries and reports errors.
+        });
+      }
+    }
+  }, 1000);
+}
 
 export default router
