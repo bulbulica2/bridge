@@ -87,6 +87,19 @@
   - not seated but the table still exists → **409** "You are not seated at this
     table.". Note the asymmetry: `DELETE /tables/{id}/seats/{user}` answers
     **404** for that same condition, because there the seat is named in the URL.
+- `DELETE /tables/{id}/seats/{user}` (issue #16, verified): the answers are the same as for
+  leaving, so the store reuses one `applyRemoval` for both. Aimed at yourself it
+  is a quit. Aimed at someone else it's a kick: **200** "Player removed from the table.",
+  **403** `{message}` "Only the table creator, its moderator or an admin can
+  remove other players." for non-managers, **404** "That user is not seated
+  at this table." when they already left. A kicked player may rejoin at once.
+  **Two-user verification recipe:** register A and B (one jar each, re-read the
+  XSRF cookie before every write). A creates, B joins, B kicks A (403), A kicks B
+  (200), A kicks B again (404), A leaves (table deleted). Then delete both throwaway users:
+  `mysql -u root bridge -e "DELETE FROM sessions WHERE user_id IN (…); DELETE FROM users WHERE id IN (…) AND email LIKE 'kick%@example.com'"`.
+- There is also `POST /tables/{id}/seats/users` (a manager seats a user by id)
+  and `GET /users/{id}` (public profile), but **no user search**. That's why "seat a
+  player" is still deferred: the SPA has no way to find another user's id.
 - `is_admin` is **hidden from `GET /api/user`**, so the SPA cannot tell whether
   the current user is an admin and cannot fully evaluate `TablePolicy::manage`
   (moderator, or creator while still seated, **or any admin**). Compute manager
