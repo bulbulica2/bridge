@@ -11,22 +11,30 @@
       </ion-refresher>
 
       <div class="table-detail">
-        <div v-if="loading" class="centered">
-          <ion-spinner name="crescent" />
-        </div>
-
         <!-- A table lives only while somebody sits at it, so a dead id is the
              normal end of a table's life, not an error worth shouting about. -->
-        <div v-else-if="notFound" class="gone">
+        <div v-if="notFound" class="gone">
           <p>This table no longer exists.</p>
           <ion-button router-link="/tables" router-direction="back">Back to tables</ion-button>
         </div>
 
-        <ion-text v-else-if="loadError" color="danger">
+        <!-- Nothing to show yet: a big spinner where the compass will be. -->
+        <div v-else-if="loading && !table" class="loading" aria-busy="true">
+          <ion-spinner name="crescent" />
+          <p>Loading table…</p>
+        </div>
+
+        <ion-text v-if="!notFound && loadError" color="danger">
           <p class="error">{{ loadError }}</p>
         </ion-text>
 
-        <template v-else-if="table">
+        <!-- A table already in the store shows at once and refreshes in place. -->
+        <template v-if="!notFound && table">
+          <div v-if="loading" class="refreshing">
+            <ion-spinner name="crescent" />
+            <span>Refreshing…</span>
+          </div>
+
           <div class="compass">
             <div
               v-for="{ seat, user } in seats"
@@ -94,7 +102,7 @@
             expand="block"
             fill="outline"
             class="refresh"
-            :disabled="busySeat !== null"
+            :disabled="busySeat !== null || loading"
             @click="load()"
           >
             Refresh
@@ -119,7 +127,6 @@ import {
   IonSpinner,
   alertController,
   onIonViewWillEnter,
-  toastController,
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
@@ -129,6 +136,7 @@ import { canManage, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { User } from '@/services/auth';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { showToast } from '@/utils/toast';
 
 const route = useRoute();
 const ionRouter = useIonRouter();
@@ -143,10 +151,14 @@ const notFound = ref(false);
 const busySeat = ref<Seat | null>(null);
 
 // Only trust the store's current table when it is the one this route asks for,
-// otherwise moving from one table to another flashes the previous one.
-const table = computed(() =>
-  store.currentTable && store.currentTable.id === tableId.value ? store.currentTable : null,
-);
+// otherwise moving from one table to another flashes the previous one. Coming
+// from the list, its copy of the table shows at once while the fresh one loads.
+const table = computed(() => {
+  if (store.currentTable && store.currentTable.id === tableId.value) {
+    return store.currentTable;
+  }
+  return store.tables.find((t) => t.id === tableId.value) ?? null;
+});
 const me = computed(() => auth.user?.id ?? null);
 const seats = computed(() => (table.value ? seatsOf(table.value) : []));
 const mySeat = computed(
@@ -302,15 +314,6 @@ function handleExpiredSession(e: unknown): boolean {
   return false;
 }
 
-async function showToast(message: string, color: 'danger' | 'success') {
-  const toast = await toastController.create({
-    message,
-    duration: 4000,
-    color,
-    position: 'bottom',
-  });
-  await toast.present();
-}
 </script>
 
 <style scoped>
@@ -319,10 +322,37 @@ async function showToast(message: string, color: 'danger' | 'success') {
   margin: 0 auto;
 }
 
-.centered {
+.loading {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 0;
+  color: var(--ion-color-medium);
+}
+
+.loading ion-spinner {
+  width: 48px;
+  height: 48px;
+}
+
+.loading p {
+  margin: 0;
+}
+
+.refreshing {
+  display: flex;
+  align-items: center;
   justify-content: center;
-  padding: 32px 0;
+  gap: 8px;
+  padding: 0 0 12px;
+  color: var(--ion-color-medium);
+  font-size: 0.9rem;
+}
+
+.refreshing ion-spinner {
+  width: 18px;
+  height: 18px;
 }
 
 .gone {

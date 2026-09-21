@@ -46,9 +46,21 @@ describe('tables store', () => {
     vi.mocked(tablesService.listTables).mockResolvedValue(tables)
 
     const store = useTablesStore()
+    expect(store.loaded).toBe(false)
     await store.load()
 
     expect(store.tables).toEqual(tables)
+    expect(store.loaded).toBe(true)
+  })
+
+  test('failed load keeps the list and stays not-loaded', async () => {
+    vi.mocked(tablesService.listTables).mockRejectedValueOnce(new Error('offline'))
+
+    const store = useTablesStore()
+    await expect(store.load()).rejects.toThrow()
+
+    expect(store.tables).toEqual([])
+    expect(store.loaded).toBe(false)
   })
 
   test('create puts the new table on top of the list', async () => {

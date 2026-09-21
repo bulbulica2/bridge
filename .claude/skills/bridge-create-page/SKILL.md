@@ -92,6 +92,14 @@ Read in parallel:
 - Conventions: `<script setup lang="ts">`, import every Ionic component you use
   from `@ionic/vue` explicitly, wrap in `<ion-page>` with `<AppHeader title="…" />`,
   navigate programmatically with `useIonRouter().navigate(path, 'root', 'replace')`.
+  A form that navigates on success awaits `navigateAndSettle(ionRouter, path)`
+  from `@/router/loading` instead, and disables its inputs, submit and
+  secondary links until that resolves (issue #18: no double submit, no silent
+  gap). Result toasts come from `@/utils/toast`'s `showToast`. Present them
+  after navigating, because they outlive the page.
+  Loading states: show a skeleton or big spinner only when there's nothing
+  to show yet. Data already in the store stays visible with a small
+  "Refreshing…" row instead of blanking on every enter.
 
 ### Route: `src/router/index.ts`
 Add a lazy-loaded entry: `{ path: '/foo', component: () => import('@/views/FooPage.vue') }`.
@@ -148,6 +156,11 @@ pages left behind, in the same PR: issue #7's router guard replaced the
   unreachable.
 - **Unit test** (`tests/unit/<domain>Store.spec.ts`, see `assets/store.spec-template.ts`):
   mock the service with `vi.mock`, and cover success and failure.
+  Page tests: Ionic web components take `disabled` (and `color`) as DOM
+  **properties**, not attributes, so read `(el.element as any).disabled`.
+  Stub `useIonRouter` by partially mocking `@ionic/vue`
+  (`tests/unit/busyForms.spec.ts`). Scope `findAll('ion-button')` to the page
+  body, because the header adds an Account button once logged in.
   `vi.clearAllMocks()` clears calls but **not** implementations, so a
   `mockRejectedValue` set in one test still applies in the next one. Don't set a
   test's fixture up by calling an action an earlier test made reject (e.g. reusing
@@ -307,3 +320,10 @@ history below, and commit the skill changes on the page's branch (a separate
   superseded by #7's `requiresAuth`), auth-gated menu item, modal/refresher/toast notes,
   and verifying against a dev DB whose seed users are gone (register a throwaway user
   and clean up after).
+- Issue #18 (Loading feedback): a cross-cutting UX issue, not a page. It added the
+  route progress bar (`src/router/loading.ts` + `App.vue`), the `index.html`
+  boot bar (the app mounts only after the first navigation), chunk prefetch,
+  `navigateAndSettle` busy forms, logout toasts and skeleton/refreshing states.
+  Learned: Python on this machine writes cp1252 unless `PYTHONUTF8=1` (it
+  mangled a "…"), Ionic `disabled` is a property in tests, and prod page
+  chunks are 2–6 kB, so slow first visits are mostly dev-only Vite compiles.
