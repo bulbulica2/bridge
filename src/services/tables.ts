@@ -84,6 +84,17 @@ export async function leaveSeat(tableId: number): Promise<SeatRemovalResult> {
   return data.data;
 }
 
+// A manager takes another player out of their seat. 403 when the caller can't
+// manage this table, 404 when that player no longer sits here (the seat is
+// addressed in the URL, unlike leaveSeat's 409). Emptying the table deletes it.
+export async function removePlayer(tableId: number, userId: number): Promise<SeatRemovalResult> {
+  await http.get('/sanctum/csrf-cookie');
+  const { data } = await http.delete<ApiResponse<SeatRemovalResult>>(
+    `/tables/${tableId}/seats/${userId}`,
+  );
+  return data.data;
+}
+
 // The four seats in N, E, S, W order with whoever holds them. The backend only
 // sends the occupied ones, so both table views build the full set from here.
 export function seatsOf(table: Table): { seat: Seat; user: User | null }[] {

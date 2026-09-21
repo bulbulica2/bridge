@@ -292,6 +292,16 @@ history below, and commit the skill changes on the page's branch (a separate
   the scratchpad), never `sed`-scrape a nested `"id"`, and truncate debug error
   bodies. Issue numbering shares a counter with PRs, so the next issue was #15,
   not #9 — read the number back from `gh issue create` before naming the branch.
+- Issue #16 (Table manager seats): first **feature on an existing page**
+  rather than a new page. It added a manager-only Remove button on the detail page's compass,
+  confirmed via `alertController` and gated by the `canManage()` hint, with 403/404 → toast +
+  reload. Learned: a "rebase" onto a merged sibling is just a new branch from
+  `origin/main` when the branch doesn't exist yet (unset the upstream it
+  inherits), removal endpoints can share one store helper, and a two-user
+  kick check belongs in the verification recipe. The branch name the user typed
+  (`16-table-managers-seats`) differs from the issue title
+  (`16-table-manager-seats`): keep the user's name for the branch and the
+  issue title for the PR.
 - Issue #8 (Tables page, PR #14): first list page — `assets/ListPageTemplate.vue`, the game
   endpoints' `{status, message, data}` envelope, a pre-guard 401 redirect (now
   superseded by #7's `requiresAuth`), auth-gated menu item, modal/refresher/toast notes,
