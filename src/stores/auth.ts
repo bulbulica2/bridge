@@ -5,6 +5,7 @@ import type {
   LoginCredentials,
   PasswordResetData,
   PasswordResetRequest,
+  ProfileUpdate,
   RegistrationData,
   User,
 } from '@/services/auth';
@@ -68,6 +69,13 @@ export const useAuthStore = defineStore('auth', () => {
     return authService.resetPassword(data);
   }
 
+  // The backend answers with the full own record, so it replaces `user`
+  // wholesale; the header and menu pick up a new name straight away. On a
+  // failure (422, 401, offline) the user stays as it was.
+  async function updateProfile(data: ProfileUpdate) {
+    user.value = await authService.updateProfile(data);
+  }
+
   return {
     user,
     isAuthenticated,
@@ -77,5 +85,6 @@ export const useAuthStore = defineStore('auth', () => {
     loadSession,
     requestPasswordReset,
     resetPassword,
+    updateProfile,
   };
 });

@@ -77,3 +77,20 @@ export async function resetPassword(data: PasswordResetData): Promise<string> {
   const { data: body } = await http.post<StatusResponse>('/reset-password', data);
   return body.status;
 }
+
+// Only these two fields are editable; the backend ignores anything else
+// (username, email and password can't be changed yet). `description: null`
+// clears it.
+export interface ProfileUpdate {
+  name?: string;
+  description?: string | null;
+}
+
+// PATCH /api/user answers with the game endpoints' envelope,
+// {status, message, data}, where data is the full own record (same shape as
+// GET /api/user). 422 {message, errors} for an invalid name/description.
+export async function updateProfile(data: ProfileUpdate): Promise<User> {
+  await http.get('/sanctum/csrf-cookie');
+  const { data: body } = await http.patch<{ data: User }>('/api/user', data);
+  return body.data;
+}

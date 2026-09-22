@@ -10,6 +10,7 @@ vi.mock('@/services/auth', () => ({
   fetchUser: vi.fn(),
   requestPasswordReset: vi.fn(),
   resetPassword: vi.fn(),
+  updateProfile: vi.fn(),
 }))
 
 describe('auth store', () => {
@@ -185,5 +186,31 @@ describe('auth store', () => {
     })).rejects.toThrow()
 
     expect(auth.isAuthenticated).toBe(false)
+  })
+
+  test('updateProfile replaces the user with the returned record', async () => {
+    const before = { id: 1, name: 'Ana', username: 'ana', email: 'ana@example.com', description: 'Hi' }
+    const after = { ...before, name: 'Ana Maria', description: null }
+    vi.mocked(authService.fetchUser).mockResolvedValue(before)
+    vi.mocked(authService.updateProfile).mockResolvedValue(after)
+
+    const auth = useAuthStore()
+    await auth.loadSession()
+    await auth.updateProfile({ name: 'Ana Maria', description: null })
+
+    expect(authService.updateProfile).toHaveBeenCalledWith({ name: 'Ana Maria', description: null })
+    expect(auth.user).toEqual(after)
+  })
+
+  test('a rejected updateProfile keeps the user as it was', async () => {
+    const before = { id: 1, name: 'Ana', username: 'ana', email: 'ana@example.com' }
+    vi.mocked(authService.fetchUser).mockResolvedValue(before)
+    vi.mocked(authService.updateProfile).mockRejectedValue(new Error('422'))
+
+    const auth = useAuthStore()
+    await auth.loadSession()
+    await expect(auth.updateProfile({ name: '' })).rejects.toThrow()
+
+    expect(auth.user).toEqual(before)
   })
 })
