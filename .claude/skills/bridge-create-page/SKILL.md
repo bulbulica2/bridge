@@ -45,6 +45,9 @@ wondering what's happening.
   keeping **both** sides (both routes, both sets of store actions and tests), then
   re-run build + lint + tests before the PR.
 - Don't use bare `git stash`; the stash is shared across worktrees.
+- Branch names can carry a `bulbulica2/` prefix (`bulbulica2/23-edit-profile`).
+  The issue number is the leading number after the prefix, and commit messages
+  start with the **full** branch name, prefix included.
 - If the issue leaves a real product decision open (e.g. where to redirect after
   success when no page exists yet), pick the least surprising option, follow
   what sibling issues imply, and mention it in the PR, rather than stopping to ask.
@@ -327,3 +330,10 @@ history below, and commit the skill changes on the page's branch (a separate
   Learned: Python on this machine writes cp1252 unless `PYTHONUTF8=1` (it
   mangled a "…"), Ionic `disabled` is a property in tests, and prod page
   chunks are 2–6 kB, so slow first visits are mostly dev-only Vite compiles.
+- Issue #23 (Edit profile): an edit mode on the existing Account page (not a
+  new route): `PATCH /api/user` via the auth service/store, `fieldErrors()` in
+  `utils/errors.ts` for per-field 422s, a hand-rendered `n / 1000` counter, and
+  change-only payloads with `null` for a cleared field. Learned: that PATCH
+  uses the envelope while `GET /api/user` doesn't, branches now carry a
+  `bulbulica2/` prefix, and `findComponent(IonInput).setValue()` drives
+  `v-model` in tests. Everything passed on the first run.
