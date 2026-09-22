@@ -71,6 +71,32 @@ and router outlet to work.
   `username`) so browsers and password managers behave.
 - Wrap in a real `<form @submit.prevent>` so Enter submits.
 
+### `ion-textarea` with a character counter, and per-field 422 errors
+The profile edit form on `AccountPage.vue` (issue #23):
+```vue
+<ion-item>
+  <ion-textarea v-model="description" label="Description" label-placement="stacked"
+                :auto-grow="true" :rows="3" :maxlength="1000" :disabled="saving" />
+</ion-item>
+<ion-note class="counter">{{ description.length }} / 1000</ion-note>
+<ion-text v-if="errors.description" color="danger">
+  <p class="field-error">{{ errors.description }}</p>
+</ion-text>
+```
+- Render the `n / max` counter yourself in an `ion-note`. Ionic's built-in
+  `counter` prop draws it inside the shadow DOM, where a unit test can't read it.
+- `errors` comes from `fieldErrors(e)` in `@/utils/errors` (first message per
+  field of a 422). Fall back to `errorMessage` below the form only when the
+  bag is empty, so the same message doesn't show twice.
+- Clearing an optional text field sends `null`, not `""`. Send only the fields
+  that changed, and when nothing changed just close the form without a request.
+- An edit mode on an existing page (`v-if="editing"` form / `v-else` view) is
+  enough for a small record. It needs no route or modal, and the store update
+  re-renders the view on its own.
+- In tests, drive `v-model` through the component:
+  `wrapper.findComponent(IonInput).setValue('x')` (same for `IonTextarea`).
+  It emits `update:modelValue` without touching the web component.
+
 ## Lists & rows
 
 A collection renders as `ion-list` + one `ion-item` per row. Put the row's own

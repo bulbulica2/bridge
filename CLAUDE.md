@@ -74,10 +74,15 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `withXSRFToken` for Sanctum's cookie flow). `src/services/auth.ts` wraps the
   Sanctum SPA calls (`GET /sanctum/csrf-cookie` → `POST /login` / `POST /register`
   / `POST /logout` / `POST /forgot-password` / `POST /reset-password`,
-  `GET /api/user`), and the Pinia store `src/stores/auth.ts` holds the logged-in
-  user and exposes `login`, `register`, `logout`, `loadSession`,
-  `requestPasswordReset` and `resetPassword`. Views call
-  the store, not the services directly.
+  `GET /api/user`, `PATCH /api/user`), and the Pinia store `src/stores/auth.ts`
+  holds the logged-in user and exposes `login`, `register`, `logout`,
+  `loadSession`, `requestPasswordReset`, `resetPassword` and `updateProfile`.
+  Views call the store, not the services directly.
+- **Profile edit** lives on `AccountPage.vue` as an in-page edit mode (no
+  route of its own). `PATCH /api/user` takes only `name` and `description`
+  (`null` clears it; username/email/password are ignored) and, unlike
+  `GET /api/user`, answers with the `{status, message, data}` envelope. The
+  store replaces `user` with `data`, so the header and menu update at once.
 - **Password reset is a two-stage guest flow**: `/reset-password` posts the email
   to `/forgot-password`; the backend emails a link to
   `<FRONTEND_URL>/password-reset/<token>?email=<email>`
@@ -100,8 +105,9 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `canManage()` mirrors the backend's `TablePolicy::manage`, but only as a hint —
   `is_admin` is hidden from `GET /api/user`, so admins read as non-managers.
 - **Error handling**: `src/utils/errors.ts` is the one axios-error reader —
-  `errorMessage(e, fallback)` for the text to show and `statusOf(e)` for the
-  status to branch on. Three envelopes reach the SPA: the game endpoints'
+  `errorMessage(e, fallback)` for the text to show, `statusOf(e)` for the
+  status to branch on and `fieldErrors(e)` for a 422's first message per field
+  (shown under each input). Three envelopes reach the SPA: the game endpoints'
   `{status, message, data}`, Laravel's 422 `{message, errors}`, and a bare
   `{message}` from auth/policy failures.
 - **Dev server port is 3000 on purpose** (`vite.config.ts`, `strictPort`): the

@@ -48,6 +48,15 @@
   Grab the newest link with
   `grep -o '[^ "<]*password-reset[^ "<]*' storage/logs/laravel.log | tail -1`.
 
+- **`PATCH /api/user` (profile edit) is wrapped, `GET /api/user` is not.**
+  The PATCH answers `{status, message: "Profile updated successfully.", data: <own record>}`,
+  so the service returns `data.data`, while the GET returns the bare record.
+  It takes only `name` (sometimes|required|max:255) and `description`
+  (sometimes|nullable|max:1000) and silently ignores other fields. Verified with
+  curl: an `email` in the body is ignored, `{"description":null}` clears it,
+  and `{"name":""}` gives 422 `{"errors":{"name":["The name field is required."]}}`.
+  Edit a throwaway registered user, not the seeded account.
+
 ## Game endpoints (tables)
 
 - They live at the **root**, not under `/api`: `/tables`, `/tables/{id}/seats`.

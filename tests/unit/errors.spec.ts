@@ -1,6 +1,6 @@
 import { AxiosError, AxiosHeaders } from 'axios'
 import { describe, expect, test } from 'vitest'
-import { errorMessage, statusOf } from '@/utils/errors'
+import { errorMessage, fieldErrors, statusOf } from '@/utils/errors'
 
 function axiosError(status: number, data: unknown): AxiosError {
   const config = { headers: new AxiosHeaders() }
@@ -62,5 +62,28 @@ describe('statusOf', () => {
 
   test('returns null for a non-axios error', () => {
     expect(statusOf(new Error('boom'))).toBeNull()
+  })
+})
+
+describe('fieldErrors', () => {
+  test('keeps the first message of each field of a 422', () => {
+    const e = axiosError(422, {
+      message: 'The name field is required. (and 1 more error)',
+      errors: {
+        name: ['The name field is required.'],
+        description: ['The description field must not be greater than 1000 characters.', 'Other.'],
+      },
+    })
+
+    expect(fieldErrors(e)).toEqual({
+      name: 'The name field is required.',
+      description: 'The description field must not be greater than 1000 characters.',
+    })
+  })
+
+  test('is empty for anything that is not a validation error', () => {
+    expect(fieldErrors(axiosError(401, { message: 'Unauthenticated.' }))).toEqual({})
+    expect(fieldErrors(networkError())).toEqual({})
+    expect(fieldErrors(new Error('boom'))).toEqual({})
   })
 })
