@@ -160,7 +160,9 @@ const createError = ref('');
 const name = ref('');
 
 // The router guard (meta.requiresAuth) already keeps guests out; this only
-// re-fetches the list every time the page is shown.
+// re-fetches the list every time the page is shown. The list is refresh-only:
+// there is no channel for it (a table's channel admits only the players seated
+// there), so only the table you sit at updates live, through the store.
 onIonViewWillEnter(() => {
   load();
 });

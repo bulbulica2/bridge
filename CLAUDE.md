@@ -104,6 +104,21 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `{table_deleted: true}` instead of a table, and the id 404s afterwards.
   `canManage()` mirrors the backend's `TablePolicy::manage`, but only as a hint —
   `is_admin` is hidden from `GET /api/user`, so admins read as non-managers.
+- **Realtime (Reverb)**: `src/services/echo.ts` holds one lazily created
+  Laravel Echo instance (`broadcaster: 'reverb'`, `VITE_REVERB_*` in `.env`)
+  whose `authorizer` signs private channels via `POST /broadcasting/auth`
+  through the shared `http` instance (Echo's own authorizer skips
+  `X-XSRF-TOKEN`). `private-table.{id}` admits only players seated there
+  (403 otherwise) and the server never ends a subscription, so the tables
+  store owns it: `watchTable(id)` / `unwatchTable()` follow the user's seat
+  after create, join, a move, a leave and every load, and logout disconnects
+  the socket. Each `TableUpdated` carries the whole table and **replaces** it
+  via the store's sync path; one that no longer seats the user (outside their
+  own seat request) is a kick: toast, unsubscribe, and `kickedFrom` makes the
+  detail page go back to `/tables`. After a reconnect the watched table is
+  refetched once. The Tables list has no channel and stays refresh-only.
+  Running it needs `php artisan reverb:start` and `queue:work` on the backend
+  (`bridge_docs/backend/RUNNING.md`, Realtime).
 - **Error handling**: `src/utils/errors.ts` is the one axios-error reader —
   `errorMessage(e, fallback)` for the text to show, `statusOf(e)` for the
   status to branch on and `fieldErrors(e)` for a 422's first message per field
