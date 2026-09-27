@@ -102,6 +102,12 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   their reason in `message`. A table exists only while somebody sits at it, so
   the last player leaving **deletes** it: that response's `data` is
   `{table_deleted: true}` instead of a table, and the id 404s afterwards.
+  Taking a seat while holding one is a **move**, not a 409: a plain seat change
+  at the same table, or, at another table, it frees the old seat with every
+  consequence of leaving it. The store's `join` then reloads `GET /tables`
+  (the response only describes the joined table), and both pages confirm a
+  cross-table move first via `src/utils/seatMove.ts`; `myTable` /
+  `seatedTable()` tell them where the user sits.
   `canManage()` mirrors the backend's `TablePolicy::manage`, but only as a hint —
   `is_admin` is hidden from `GET /api/user`, so admins read as non-managers.
 - **Realtime (Reverb)**: `src/services/echo.ts` holds one lazily created

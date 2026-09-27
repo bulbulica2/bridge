@@ -52,7 +52,10 @@ export async function createTable(payload: CreateTablePayload): Promise<Table> {
   return data.data;
 }
 
-// Takes a free seat; 409 if the seat is taken or the user already sits somewhere.
+// Takes a free seat. Holding a seat already makes this a move, not a 409: at
+// the same table it is a plain seat change; off another table it frees the old
+// seat with every consequence of leaving it, and the response only describes
+// the table joined. 409 if the seat is taken or unknown.
 export async function joinSeat(tableId: number, seat: Seat): Promise<Table> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.post<ApiResponse<Table>>(`/tables/${tableId}/seats`, { seat });

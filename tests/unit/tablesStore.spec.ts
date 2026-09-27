@@ -315,6 +315,116 @@ describe('tables store', () => {
     expect(store.currentTable).toBeNull()
   })
 
+  describe('seat moves', () => {
+    test('a seat change at the same table keeps the list and the channel', async () => {
+      logInAs(1)
+      const before = makeTable(1, { N: 'ana' })
+      const after = makeTable(1, { E: 'ana' })
+      vi.mocked(tablesService.listTables).mockResolvedValue([before])
+      vi.mocked(tablesService.joinSeat).mockResolvedValue(after)
+
+      const store = useTablesStore()
+      await store.load()
+      await store.join(1, 'E')
+
+      expect(tablesService.listTables).toHaveBeenCalledTimes(1)
+      expect(store.tables).toEqual([after])
+      expect(echo.leaveTable).not.toHaveBeenCalled()
+      expect(store.watchedTableId).toBe(1)
+    })
+
+    test('a move to another table reloads the list', async () => {
+      logInAs(1)
+      const old = makeTable(1, { N: 'ana', E: 'bob' })
+      const target = makeTable(2)
+      const joined = makeTable(2, { N: 'ana' })
+      const oldAfter = { ...old, seats: [old.seats[1]], moderated_by: 2 }
+      vi.mocked(tablesService.listTables).mockResolvedValueOnce([target, old])
+      vi.mocked(tablesService.joinSeat).mockResolvedValue(joined)
+
+      const store = useTablesStore()
+      await store.load()
+      expect(store.myTable?.id).toBe(1)
+      vi.mocked(tablesService.listTables).mockResolvedValueOnce([joined, oldAfter])
+      await store.join(2, 'N')
+
+      expect(tablesService.listTables).toHaveBeenCalledTimes(2)
+      expect(store.tables).toEqual([joined, oldAfter])
+      expect(store.myTable?.id).toBe(2)
+      expect(echo.leaveTable).toHaveBeenCalledWith(1)
+      expect(store.watchedTableId).toBe(2)
+    })
+
+    test('the old table disappears when the move emptied it', async () => {
+      logInAs(1)
+      const old = makeTable(1, { N: 'ana' })
+      const joined = makeTable(2, { N: 'ana' })
+      vi.mocked(tablesService.listTables).mockResolvedValueOnce([makeTable(2), old])
+      vi.mocked(tablesService.getTable).mockResolvedValue(old)
+      vi.mocked(tablesService.joinSeat).mockResolvedValue(joined)
+
+      const store = useTablesStore()
+      await store.load()
+      await store.loadTable(1)
+      vi.mocked(tablesService.listTables).mockResolvedValueOnce([joined])
+      await store.join(2, 'N')
+
+      expect(store.tables).toEqual([joined])
+      // The old table was open: it is gone, not left showing us seated.
+      expect(store.currentTable).toBeNull()
+    })
+
+    test('a move is not mistaken for a kick from the old table', async () => {
+      logInAs(2)
+      const old = makeTable(1, { N: 'ana', E: 'bob' })
+      const oldAfter = makeTable(1, { N: 'ana' })
+      const joined = { ...makeTable(2), seats: [{ ...old.seats[1], table_id: 2 }] }
+      vi.mocked(tablesService.getTable).mockResolvedValue(old)
+      vi.mocked(tablesService.listTables).mockResolvedValue([joined, oldAfter])
+      vi.mocked(tablesService.joinSeat).mockImplementation(async () => {
+        pushUpdate(oldAfter)
+        return joined
+      })
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await store.join(2, 'E')
+
+      expect(store.kickedFrom).toBeNull()
+      expect(showToast).not.toHaveBeenCalled()
+      expect(store.watchedTableId).toBe(2)
+    })
+
+    test('a failed reload after a move still counts as a successful join', async () => {
+      logInAs(1)
+      const joined = makeTable(2, { N: 'ana' })
+      vi.mocked(tablesService.listTables).mockResolvedValueOnce([makeTable(2), makeTable(1, { N: 'ana' })])
+      vi.mocked(tablesService.joinSeat).mockResolvedValue(joined)
+
+      const store = useTablesStore()
+      await store.load()
+      vi.mocked(tablesService.listTables).mockRejectedValueOnce(new Error('offline'))
+
+      await expect(store.join(2, 'N')).resolves.toEqual(joined)
+      expect(store.watchedTableId).toBe(2)
+    })
+
+    test('seatedTable loads the list when nothing says where you sit', async () => {
+      logInAs(1)
+      const mine = makeTable(1, { N: 'ana' })
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(2))
+      vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(2), mine])
+
+      const store = useTablesStore()
+      await store.loadTable(2)
+
+      expect(await store.seatedTable()).toEqual(mine)
+      expect(tablesService.listTables).toHaveBeenCalledTimes(1)
+      await store.seatedTable()
+      expect(tablesService.listTables).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe('live updates', () => {
     test('loading a table you sit at subscribes to it', async () => {
       logInAs(1)
@@ -367,6 +477,7 @@ describe('tables store', () => {
       logInAs(1)
       vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana' }))
       vi.mocked(tablesService.joinSeat).mockResolvedValue(makeTable(2, { S: 'ana' }))
+      vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(2, { S: 'ana' })])
 
       const store = useTablesStore()
       await store.loadTable(1)

@@ -62,18 +62,17 @@
                 <span v-else>Leave</span>
               </ion-button>
 
-              <!-- No "sit" button on the other free seats once you hold one:
-                   a seat is unique per user across every table, so a second
-                   one is a guaranteed 409. -->
+              <!-- Holding a seat here makes a free one a plain seat change;
+                   holding one elsewhere makes it a move, confirmed in sit(). -->
               <ion-button
-                v-else-if="!user && !mySeat"
+                v-else-if="!user"
                 size="small"
                 fill="outline"
                 :disabled="busySeat !== null"
                 @click="sit(seat)"
               >
                 <ion-spinner v-if="busySeat === seat" name="crescent" />
-                <span v-else>Sit here</span>
+                <span v-else>{{ mySeat ? 'Move here' : 'Sit here' }}</span>
               </ion-button>
 
               <!-- Managers only; the backend has the final say (403). -->
@@ -97,6 +96,13 @@
               <p v-if="isManager" class="table-yours">You manage this table</p>
             </div>
           </div>
+
+          <p v-if="seatedElsewhere" class="seated-elsewhere">
+            You sit at
+            <router-link :to="`/tables/${seatedElsewhere.id}`">
+              {{ seatedElsewhere.name || `table #${seatedElsewhere.id}` }}</router-link
+            >. Taking a seat here moves you.
+          </p>
 
           <ion-button
             expand="block"
@@ -135,6 +141,7 @@ import { canManage, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { User } from '@/services/auth';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { confirmMove } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
@@ -162,6 +169,10 @@ const me = computed(() => auth.user?.id ?? null);
 const seats = computed(() => (table.value ? seatsOf(table.value) : []));
 const mySeat = computed(
   () => table.value?.seats.find((s) => s.user_id === me.value)?.seat ?? null,
+);
+// Another table the user holds a seat at, which sitting down here gives up.
+const seatedElsewhere = computed(() =>
+  store.myTable && store.myTable.id !== tableId.value ? store.myTable : null,
 );
 const isManager = computed(() => !!table.value && canManage(table.value, me.value));
 const managerName = computed(() => {
@@ -235,10 +246,18 @@ async function refresh(event: CustomEvent) {
 async function sit(seat: Seat) {
   busySeat.value = seat;
   try {
+    // Moving off another table costs something there, so ask first. A seat
+    // change at this table doesn't.
+    if (!mySeat.value && table.value && me.value) {
+      const from = await store.seatedTable();
+      if (from && from.id !== tableId.value && !(await confirmMove(from, table.value, me.value))) {
+        return;
+      }
+    }
     await store.join(tableId.value, seat);
   } catch (e) {
     if (!handleExpiredSession(e)) {
-      // 409 when somebody got there first, or you already hold a seat somewhere.
+      // 409 when somebody got there first (or the seat name is unknown).
       await showToast(errorMessage(e, 'Could not take that seat. Please try again.'), 'danger');
       await load();
     }
@@ -469,6 +488,13 @@ function handleExpiredSession(e: unknown): boolean {
 
 .table-yours {
   color: var(--ion-color-primary);
+}
+
+.seated-elsewhere {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+  text-align: center;
+  color: var(--ion-color-medium);
 }
 
 .refresh {
