@@ -107,7 +107,6 @@
           >
             Refresh
           </ion-button>
-          <p class="hint">Seats update when you refresh — there are no live updates yet.</p>
         </template>
       </div>
     </ion-content>
@@ -115,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   IonPage,
@@ -192,6 +191,19 @@ onIonViewWillEnter(() => {
   notFound.value = false;
   load();
 });
+
+// While seated here the store follows the table live (TableUpdated). When an
+// update shows we were kicked, the store has already said so in a toast; a
+// seat we no longer hold is no reason to stay.
+watch(
+  () => store.kickedFrom,
+  (kicked) => {
+    if (kicked !== null && kicked === tableId.value) {
+      store.kickedFrom = null;
+      ionRouter.navigate('/tables', 'back', 'replace');
+    }
+  },
+);
 
 async function load() {
   loading.value = true;
@@ -461,12 +473,5 @@ function handleExpiredSession(e: unknown): boolean {
 
 .refresh {
   margin-top: 8px;
-}
-
-.hint {
-  margin: 8px 0 0;
-  font-size: 0.8rem;
-  text-align: center;
-  color: var(--ion-color-medium);
 }
 </style>

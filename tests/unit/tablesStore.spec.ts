@@ -1,8 +1,11 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { useTablesStore } from '@/stores/tables'
+import { useAuthStore } from '@/stores/auth'
 import * as tablesService from '@/services/tables'
+import * as echo from '@/services/echo'
 import type { Seat, Table } from '@/services/tables'
+import { showToast } from '@/utils/toast'
 
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
@@ -13,6 +16,31 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   leaveSeat: vi.fn(),
   removePlayer: vi.fn(),
 }))
+
+// No socket in unit tests: capture what the store subscribes to instead, so a
+// test can play the part of Reverb and push a TableUpdated.
+vi.mock('@/services/echo', () => ({
+  listenToTable: vi.fn(),
+  leaveTable: vi.fn(),
+  onReconnect: vi.fn(),
+  disconnectEcho: vi.fn(),
+}))
+
+vi.mock('@/utils/toast', () => ({
+  showToast: vi.fn(),
+}))
+
+// What Reverb would call when a TableUpdated arrives on the last channel joined.
+function pushUpdate(table: Table) {
+  const calls = vi.mocked(echo.listenToTable).mock.calls
+  const [, onUpdate] = calls[calls.length - 1]
+  onUpdate(table)
+}
+
+// makeTable seats users 1, 2, … in the order the seats are given.
+function logInAs(id: number) {
+  useAuthStore().user = { id, name: `user${id}`, username: `user${id}`, email: `user${id}@example.com` }
+}
 
 function makeTable(id: number, seats: Partial<Record<Seat, string>> = {}): Table {
   const taken = Object.entries(seats) as [Seat, string][]
@@ -285,5 +313,176 @@ describe('tables store', () => {
 
     expect(store.tables).toEqual([other])
     expect(store.currentTable).toBeNull()
+  })
+
+  describe('live updates', () => {
+    test('loading a table you sit at subscribes to it', async () => {
+      logInAs(1)
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana' }))
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+
+      expect(echo.listenToTable).toHaveBeenCalledWith(1, expect.any(Function))
+      expect(store.watchedTableId).toBe(1)
+    })
+
+    test('never subscribes while unseated', async () => {
+      logInAs(9)
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana' }))
+      vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(1, { N: 'ana' })])
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await store.load()
+
+      expect(echo.listenToTable).not.toHaveBeenCalled()
+      expect(store.watchedTableId).toBeNull()
+    })
+
+    test('the list subscribes to the table you sit at', async () => {
+      logInAs(2)
+      vi.mocked(tablesService.listTables).mockResolvedValue([
+        makeTable(2, { N: 'ana' }),
+        makeTable(1, { N: 'ana', E: 'bob' }),
+      ])
+
+      const store = useTablesStore()
+      await store.load()
+
+      expect(echo.listenToTable).toHaveBeenCalledWith(1, expect.any(Function))
+    })
+
+    test('creating a table subscribes to it', async () => {
+      logInAs(1)
+      vi.mocked(tablesService.createTable).mockResolvedValue(makeTable(3, { N: 'ana' }))
+
+      const store = useTablesStore()
+      await store.create({ name: null })
+
+      expect(store.watchedTableId).toBe(3)
+    })
+
+    test('moving to another table switches channels', async () => {
+      logInAs(1)
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana' }))
+      vi.mocked(tablesService.joinSeat).mockResolvedValue(makeTable(2, { S: 'ana' }))
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await store.join(2, 'S')
+
+      expect(echo.leaveTable).toHaveBeenCalledWith(1)
+      expect(echo.listenToTable).toHaveBeenLastCalledWith(2, expect.any(Function))
+      expect(store.watchedTableId).toBe(2)
+    })
+
+    test('an update replaces the table in the list and the open page', async () => {
+      logInAs(1)
+      const before = makeTable(1, { N: 'ana' })
+      const after = { ...makeTable(1, { N: 'ana', E: 'bob' }), board_id: null }
+      vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(2), before])
+      vi.mocked(tablesService.getTable).mockResolvedValue(before)
+
+      const store = useTablesStore()
+      await store.load()
+      await store.loadTable(1)
+      pushUpdate(after)
+
+      expect(store.currentTable).toEqual(after)
+      expect(store.tables[1]).toEqual(after)
+      expect(store.kickedFrom).toBeNull()
+      expect(echo.leaveTable).not.toHaveBeenCalled()
+    })
+
+    test('an update replaces rather than merges', async () => {
+      logInAs(1)
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana', E: 'bob' }))
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      const after = makeTable(1, { N: 'ana' })
+      pushUpdate(after)
+
+      expect(store.currentTable).toEqual(after)
+      expect(store.currentTable?.seats).toHaveLength(1)
+    })
+
+    test('leaving unsubscribes without calling it a kick', async () => {
+      logInAs(2)
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana', E: 'bob' }))
+      vi.mocked(tablesService.leaveSeat).mockResolvedValue(makeTable(1, { N: 'ana' }))
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await store.leave(1)
+
+      expect(echo.leaveTable).toHaveBeenCalledWith(1)
+      expect(store.watchedTableId).toBeNull()
+      expect(store.kickedFrom).toBeNull()
+      expect(showToast).not.toHaveBeenCalled()
+    })
+
+    test('leaving the last seat unsubscribes', async () => {
+      logInAs(1)
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana' }))
+      vi.mocked(tablesService.leaveSeat).mockResolvedValue({ table_deleted: true })
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await store.leave(1)
+
+      expect(echo.leaveTable).toHaveBeenCalledWith(1)
+      expect(store.watchedTableId).toBeNull()
+    })
+
+    test('our own leave broadcast beating the response is not a kick', async () => {
+      logInAs(2)
+      const after = makeTable(1, { N: 'ana' })
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana', E: 'bob' }))
+      vi.mocked(tablesService.leaveSeat).mockImplementation(async () => {
+        pushUpdate(after)
+        return after
+      })
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await store.leave(1)
+
+      expect(store.watchedTableId).toBeNull()
+      expect(store.kickedFrom).toBeNull()
+      expect(showToast).not.toHaveBeenCalled()
+    })
+
+    test('an update that no longer seats you is a kick', async () => {
+      logInAs(2)
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana', E: 'bob' }))
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      const after = makeTable(1, { N: 'ana' })
+      pushUpdate(after)
+
+      expect(echo.leaveTable).toHaveBeenCalledWith(1)
+      expect(store.watchedTableId).toBeNull()
+      expect(store.kickedFrom).toBe(1)
+      expect(store.currentTable).toEqual(after)
+      expect(showToast).toHaveBeenCalledWith(expect.stringContaining('removed'), 'warning')
+    })
+
+    test('after a reconnect the watched table is refetched once', async () => {
+      logInAs(1)
+      const missed = makeTable(1, { N: 'ana', E: 'bob' })
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana' }))
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      vi.mocked(tablesService.getTable).mockClear().mockResolvedValue(missed)
+      const [reconnected] = vi.mocked(echo.onReconnect).mock.calls[0]
+      await reconnected()
+
+      expect(tablesService.getTable).toHaveBeenCalledTimes(1)
+      expect(store.currentTable).toEqual(missed)
+    })
   })
 })

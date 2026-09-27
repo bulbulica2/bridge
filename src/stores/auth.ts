@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as authService from '@/services/auth';
+import { disconnectEcho } from '@/services/echo';
+import { useTablesStore } from '@/stores/tables';
 import type {
   LoginCredentials,
   PasswordResetData,
@@ -36,7 +38,10 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       await authService.logout();
     } finally {
-      // Whatever the server says, this client is done with the session.
+      // Whatever the server says, this client is done with the session, and
+      // with the table channel it could only hold while logged in.
+      useTablesStore().unwatchTable();
+      disconnectEcho();
       user.value = null;
       sessionCheck = Promise.resolve();
     }

@@ -2,6 +2,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { useAuthStore } from '@/stores/auth'
 import * as authService from '@/services/auth'
+import * as echo from '@/services/echo'
+import { useTablesStore } from '@/stores/tables'
 
 vi.mock('@/services/auth', () => ({
   login: vi.fn(),
@@ -11,6 +13,14 @@ vi.mock('@/services/auth', () => ({
   requestPasswordReset: vi.fn(),
   resetPassword: vi.fn(),
   updateProfile: vi.fn(),
+}))
+
+// Logout closes the websocket; there is no socket in unit tests.
+vi.mock('@/services/echo', () => ({
+  listenToTable: vi.fn(),
+  leaveTable: vi.fn(),
+  onReconnect: vi.fn(),
+  disconnectEcho: vi.fn(),
 }))
 
 describe('auth store', () => {
@@ -98,6 +108,18 @@ describe('auth store', () => {
     await expect(auth.logout()).rejects.toThrow()
 
     expect(auth.isAuthenticated).toBe(false)
+  })
+
+  test('logout leaves the table channel and closes the socket', async () => {
+    const tables = useTablesStore()
+    tables.watchedTableId = 4
+    vi.mocked(authService.logout).mockResolvedValue()
+
+    await useAuthStore().logout()
+
+    expect(echo.leaveTable).toHaveBeenCalledWith(4)
+    expect(echo.disconnectEcho).toHaveBeenCalled()
+    expect(tables.watchedTableId).toBeNull()
   })
 
   test('loadSession restores the user from a live session', async () => {
