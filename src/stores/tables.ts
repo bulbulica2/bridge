@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import * as tablesService from '@/services/tables';
 import type { CreateTablePayload, Seat, Table } from '@/services/tables';
 import { leaveTable, listenToTable, onReconnect } from '@/services/echo';
@@ -37,6 +37,25 @@ export const useTablesStore = defineStore('tables', () => {
   // it. load() brings it in properly.
   function upsertInList(table: Table) {
     tables.value = tables.value.map((t) => (t.id === table.id ? table : t));
+  }
+
+  // The table the user sits at, as far as the copies we hold can tell (a seat
+  // is unique per user across every table). Null when unseated or unknown.
+  const myTable = computed<Table | null>(() => {
+    if (currentTable.value && seatsMe(currentTable.value)) {
+      return currentTable.value;
+    }
+    return tables.value.find(seatsMe) ?? null;
+  });
+
+  // The table the user sits at, loading the list first if nothing we hold says
+  // so yet (a detail page opened by URL knows only its own table). Pages ask
+  // before a seat request so a move to another table can be confirmed.
+  async function seatedTable(): Promise<Table | null> {
+    if (!myTable.value && !loaded.value) {
+      await load();
+    }
+    return myTable.value;
   }
 
   // A table came back from the backend: refresh every copy we hold.
@@ -159,13 +178,33 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   // Replaces the table in place so the page doesn't have to reload the list.
-  // Sitting down while seated elsewhere is a move, which followSeat() turns
-  // into a switch of channels.
+  // Taking a seat while holding one is a move: within the same table it is a
+  // plain seat change, but a move off another table frees the old seat (maybe
+  // deleting that table or handing its manager role on), and the response only
+  // describes the table joined. followSeat() switches channels, and the list is
+  // reloaded so the old table's row changes or disappears.
   async function join(tableId: number, seat: Seat) {
+    const movedFrom = myTable.value?.id ?? watchedTableId.value;
     const table = await ownSeatRequest(() => tablesService.joinSeat(tableId, seat));
     syncTable(table);
     followSeat(table);
+    if (movedFrom !== null && movedFrom !== tableId) {
+      await reloadAfterMove(movedFrom);
+    }
     return table;
+  }
+
+  // The seat is already ours, so a failed reload is not the join failing: the
+  // old row just stays stale until the next refresh.
+  async function reloadAfterMove(oldTableId: number) {
+    try {
+      await load();
+    } catch {
+      return;
+    }
+    if (currentTable.value?.id === oldTableId) {
+      currentTable.value = tables.value.find((t) => t.id === oldTableId) ?? null;
+    }
   }
 
   // Giving up the last seat deletes the table, so the caller has to know which
@@ -193,10 +232,12 @@ export const useTablesStore = defineStore('tables', () => {
     tables,
     currentTable,
     loaded,
+    myTable,
     watchedTableId,
     kickedFrom,
     load,
     loadTable,
+    seatedTable,
     create,
     join,
     leave,

@@ -37,7 +37,12 @@
           </p>
 
           <ion-list v-else-if="tablesStore.tables.length > 0">
-            <ion-item v-for="table in tablesStore.tables" :key="table.id" lines="full">
+            <ion-item
+              v-for="table in tablesStore.tables"
+              :key="table.id"
+              lines="full"
+              :class="{ 'table-mine': table.id === myTableId }"
+            >
               <div class="table-row">
                 <div class="table-heading">
                   <h2 class="table-title">
@@ -61,15 +66,16 @@
                   <div v-for="{ seat, user } in seatsOf(table)" :key="seat" class="seat">
                     <span class="seat-name">{{ seat }}</span>
                     <span v-if="user" class="seat-user">{{ user.username }}</span>
+                    <ion-badge v-if="user && user.id === me" color="primary">You</ion-badge>
                     <ion-button
                       v-else
                       size="small"
                       fill="outline"
                       :disabled="joining !== null"
-                      @click="join(table.id, seat)"
+                      @click="join(table, seat)"
                     >
                       <ion-spinner v-if="isJoining(table.id, seat)" name="crescent" />
-                      <span v-else>empty</span>
+                      <span v-else>{{ table.id === myTableId ? 'move here' : 'empty' }}</span>
                     </ion-button>
                   </div>
                 </div>
@@ -118,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import {
   IonPage,
   IonContent,
@@ -130,6 +136,7 @@ import {
   IonItem,
   IonInput,
   IonButton,
+  IonBadge,
   IonIcon,
   IonModal,
   IonRefresher,
@@ -143,13 +150,20 @@ import {
 import { chevronForwardOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
 import { useTablesStore } from '@/stores/tables';
+import { useAuthStore } from '@/stores/auth';
 import { seatsOf } from '@/services/tables';
-import type { Seat } from '@/services/tables';
+import type { Seat, Table } from '@/services/tables';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { confirmMove } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
 const tablesStore = useTablesStore();
+const auth = useAuthStore();
 const ionRouter = useIonRouter();
+
+const me = computed(() => auth.user?.id ?? null);
+// Where the user sits, so the list shows what a move would give up.
+const myTableId = computed(() => tablesStore.myTable?.id ?? null);
 
 const loading = ref(false);
 const loadError = ref('');
@@ -193,12 +207,19 @@ function isJoining(tableId: number, seat: Seat) {
   return joining.value === `${tableId}-${seat}`;
 }
 
-async function join(tableId: number, seat: Seat) {
-  joining.value = `${tableId}-${seat}`;
+async function join(table: Table, seat: Seat) {
+  // Taking a seat at another table moves you off yours, so ask first; a seat
+  // change at your own table costs nothing.
+  const from = tablesStore.myTable;
+  if (from && me.value && from.id !== table.id && !(await confirmMove(from, table, me.value))) {
+    return;
+  }
+  joining.value = `${table.id}-${seat}`;
   try {
-    await tablesStore.join(tableId, seat);
+    // A move reloads the list, so the old table's row updates or disappears.
+    await tablesStore.join(table.id, seat);
   } catch (e) {
-    // 409 when the seat was taken meanwhile or you already sit somewhere.
+    // 409 when the seat was taken meanwhile (or the seat name is unknown).
     await showToast(errorMessage(e, 'Could not take that seat. Please try again.'), 'danger');
   } finally {
     joining.value = null;
@@ -301,6 +322,10 @@ async function submitCreate() {
 .seat-name {
   font-weight: 600;
   color: var(--ion-color-medium);
+}
+
+.table-mine {
+  --background: rgba(var(--ion-color-primary-rgb), 0.06);
 }
 
 .seat-user {
