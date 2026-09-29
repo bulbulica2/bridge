@@ -233,6 +233,9 @@ missing exactly that way. Fix anything that fails before committing. Don't commi
   fine to reuse; a Vite owned by **another** worktree is a parallel session's dev
   server, so ask the user before stopping it instead of killing it.
 - Open the new page for them: `Start-Process http://localhost:3000/<route>`.
+  If a seat request 500s on a missing column, the local DB schema is stale
+  (see Troubleshooting in the reference). Ask before `migrate:fresh --seed`.
+  After a reseed, `email@email.com` sits at table 1 with a board dealt.
 - If the page hits the backend, prove the real flow works with sequential
   `curl` calls (details and a ready script in the reference file). Seeded login:
   `email@email.com` / `pass`.
@@ -348,3 +351,12 @@ history below, and commit the skill changes on the page's branch (a separate
   tests, a service test mocks `@/services/http` directly, a type narrowing
   (`TableSeat.user` → `PublicUser`) means fixing the test fixtures too, and
   navigating out of a sheet needs `emit('close')` first.
+- Issue #26 (Game table, PR #41): the first **game** page, `/tables/:id/play`,
+  with a `game` store fed by a second channel (the user channel's `HandDealt`)
+  and by the tables store's channel, plus three reusable components
+  (`BridgeTable`, `HandView`, `PlayingCard`). Auto-entry fires only when
+  `board_id` goes from null to non-null, so the detail page stays reachable.
+  Learned: the backend edits `create_*` migrations in place, so the local DB
+  needed `migrate:fresh --seed` (with the user's OK). Four-player checks now
+  have `assets/four-players-flow.sh`. Pinia wraps actions (`toBe` fails),
+  and every echo mock needs the new functions.

@@ -126,6 +126,22 @@
   status as a hint for what to render and let a 403 correct it. The clean fix is
   a computed `can_manage` on the backend's `TableResource`.
 
+## Game state (playing) — issue #26
+
+- `GET /tables/{id}/playing` (seated only, 403 otherwise) is one snapshot:
+  `phase` (`waiting|auction|play|finished`), `board {id, number, dealer,
+  vulnerable}`, `players` by seat, `turn`, `acting_user_id` (declarer on
+  dummy's turn), auction/contract/tricks/result, plus `my_seat` and `hand`.
+  While `waiting` every other field is null. Card `rank` skips 11 (J=12 … A=15).
+- `PlayingUpdated` (table channel) is the same **without** `hand`/`my_seat`;
+  `HandDealt` on `private-App.Models.User.{id}` brings each player's cards.
+  They come from one request on two channels, so either can arrive first.
+- A player leaving mid-board sends **no** PlayingUpdated: only `TableUpdated`
+  with `board_id: null`.
+- The seeder (after `migrate:fresh --seed`) seats `email@email.com` at table 1
+  ("Your call") with a board in its auction, and fills tables 2–5 with every
+  other phase. Use table 1 to show the play page without setting anything up.
+
 ## Proving a backend flow works
 
 Use the Bash tool with `curl`, **one request at a time**. `php artisan serve` is
@@ -186,7 +202,20 @@ state-changing call; a stale or missing `X-XSRF-TOKEN` is
 should show `Access-Control-Allow-Origin: http://localhost:3000` and
 `Access-Control-Allow-Credentials: true`.
 
+**Four players:** `assets/four-players-flow.sh <scratchpad>` registers four
+throwaway users (one jar each), fills a table, checks each `/playing` (seat,
+13 own cards, sorted), a non-seated user's 403 and a mid-board leave, then
+empties the table so it gets deleted. Use it as the template for any multi-player check.
+
 ## Troubleshooting
+
+**A seat request 500s with `Unknown column 'last_seen_at'` (or another missing
+column) while `migrate:status` says everything ran.** The backend edits its
+`create_*` migrations **in place** instead of adding new ones, so an old
+local DB never gets the column. The fix is `php artisan migrate:fresh --seed`
+(run from bridge_backend). It wipes the shared DB, so **ask the user first**;
+on the #26 run they approved it. Find the cause with
+`grep -h local.ERROR storage/logs/laravel.log | tail -2 | cut -c1-600`.
 
 **Requests hang / curl returns `HTTP 000`, nothing new in the `artisan serve` log.**
 1. `Get-NetTCPConnection -LocalPort 8000`: many `CloseWait` rows on the php
