@@ -242,6 +242,19 @@ missing exactly that way. Fix anything that fails before committing. Don't commi
   — the command line says which worktree owns it. A backend already on 8000 is
   fine to reuse; a Vite owned by **another** worktree is a parallel session's dev
   server, so ask the user before stopping it instead of killing it.
+  On #28 the holder was a merged branch's worktree that Orca had half
+  removed: git no longer listed it, but its folder survived because Vite
+  held files open. The user asked to stop it and delete it. Before
+  deleting, compare its files with the branch commit and check that the
+  commit is an ancestor of `origin/main`. Then remove the folder and run
+  `git branch -d` and `git worktree prune`. Leave the remote branch alone.
+- **Realtime** needs Reverb (`php artisan reverb:start`) and `queue:work`, but
+  the local backend may not have it yet: on #28 `.env` had
+  `BROADCAST_CONNECTION=log` and `vendor/laravel/reverb` was missing
+  (`There are no commands defined in the "reverb" namespace`). The fix is
+  `composer install` plus `.env` changes, which belong to the user, so
+  report it instead of doing it. Without Reverb each browser updates only on
+  its own moves and on Refresh.
 - Open the new page for them: `Start-Process http://localhost:3000/<route>`.
   If a seat request 500s on a missing column, the local DB schema is stale
   (see Troubleshooting in the reference). Ask before `migrate:fresh --seed`.
@@ -381,3 +394,17 @@ history below, and commit the skill changes on the page's branch (a separate
   states that are behind. Bash heredocs holding a long inline Python edit can
   fail to parse ("unexpected EOF"), so use Edit, or write the script to a
   file first. `assets/auction-flow.sh` needs a Windows scratchpad path.
+- Issue #28 (Card play): the second feature on the play page. It adds
+  `play()` in the game store (sharing `call()`'s race guard through one
+  `act()` helper), `utils/play.ts` (follow-suit hint, whose hand is on
+  play, trick layout by seat), a tappable `HandView`, `TrickArea` in a new
+  `BridgeTable` `centre` slot, dummy at its seat (full width for declarer,
+  `DummyColumns` for a defender) and a 2 s pause on a finished trick. The
+  backend (#49) was already merged although the issue said "blocked", so
+  check the backend's PRs before believing an issue's blocker. New
+  `assets/play-flow.sh` plays a whole board (or stops after N tricks with
+  `keep`, for a live demo table). Learned: a second long heredoc failed
+  again, so use a script file from the start. A root template comment
+  breaks `wrapper.attributes()`. The local backend lacked Reverb. The
+  permission classifier can stall every tool for a while; file edits
+  worked again after a single retry.
