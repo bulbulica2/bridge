@@ -2,6 +2,7 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import type { ChannelAuthorizationCallback } from 'pusher-js';
 import http from './http';
+import type { HandDealtEvent, PublicPlaying } from './game';
 import type { Table } from './tables';
 
 // Live updates come over Laravel Reverb, which speaks the Pusher protocol.
@@ -11,6 +12,12 @@ import type { Table } from './tables';
 // same shape as GET /tables/{id}.
 export interface TableUpdatedEvent {
   table: Table;
+}
+
+// What `PlayingUpdated` carries on the same channel: the public part of the
+// game state, never anybody's hand.
+export interface PlayingUpdatedEvent {
+  playing: PublicPlaying;
 }
 
 let echo: Echo<'reverb'> | null = null;
@@ -69,10 +76,25 @@ export function onReconnect(listener: () => void): () => void {
   return () => reconnectListeners.delete(listener);
 }
 
-export function listenToTable(tableId: number, onUpdate: (table: Table) => void) {
+export function listenToTable(
+  tableId: number,
+  onUpdate: (table: Table) => void,
+  onPlaying: (playing: PublicPlaying) => void,
+) {
   getEcho()
     .private(`table.${tableId}`)
-    .listen('TableUpdated', (event: TableUpdatedEvent) => onUpdate(event.table));
+    .listen('TableUpdated', (event: TableUpdatedEvent) => onUpdate(event.table))
+    .listen('PlayingUpdated', (event: PlayingUpdatedEvent) => onPlaying(event.playing));
+}
+
+// The user's own channel carries what only they may see: their cards
+// (`HandDealt`) each time a board is dealt at their table.
+export function listenToUser(userId: number, onHandDealt: (event: HandDealtEvent) => void) {
+  getEcho().private(`App.Models.User.${userId}`).listen('HandDealt', onHandDealt);
+}
+
+export function leaveUser(userId: number) {
+  echo?.leave(`App.Models.User.${userId}`);
 }
 
 // The server never ends a subscription itself, even once the user has left.

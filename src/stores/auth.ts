@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as authService from '@/services/auth';
 import { disconnectEcho } from '@/services/echo';
+import { useGameStore } from '@/stores/game';
 import { useTablesStore } from '@/stores/tables';
 import type {
   LoginCredentials,
@@ -25,12 +26,14 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(credentials: LoginCredentials) {
     await authService.login(credentials);
     user.value = await authService.fetchUser();
+    useGameStore().watchUser(user.value.id);
     sessionCheck = Promise.resolve();
   }
 
   async function register(data: RegistrationData) {
     await authService.register(data);
     user.value = await authService.fetchUser();
+    useGameStore().watchUser(user.value.id);
     sessionCheck = Promise.resolve();
   }
 
@@ -39,8 +42,9 @@ export const useAuthStore = defineStore('auth', () => {
       await authService.logout();
     } finally {
       // Whatever the server says, this client is done with the session, and
-      // with the table channel it could only hold while logged in.
+      // with the table and user channels it could only hold while logged in.
       useTablesStore().unwatchTable();
+      useGameStore().unwatchUser();
       disconnectEcho();
       user.value = null;
       sessionCheck = Promise.resolve();
@@ -59,6 +63,12 @@ export const useAuthStore = defineStore('auth', () => {
         .catch(() => {
           // 401 (or an unreachable backend) simply means "not logged in".
           user.value = null;
+        })
+        .then(() => {
+          // Our own channel (HandDealt) is followed for the whole session.
+          if (user.value) {
+            useGameStore().watchUser(user.value.id);
+          }
         });
     }
     return sessionCheck;

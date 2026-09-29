@@ -18,6 +18,15 @@ vi.mock('@/services/auth', () => ({
   updateProfile: vi.fn(),
 }))
 vi.mock('@/router/loading', () => ({ navigateAndSettle: vi.fn() }))
+// Logging in follows the user's own channel; there is no socket in unit tests.
+vi.mock('@/services/echo', () => ({
+  listenToTable: vi.fn(),
+  leaveTable: vi.fn(),
+  listenToUser: vi.fn(),
+  leaveUser: vi.fn(),
+  onReconnect: vi.fn(),
+  disconnectEcho: vi.fn(),
+}))
 vi.mock('@/utils/toast', () => ({ showToast: vi.fn(), showWelcomeToast: vi.fn() }))
 vi.mock('@ionic/vue', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ionic/vue')>()),

@@ -14,6 +14,8 @@ vi.mock('@/services/tables', async (importOriginal) => ({
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
   leaveTable: vi.fn(),
+  listenToUser: vi.fn(),
+  leaveUser: vi.fn(),
   onReconnect: vi.fn(),
   disconnectEcho: vi.fn(),
 }))
@@ -89,7 +91,8 @@ describe('HomePage.vue', () => {
     expect(card.text()).toContain('Board in progress')
     expect(card.text()).toContain('ana (you)')
     expect(card.text()).toContain('bob')
-    expect(pageLinks(wrapper)).toEqual([{ text: 'Go to table', to: '/tables/7' }])
+    // A board in progress: straight to the game.
+    expect(pageLinks(wrapper)).toEqual([{ text: 'Go to the board', to: '/tables/7/play' }])
   })
 
   test('leaves out the board badge when no board is being played', async () => {
@@ -97,6 +100,7 @@ describe('HomePage.vue', () => {
     const wrapper = await mountLoggedIn()
 
     expect(wrapper.find('.your-table').text()).not.toContain('Board in progress')
+    expect(pageLinks(wrapper)).toEqual([{ text: 'Go to table', to: '/tables/7' }])
   })
 
   test('sends an unseated user to find a table', async () => {

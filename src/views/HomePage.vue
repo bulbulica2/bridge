@@ -59,10 +59,12 @@
                 </ul>
                 <ion-button
                   expand="block"
-                  :router-link="`/tables/${myTable.id}`"
+                  :router-link="
+                    myTable.board_id !== null ? `/tables/${myTable.id}/play` : `/tables/${myTable.id}`
+                  "
                   router-direction="forward"
                 >
-                  Go to table
+                  {{ myTable.board_id !== null ? 'Go to the board' : 'Go to table' }}
                   <ion-icon slot="end" :icon="chevronForwardOutline" />
                 </ion-button>
               </ion-card-content>

@@ -104,6 +104,18 @@
             </div>
           </div>
 
+          <!-- The game itself lives on its own page; a board being dealt
+               (the fourth seat taken) takes the players there by itself. -->
+          <ion-button
+            v-if="mySeat"
+            expand="block"
+            class="play"
+            :router-link="`/tables/${tableId}/play`"
+            router-direction="forward"
+          >
+            {{ table.board_id !== null ? 'Go to the board' : 'Open the game table' }}
+          </ion-button>
+
           <p v-if="seatedElsewhere" class="seated-elsewhere">
             You sit at
             <router-link :to="`/tables/${seatedElsewhere.id}`">
@@ -224,6 +236,24 @@ watch(
     if (kicked !== null && kicked === tableId.value) {
       store.kickedFrom = null;
       ionRouter.navigate('/tables', 'back', 'replace');
+    }
+  },
+);
+
+// The fourth seat taken deals a board: whoever sits here and is looking at
+// this page moves on to the game. Only on the change, so the page stays
+// reachable (to leave, say) while a board is being played. Ionic keeps this
+// page alive underneath others, hence the check that it is the one showing.
+watch(
+  () => table.value?.board_id ?? null,
+  (boardId, before) => {
+    if (
+      boardId !== null &&
+      before === null &&
+      mySeat.value &&
+      route.path === `/tables/${tableId.value}`
+    ) {
+      ionRouter.navigate(`/tables/${tableId.value}/play`, 'forward', 'push');
     }
   },
 );
@@ -516,6 +546,10 @@ function handleExpiredSession(e: unknown): boolean {
   font-size: 0.9rem;
   text-align: center;
   color: var(--ion-color-medium);
+}
+
+.play {
+  margin-bottom: 16px;
 }
 
 .refresh {
