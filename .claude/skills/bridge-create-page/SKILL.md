@@ -342,3 +342,9 @@ history below, and commit the skill changes on the page's branch (a separate
   never fires in unit tests (watch `auth.isAuthenticated` too), `router-link` is
   a component prop, not an attribute, and a fixture that assigns user ids by
   seat order puts the wrong user in "your" seat — key ids by username.
+- Issue #24 (Public profile): a new service + store domain (`users`), a
+  reusable bottom-sheet component opened from both table pages, and the
+  optional `/users/:id` detail page. Learned: `IonModal` needs a stub in jsdom
+  tests, a service test mocks `@/services/http` directly, a type narrowing
+  (`TableSeat.user` → `PublicUser`) means fixing the test fixtures too, and
+  navigating out of a sheet needs `emit('close')` first.
