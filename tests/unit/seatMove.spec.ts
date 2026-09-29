@@ -21,7 +21,7 @@ function makeTable(
       table_id: 4,
       user_id: userId,
       seat,
-      user: { id: userId, name: `User ${userId}`, username: `user${userId}` },
+      user: { id: userId, name: `User ${userId}`, username: `user${userId}`, description: null },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
   }

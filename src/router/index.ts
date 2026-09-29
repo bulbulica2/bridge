@@ -39,6 +39,13 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    // A player's public profile. Reached from the profile sheet a seated
+    // player opens, not from the menu.
+    path: '/users/:id',
+    component: () => import('@/views/UserProfilePage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/create-account',
     component: () => import('@/views/CreateAccountPage.vue'),
     meta: { guestOnly: true }

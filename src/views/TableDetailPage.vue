@@ -44,10 +44,17 @@
             >
               <span class="seat-name">{{ seat }}</span>
 
-              <span v-if="user" class="seat-user">
+              <!-- Tapping a player opens their public profile. -->
+              <button
+                v-if="user"
+                type="button"
+                class="seat-user"
+                :aria-label="`${user.username}'s profile`"
+                @click="player = user"
+              >
                 {{ user.username }}
                 <span v-if="user.id === me" class="seat-you">you</span>
-              </span>
+              </button>
               <span v-else class="seat-empty">Empty</span>
 
               <ion-button
@@ -115,6 +122,8 @@
           </ion-button>
         </template>
       </div>
+
+      <PlayerProfileSheet :player="player" @close="player = null" />
     </ion-content>
   </ion-page>
 </template>
@@ -135,11 +144,12 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
+import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
 import { canManage, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
-import type { User } from '@/services/auth';
+import type { PublicUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { confirmMove } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
@@ -155,6 +165,8 @@ const loadError = ref('');
 const notFound = ref(false);
 // One seat action at a time, so the whole compass locks while a request is out.
 const busySeat = ref<Seat | null>(null);
+// The seated player whose profile sheet is open.
+const player = ref<PublicUser | null>(null);
 
 // Only trust the store's current table when it is the one this route asks for,
 // otherwise moving from one table to another flashes the previous one. Coming
@@ -299,7 +311,7 @@ async function confirmLeave(seat: Seat) {
   }
 }
 
-async function confirmRemove(seat: Seat, user: User) {
+async function confirmRemove(seat: Seat, user: PublicUser) {
   const alert = await alertController.create({
     header: `Remove ${user.username}?`,
     message: `${user.username} loses seat ${seat}. They can sit down again afterwards.`,
@@ -451,8 +463,17 @@ function handleExpiredSession(e: unknown): boolean {
   color: var(--ion-color-medium);
 }
 
+/* A plain button that reads as a link: the name itself is the tap target. */
 .seat-user {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 0.95rem;
+  color: var(--ion-color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
   overflow-wrap: anywhere;
 }
 

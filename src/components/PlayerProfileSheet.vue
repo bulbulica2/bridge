@@ -1,0 +1,152 @@
+<template>
+  <!-- A bottom sheet over the table: the player's public profile in one tap.
+       The parent owns which player is open and clears it on close. -->
+  <ion-modal
+    :is-open="player !== null"
+    :initial-breakpoint="0.5"
+    :breakpoints="[0, 0.5, 0.9]"
+    @did-dismiss="emit('close')"
+  >
+    <ion-content class="ion-padding">
+      <div v-if="shown" class="profile">
+        <h2 class="profile-name">{{ shown.name }}</h2>
+        <p class="profile-username">@{{ shown.username }}</p>
+
+        <p v-if="gone" class="profile-gone">This player's account no longer exists.</p>
+        <template v-else>
+          <p v-if="shown.description" class="profile-description">{{ shown.description }}</p>
+          <p v-else class="profile-empty">No description yet.</p>
+        </template>
+
+        <div v-if="refreshing" class="refreshing">
+          <ion-spinner name="crescent" />
+          <span>Refreshing…</span>
+        </div>
+        <ion-text v-if="loadError" color="danger">
+          <p class="error">{{ loadError }}</p>
+        </ion-text>
+
+        <ion-button v-if="!gone" expand="block" fill="outline" @click="openPage">
+          Full profile
+        </ion-button>
+      </div>
+    </ion-content>
+  </ion-modal>
+</template>
+
+<script setup lang="ts">
+import { ref, watch } from 'vue';
+import { IonModal, IonContent, IonButton, IonSpinner, IonText, useIonRouter } from '@ionic/vue';
+import { useUsersStore } from '@/stores/users';
+import type { PublicUser } from '@/services/users';
+import { errorMessage, statusOf } from '@/utils/errors';
+
+const props = defineProps<{ player: PublicUser | null }>();
+const emit = defineEmits<{ close: [] }>();
+
+const store = useUsersStore();
+const ionRouter = useIonRouter();
+
+// Starts as the copy the table payload embedded, so the sheet has something to
+// show the moment it opens, then is replaced by GET /users/{id}.
+const shown = ref<PublicUser | null>(null);
+const refreshing = ref(false);
+const loadError = ref('');
+const gone = ref(false);
+
+watch(
+  () => props.player,
+  async (player) => {
+    if (!player) {
+      return;
+    }
+    shown.value = player;
+    gone.value = false;
+    loadError.value = '';
+    refreshing.value = true;
+    try {
+      const fresh = await store.load(player.id);
+      // Another player may have been tapped while this one loaded.
+      if (props.player?.id === player.id) {
+        shown.value = fresh;
+      }
+    } catch (e) {
+      if (props.player?.id !== player.id) {
+        return;
+      }
+      if (statusOf(e) === 404) {
+        gone.value = true;
+      } else {
+        // The embedded copy is still worth showing; just say it may be stale.
+        loadError.value = errorMessage(e, 'Could not refresh this profile.');
+      }
+    } finally {
+      if (props.player?.id === player.id) {
+        refreshing.value = false;
+      }
+    }
+  },
+  { immediate: true },
+);
+
+function openPage() {
+  const id = shown.value?.id;
+  emit('close');
+  if (id) {
+    ionRouter.navigate(`/users/${id}`, 'forward');
+  }
+}
+</script>
+
+<style scoped>
+.profile {
+  max-width: 520px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.profile-name {
+  margin: 8px 0 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.profile-username {
+  margin: 4px 0 16px;
+  color: var(--ion-color-medium);
+  overflow-wrap: anywhere;
+}
+
+.profile-description {
+  margin: 0 0 16px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.profile-empty,
+.profile-gone {
+  margin: 0 0 16px;
+  color: var(--ion-color-medium);
+}
+
+.refreshing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--ion-color-medium);
+  font-size: 0.9rem;
+}
+
+.refreshing ion-spinner {
+  width: 18px;
+  height: 18px;
+}
+
+.error {
+  margin: 0 0 12px;
+}
+</style>

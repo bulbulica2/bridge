@@ -26,7 +26,7 @@ function makeTable(
         id: userId,
         name: `User ${userId}`,
         username: `user${userId}`,
-        email: `user${userId}@example.com`,
+        description: null,
       },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
