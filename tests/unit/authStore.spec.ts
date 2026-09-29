@@ -19,6 +19,8 @@ vi.mock('@/services/auth', () => ({
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
   leaveTable: vi.fn(),
+  listenToUser: vi.fn(),
+  leaveUser: vi.fn(),
   onReconnect: vi.fn(),
   disconnectEcho: vi.fn(),
 }))

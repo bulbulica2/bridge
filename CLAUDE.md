@@ -40,7 +40,9 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `/account` (`AccountPage.vue`, `meta.requiresAuth`), `/tables`
   (`TablesPage.vue`, `meta.requiresAuth`, the menu's logged-in entry),
   `/tables/:id` (`TableDetailPage.vue`, `meta.requiresAuth`, one table's four
-  seats, reached from the list's "Open" button, not from the menu) and
+  seats, reached from the list's "Open" button, not from the menu),
+  `/tables/:id/play` (`TablePlayPage.vue`, `meta.requiresAuth`, the game at
+  that table, entered from the detail page) and
   `/users/:id` (`UserProfilePage.vue`, `meta.requiresAuth`, a player's public
   profile, reached from the profile sheet, not from the menu). Adding a
   new top-level section means adding both a view and a route entry here, plus an `ion-item` in
@@ -114,6 +116,24 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `seatedTable()` tell them where the user sits.
   `canManage()` mirrors the backend's `TablePolicy::manage`, but only as a hint —
   `is_admin` is hidden from `GET /api/user`, so admins read as non-managers.
+- **Game (playing)**: `src/services/game.ts` wraps
+  `GET /tables/{id}/playing` (seated players only, 403 otherwise) and types the
+  game state (`Playing` = the public `PublicPlaying` + `my_seat` and `hand`,
+  the caller's own cards only). The Pinia store `src/stores/game.ts` holds the
+  state of one table (`tableId`, `playing`): `load()` replaces it all (also how
+  a reload or reconnect rebuilds it); `PlayingUpdated` replaces the public part
+  and carries the hand over (less any card played); `HandDealt` on the user's
+  own channel `private-App.Models.User.{id}` brings a new board's hand, kept
+  as pending if it beats that board's `PlayingUpdated`. A `TableUpdated` whose
+  `board_id` went back to null mid-board means a player left and the board was
+  abandoned: toast and back to `waiting`. The auth store follows the user
+  channel from login/session restore to logout (`watchUser`/`unwatchUser`).
+  `TablePlayPage.vue` draws it with `src/components/BridgeTable.vue` (the four
+  seats rotated so the viewer is always at the bottom, dealer and
+  red/green vulnerability, whose turn), `HandView.vue` and `PlayingCard.vue`;
+  card sorting, rank labels (the backend skips 11: `12`=J … `15`=A), seat
+  rotation and vulnerability live in `src/utils/cards.ts`. The detail page
+  moves a seated player to `/play` when `board_id` turns non-null.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
   `username`, `description`, never the email); `TableSeat.user` uses that type
@@ -131,7 +151,8 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   (403 otherwise) and the server never ends a subscription, so the tables
   store owns it: `watchTable(id)` / `unwatchTable()` follow the user's seat
   after create, join, a move, a leave and every load, and logout disconnects
-  the socket. Each `TableUpdated` carries the whole table and **replaces** it
+  the socket. The same channel carries `PlayingUpdated`, which the tables
+  store hands to the game store. Each `TableUpdated` carries the whole table and **replaces** it
   via the store's sync path; one that no longer seats the user (outside their
   own seat request) is a kick: toast, unsubscribe, and `kickedFrom` makes the
   detail page go back to `/tables`. After a reconnect the watched table is

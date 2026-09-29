@@ -4,6 +4,7 @@ import * as tablesService from '@/services/tables';
 import type { CreateTablePayload, Seat, Table } from '@/services/tables';
 import { leaveTable, listenToTable, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
+import { useGameStore } from '@/stores/game';
 import { statusOf } from '@/utils/errors';
 import { showToast } from '@/utils/toast';
 
@@ -87,7 +88,10 @@ export const useTablesStore = defineStore('tables', () => {
     unwatchTable();
     watchedTableId.value = tableId;
     kickedFrom.value = null;
-    listenToTable(tableId, applyTableUpdate);
+    // The same channel carries the game state; the game store keeps that.
+    listenToTable(tableId, applyTableUpdate, (playing) =>
+      useGameStore().applyPlayingUpdate(tableId, playing),
+    );
   }
 
   function unwatchTable() {
@@ -114,6 +118,7 @@ export const useTablesStore = defineStore('tables', () => {
       return;
     }
     syncTable(table);
+    useGameStore().applyTableUpdate(table);
     if (seatsMe(table)) {
       return;
     }

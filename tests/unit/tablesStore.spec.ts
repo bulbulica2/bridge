@@ -22,6 +22,8 @@ vi.mock('@/services/tables', async (importOriginal) => ({
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
   leaveTable: vi.fn(),
+  listenToUser: vi.fn(),
+  leaveUser: vi.fn(),
   onReconnect: vi.fn(),
   disconnectEcho: vi.fn(),
 }))
@@ -433,7 +435,7 @@ describe('tables store', () => {
       const store = useTablesStore()
       await store.loadTable(1)
 
-      expect(echo.listenToTable).toHaveBeenCalledWith(1, expect.any(Function))
+      expect(echo.listenToTable).toHaveBeenCalledWith(1, expect.any(Function), expect.any(Function))
       expect(store.watchedTableId).toBe(1)
     })
 
@@ -460,7 +462,7 @@ describe('tables store', () => {
       const store = useTablesStore()
       await store.load()
 
-      expect(echo.listenToTable).toHaveBeenCalledWith(1, expect.any(Function))
+      expect(echo.listenToTable).toHaveBeenCalledWith(1, expect.any(Function), expect.any(Function))
     })
 
     test('creating a table subscribes to it', async () => {
@@ -484,7 +486,7 @@ describe('tables store', () => {
       await store.join(2, 'S')
 
       expect(echo.leaveTable).toHaveBeenCalledWith(1)
-      expect(echo.listenToTable).toHaveBeenLastCalledWith(2, expect.any(Function))
+      expect(echo.listenToTable).toHaveBeenLastCalledWith(2, expect.any(Function), expect.any(Function))
       expect(store.watchedTableId).toBe(2)
     })
 

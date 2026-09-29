@@ -39,6 +39,13 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    // The game at one table: the board, the four players and your own hand.
+    // Entered from the detail page (automatically when a board is dealt).
+    path: '/tables/:id/play',
+    component: () => import('@/views/TablePlayPage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     // A player's public profile. Reached from the profile sheet a seated
     // player opens, not from the menu.
     path: '/users/:id',

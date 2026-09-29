@@ -396,6 +396,21 @@ async function refresh(event: CustomEvent) {
   `<ion-menu-toggle auto-hide="false"><ion-item button router-link="/home" router-direction="root">…`.
   `ion-menu-toggle` closes the menu when an item is tapped.
 
+### Game table components (issue #26)
+- `BridgeTable.vue` reuses the compass grid, but places **screen sides**
+  (`top/left/right/bottom`), not seats: `seatAt(side, mySeat)` in
+  `utils/cards.ts` rotates so the viewer is always at the bottom. Its default
+  slot fills the centre when there is no board ("Waiting for 4 players").
+  Vulnerability is a 5px red/green `border-top` per seat; whose turn is a
+  `box-shadow` ring plus a pulsing dot.
+- `HandView.vue` overlaps cards with `.card + .card { margin-left: -27px }`.
+  That works on a child component's root because a scoped style reaches the
+  child's root element. Each suit is a `display: flex` group inside a
+  wrapping flex, so a narrow screen wraps whole suits and never splits one.
+  48px cards at a 21px step fit 13 cards in about 320px.
+- `defineEmits<{ select: [user: PublicUser] }>()` (the tuple syntax) is the
+  typed-emit form used here.
+
 ## State
 
 - Setup-style Pinia stores in `src/stores/` (`defineStore('auth', () => {…})`);
@@ -416,6 +431,18 @@ async function refresh(event: CustomEvent) {
   same and the store action reads as "what the list becomes".
 - A store action that talks to the backend should let the error propagate; the
   view decides between inline text, a toast and a redirect.
+- **A store fed by another store's channel** (issue #26): the tables store owns
+  `private-table.{id}` and passes `PlayingUpdated` / `TableUpdated` to
+  `useGameStore()` by calling it **inside** the handler. Stores that import
+  each other are fine as long as `useXStore()` runs in functions, not at the
+  top of the module.
+- Pinia wraps setup-store actions, so `expect(cb).toBe(store.action)` fails.
+  Assert `toHaveBeenCalledWith(id, expect.any(Function))`, or invoke the
+  captured callback and check its effect.
+- Adding a function to `services/echo.ts` means adding it to **every**
+  `vi.mock('@/services/echo', …)` factory (authStore, tablesStore, homePage,
+  busyForms specs). A test that logs in through the real auth store also
+  needs that mock, or Echo builds a real socket.
 
 ### Auth state across a reload
 The store is memory-only while the Sanctum session is a cookie, so
