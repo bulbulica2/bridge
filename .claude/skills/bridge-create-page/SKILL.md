@@ -65,6 +65,8 @@ the heredoc is enough).
 
 Read in parallel:
 - `CLAUDE.md` (architecture, conventions, port, test commands).
+- `C:\xampp\htdocs\bridge_docs\frontend\SCREENS.md` for the pages next to the
+  one you're building (you'll add or edit a section there in step 3).
 - `src/router/index.ts`, `src/components/AppMenu.vue`, `src/components/AppHeader.vue`,
   an existing view (e.g. `src/views/LoginPage.vue`), `src/main.ts`.
 - If the page calls the backend: `C:\xampp\htdocs\bridge_docs\backend\API.md` /
@@ -194,8 +196,17 @@ Link to the route the owning issue names (e.g. `/create-account`), but don't
 create that page; it belongs to its own issue. Say so in the PR.
 
 ### Docs
-If you add a new architectural piece (new store/service domain, route meta, env
-var), update `CLAUDE.md` in the same commit.
+Two sets, both in the same change as the code:
+- `CLAUDE.md`, for Claude: a new architectural piece (store/service domain,
+  route meta, env var) goes there in the same commit.
+- `C:\xampp\htdocs\bridge_docs\frontend\*.md`, for people (issue #35): follow
+  CLAUDE.md's "Keep frontend docs in sync" table. A new page always means a
+  `SCREENS.md` section (access, what it shows, store actions → endpoints,
+  the frontend and `bb#N` backend issues) and a row in `ARCHITECTURE.md`'s
+  route table; a new store, service, channel or env var means
+  `ARCHITECTURE.md` / `RUNNING.md` too. Bump the branch line at the top of
+  each file you touch. That folder isn't a git repo, so nothing to commit
+  there: list the files you changed in the PR body instead.
 
 ## 4. Verify
 
@@ -228,7 +239,8 @@ missing exactly that way. Fix anything that fails before committing. Don't commi
   `gh pr create --base main --head <branch> --title "<issue title>" --body-file <file>`.**
   Passing a long `--body` from Windows PowerShell 5.1 splits it on quotes and
   gh fails with "unknown arguments".
-- PR body: `Closes #N`, a Summary of what each file does, anything deferred to
+- PR body: `Closes #N`, a Summary of what each file does, the
+  `bridge_docs/frontend` files updated, anything deferred to
   other issues, and a Test plan with checked items for what you actually ran and
   unchecked ones for manual checks.
 - Follow-up tweaks the user asks for later go in new small commits on the same
@@ -439,3 +451,7 @@ history below, and commit the skill changes on the page's branch (a separate
   the red error text, and `HistoryPage` tests can mount the page for real
   (with `onIonViewWillEnter` as `onMounted`) by mocking `@/services/http`
   only.
+- Issue #35 (Frontend docs): not a page. It created `bridge_docs/frontend/`
+  (README, RUNNING, ARCHITECTURE, SCREENS) for people, and the keep-in-sync
+  rule in CLAUDE.md, which step 3's Docs now follows: every page gets a
+  `SCREENS.md` section. That folder is outside git, so the PR lists it.

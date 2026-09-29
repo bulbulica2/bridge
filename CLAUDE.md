@@ -1,6 +1,8 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+The human-facing docs for this app live in `C:\xampp\htdocs\bridge_docs\frontend`
+and must be kept in sync (see "Keep frontend docs in sync" at the end).
 
 ## Project
 
@@ -310,3 +312,31 @@ model, read the relevant file there rather than guessing:
 This documentation is maintained independently from the backend side and
 can change over time — re-read the file rather than trusting a summary
 cached earlier in a conversation.
+
+## Keep frontend docs in sync — do this in every relevant change, not as a follow-up
+
+People (not Claude) read this app's docs at `bridge_docs/frontend`
+(`C:\xampp\htdocs\bridge_docs\frontend`). That folder isn't a git repo, so
+edit it directly; the PR description should say which files changed there.
+
+| File | Update it when you change... |
+|---|---|
+| `RUNNING.md` | setup or run steps, an `.env` key, a port, an npm script, the test setup, or what must run on the backend for the app to work |
+| `ARCHITECTURE.md` | a route or route meta, the guard, a store (state or actions), a service or the endpoints it calls, error handling, loading/toast behaviour, a channel or event, the heartbeat, a shared component or util |
+| `SCREENS.md` | a page is added or removed, or what a page shows, which store actions or endpoints it calls, or which frontend/backend issue it depends on |
+| `README.md` | none of the above changed but the status line (branch reference) is stale |
+
+Rules:
+- Same change, same turn: if you touch `src/router/`, `src/stores/`,
+  `src/services/`, `src/views/`, `.env`, `vite.config.ts` or
+  `package.json` scripts, check whether `bridge_docs/frontend` needs a
+  matching edit before considering the task done. Bump the branch named at
+  the top of every file you edit.
+- Write for a developer joining the project, not for Claude: explain what
+  and why in plain words, and link to `bridge_docs/backend/*.md` for
+  endpoint shapes rather than copying them.
+- Docs reflect the code as it is. Something planned goes in as "coming"
+  with its issue number, never as working.
+- This file (CLAUDE.md) stays the detailed map for Claude; the
+  architecture notes above and `ARCHITECTURE.md` cover the same ground,
+  so when one changes, check the other.
