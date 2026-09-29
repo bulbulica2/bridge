@@ -50,6 +50,13 @@
           >
             Refresh
           </ion-button>
+
+          <h3 class="boards-title">Boards played</h3>
+          <HistoryList
+            ref="history"
+            :owner="historyOwner"
+            :empty-text="isMe ? 'You haven\'t finished a board yet.' : 'No finished boards yet.'"
+          />
         </template>
       </div>
     </ion-content>
@@ -57,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   IonPage,
@@ -71,6 +78,7 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
+import HistoryList from '@/components/HistoryList.vue';
 import { useUsersStore } from '@/stores/users';
 import { useAuthStore } from '@/stores/auth';
 import { errorMessage, statusOf } from '@/utils/errors';
@@ -87,6 +95,9 @@ const notFound = ref(false);
 
 const profile = computed(() => store.profiles[userId.value] ?? null);
 const isMe = computed(() => !!userId.value && auth.user?.id === userId.value);
+// Your own profile shares the "My boards" list (null); anyone else's is theirs.
+const historyOwner = computed(() => (isMe.value ? null : userId.value));
+const history = ref<InstanceType<typeof HistoryList> | null>(null);
 
 // Ionic keeps the page alive, so read the param on every entry rather than at
 // setup time — opening another player must not reuse the old id.
@@ -103,11 +114,15 @@ onIonViewWillEnter(() => {
   load();
 });
 
+// The profile, then (once it is up and the list follows the new id) the
+// boards they played.
 async function load() {
   loading.value = true;
   loadError.value = '';
   try {
     await store.load(userId.value);
+    await nextTick();
+    await history.value?.load();
   } catch (e) {
     // A 401 here means the session expired after the router guard let us in.
     if (statusOf(e) === 401) {
@@ -220,5 +235,11 @@ async function refresh(event: CustomEvent) {
 
 .refresh {
   margin-top: 8px;
+}
+
+.boards-title {
+  margin: 24px 0 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 </style>

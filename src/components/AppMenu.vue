@@ -11,7 +11,7 @@
           <ion-item button router-link="/home" router-direction="root">
             <ion-label>Home</ion-label>
           </ion-item>
-          <!-- Login while logged out, Tables once logged in. -->
+          <!-- Login while logged out, Tables and My boards once logged in. -->
           <ion-item
             v-if="!auth.isAuthenticated"
             button
@@ -20,9 +20,14 @@
           >
             <ion-label>Login</ion-label>
           </ion-item>
-          <ion-item v-else button router-link="/tables" router-direction="root">
-            <ion-label>Tables</ion-label>
-          </ion-item>
+          <template v-else>
+            <ion-item button router-link="/tables" router-direction="root">
+              <ion-label>Tables</ion-label>
+            </ion-item>
+            <ion-item button router-link="/history" router-direction="root">
+              <ion-label>My boards</ion-label>
+            </ion-item>
+          </template>
         </ion-menu-toggle>
       </ion-list>
     </ion-content>

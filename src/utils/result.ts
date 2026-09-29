@@ -109,3 +109,21 @@ export function sessionScore(
   }
   return total;
 }
+
+// A side's matchpoints on a board as a percentage of the top, rounded.
+// Null when the board has only one result (top 0): nothing to compare with.
+export function matchpointPercent(matchpoints: number, top: number): number | null {
+  return top > 0 ? Math.round((matchpoints / top) * 100) : null;
+}
+
+// The seat `userId` held in a playing's seat snapshot, if any.
+export function seatOfUser(
+  players: Partial<Record<Seat, { id: number } | null>>,
+  userId: number | null | undefined,
+): Seat | null {
+  if (userId == null) {
+    return null;
+  }
+  const seat = (Object.keys(players) as Seat[]).find((s) => players[s]?.id === userId);
+  return seat ?? null;
+}

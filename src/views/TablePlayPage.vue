@@ -79,6 +79,16 @@
                moving on. The deal lies face up on the table below. -->
           <template v-else-if="playing.phase === 'finished' && playing.result">
             <BoardResultPanel :result="playing.result" :my-seat="mySeat" :session="session" />
+            <!-- The same board at every other table, with matchpoints. -->
+            <ion-button
+              v-if="playing.board"
+              expand="block"
+              fill="outline"
+              class="compare"
+              :router-link="`/boards/${playing.board.id}/results`"
+            >
+              Compare with other tables
+            </ion-button>
             <NextBoardBox
               :ready="playing.ready ?? []"
               :players="players"
@@ -719,6 +729,10 @@ async function refresh(event: CustomEvent) {
 .play {
   max-width: 520px;
   margin: 0 auto;
+}
+
+.compare {
+  margin: 0 0 12px;
 }
 
 .loading {

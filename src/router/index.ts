@@ -46,6 +46,20 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    // The user's finished boards (the menu's "My boards"), paged in as it scrolls.
+    path: '/history',
+    component: () => import('@/views/HistoryPage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    // One board's results at every table, with matchpoints. Reached from a
+    // history entry or a finished board's result panel; 403 unless the user
+    // has finished that board.
+    path: '/boards/:id/results',
+    component: () => import('@/views/BoardResultsPage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     // A player's public profile. Reached from the profile sheet a seated
     // player opens, not from the menu.
     path: '/users/:id',

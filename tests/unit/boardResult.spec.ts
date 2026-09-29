@@ -348,6 +348,9 @@ describe('TablePlayPage between boards', () => {
     expect(nextBox(wrapper).findAll('li.is-ready').map((li) => li.attributes('data-seat'))).toEqual(['N', 'W'])
     // The running score is read from the history for this table.
     expect(historyService.getMyPlayings).toHaveBeenCalledWith(1)
+    // And the same board at the other tables is one tap away.
+    const compare = wrapper.findAllComponents({ name: 'IonButton' }).find((b) => b.classes('compare'))
+    expect(compare?.props('routerLink')).toMatch(/^\/boards\/\d+\/results$/)
   })
 
   test('"Next board" asks once, then waits for the others', async () => {

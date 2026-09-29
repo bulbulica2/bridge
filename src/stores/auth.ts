@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import * as authService from '@/services/auth';
 import { disconnectEcho } from '@/services/echo';
 import { useGameStore } from '@/stores/game';
+import { useHistoryStore } from '@/stores/history';
 import { useTablesStore } from '@/stores/tables';
 import type {
   LoginCredentials,
@@ -45,6 +46,7 @@ export const useAuthStore = defineStore('auth', () => {
       // with the table and user channels it could only hold while logged in.
       useTablesStore().unwatchTable();
       useGameStore().unwatchUser();
+      useHistoryStore().clear();
       disconnectEcho();
       user.value = null;
       sessionCheck = Promise.resolve();
