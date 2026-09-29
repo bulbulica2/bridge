@@ -196,6 +196,36 @@ Inline modal driven by a ref; it brings its own header and content.
   never shows the previous attempt's message.
 - The modal has its own `ion-content`, so the page's scroll position is kept.
 
+### Bottom sheet as a reusable component (`PlayerProfileSheet.vue`, issue #24)
+A small "tap for details" view over a page, shared by two pages. The parent owns
+a nullable ref and the sheet is open while it's set:
+
+```vue
+<!-- parent -->
+<button type="button" class="seat-user" @click="player = user">{{ user.username }}</button>
+<PlayerProfileSheet :player="player" @close="player = null" />
+
+<!-- sheet -->
+<ion-modal :is-open="player !== null" :initial-breakpoint="0.5"
+           :breakpoints="[0, 0.5, 0.9]" @did-dismiss="emit('close')">
+  <ion-content class="ion-padding">…</ion-content>
+</ion-modal>
+```
+
+- Show the copy you already have (e.g. the profile a table payload embeds) at
+  once, and refresh it in a `watch(() => props.player, …, { immediate: true })`.
+  Guard each await with `props.player?.id === player.id`, because a second tap
+  can land before the first request answers.
+- To navigate from inside the sheet: `emit('close')` first, then
+  `useIonRouter().navigate(path, 'forward')`, or the sheet stays open over the new page.
+- A tappable name inside a row that already holds `ion-button`s: use a plain
+  `<button type="button">` styled as a link (`border: 0; background: none;
+  font: inherit; color: var(--ion-color-primary); text-decoration: underline`),
+  not a tappable `ion-item`, which would swallow the seat buttons' taps.
+- **Tests**: `IonModal` renders nothing in jsdom (it is never presented). Stub it:
+  `global: { stubs: { IonModal: s, 'ion-modal': s } }` with
+  `s = { template: '<div><slot /></div>' }`.
+
 ## Buttons & navigation
 
 ### `ion-button`

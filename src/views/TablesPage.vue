@@ -65,7 +65,16 @@
                 <div class="seats">
                   <div v-for="{ seat, user } in seatsOf(table)" :key="seat" class="seat">
                     <span class="seat-name">{{ seat }}</span>
-                    <span v-if="user" class="seat-user">{{ user.username }}</span>
+                    <!-- Tapping a player opens their public profile. -->
+                    <button
+                      v-if="user"
+                      type="button"
+                      class="seat-user"
+                      :aria-label="`${user.username}'s profile`"
+                      @click="player = user"
+                    >
+                      {{ user.username }}
+                    </button>
                     <ion-badge v-if="user && user.id === me" color="primary">You</ion-badge>
                     <ion-button
                       v-else
@@ -84,6 +93,8 @@
           </ion-list>
         </template>
       </div>
+
+      <PlayerProfileSheet :player="player" @close="player = null" />
 
       <ion-modal :is-open="createOpen" @did-dismiss="closeCreate">
         <ion-header>
@@ -149,10 +160,12 @@ import {
 } from '@ionic/vue';
 import { chevronForwardOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
+import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
 import { seatsOf } from '@/services/tables';
 import type { Seat, Table } from '@/services/tables';
+import type { PublicUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { confirmMove } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
@@ -172,6 +185,8 @@ const createOpen = ref(false);
 const creating = ref(false);
 const createError = ref('');
 const name = ref('');
+// The seated player whose profile sheet is open.
+const player = ref<PublicUser | null>(null);
 
 // The router guard (meta.requiresAuth) already keeps guests out; this only
 // re-fetches the list every time the page is shown. The list is refresh-only:
@@ -328,7 +343,17 @@ async function submitCreate() {
   --background: rgba(var(--ion-color-primary-rgb), 0.06);
 }
 
+/* A plain button that reads as a link: the name itself is the tap target. */
 .seat-user {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ion-color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

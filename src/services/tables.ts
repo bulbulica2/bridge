@@ -1,5 +1,5 @@
 import http from './http';
-import type { User } from './auth';
+import type { PublicUser } from './users';
 
 // Game endpoints answer with an envelope: {status, message, data}.
 // See bridge_docs/backend/API.md.
@@ -18,7 +18,7 @@ export interface TableSeat {
   table_id: number;
   user_id: number;
   seat: Seat;
-  user: User;
+  user: PublicUser;
 }
 
 export interface Table {
@@ -100,7 +100,7 @@ export async function removePlayer(tableId: number, userId: number): Promise<Sea
 
 // The four seats in N, E, S, W order with whoever holds them. The backend only
 // sends the occupied ones, so both table views build the full set from here.
-export function seatsOf(table: Table): { seat: Seat; user: User | null }[] {
+export function seatsOf(table: Table): { seat: Seat; user: PublicUser | null }[] {
   return SEATS.map((seat) => ({
     seat,
     user: table.seats.find((s) => s.seat === seat)?.user ?? null,

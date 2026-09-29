@@ -57,7 +57,7 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>> = {}): Table
       table_id: id,
       user_id: i + 1,
       seat,
-      user: { id: i + 1, name: username, username, email: `${username}@example.com` },
+      user: { id: i + 1, name: username, username, description: null },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
   }

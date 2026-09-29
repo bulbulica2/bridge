@@ -38,9 +38,11 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `/reset-password` and `/password-reset/:token` (both `ResetPasswordPage.vue`,
   `meta.guestOnly`, reached from the Login page or the emailed link),
   `/account` (`AccountPage.vue`, `meta.requiresAuth`), `/tables`
-  (`TablesPage.vue`, `meta.requiresAuth`, the menu's logged-in entry) and
+  (`TablesPage.vue`, `meta.requiresAuth`, the menu's logged-in entry),
   `/tables/:id` (`TableDetailPage.vue`, `meta.requiresAuth`, one table's four
-  seats, reached from the list's "Open" button, not from the menu). Adding a
+  seats, reached from the list's "Open" button, not from the menu) and
+  `/users/:id` (`UserProfilePage.vue`, `meta.requiresAuth`, a player's public
+  profile, reached from the profile sheet, not from the menu). Adding a
   new top-level section means adding both a view and a route entry here, plus an `ion-item` in
   `src/components/AppMenu.vue` if it belongs in the menu.
 - **Route guard**: a single `router.beforeEach` in `src/router/index.ts` enforces
@@ -112,6 +114,15 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `seatedTable()` tell them where the user sits.
   `canManage()` mirrors the backend's `TablePolicy::manage`, but only as a hint —
   `is_admin` is hidden from `GET /api/user`, so admins read as non-managers.
+- **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
+  envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
+  `username`, `description`, never the email); `TableSeat.user` uses that type
+  too, since table payloads embed the same profile per seat. The Pinia store
+  `src/stores/users.ts` caches profiles by id (a 404 drops the cached one).
+  Tapping a seated player's name on either table page opens
+  `src/components/PlayerProfileSheet.vue`, a bottom-sheet `ion-modal` that
+  shows the embedded copy at once, refreshes it from the store, and links to
+  `/users/:id`. The own record with its email stays the auth store's `User`.
 - **Realtime (Reverb)**: `src/services/echo.ts` holds one lazily created
   Laravel Echo instance (`broadcaster: 'reverb'`, `VITE_REVERB_*` in `.env`)
   whose `authorizer` signs private channels via `POST /broadcasting/auth`

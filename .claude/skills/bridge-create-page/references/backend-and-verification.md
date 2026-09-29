@@ -57,6 +57,17 @@
   and `{"name":""}` gives 422 `{"errors":{"name":["The name field is required."]}}`.
   Edit a throwaway registered user, not the seeded account.
 
+- `GET /users/{id}` (issue #24) is a root `auth` route like the game ones and
+  answers with the envelope: `data` is the public profile `{id, name, username,
+  description}`. An unknown id 404s with Laravel's raw model-binding body
+  ("No query results for model [App\Models\User] …"), so pages show their own
+  text for that 404, never `message`. Seat users in table payloads have exactly
+  the same four keys (verified with curl: no `email`).
+- A service test mocks the shared instance: `vi.mock('@/services/http', () =>
+  ({ default: { get: vi.fn() } }))`, then resolve `{ data: { status, message,
+  data } }` or reject with an `AxiosError` whose `response.status` is set
+  (`tests/unit/users.spec.ts`, `tests/unit/errors.spec.ts`).
+
 ## Game endpoints (tables)
 
 - They live at the **root**, not under `/api`: `/tables`, `/tables/{id}/seats`.
