@@ -411,6 +411,37 @@ async function refresh(event: CustomEvent) {
 - `defineEmits<{ select: [user: PublicUser] }>()` (the tuple syntax) is the
   typed-emit form used here.
 
+### Card play components (issue #28)
+- **Tappable cards**: `HandView` switches to `<button class="card card-button">`
+  wrappers only when given `playable` (ids). An undefined prop leaves the
+  old display-only markup, so existing callers and tests don't change.
+  Dim illegal cards with `:deep(.playing-card)` on the button, and raise
+  the hovered or in-flight card with `transform: translateY(-10px)`. Add
+  `padding-top` on the hand so a raised card isn't clipped.
+- **An optional named slot**: `BridgeTable` renders
+  `<slot v-if="$slots.centre" name="centre" />` before its default content,
+  and the page passes `<template v-if="playing.contract" #centre>`. A
+  `v-if` on a slot template is allowed, and it makes `$slots.centre`
+  undefined when the condition is false.
+- **Letting one grid cell span the row**: `.side-top.seat-wide { grid-column: 1 / 4 }`
+  gives dummy the full width when declarer looks at it from the top. On a
+  side seat, `DummyColumns` (one text column per suit, about 90px) fits the
+  narrow cell instead.
+- **Overlapping absolute cards** (`TrickArea`): a 124×150 box with four
+  48×68 slots in a cross. Set the z-index so each overlap covers a card's
+  bottom corner, never its top-left rank index: top 0, left/right 1,
+  bottom 2, winner 3.
+- **A template comment before the root element** makes `wrapper.attributes()`
+  read the comment node in tests. Query the element (`wrapper.get('.trick')`)
+  instead. Attribute fallthrough (`class="card"` on `PlayingCard`) still
+  works.
+- **A timed pause driven by a watch**: watch `[playing_id, tricks.length]`,
+  and when the count grows on the same playing, hold the trick in a ref and
+  clear it with `setTimeout`. Clear the timer in `onBeforeUnmount`. Tests
+  call `vi.useFakeTimers()` after mounting (mounting awaits real
+  promises), then `vi.advanceTimersByTime`, and restore real timers in
+  `afterEach`.
+
 ## State
 
 - Setup-style Pinia stores in `src/stores/` (`defineStore('auth', () => {…})`);

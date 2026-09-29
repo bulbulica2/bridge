@@ -138,6 +138,16 @@
   They come from one request on two channels, so either can arrive first.
 - A player leaving mid-board sends **no** PlayingUpdated: only `TableUpdated`
   with `board_id: null`.
+- **Card play** (#28): `POST /tables/{id}/cards {card_id}` → 201 with the
+  full state. `turn` is the *hand* the card comes from, and on dummy's turn
+  `acting_user_id` is declarer. `dummy_hand` is null until the opening
+  lead, then public (dummy's own `hand` is the same cards).
+  `current_trick` is `[]` right after a trick's 4th card: that trick is the
+  last of `tricks`, with its `winner`. `tricks_won` is `{ns, ew}`. The 409
+  messages are `Dummy doesn't play: …`, `It is not your turn: W plays
+  next.`, `That card is not in the hand being played.` (declarer's own card
+  on dummy's turn) and `You must follow suit: Spades were led.`. After the
+  13th trick the answer is already `finished` with `result`.
 - The seeder (after `migrate:fresh --seed`) seats `email@email.com` at table 1
   ("Your call") with a board in its auction, and fills tables 2–5 with every
   other phase. Use table 1 to show the play page without setting anything up.
@@ -216,6 +226,15 @@ Python, which can't open `/c/...` paths. When it can't, `r.json` never
 exists, the table id comes back empty and every later request 404s. A table
 created before that failure stays behind with its creator seated, so find it
 with `GET /tables` in that user's jar and `DELETE /tables/{id}/seats`.
+
+**A whole board of play:** `assets/play-flow.sh <Windows scratchpad> [keep]`
+has the dealer bid 1NT and the others pass. It then checks the four play
+409s (dummy playing, wrong turn, declarer's own card on dummy's turn, not
+following suit) and that `dummy_hand` is null before the lead and 13
+cards after it. Then it plays all 13 tricks, each time with the first
+legal card from whichever hand is on play, and prints the phase, the
+tricks won and the `result`. `keep` leaves the four seated and prints their
+usernames, so you can log in as one in the browser.
 
 ## Troubleshooting
 

@@ -140,11 +140,21 @@ export const useGameStore = defineStore('game', () => {
   // included, so it replaces ours, unless the table channel has already
   // brought a later one (the next player may have called by then).
   async function call(bidId: number): Promise<Playing> {
+    return act((id) => gameService.makeCall(id, bidId));
+  }
+
+  // Our card (or dummy's, as declarer): same race as a call, since the next
+  // player may already have played by the time our answer lands.
+  async function play(cardId: number): Promise<Playing> {
+    return act((id) => gameService.playCard(id, cardId));
+  }
+
+  async function act(send: (id: number) => Promise<Playing>): Promise<Playing> {
     const id = tableId.value;
     if (id === null) {
       throw new Error('No board is loaded.');
     }
-    const state = await gameService.makeCall(id, bidId);
+    const state = await send(id);
     if (tableId.value === id && !isBehind(state, playing.value)) {
       playing.value = state;
     }
@@ -229,6 +239,7 @@ export const useGameStore = defineStore('game', () => {
     load,
     loadBids,
     call,
+    play,
     applyPlayingUpdate,
     applyHandDealt,
     applyTableUpdate,

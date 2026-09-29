@@ -10,7 +10,12 @@ import type { AuctionCall, Bid, Card, Playing, PublicPlaying } from '@/services/
 import type { Seat, Table } from '@/services/tables'
 import { showToast } from '@/utils/toast'
 
-vi.mock('@/services/game', () => ({ getPlaying: vi.fn(), getBids: vi.fn(), makeCall: vi.fn() }))
+vi.mock('@/services/game', () => ({
+  getPlaying: vi.fn(),
+  getBids: vi.fn(),
+  makeCall: vi.fn(),
+  playCard: vi.fn(),
+}))
 
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
@@ -310,5 +315,71 @@ describe('game store', () => {
 
     await expect(game.call(ONE_HEART.id)).rejects.toBe(refused)
     expect(game.playing).toEqual(fullState())
+  })
+
+  describe('card play', () => {
+    // 1♥ by North, South (the user) dummy; West has led and it is North's turn.
+    const LEAD = { seat: 'W' as Seat, card: card(20, 'H', 5) }
+    function inPlay(overrides: Partial<PublicPlaying> = {}): Partial<Playing> {
+      return {
+        phase: 'play',
+        auction: auction(PASS, PASS, ONE_HEART, PASS, PASS, PASS),
+        contract: { bid: ONE_HEART, doubled: 0, declarer: 'N', dummy: 'S' },
+        turn: 'N',
+        acting_user_id: 1,
+        tricks: [],
+        current_trick: [LEAD],
+        tricks_won: { ns: 0, ew: 0 },
+        dummy_hand: HAND,
+        ...overrides,
+      }
+    }
+
+    test('a card sends its id and takes the new state it answers with', async () => {
+      logIn(1)
+      const game = await loaded(fullState({ ...inPlay(), my_seat: 'N', hand: [card(40, 'H', 15)] }))
+      const after = fullState({
+        ...inPlay({ turn: 'E', acting_user_id: 2, current_trick: [LEAD, { seat: 'N', card: card(40, 'H', 15) }] }),
+        my_seat: 'N',
+        hand: [],
+      })
+      vi.mocked(gameService.playCard).mockResolvedValue(after)
+
+      await game.play(40)
+
+      expect(gameService.playCard).toHaveBeenCalledWith(5, 40)
+      expect(game.playing).toEqual(after)
+    })
+
+    test("a card's answer does not undo a later card the channel already brought", async () => {
+      logIn(1)
+      const mine = { seat: 'S' as Seat, card: HAND[1] }
+      const game = await loaded(fullState({ ...inPlay({ turn: 'S' }), my_seat: 'N', hand: [card(40, 'H', 15)] }))
+      let answer!: (state: Playing) => void
+      vi.mocked(gameService.playCard).mockReturnValue(new Promise((resolve) => (answer = resolve)))
+
+      // Declarer plays dummy's ♥K; East follows before our answer lands.
+      const playing = game.play(HAND[1].id)
+      game.applyPlayingUpdate(
+        5,
+        publicState(inPlay({ turn: 'E', current_trick: [LEAD, mine, { seat: 'E', card: card(21, 'H', 6) }] })),
+      )
+      answer(fullState({ ...inPlay({ turn: 'E', current_trick: [LEAD, mine] }), my_seat: 'N' }))
+      await playing
+
+      expect(game.playing?.current_trick).toHaveLength(3)
+    })
+
+    test("dummy's own hand loses the cards declarer plays from it", async () => {
+      const game = await loaded(fullState({ ...inPlay({ turn: 'S' }) }))
+
+      game.applyPlayingUpdate(
+        5,
+        publicState(inPlay({ turn: 'E', current_trick: [LEAD, { seat: 'S', card: HAND[1] }], dummy_hand: [HAND[0], HAND[2]] })),
+      )
+
+      expect(game.playing?.hand).toEqual([HAND[0], HAND[2]])
+      expect(game.playing?.my_seat).toBe('S')
+    })
   })
 })

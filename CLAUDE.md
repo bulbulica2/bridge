@@ -151,6 +151,23 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   table (the viewer's column last, so South reads W N E S), starting in the
   dealer's column. `CallLabel.vue` draws one call. The page announces the
   contract (or "Passed out") and toasts it when the last call arrives live.
+- **Card play**: `play(cardId)` posts `POST /tables/{id}/cards` and takes
+  its answer through the same `isBehind` guard as `call`. `turn` is the
+  hand the card comes from and `acting_user_id` who sends it (declarer on
+  dummy's turn), so `handToPlay()` in `src/utils/play.ts` says whether the
+  user plays their own hand, dummy's, or nothing (dummy never plays).
+  `legalCards()` is the follow-suit hint that dims cards in `HandView`
+  (given `playable` ids it turns into buttons). `trickBySide()` places a
+  trick's cards by seat for `TrickArea.vue`, which fills `BridgeTable`'s
+  `centre` slot. `dummy_hand` is public only after the opening lead.
+  `BridgeTable` lays it across the top for declarer, where it can be tapped,
+  or as `DummyColumns.vue` on a defender's side seat, and not at all for
+  dummy, whose own hand is the same cards. `current_trick` empties as soon
+  as a trick's fourth card lands, so the page holds that trick (the last of
+  `tricks`) with its winner for 2 s before clearing it, but only when seen
+  live. The contract bar above the table carries `tricks_won` and a "Last
+  trick" peek. One card is in flight at a time; a 409 toasts and reloads,
+  as for calls.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
   `username`, `description`, never the email); `TableSeat.user` uses that type
