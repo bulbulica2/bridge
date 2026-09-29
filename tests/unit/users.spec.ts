@@ -1,10 +1,12 @@
 import { AxiosError, AxiosHeaders } from 'axios'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { effectScope, nextTick } from 'vue'
 import http from '@/services/http'
-import { getUser } from '@/services/users'
-import type { PublicUser } from '@/services/users'
+import { getUser, searchUsers } from '@/services/users'
+import type { PublicUser, SearchedUser } from '@/services/users'
+import { SEARCH_DEBOUNCE_MS, useUserSearch } from '@/composables/useUserSearch'
 import { useUsersStore } from '@/stores/users'
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue'
 
@@ -143,5 +145,133 @@ describe('PlayerProfileSheet', () => {
 
     expect(wrapper.emitted('close')).toHaveLength(1)
     expect(navigate).toHaveBeenCalledWith('/users/3', 'forward')
+  })
+})
+
+const jo: SearchedUser = { id: 7, name: 'Joanna', username: 'jo', description: null, seated: true }
+
+// GET /users?search= as the backend answers it: the matches in the envelope.
+function found(users: SearchedUser[]) {
+  return { data: { status: 200, message: 'Users retrieved successfully.', data: users } }
+}
+
+describe('user search', () => {
+  test('searchUsers sends the term as a query parameter and unwraps the envelope', async () => {
+    vi.mocked(http.get).mockResolvedValue(found([jo]))
+
+    await expect(searchUsers('jo')).resolves.toEqual([jo])
+    expect(http.get).toHaveBeenCalledWith('/users', { params: { search: 'jo' } })
+  })
+
+  describe('useUserSearch', () => {
+    // The composable cleans up with its scope, as it would with a component.
+    let scope: ReturnType<typeof effectScope>
+
+    function start() {
+      scope = effectScope()
+      return scope.run(() => useUserSearch())!
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      scope?.stop()
+      vi.useRealTimers()
+    })
+
+    test('waits for a pause in the typing and sends only the last term', async () => {
+      vi.mocked(http.get).mockResolvedValue(found([jo]))
+      const search = start()
+
+      for (const text of ['jo', 'joa', 'joan']) {
+        search.query.value = text
+        await nextTick()
+        vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS - 50)
+      }
+      expect(http.get).not.toHaveBeenCalled()
+      expect(search.searching.value).toBe(true)
+
+      vi.advanceTimersByTime(50)
+      await flushPromises()
+
+      expect(http.get).toHaveBeenCalledTimes(1)
+      expect(http.get).toHaveBeenCalledWith('/users', { params: { search: 'joan' } })
+      expect(search.results.value).toEqual([jo])
+      expect(search.searched.value).toBe('joan')
+      expect(search.searching.value).toBe(false)
+    })
+
+    test('never searches fewer than two characters, spaces aside', async () => {
+      const search = start()
+
+      search.query.value = ' j '
+      await nextTick()
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS * 2)
+
+      expect(http.get).not.toHaveBeenCalled()
+      expect(search.tooShort.value).toBe(true)
+      expect(search.searching.value).toBe(false)
+    })
+
+    test('trims the term it sends', async () => {
+      vi.mocked(http.get).mockResolvedValue(found([]))
+      const search = start()
+
+      search.query.value = '  ann  '
+      await nextTick()
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS)
+      await flushPromises()
+
+      expect(http.get).toHaveBeenCalledWith('/users', { params: { search: 'ann' } })
+      expect(search.results.value).toEqual([])
+      expect(search.searched.value).toBe('ann')
+    })
+
+    test('an answer that arrives after the box was cleared is dropped', async () => {
+      let answerLate: (value: unknown) => void = () => {}
+      vi.mocked(http.get).mockReturnValue(new Promise((resolve) => (answerLate = resolve)))
+      const search = start()
+
+      search.query.value = 'jo'
+      await nextTick()
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS)
+      search.query.value = 'j'
+      await nextTick()
+      answerLate(found([jo]))
+      await flushPromises()
+
+      expect(search.results.value).toEqual([])
+      expect(search.searched.value).toBeNull()
+      expect(search.searching.value).toBe(false)
+    })
+
+    test('a throttled search says so', async () => {
+      vi.mocked(http.get).mockRejectedValue(axiosError(429, { message: 'Too Many Attempts.' }))
+      const search = start()
+
+      search.query.value = 'jo'
+      await nextTick()
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS)
+      await flushPromises()
+
+      expect(search.error.value).toMatch(/too many searches/i)
+      expect(search.searching.value).toBe(false)
+    })
+
+    test('reset clears the box and cancels a pending search', async () => {
+      const search = start()
+
+      search.query.value = 'jo'
+      await nextTick()
+      search.reset()
+      await nextTick()
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS * 2)
+
+      expect(http.get).not.toHaveBeenCalled()
+      expect(search.query.value).toBe('')
+      expect(search.searching.value).toBe(false)
+    })
   })
 })

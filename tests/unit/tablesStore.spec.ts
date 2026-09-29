@@ -1,12 +1,13 @@
 import { AxiosError, AxiosHeaders } from 'axios'
 import { createPinia, setActivePinia } from 'pinia'
+import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { HEARTBEAT_MS, IDLE_NOTICE, useTablesStore } from '@/stores/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
 import * as tablesService from '@/services/tables'
 import * as echo from '@/services/echo'
-import type { Seat, Table } from '@/services/tables'
+import type { BroadcastTable, Seat, Table } from '@/services/tables'
 import { showToast } from '@/utils/toast'
 
 vi.mock('@/services/tables', async (importOriginal) => ({
@@ -17,6 +18,7 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   getTable: vi.fn(),
   leaveSeat: vi.fn(),
   removePlayer: vi.fn(),
+  seatUser: vi.fn(),
   sendHeartbeat: vi.fn(),
 }))
 
@@ -40,7 +42,7 @@ vi.mock('@/utils/toast', () => ({
 }))
 
 // What Reverb would call when a TableUpdated arrives on the last channel joined.
-function pushUpdate(table: Table) {
+function pushUpdate(table: BroadcastTable) {
   const calls = vi.mocked(echo.listenToTable).mock.calls
   const [, onUpdate] = calls[calls.length - 1]
   onUpdate(table)
@@ -85,7 +87,15 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>> = {}): Table
       user: { id: i + 1, name: username, username, description: null },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
+    can_manage: false,
   }
+}
+
+// What TableUpdated carries: the table less the caller's own can_manage.
+function broadcastOf(table: Table): BroadcastTable {
+  const copy: Partial<Table> = { ...table }
+  delete copy.can_manage
+  return copy as BroadcastTable
 }
 
 describe('tables store', () => {
@@ -332,6 +342,71 @@ describe('tables store', () => {
     await expect(store.removePlayer(1, 2)).rejects.toThrow()
 
     expect(store.currentTable).toEqual(table)
+  })
+
+  describe('seating another player', () => {
+    test('seatUser replaces the table in the list and the open page', async () => {
+      logInAs(1)
+      const before = { ...makeTable(1, { N: 'ana' }), can_manage: true }
+      const after = { ...makeTable(1, { N: 'ana', E: 'bob' }), can_manage: true }
+      vi.mocked(tablesService.listTables).mockResolvedValue([before])
+      vi.mocked(tablesService.getTable).mockResolvedValue(before)
+      vi.mocked(tablesService.seatUser).mockResolvedValue(after)
+
+      const store = useTablesStore()
+      await store.load()
+      await store.loadTable(1)
+      const result = await store.seatUser(1, 2, 'E')
+
+      expect(tablesService.seatUser).toHaveBeenCalledWith(1, 2, 'E')
+      expect(result).toEqual(after)
+      expect(store.tables).toEqual([after])
+      expect(store.currentTable).toEqual(after)
+      expect(store.watchedTableId).toBe(1)
+    })
+
+    test('the fourth player seated brings the board', async () => {
+      logInAs(1)
+      const before = { ...makeTable(1, { N: 'ana', E: 'bob', S: 'cy' }), can_manage: true }
+      const dealt = { ...makeTable(1, { N: 'ana', E: 'bob', S: 'cy', W: 'di' }), board_id: 5, can_manage: true }
+      vi.mocked(tablesService.getTable).mockResolvedValue(before)
+      vi.mocked(tablesService.seatUser).mockResolvedValue(dealt)
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await store.seatUser(1, 4, 'W')
+
+      expect(store.currentTable?.board_id).toBe(5)
+    })
+
+    test('an unseated admin seating someone does not subscribe', async () => {
+      logInAs(9)
+      const before = { ...makeTable(1, { N: 'ana' }), can_manage: true }
+      vi.mocked(tablesService.getTable).mockResolvedValue(before)
+      vi.mocked(tablesService.seatUser).mockResolvedValue({
+        ...makeTable(1, { N: 'ana', E: 'bob' }),
+        can_manage: true,
+      })
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await store.seatUser(1, 2, 'E')
+
+      expect(echo.listenToTable).not.toHaveBeenCalled()
+      expect(store.currentTable?.seats).toHaveLength(2)
+    })
+
+    test('a refused seatUser leaves the table as it was', async () => {
+      const table = { ...makeTable(1, { N: 'ana' }), can_manage: true }
+      vi.mocked(tablesService.getTable).mockResolvedValue(table)
+      vi.mocked(tablesService.seatUser).mockRejectedValue(axiosError(409))
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await expect(store.seatUser(1, 2, 'E')).rejects.toMatchObject({ response: { status: 409 } })
+
+      expect(store.currentTable).toEqual(table)
+    })
   })
 
   test('forget drops a table that no longer exists', async () => {
@@ -613,6 +688,54 @@ describe('tables store', () => {
       expect(store.kickedFrom).toBe(1)
       expect(store.currentTable).toEqual(after)
       expect(showToast).toHaveBeenCalledWith(expect.stringContaining('removed'), 'warning')
+    })
+
+    test('an update keeps the can_manage we last got over HTTP', async () => {
+      logInAs(1)
+      vi.mocked(tablesService.listTables).mockResolvedValue([
+        { ...makeTable(1, { N: 'ana' }), can_manage: true },
+      ])
+      vi.mocked(tablesService.getTable).mockResolvedValue({
+        ...makeTable(1, { N: 'ana' }),
+        can_manage: true,
+      })
+
+      const store = useTablesStore()
+      await store.load()
+      await store.loadTable(1)
+      vi.mocked(tablesService.getTable).mockClear()
+      const broadcast = broadcastOf(makeTable(1, { N: 'ana', E: 'bob' }))
+      pushUpdate(broadcast)
+
+      expect(store.currentTable).toEqual({ ...broadcast, can_manage: true })
+      expect(store.tables[0].can_manage).toBe(true)
+      expect(tablesService.getTable).not.toHaveBeenCalled()
+    })
+
+    test('a new moderator refetches can_manage without undoing later seats', async () => {
+      logInAs(2)
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana', E: 'bob' }))
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      // ana (1) leaves and the role passes to bob (2).
+      const both = makeTable(1, { N: 'ana', E: 'bob' })
+      const handedOn = broadcastOf({
+        ...both,
+        moderated_by: 2,
+        seats: both.seats.filter((seat) => seat.user_id === 2),
+        free_seats: ['N', 'S', 'W'],
+      })
+      vi.mocked(tablesService.getTable)
+        .mockClear()
+        .mockResolvedValue({ ...handedOn, can_manage: true })
+      pushUpdate(handedOn)
+
+      expect(tablesService.getTable).toHaveBeenCalledWith(1)
+      expect(store.currentTable?.can_manage).toBe(false)
+      await flushPromises()
+
+      expect(store.currentTable).toEqual({ ...handedOn, can_manage: true })
     })
 
     test('after a reconnect the watched table is refetched once', async () => {

@@ -238,7 +238,7 @@ import TrickArea from '@/components/TrickArea.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
 import { useTablesStore } from '@/stores/tables';
-import { canManage, seatsOf } from '@/services/tables';
+import { seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { Bid, Card, PlayedCard, Trick } from '@/services/game';
 import type { PublicUser } from '@/services/users';
@@ -428,7 +428,7 @@ function playStatus(turn: Seat | null): string {
 const shortOfPlayers = computed(() => !!table.value && table.value.seats.length < 4);
 
 // A hint for the "for everyone" button; a 403 corrects it.
-const isManager = computed(() => !!table.value && canManage(table.value, me.value));
+const isManager = computed(() => table.value?.can_manage ?? false);
 
 // The running score at this table, once the store has read it for this table.
 const session = computed(() => (game.session?.tableId === tableId.value ? game.session : null));

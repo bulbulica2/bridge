@@ -103,8 +103,10 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   table endpoints (`GET /tables`, `POST /tables`, `GET /tables/{id}`,
   `POST /tables/{id}/seats`, `DELETE /tables/{id}/seats`, and the manager-only
   `DELETE /tables/{id}/seats/{user}` that kicks another player: 403 for
-  non-managers, 404 when that player already left) and
-  `src/stores/tables.ts` keeps both the list (`tables`) and the table the detail
+  non-managers, 404 when that player already left, and
+  `POST /tables/{id}/seats/users` that seats another user: 403 for
+  non-managers, 409 for a taken seat or a user seated anywhere, never a move)
+  and `src/stores/tables.ts` keeps both the list (`tables`) and the table the detail
   page is showing (`currentTable`), syncing a changed table into both. These
   endpoints sit at the root (not under `/api`) and answer with an envelope,
   `{status, message, data}`, so the service returns `data.data`; 409s carry
@@ -117,8 +119,19 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   (the response only describes the joined table), and both pages confirm a
   cross-table move first via `src/utils/seatMove.ts`; `myTable` /
   `seatedTable()` tell them where the user sits.
-  `canManage()` mirrors the backend's `TablePolicy::manage`, but only as a hint —
-  `is_admin` is hidden from `GET /api/user`, so admins read as non-managers.
+  The manager controls (Remove, "Seat a player", the next board for
+  everyone) show from the payload's `can_manage` (`TablePolicy::manage` for
+  the caller, admins included); never re-derive it from
+  `moderated_by`/`created_by`. `TableUpdated` leaves it out, so the store's
+  `withCanManage` keeps the last HTTP value and refetches the table when
+  `moderated_by` changes (taking only `can_manage` from that answer). The
+  channel payload is typed `BroadcastTable`, `Table` adds `can_manage`.
+  "Seat a player" opens `src/components/SeatPlayerSheet.vue`, a search over
+  `GET /users?search=` (`searchUsers` in `src/services/users.ts`) through
+  `src/composables/useUserSearch.ts` (300 ms debounce, 2 characters minimum,
+  latest answer only, since the endpoint is throttled); `seated` users are
+  greyed out. The store's `seatUser` seats the pick; picking yourself is a
+  plain join instead.
 - **Game (playing)**: `src/services/game.ts` wraps
   `GET /tables/{id}/playing` (seated players only, 403 otherwise) and types the
   game state (`Playing` = the public `PublicPlaying` + `my_seat` and `hand`,

@@ -3,15 +3,15 @@ import Pusher from 'pusher-js';
 import type { ChannelAuthorizationCallback } from 'pusher-js';
 import http from './http';
 import type { HandDealtEvent, PublicPlaying } from './game';
-import type { Table } from './tables';
+import type { BroadcastTable } from './tables';
 
 // Live updates come over Laravel Reverb, which speaks the Pusher protocol.
 // See bridge_docs/backend/AUTH.md (Websocket channels) and API.md (Realtime).
 
 // What `TableUpdated` carries on `private-table.{id}`: the whole table, in the
-// same shape as GET /tables/{id}.
+// same shape as GET /tables/{id} less `can_manage`.
 export interface TableUpdatedEvent {
-  table: Table;
+  table: BroadcastTable;
 }
 
 // What `PlayingUpdated` carries on the same channel: the public part of the
@@ -78,7 +78,7 @@ export function onReconnect(listener: () => void): () => void {
 
 export function listenToTable(
   tableId: number,
-  onUpdate: (table: Table) => void,
+  onUpdate: (table: BroadcastTable) => void,
   onPlaying: (playing: PublicPlaying) => void,
 ) {
   getEcho()

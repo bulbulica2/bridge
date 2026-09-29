@@ -24,6 +24,7 @@ function makeTable(
       user: { id: userId, name: `User ${userId}`, username: `user${userId}`, description: null },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
+    can_manage: false,
   }
 }
 

@@ -222,6 +222,7 @@ describe('leaving, by phase', () => {
         { id: 2, table_id: 5, user_id: 3, seat: 'S', user: { id: 3, name: 'C', username: 'c', description: null } },
       ],
       free_seats: ['E', 'W'],
+      can_manage: false,
     } as Table
     expect(moveConsequences(table, 3).join(' ')).toContain('will be abandoned')
     expect(moveConsequences(table, 3, 'finished').join(' ')).not.toContain('abandoned')
@@ -256,6 +257,7 @@ describe('TablePlayPage between boards', () => {
       updated_at: '',
       seats: seated.map((seat, i) => ({ id: i + 1, table_id: 5, user_id: PLAYERS[seat].id, seat, user: PLAYERS[seat] })),
       free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !seated.includes(s)),
+      can_manage: false,
     }
   }
 

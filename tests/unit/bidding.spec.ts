@@ -189,6 +189,7 @@ describe('TablePlayPage bidding', () => {
       user: PLAYERS[seat],
     })),
     free_seats: [],
+    can_manage: false,
   }
 
   // The user is Cy, South; North deals.

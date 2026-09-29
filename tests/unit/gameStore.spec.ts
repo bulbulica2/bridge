@@ -102,6 +102,7 @@ function makeTable(seated: Seat[], boardId: number | null): Table {
       user: PLAYERS[seat],
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !seated.includes(s)),
+    can_manage: false,
   }
 }
 
