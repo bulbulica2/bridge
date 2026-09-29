@@ -30,9 +30,11 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
 ## Architecture
 
 - **Routing is flat, driven by a side menu**: `src/router/index.ts` defines
-  `/` → redirect to `/home`, plus lazy-loaded `/home` (`HomePage.vue`),
+  `/` → redirect to `/home`, plus lazy-loaded `/home` (`HomePage.vue`: an
+  intro with Log in / Create account for guests; for a logged-in user a
+  "Your table" card from the tables store's `myTable`, or "Find a table"),
   `/login` (`LoginPage.vue`, `meta.guestOnly`), `/create-account`
-  (`CreateAccountPage.vue`, `meta.guestOnly`, linked only from the Login page),
+  (`CreateAccountPage.vue`, `meta.guestOnly`, linked from the Login page and guest Home),
   `/reset-password` and `/password-reset/:token` (both `ResetPasswordPage.vue`,
   `meta.guestOnly`, reached from the Login page or the emailed link),
   `/account` (`AccountPage.vue`, `meta.requiresAuth`), `/tables`
