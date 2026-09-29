@@ -442,6 +442,25 @@ async function refresh(event: CustomEvent) {
   promises), then `vi.advanceTimersByTime`, and restore real timers in
   `afterEach`.
 
+### Board result components (issue #29)
+- **One compact hand per seat**: `DummyColumns` took a `label` prop
+  (default "Dummy's hand") and became the finished deal's hand too:
+  `BridgeTable`'s `deal` prop draws one at every seat (`class="dealt-hand"`),
+  about 90px wide, so all four fit the compass even on a phone.
+- **Swapping a phase's whole block**: the page's `<template v-else-if="playing.phase
+  === 'finished' && playing.result">` holds `BoardResultPanel` +
+  `NextBoardBox`, and the centre slot's `v-if` adds
+  `(phase === 'play' || finishedTrick)`, so the last trick still gets its 2 s
+  before the centre falls back to the board details.
+- **Class names clash across components in page tests**: `wrapper.find('.next')`
+  hit `AuctionHistory`'s "next call" cell, not the new box. Give a new
+  component's root a prefixed class (`next-board`, `result-…`).
+- **`-0` fails `toBe(0)`**: negating a zero score gives `-0`, and
+  `Object.is(-0, 0)` is false. Write `0 - x`, not `-x`, when a score can be 0.
+- **Emit-only child boxes**: `NextBoardBox` only emits `next` / `everyone` /
+  `leave`, and the page owns the requests, alerts and toasts, as
+  `BiddingBox` does. The box stays easy to test and the page keeps one busy flag.
+
 ## State
 
 - Setup-style Pinia stores in `src/stores/` (`defineStore('auth', () => {…})`);

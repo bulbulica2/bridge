@@ -236,6 +236,21 @@ legal card from whichever hand is on play, and prints the phase, the
 tricks won and the `result`. `keep` leaves the four seated and prints their
 usernames, so you can log in as one in the browser.
 
+**Between boards:** `assets/next-board-flow.sh <Windows scratchpad> [keep]`
+plays a 1NT board out, prints the finished state (`result`, the size of each
+hand in `deal`, `ready`), then asks for the next board one player at a time.
+It checks that asking twice changes nothing, that a non-manager's
+`{"everyone": true}` gets a 403, and that the last ask answers
+`"Next board dealt."` with the new board and hand. It then passes the next
+board out (`score_ns: 0`), has the creator deal the one after for everyone,
+plays it out and prints the history rows at that table
+(`GET /api/user/playings`). Last, one player leaves between boards
+(`board_id` stays) and the next ask 409s "short of a player". `keep` stops
+on the first finished board with nobody ready, for the browser. What the
+#29 run learned from it: `score_ns` really is N-S's side (1NT+3 by West
+came back −180), `made_by` goes down to −7, and the history keeps
+`table_id` while the table exists.
+
 ## Troubleshooting
 
 **A seat request 500s with `Unknown column 'last_seen_at'` (or another missing
