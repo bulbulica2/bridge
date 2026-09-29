@@ -1,7 +1,11 @@
 <template>
   <!-- The viewer is always at the bottom, partner opposite, the opponents on
        the left and right (see screenSide). Once a board is dealt each seat is
-       striped red when its side is vulnerable and green when it is not. -->
+       striped red when its side is vulnerable and green when it is not.
+       Once dummy is face up its cards lie at its seat: across the top when
+       the viewer is declarer (who plays them from there), in suit columns on
+       a side seat for a defender, and not at all when the viewer is dummy,
+       whose own hand below is the same cards. -->
   <div class="bridge-table">
     <div
       v-for="side in SIDES"
@@ -10,7 +14,11 @@
       :class="[
         `side-${side}`,
         board ? (isVulnerable(seatOn[side], board.vulnerable) ? 'vul' : 'not-vul') : null,
-        { 'seat-turn': turn === seatOn[side], 'seat-mine': side === 'bottom' && mySeat },
+        {
+          'seat-turn': turn === seatOn[side],
+          'seat-mine': side === 'bottom' && mySeat,
+          'seat-wide': side === 'top' && dummySide === 'top',
+        },
       ]"
       :data-seat="seatOn[side]"
     >
@@ -31,13 +39,31 @@
       <span v-else class="seat-empty">Empty</span>
 
       <span v-if="side === 'bottom' && mySeat" class="seat-you">you</span>
-      <span v-if="turn === seatOn[side]" class="turn">
-        <span class="turn-dot" aria-hidden="true" />{{ side === 'bottom' ? 'Your turn' : 'To act' }}
+      <span v-if="dummy && dummy.seat === seatOn[side] && side !== 'bottom'" class="seat-dummy">
+        dummy
       </span>
+      <span v-if="turn === seatOn[side]" class="turn">
+        <span class="turn-dot" aria-hidden="true" />{{ turnLabel(side) }}
+      </span>
+
+      <template v-if="dummySide === side">
+        <HandView
+          v-if="side === 'top'"
+          class="dummy-hand"
+          :cards="dummy!.cards"
+          label="Dummy's hand"
+          :playable="dummyPlayable"
+          :busy="busy"
+          :sending-id="sendingId"
+          @play="emit('play', $event)"
+        />
+        <DummyColumns v-else :cards="dummy!.cards" />
+      </template>
     </div>
 
-    <div class="centre">
-      <template v-if="board">
+    <div class="centre" :class="{ 'centre-slot': $slots.centre }">
+      <slot v-if="$slots.centre" name="centre" />
+      <template v-else-if="board">
         <p class="board-number">Board {{ board.number }}</p>
         <p class="board-line">Dealer {{ board.dealer }}</p>
         <p class="board-line">Vul {{ vulnerabilityLabel(board.vulnerable) }}</p>
@@ -49,21 +75,35 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { Board } from '@/services/game';
+import DummyColumns from '@/components/DummyColumns.vue';
+import HandView from '@/components/HandView.vue';
+import type { Board, Card } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { isVulnerable, seatAt, vulnerabilityLabel } from '@/utils/cards';
 import type { ScreenSide } from '@/utils/cards';
 
-const props = defineProps<{
-  players: Partial<Record<Seat, PublicUser | null>>;
-  // Null for someone watching without a seat: then North is at the top.
-  mySeat: Seat | null;
-  board: Board | null;
-  turn: Seat | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    players: Partial<Record<Seat, PublicUser | null>>;
+    // Null for someone watching without a seat: then North is at the top.
+    mySeat: Seat | null;
+    board: Board | null;
+    turn: Seat | null;
+    // Whether the viewer acts for `turn` (declarer does on dummy's turn).
+    // Left out, the bottom seat's turn is taken to be the viewer's.
+    myTurn?: boolean | null;
+    // Dummy's seat and remaining cards, once they are face up.
+    dummy?: { seat: Seat; cards: Card[] } | null;
+    // Dummy's cards declarer may play now (see HandView), else null.
+    dummyPlayable?: number[] | null;
+    busy?: boolean;
+    sendingId?: number | null;
+  }>(),
+  { myTurn: null, dummy: null, dummyPlayable: null, busy: false, sendingId: null },
+);
 
-const emit = defineEmits<{ select: [user: PublicUser] }>();
+const emit = defineEmits<{ select: [user: PublicUser]; play: [card: Card] }>();
 
 const SIDES: ScreenSide[] = ['top', 'left', 'right', 'bottom'];
 
@@ -74,6 +114,22 @@ const seatOn = computed(
       Seat
     >,
 );
+
+// Where dummy's cards are drawn: nowhere for dummy themselves (their own hand
+// is below the table).
+const dummySide = computed<ScreenSide | null>(() => {
+  const dummy = props.dummy;
+  if (!dummy) {
+    return null;
+  }
+  const side = SIDES.find((s) => seatOn.value[s] === dummy.seat);
+  return side && side !== 'bottom' ? side : null;
+});
+
+function turnLabel(side: ScreenSide): string {
+  const mine = props.myTurn ?? side === 'bottom';
+  return mine ? 'Your turn' : 'To act';
+}
 </script>
 
 <style scoped>
@@ -106,6 +162,15 @@ const seatOn = computed(
 .side-bottom {
   grid-column: 2;
   grid-row: 3;
+}
+
+/* Dummy across the top, for declarer: the whole width, like their own hand. */
+.side-top.seat-wide {
+  grid-column: 1 / 4;
+}
+
+.dummy-hand {
+  margin-top: 4px;
 }
 
 .seat,
@@ -181,6 +246,12 @@ const seatOn = computed(
   color: var(--ion-color-medium);
 }
 
+.seat-dummy {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}
+
 .seat-you {
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -212,6 +283,10 @@ const seatOn = computed(
 
 .centre {
   background: var(--ion-color-light, #f4f5f8);
+}
+
+.centre.centre-slot {
+  padding: 6px 4px;
 }
 
 .centre p {

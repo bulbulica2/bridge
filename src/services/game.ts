@@ -142,3 +142,15 @@ export async function makeCall(tableId: number, bidId: number): Promise<Playing>
   });
   return data.data;
 }
+
+// Play the next card of the current trick: from the caller's own hand, or
+// from dummy's when the caller is declarer and it is dummy's turn. 201 with
+// the whole new state (hand included); 409 with the reason in `message` (not
+// your turn, must follow suit, not in that hand, dummy doesn't play), 403
+// unless seated here, 422 for an unknown card id.
+export async function playCard(tableId: number, cardId: number): Promise<Playing> {
+  const { data } = await http.post<ApiResponse<Playing>>(`/tables/${tableId}/cards`, {
+    card_id: cardId,
+  });
+  return data.data;
+}

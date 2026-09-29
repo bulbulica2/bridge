@@ -1,9 +1,27 @@
 <template>
   <!-- One overlapping run of cards per suit, ♠ ♥ ♦ ♣, high to low. A suit
-       never splits across lines; on a narrow screen whole suits wrap. -->
-  <div class="hand" :aria-label="label">
+       never splits across lines; on a narrow screen whole suits wrap.
+       Given `playable`, the hand is the one being played: every card is a
+       button, and the ones that can't legally go now are dimmed. -->
+  <div class="hand" :class="{ active: playable }" :aria-label="label" :aria-busy="busy">
     <div v-for="group in groups" :key="group.suit" class="suit-group">
-      <PlayingCard v-for="card in group.cards" :key="card.id" :card="card" class="card" />
+      <template v-if="playable">
+        <button
+          v-for="card in group.cards"
+          :key="card.id"
+          type="button"
+          class="card card-button"
+          :class="{ illegal: !playable.includes(card.id), sending: card.id === sendingId }"
+          :data-card="card.id"
+          :disabled="busy || !playable.includes(card.id)"
+          @click="emit('play', card)"
+        >
+          <PlayingCard :card="card" />
+        </button>
+      </template>
+      <template v-else>
+        <PlayingCard v-for="card in group.cards" :key="card.id" :card="card" class="card" />
+      </template>
     </div>
     <p v-if="cards.length === 0" class="empty">No cards left.</p>
   </div>
@@ -15,9 +33,20 @@ import PlayingCard from '@/components/PlayingCard.vue';
 import type { Card } from '@/services/game';
 import { groupBySuit } from '@/utils/cards';
 
-const props = withDefaults(defineProps<{ cards: Card[]; label?: string }>(), {
-  label: 'Your hand',
-});
+const props = withDefaults(
+  defineProps<{
+    cards: Card[];
+    label?: string;
+    // The ids that may be played now; null (the default) is a hand on show only.
+    playable?: number[] | null;
+    // A card is on its way: nothing more can be tapped until it lands.
+    busy?: boolean;
+    sendingId?: number | null;
+  }>(),
+  { label: 'Your hand', playable: null, busy: false, sendingId: null },
+);
+
+const emit = defineEmits<{ play: [card: Card] }>();
 
 const groups = computed(() => groupBySuit(props.cards));
 </script>
@@ -30,6 +59,11 @@ const groups = computed(() => groupBySuit(props.cards));
   gap: 8px 6px;
 }
 
+/* Room for a playable card to rise without being clipped. */
+.hand.active {
+  padding-top: 10px;
+}
+
 .suit-group {
   display: flex;
 }
@@ -37,6 +71,40 @@ const groups = computed(() => groupBySuit(props.cards));
 /* Each card covers most of the one before it, leaving rank and suit showing. */
 .card + .card {
   margin-left: -27px;
+}
+
+.card-button {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.card-button:not(:disabled):hover,
+.card-button:not(:disabled):focus-visible,
+.card-button.sending {
+  transform: translateY(-10px);
+}
+
+.card-button:focus-visible {
+  outline: none;
+}
+
+.card-button:focus-visible :deep(.playing-card) {
+  box-shadow: 0 0 0 2px var(--ion-color-primary);
+}
+
+.card-button:disabled {
+  cursor: default;
+}
+
+/* Can't follow to this trick: still readable, clearly out of play. */
+.card-button.illegal :deep(.playing-card) {
+  filter: grayscale(0.6) brightness(0.8);
+  opacity: 0.45;
 }
 
 .empty {
