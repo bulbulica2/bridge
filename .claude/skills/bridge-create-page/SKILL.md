@@ -71,6 +71,16 @@ Read in parallel:
 - Existing `src/services/*.ts` and `src/stores/*.ts`, so you extend them rather
   than duplicate them (e.g. registration belongs in `services/auth.ts` +
   `stores/auth.ts`, not a new auth module).
+- **A missing backend endpoint is the user's call**, not a default: ask with
+  the options (add it to the backend, build against an assumed shape, a
+  workaround the issue forbids). On #27 (no `GET /bids`) the user chose the
+  backend. Doing that follows bridge_backend's own `CLAUDE.md`: open an
+  issue titled `<next prefix number>-<slug> - <problem>`, where the prefix
+  counter is separate from the issue number (`gh issue list` shows the last
+  one). Then branch `bulbulica2/<prefix>-<slug>` in the backend checkout, use
+  2-space PHP, `vendor/bin/pint --test`, add a feature test, update
+  `bridge_docs` in the same change (it isn't a git repo, so just edit it), and
+  open a PR. Say in the frontend PR that it depends on that one.
 
 ## 3. Build the page
 
@@ -360,3 +370,14 @@ history below, and commit the skill changes on the page's branch (a separate
   needed `migrate:fresh --seed` (with the user's OK). Four-player checks now
   have `assets/four-players-flow.sh`. Pinia wraps actions (`toBe` fails),
   and every echo mock needs the new functions.
+- Issue #27 (Bidding): a feature on the play page, not a page. It adds
+  `BiddingBox`, `AuctionHistory`, `CallLabel`, the rules hint in
+  `utils/auction.ts` and `call()`/`loadBids()` in the game store. It was
+  blocked on bid ids (no endpoint, ids not pinned). The user chose to add
+  `GET /bids` to the backend (bridge_backend#56, PR #57), so step 2 now covers
+  that. Learned: a page test can mock `onIonViewWillEnter` as `onMounted` and
+  `useRoute` to mount a route page for real (`tests/unit/bidding.spec.ts`).
+  The HTTP answer to a call races the table channel, so the store drops
+  states that are behind. Bash heredocs holding a long inline Python edit can
+  fail to parse ("unexpected EOF"), so use Edit, or write the script to a
+  file first. `assets/auction-flow.sh` needs a Windows scratchpad path.

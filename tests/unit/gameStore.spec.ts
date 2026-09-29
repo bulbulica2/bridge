@@ -6,11 +6,11 @@ import { useTablesStore } from '@/stores/tables'
 import * as gameService from '@/services/game'
 import * as tablesService from '@/services/tables'
 import * as echo from '@/services/echo'
-import type { Card, Playing, PublicPlaying } from '@/services/game'
+import type { AuctionCall, Bid, Card, Playing, PublicPlaying } from '@/services/game'
 import type { Seat, Table } from '@/services/tables'
 import { showToast } from '@/utils/toast'
 
-vi.mock('@/services/game', () => ({ getPlaying: vi.fn() }))
+vi.mock('@/services/game', () => ({ getPlaying: vi.fn(), getBids: vi.fn(), makeCall: vi.fn() }))
 
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
@@ -41,6 +41,15 @@ function card(id: number, suit: Card['suit'], rank: number): Card {
 }
 
 const HAND = [card(52, 'S', 15), card(38, 'H', 13), card(3, 'C', 4)]
+
+const ONE_HEART: Bid = { id: 6, call: '1H', level: 1, strain: 'H', special: false }
+const PASS: Bid = { id: 1, call: 'P', level: null, strain: null, special: true }
+const BIDS: Bid[] = [PASS, ONE_HEART]
+
+function auction(...bids: Bid[]): AuctionCall[] {
+  const seats: Seat[] = ['S', 'W', 'N', 'E']
+  return bids.map((bid, i) => ({ seat: seats[i % 4], bid }))
+}
 
 function publicState(overrides: Partial<PublicPlaying> = {}): PublicPlaying {
   return {
@@ -230,5 +239,76 @@ describe('game store', () => {
     const [reconnected] = vi.mocked(echo.onReconnect).mock.calls[0]
     reconnected()
     await vi.waitFor(() => expect(game.playing?.turn).toBe('N'))
+  })
+
+  test('reads the bid list once and shares a request in flight', async () => {
+    vi.mocked(gameService.getBids).mockResolvedValue(BIDS)
+    const game = useGameStore()
+
+    const [first, second] = await Promise.all([game.loadBids(), game.loadBids()])
+    await game.loadBids()
+
+    expect(gameService.getBids).toHaveBeenCalledTimes(1)
+    expect(first).toEqual(BIDS)
+    expect(second).toEqual(BIDS)
+    expect(game.bids).toEqual(BIDS)
+  })
+
+  test('rereads the bid list when forced, and after a failure', async () => {
+    const game = useGameStore()
+    vi.mocked(gameService.getBids).mockRejectedValueOnce(new Error('down'))
+    await expect(game.loadBids()).rejects.toThrow('down')
+    expect(game.bids).toEqual([])
+
+    vi.mocked(gameService.getBids).mockResolvedValue(BIDS)
+    await game.loadBids()
+    await game.loadBids(true)
+
+    expect(gameService.getBids).toHaveBeenCalledTimes(3)
+    expect(game.bids).toEqual(BIDS)
+  })
+
+  test('a call sends the bid id and takes the new state it answers with', async () => {
+    const game = await loaded()
+    const after = fullState({ turn: 'W', acting_user_id: 4, auction: auction(ONE_HEART) })
+    vi.mocked(gameService.makeCall).mockResolvedValue(after)
+
+    await game.call(ONE_HEART.id)
+
+    expect(gameService.makeCall).toHaveBeenCalledWith(5, 6)
+    expect(game.playing).toEqual(after)
+  })
+
+  test("a call's answer does not undo a later call the channel already brought", async () => {
+    const game = await loaded()
+    let answer!: (state: Playing) => void
+    vi.mocked(gameService.makeCall).mockReturnValue(new Promise((resolve) => (answer = resolve)))
+
+    const calling = game.call(ONE_HEART.id)
+    game.applyPlayingUpdate(5, publicState({ turn: 'N', acting_user_id: 1, auction: auction(ONE_HEART, PASS) }))
+    answer(fullState({ turn: 'W', acting_user_id: 4, auction: auction(ONE_HEART) }))
+    await calling
+
+    expect(game.playing?.auction).toHaveLength(2)
+    expect(game.playing?.turn).toBe('N')
+    expect(game.playing?.hand).toEqual(HAND)
+  })
+
+  test('an older PlayingUpdated of the same board is ignored', async () => {
+    const game = await loaded(fullState({ turn: 'N', auction: auction(ONE_HEART, PASS) }))
+
+    game.applyPlayingUpdate(5, publicState({ turn: 'W', auction: auction(ONE_HEART) }))
+
+    expect(game.playing?.turn).toBe('N')
+    expect(game.playing?.auction).toHaveLength(2)
+  })
+
+  test('a refused call leaves the state alone and reaches the caller', async () => {
+    const game = await loaded()
+    const refused = Object.assign(new Error('409'), { response: { status: 409 } })
+    vi.mocked(gameService.makeCall).mockRejectedValue(refused)
+
+    await expect(game.call(ONE_HEART.id)).rejects.toBe(refused)
+    expect(game.playing).toEqual(fullState())
   })
 })

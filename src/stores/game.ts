@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import * as gameService from '@/services/game';
-import type { Card, HandDealtEvent, Playing, PublicPlaying } from '@/services/game';
+import type { Bid, Card, HandDealtEvent, Playing, PublicPlaying } from '@/services/game';
 import type { Seat, Table } from '@/services/tables';
 import { leaveUser, listenToUser, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
@@ -36,6 +36,33 @@ function playedCardIds(state: PublicPlaying): Set<number> {
   return new Set(played.map((p) => p.card.id));
 }
 
+const PHASES: PublicPlaying['phase'][] = ['waiting', 'auction', 'play', 'finished'];
+
+// How far one board has got: every part only grows while the board lasts,
+// and each stops before the next one starts (calls, then cards, then who is
+// ready for the next board), so comparing them in order is enough.
+function progress(state: PublicPlaying): number[] {
+  return [
+    PHASES.indexOf(state.phase),
+    state.auction?.length ?? 0,
+    playedCardIds(state).size,
+    state.ready?.length ?? 0,
+  ];
+}
+
+// Is `state` an older picture of the same board than `current`? A call's
+// HTTP answer and the table channel race each other, and the later of the
+// two must not roll the table back.
+function isBehind(state: PublicPlaying, current: PublicPlaying | null): boolean {
+  if (!current || current.playing_id === null || current.playing_id !== state.playing_id) {
+    return false;
+  }
+  const a = progress(state);
+  const b = progress(current);
+  const i = a.findIndex((value, index) => value !== b[index]);
+  return i !== -1 && a[i] < b[i];
+}
+
 export const useGameStore = defineStore('game', () => {
   // The game state of one table's current board, with the user's own hand.
   // Only the table the play page last loaded: events for any other are ignored.
@@ -46,6 +73,10 @@ export const useGameStore = defineStore('game', () => {
   // A HandDealt that beat its board's PlayingUpdated: both come from the same
   // request, but on different channels, so either can arrive first.
   let pendingHand: HandDealtEvent | null = null;
+  // The 38 calls from GET /bids: a call is sent as its id, and ids aren't
+  // pinned, so they are read once rather than hard-coded.
+  const bids = ref<Bid[]>([]);
+  let bidsRequest: Promise<Bid[]> | null = null;
 
   const auth = useAuthStore();
 
@@ -72,7 +103,7 @@ export const useGameStore = defineStore('game', () => {
   // card played since), or the one HandDealt brought for a new board. A new
   // board whose HandDealt hasn't come yet shows no hand until it does.
   function applyPlayingUpdate(id: number, update: PublicPlaying) {
-    if (tableId.value !== id) {
+    if (tableId.value !== id || isBehind(update, playing.value)) {
       return;
     }
     const current = playing.value;
@@ -85,6 +116,39 @@ export const useGameStore = defineStore('game', () => {
       pendingHand = null;
     }
     playing.value = { ...update, my_seat: mySeatIn(update), hand };
+  }
+
+  // The bid list, fetched once and shared (a second caller waits for the same
+  // request). `force` refetches it, for when an id was refused as unknown.
+  async function loadBids(force = false): Promise<Bid[]> {
+    if (bids.value.length > 0 && !force) {
+      return bids.value;
+    }
+    bidsRequest ??= gameService
+      .getBids()
+      .then((list) => {
+        bids.value = list;
+        return list;
+      })
+      .finally(() => {
+        bidsRequest = null;
+      });
+    return bidsRequest;
+  }
+
+  // Our call in the auction. The answer is the whole new state, hand
+  // included, so it replaces ours, unless the table channel has already
+  // brought a later one (the next player may have called by then).
+  async function call(bidId: number): Promise<Playing> {
+    const id = tableId.value;
+    if (id === null) {
+      throw new Error('No board is loaded.');
+    }
+    const state = await gameService.makeCall(id, bidId);
+    if (tableId.value === id && !isBehind(state, playing.value)) {
+      playing.value = state;
+    }
+    return state;
   }
 
   // Our own cards for a board just dealt, from the user channel.
@@ -161,7 +225,10 @@ export const useGameStore = defineStore('game', () => {
     playing,
     tableId,
     watchedUserId,
+    bids,
     load,
+    loadBids,
+    call,
     applyPlayingUpdate,
     applyHandDealt,
     applyTableUpdate,

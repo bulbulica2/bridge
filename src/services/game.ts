@@ -34,13 +34,19 @@ export interface Board {
   vulnerable: Vulnerability;
 }
 
-// `call` is the only field telling pass (P), double (X) and redouble (XX)
-// apart; `level` and `strain` are null for those three.
+// A contract bid's strain, lowest to highest: clubs, diamonds, hearts,
+// spades, no trump.
+export type Strain = Suit | 'NT';
+
+// One of the 38 calls. `call` is the only field telling pass (P), double (X)
+// and redouble (XX) apart; `level` and `strain` are null for those three.
+// Ids aren't pinned to the rank, so never compare or hard-code them: look a
+// call up by `call` in the GET /bids list.
 export interface Bid {
   id: number;
   call: string;
   level: number | null;
-  strain: string | null;
+  strain: Strain | null;
   special: boolean;
 }
 
@@ -117,5 +123,22 @@ export interface HandDealtEvent {
 // at this table, 404 for an unknown table.
 export async function getPlaying(tableId: number): Promise<Playing> {
   const { data } = await http.get<ApiResponse<Playing>>(`/tables/${tableId}/playing`);
+  return data.data;
+}
+
+// All 38 calls with the ids POST /tables/{id}/calls takes: P, X, XX, then
+// 1C … 7NT by rank. Public, static reference data.
+export async function getBids(): Promise<Bid[]> {
+  const { data } = await http.get<ApiResponse<Bid[]>>('/bids');
+  return data.data;
+}
+
+// The caller's next call in the auction. 201 with the whole new state (hand
+// included); 409 with the reason in `message` when the call is illegal or it
+// isn't the caller's turn, 403 unless seated here, 422 for an unknown bid id.
+export async function makeCall(tableId: number, bidId: number): Promise<Playing> {
+  const { data } = await http.post<ApiResponse<Playing>>(`/tables/${tableId}/calls`, {
+    bid_id: bidId,
+  });
   return data.data;
 }
