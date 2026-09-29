@@ -42,7 +42,10 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `/tables/:id` (`TableDetailPage.vue`, `meta.requiresAuth`, one table's four
   seats, reached from the list's "Open" button, not from the menu),
   `/tables/:id/play` (`TablePlayPage.vue`, `meta.requiresAuth`, the game at
-  that table, entered from the detail page) and
+  that table, entered from the detail page), `/history` (`HistoryPage.vue`,
+  `meta.requiresAuth`, the menu's "My boards"), `/boards/:id/results`
+  (`BoardResultsPage.vue`, `meta.requiresAuth`, reached from a history entry
+  or the play page's "Compare with other tables") and
   `/users/:id` (`UserProfilePage.vue`, `meta.requiresAuth`, a player's public
   profile, reached from the profile sheet, not from the menu). Adding a
   new top-level section means adding both a view and a route entry here, plus an `ion-item` in
@@ -72,8 +75,8 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `src/components/AppHeader.vue` (menu button + `title` prop, an `end` slot for
   per-page header actions, and an "Account" button linking to `/account` that
   the header itself renders whenever the auth store says somebody is logged in).
-  `AppMenu.vue` is auth-aware too: "Login" while logged out, "Tables" once
-  logged in. Because both read the auth store, mounting any page in a unit test
+  `AppMenu.vue` is auth-aware too: "Login" while logged out, "Tables" and
+  "My boards" once logged in. Because both read the auth store, mounting any page in a unit test
   needs an active Pinia.
 - **Auth / HTTP**: `src/services/http.ts` is the shared axios instance
   (`baseURL` from `VITE_API_BASE_URL` in `.env`, `withCredentials` +
@@ -185,6 +188,20 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   leaving by phase (`game.phaseOf(id)`). The running score at a table comes
   from `GET /api/user/playings` (`src/services/history.ts`): the store's
   `loadSessionScore(id)` sums the user's latest run of boards at that table.
+- **Results and history**: `src/services/history.ts` also wraps
+  `GET /users/{id}/playings` and `GET /boards/{id}/results` (every table's
+  finished playing of a board, best N-S first, with `matchpoints` `{ns, ew}`
+  out of `top`; 403 unless the user has finished that board, 404 for an
+  unknown one). Both read the playings' seat snapshots, so they outlive a
+  deleted table (`table_id: null`). The Pinia store `src/stores/history.ts`
+  keeps histories by owner (`null` = the user, a number = anyone) as far
+  as they are paged in (`loadHistory` = first page, `loadMore` = next,
+  skipping rows that slid down a page) and results by board id (a 403/404
+  drops the cached one); logout clears it. `src/components/HistoryList.vue`
+  (loading states + `ion-infinite-scroll`, `load()` exposed to the page)
+  and `HistoryEntryItem.vue` serve both `/history` and the profile page's
+  "Boards played". `BoardResultsPage.vue` highlights the tables the viewer
+  sat at (`seatOfUser`) with their side's `matchpointPercent`.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
   `username`, `description`, never the email); `TableSeat.user` uses that type

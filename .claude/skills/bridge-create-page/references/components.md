@@ -388,6 +388,27 @@ async function refresh(event: CustomEvent) {
   retracts. Type the handler's argument as `CustomEvent` and cast `event.target`;
   `vue-tsc` rejects the bare `RefresherCustomEvent` import path.
 
+### `ion-infinite-scroll` (paged lists, issue #30)
+```vue
+<ion-infinite-scroll :disabled="!store.hasMore(owner) || loading" @ionInfinite="more($event)">
+  <ion-infinite-scroll-content loading-text="Loading older boards…" />
+</ion-infinite-scroll>
+```
+```ts
+async function more(event: CustomEvent) {
+  try { await store.loadMore(owner); } catch (e) { /* show a small error */ }
+  finally { (event.target as HTMLIonInfiniteScrollElement).complete(); }
+}
+```
+- It finds the closest `ion-content`, so it can live in a child component
+  (`HistoryList.vue`) that two pages share. Such a list exposes `load()`
+  (`defineExpose`) and the page calls it from `onIonViewWillEnter` and its
+  refresher through a template ref. If a prop (the owner) changes first,
+  `await nextTick()` before calling it.
+- Always `complete()`, and `disabled` once the last page is in, or it keeps
+  firing. Laravel pages are newest first, so a row can slide into the next
+  page when something new lands: dedupe by id when appending.
+
 ## App shell
 
 - `App.vue`: `<ion-app><AppMenu /><ion-router-outlet id="main-content" /></ion-app>`.
