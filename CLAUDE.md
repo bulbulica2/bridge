@@ -1,6 +1,8 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+The human-facing docs for this app live in `docs/` and are updated in the
+same PR as the code (see "Keep `docs/` in sync" at the end).
 
 ## Project
 
@@ -292,21 +294,59 @@ without asking again:
 ## Backend API
 
 This frontend consumes a backend API (`bridge_backend`, a separate Laravel
-app) that is not in this repo. Its documentation lives in a sibling folder
-on disk, not on GitHub:
+app, checked out at `C:\xampp\htdocs\bridge_backend`) that is not in this
+repo. Before assuming an endpoint, request/response shape, auth flow, or
+data model, read the backend's docs rather than guessing:
 
+- `API.md` — routes and request/response shapes
+- `AUTH.md` — auth/cookie/CORS flow
+- `DATA-MODEL.md` — data models
+- `RUNNING.md` — how to run the backend locally
+- `GAME-RULES.md` — the bridge rules and how the backend maps them
+
+Where to read them: they are moving into the backend repo's `docs/`
+(bulbulica2/bridge_backend#61). The local checkout can lag or sit on
+another branch, so read `origin/main`, not the working tree:
+
+```bash
+git -C C:\xampp\htdocs\bridge_backend fetch -q
+git -C C:\xampp\htdocs\bridge_backend show origin/main:docs/API.md
 ```
-C:\xampp\htdocs\bridge_docs
-```
 
-Before assuming an endpoint, request/response shape, auth flow, or data
-model, read the relevant file there rather than guessing:
+If `origin/main` has no `docs/` yet, they are still in the old
+out-of-git folder, `C:\xampp\htdocs\bridge_docs\backend\` (and
+`bridge_docs\GAME-RULES.md`). Other `bridge_docs/...` mentions in `src/`
+comments and the skill refer to the same files and get repointed once #61
+lands.
 
-- `bridge_docs/backend/API.md` — routes and request/response shapes
-- `bridge_docs/backend/AUTH.md` — auth/cookie/CORS flow
-- `bridge_docs/backend/DATA-MODEL.md` — data models
-- `bridge_docs/backend/RUNNING.md` — how to run the backend locally
+These docs change with the backend — re-read the file rather than trusting
+a summary cached earlier in a conversation.
 
-This documentation is maintained independently from the backend side and
-can change over time — re-read the file rather than trusting a summary
-cached earlier in a conversation.
+## Keep `docs/` in sync — in the same PR, not as a follow-up
+
+`docs/` holds this app's docs for people (not Claude). They ship with the
+code: a PR that changes what they describe updates them in its own diff,
+so the reviewer sees both.
+
+| File | Update it when you change... |
+|---|---|
+| `RUNNING.md` | setup or run steps, an `.env` key, a port, an npm script, the test setup, or what must run on the backend for the app to work |
+| `ARCHITECTURE.md` | a route or route meta, the guard, a store (state or actions), a service or the endpoints it calls, error handling, loading/toast behaviour, a channel or event, the heartbeat, a shared component or util |
+| `SCREENS.md` | a page is added or removed, or what a page shows, which store actions or endpoints it calls, or which frontend/backend issue it depends on |
+| `README.md` | none of the above changed but the status line (branch reference) is stale |
+
+Rules:
+- Same commit as the code: if you touch `src/router/`, `src/stores/`,
+  `src/services/`, `src/views/`, `.env`, `vite.config.ts` or
+  `package.json` scripts, check whether `docs/` needs a matching edit
+  before considering the task done. Bump the branch named at the top of
+  every file you edit.
+- Write for a developer joining the project, not for Claude: explain what
+  and why in plain words, and link to the backend's docs on GitHub
+  (`https://github.com/bulbulica2/bridge_backend/blob/main/docs/<file>`)
+  for endpoint shapes rather than copying them.
+- Docs reflect the code as it is. Something planned goes in as "coming"
+  with its issue number, never as working.
+- This file (CLAUDE.md) stays the detailed map for Claude; the
+  architecture notes above and `ARCHITECTURE.md` cover the same ground,
+  so when one changes, check the other.

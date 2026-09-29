@@ -65,10 +65,13 @@ the heredoc is enough).
 
 Read in parallel:
 - `CLAUDE.md` (architecture, conventions, port, test commands).
+- `docs/SCREENS.md` for the pages next to the one you're building (you'll
+  add or edit a section there in step 3).
 - `src/router/index.ts`, `src/components/AppMenu.vue`, `src/components/AppHeader.vue`,
   an existing view (e.g. `src/views/LoginPage.vue`), `src/main.ts`.
-- If the page calls the backend: `C:\xampp\htdocs\bridge_docs\backend\API.md` /
-  `AUTH.md` / `DATA-MODEL.md`, **and** the real source in
+- If the page calls the backend: the backend's `API.md` / `AUTH.md` /
+  `DATA-MODEL.md` (where to read them, from `origin/main`, is in CLAUDE.md's
+  "Backend API"), **and** the real source in
   `C:\xampp\htdocs\bridge_backend` (`routes/*.php`, the controller, its
   `FormRequest` rules). The docs are maintained separately and can lag, and the
   controller is the truth for field names, status codes (e.g. 204 No Content)
@@ -87,9 +90,10 @@ Read in parallel:
   issue titled `<next prefix number>-<slug> - <problem>`, where the prefix
   counter is separate from the issue number (`gh issue list` shows the last
   one). Then branch `bulbulica2/<prefix>-<slug>` in the backend checkout, use
-  2-space PHP, `vendor/bin/pint --test`, add a feature test, update
-  `bridge_docs` in the same change (it isn't a git repo, so just edit it), and
-  open a PR. Say in the frontend PR that it depends on that one.
+  2-space PHP, `vendor/bin/pint --test`, add a feature test, update the
+  backend's docs in the same change (its `docs/` once bridge_backend#61
+  lands; before that `bridge_docs/backend`, outside git, so just edit it),
+  and open a PR. Say in the frontend PR that it depends on that one.
 
 ## 3. Build the page
 
@@ -194,8 +198,16 @@ Link to the route the owning issue names (e.g. `/create-account`), but don't
 create that page; it belongs to its own issue. Say so in the PR.
 
 ### Docs
-If you add a new architectural piece (new store/service domain, route meta, env
-var), update `CLAUDE.md` in the same commit.
+Two sets, both in the same change as the code:
+- `CLAUDE.md`, for Claude: a new architectural piece (store/service domain,
+  route meta, env var) goes there in the same commit.
+- `docs/*.md`, for people (issue #35): follow CLAUDE.md's "Keep `docs/` in
+  sync" table. A new page always means a `docs/SCREENS.md` section (access,
+  what it shows, store actions → endpoints, the frontend and `bb#N` backend
+  issues) and a row in `docs/ARCHITECTURE.md`'s route table; a new store,
+  service, channel or env var means `ARCHITECTURE.md` / `RUNNING.md` too.
+  Bump the branch line at the top of each file you touch. They go in the
+  same commit as the code, so the PR diff shows them.
 
 ## 4. Verify
 
@@ -228,8 +240,8 @@ missing exactly that way. Fix anything that fails before committing. Don't commi
   `gh pr create --base main --head <branch> --title "<issue title>" --body-file <file>`.**
   Passing a long `--body` from Windows PowerShell 5.1 splits it on quotes and
   gh fails with "unknown arguments".
-- PR body: `Closes #N`, a Summary of what each file does, anything deferred to
-  other issues, and a Test plan with checked items for what you actually ran and
+- PR body: `Closes #N`, a Summary of what each file does (the `docs/`
+  files included), anything deferred to other issues, and a Test plan with checked items for what you actually ran and
   unchecked ones for manual checks.
 - Follow-up tweaks the user asks for later go in new small commits on the same
   branch, pushed to the same PR.
@@ -439,3 +451,10 @@ history below, and commit the skill changes on the page's branch (a separate
   the red error text, and `HistoryPage` tests can mount the page for real
   (with `onIonViewWillEnter` as `onMounted`) by mocking `@/services/http`
   only.
+- Issue #35 (Frontend docs): not a page. It added `docs/` (README,
+  RUNNING, ARCHITECTURE, SCREENS) for people, and the keep-in-sync rule in
+  CLAUDE.md, which step 3's Docs now follows: every page gets a
+  `SCREENS.md` section, in the same PR. The docs first went to the shared
+  `bridge_docs` folder, but the user moved them into the repo so they're
+  reviewed and versioned with the code; the backend follows in
+  bridge_backend#61.
