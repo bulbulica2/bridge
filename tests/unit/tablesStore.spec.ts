@@ -1,7 +1,9 @@
+import { AxiosError, AxiosHeaders } from 'axios'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { useTablesStore } from '@/stores/tables'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { HEARTBEAT_MS, IDLE_NOTICE, useTablesStore } from '@/stores/tables'
 import { useAuthStore } from '@/stores/auth'
+import { useGameStore } from '@/stores/game'
 import * as tablesService from '@/services/tables'
 import * as echo from '@/services/echo'
 import type { Seat, Table } from '@/services/tables'
@@ -15,6 +17,11 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   getTable: vi.fn(),
   leaveSeat: vi.fn(),
   removePlayer: vi.fn(),
+  sendHeartbeat: vi.fn(),
+}))
+
+vi.mock('@/services/auth', () => ({
+  logout: vi.fn(),
 }))
 
 // No socket in unit tests: capture what the store subscribes to instead, so a
@@ -37,6 +44,22 @@ function pushUpdate(table: Table) {
   const calls = vi.mocked(echo.listenToTable).mock.calls
   const [, onUpdate] = calls[calls.length - 1]
   onUpdate(table)
+}
+
+function axiosError(status: number): AxiosError {
+  const config = { headers: new AxiosHeaders() }
+  const error = new AxiosError('Request failed', 'ERR_BAD_REQUEST', config)
+  error.response = { status, data: { message: 'Forbidden' }, statusText: '', headers: {}, config }
+  return error
+}
+
+// jsdom's page is always visible; let a test send it to the background.
+let visibility: DocumentVisibilityState = 'visible'
+Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility })
+
+function setVisibility(state: DocumentVisibilityState) {
+  visibility = state
+  document.dispatchEvent(new Event('visibilitychange'))
 }
 
 // makeTable seats users 1, 2, … in the order the seats are given.
@@ -69,6 +92,15 @@ describe('tables store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    visibility = 'visible'
+    vi.mocked(tablesService.sendHeartbeat).mockResolvedValue(undefined)
+  })
+
+  // Every store listens to the page's visibility for good: stop this one's
+  // heartbeat so it can't reach into the next test.
+  afterEach(() => {
+    useTablesStore().unwatchTable()
+    vi.useRealTimers()
   })
 
   test('load fills the list', async () => {
@@ -596,6 +628,189 @@ describe('tables store', () => {
 
       expect(tablesService.getTable).toHaveBeenCalledTimes(1)
       expect(store.currentTable).toEqual(missed)
+    })
+  })
+
+  describe('heartbeat', () => {
+    // Seated at table 1 as user 2 (bob), with fake timers already running.
+    async function seated() {
+      vi.useFakeTimers()
+      logInAs(2)
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana', E: 'bob' }))
+      const store = useTablesStore()
+      await store.loadTable(1)
+      return store
+    }
+
+    test('beats every 30 s while seated', async () => {
+      await seated()
+
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_MS)
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledTimes(1)
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledWith(1)
+      await vi.advanceTimersByTimeAsync(2 * HEARTBEAT_MS)
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledTimes(3)
+    })
+
+    test('never beats while unseated', async () => {
+      vi.useFakeTimers()
+      logInAs(9)
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana' }))
+
+      await useTablesStore().loadTable(1)
+      await vi.advanceTimersByTimeAsync(5 * HEARTBEAT_MS)
+
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+    })
+
+    test('stops on leave', async () => {
+      const store = await seated()
+      vi.mocked(tablesService.leaveSeat).mockResolvedValue(makeTable(1, { N: 'ana' }))
+
+      await store.leave(1)
+      await vi.advanceTimersByTimeAsync(5 * HEARTBEAT_MS)
+
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+    })
+
+    test('stops on a kick', async () => {
+      await seated()
+
+      pushUpdate(makeTable(1, { N: 'ana' }))
+      await vi.advanceTimersByTimeAsync(5 * HEARTBEAT_MS)
+
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+    })
+
+    test('stops on logout', async () => {
+      await seated()
+
+      await useAuthStore().logout()
+      await vi.advanceTimersByTimeAsync(5 * HEARTBEAT_MS)
+
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+    })
+
+    test('follows a move to the new table', async () => {
+      const store = await seated()
+      vi.mocked(tablesService.joinSeat).mockResolvedValue(makeTable(2, { N: 'ana', S: 'bob' }))
+      vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(2, { N: 'ana', S: 'bob' })])
+
+      await store.join(2, 'S')
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_MS)
+
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledTimes(1)
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledWith(2)
+    })
+
+    test('pauses while the page is hidden and beats at once on return', async () => {
+      await seated()
+
+      setVisibility('hidden')
+      await vi.advanceTimersByTimeAsync(10 * HEARTBEAT_MS)
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+
+      setVisibility('visible')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_MS)
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledTimes(2)
+    })
+
+    test('does not start while the page is hidden', async () => {
+      visibility = 'hidden'
+      await seated()
+
+      await vi.advanceTimersByTimeAsync(5 * HEARTBEAT_MS)
+
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+    })
+
+    test('coming back refetches the table and the board', async () => {
+      const store = await seated()
+      const game = useGameStore()
+      game.tableId = 1
+      const load = vi.spyOn(game, 'load').mockResolvedValue(null as never)
+      const meanwhile = makeTable(1, { N: 'ana', E: 'bob', S: 'cy' })
+
+      setVisibility('hidden')
+      vi.mocked(tablesService.getTable).mockClear().mockResolvedValue(meanwhile)
+      setVisibility('visible')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(tablesService.getTable).toHaveBeenCalledTimes(1)
+      expect(store.currentTable).toEqual(meanwhile)
+      expect(load).toHaveBeenCalledWith(1)
+      expect(showToast).not.toHaveBeenCalled()
+    })
+
+    test('a seat freed while away is told on return', async () => {
+      const store = await seated()
+
+      setVisibility('hidden')
+      vi.mocked(tablesService.sendHeartbeat).mockRejectedValue(axiosError(403))
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana' }))
+      setVisibility('visible')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(showToast).toHaveBeenCalledWith(IDLE_NOTICE, 'warning')
+      expect(store.kickedFrom).toBe(1)
+      expect(store.watchedTableId).toBeNull()
+      vi.mocked(tablesService.sendHeartbeat).mockClear()
+      await vi.advanceTimersByTimeAsync(5 * HEARTBEAT_MS)
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+    })
+
+    test('a removal broadcast while hidden waits for the user to look', async () => {
+      const store = await seated()
+
+      setVisibility('hidden')
+      pushUpdate(makeTable(1, { N: 'ana' }))
+
+      expect(store.kickedFrom).toBe(1)
+      expect(showToast).not.toHaveBeenCalled()
+      setVisibility('visible')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(showToast).toHaveBeenCalledTimes(1)
+      expect(showToast).toHaveBeenCalledWith(IDLE_NOTICE, 'warning')
+    })
+
+    test('a table deleted while away sends the user off it', async () => {
+      const store = await seated()
+
+      setVisibility('hidden')
+      vi.mocked(tablesService.sendHeartbeat).mockRejectedValue(axiosError(404))
+      vi.mocked(tablesService.getTable).mockRejectedValue(axiosError(404))
+      setVisibility('visible')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(store.currentTable).toBeNull()
+      expect(store.kickedFrom).toBe(1)
+      expect(showToast).toHaveBeenCalledWith(IDLE_NOTICE, 'warning')
+    })
+
+    test('a refused beat looks at the table to see why', async () => {
+      const store = await seated()
+      vi.mocked(tablesService.sendHeartbeat).mockRejectedValue(axiosError(403))
+      vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana' }))
+
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_MS)
+
+      expect(store.kickedFrom).toBe(1)
+      expect(store.watchedTableId).toBeNull()
+      expect(showToast).toHaveBeenCalledWith(IDLE_NOTICE, 'warning')
+    })
+
+    test('a beat lost to the network changes nothing', async () => {
+      const store = await seated()
+      vi.mocked(tablesService.sendHeartbeat).mockRejectedValueOnce(new Error('offline'))
+
+      await vi.advanceTimersByTimeAsync(2 * HEARTBEAT_MS)
+
+      expect(tablesService.getTable).toHaveBeenCalledTimes(1)
+      expect(store.watchedTableId).toBe(1)
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledTimes(2)
     })
   })
 })

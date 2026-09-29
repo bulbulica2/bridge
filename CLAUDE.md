@@ -225,6 +225,14 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   own seat request) is a kick: toast, unsubscribe, and `kickedFrom` makes the
   detail page go back to `/tables`. After a reconnect the watched table is
   refetched once. The Tables list has no channel and stays refresh-only.
+  **Heartbeat**: the backend frees idle seats (through the normal leave
+  path), so the tables store sends `POST /tables/{id}/heartbeat` every 30 s
+  for as long as it watches a table (`watchTable`/`unwatchTable` start and
+  stop it, so leave, kick, move and logout end it too). It pauses while
+  `document.visibilityState` is hidden; on return it beats at once, refetches
+  the table and the game state, and a seat lost meanwhile (or a 403/404 from
+  a beat) is told as `IDLE_NOTICE` and sets `kickedFrom`. A removal noticed
+  while hidden keeps its toast until the page shows again.
   Running it needs `php artisan reverb:start` and `queue:work` on the backend
   (`bridge_docs/backend/RUNNING.md`, Realtime).
 - **Error handling**: `src/utils/errors.ts` is the one axios-error reader —
