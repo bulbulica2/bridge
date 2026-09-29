@@ -337,3 +337,8 @@ history below, and commit the skill changes on the page's branch (a separate
   uses the envelope while `GET /api/user` doesn't, branches now carry a
   `bulbulica2/` prefix, and `findComponent(IonInput).setValue()` drives
   `v-model` in tests. Everything passed on the first run.
+- Issue #25 (Home page): a public page with a logged-in variant, reusing the
+  tables store's `myTable` for a "Your table" card. Learned: `onIonViewWillEnter`
+  never fires in unit tests (watch `auth.isAuthenticated` too), `router-link` is
+  a component prop, not an attribute, and a fixture that assigns user ids by
+  seat order puts the wrong user in "your" seat — key ids by username.
