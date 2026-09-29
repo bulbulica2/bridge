@@ -248,6 +248,22 @@ Ionic keeps visited pages alive in the stack, so `onMounted` runs only once.
 Use `onIonViewWillEnter` (from `@ionic/vue`) for work that must run every time
 the page is shown, e.g. reading `route.query` in `ResetPasswordPage.vue`.
 Auth redirects are **not** such a case any more: the router guard owns them.
+It never fires when a page is `mount()`ed in a unit test (no router outlet).
+A page that is public but shows extra data once logged in (HomePage) also
+`watch`es `auth.isAuthenticated` and loads then; the test mounts as a guest
+and sets `useAuthStore().user` to trigger it (`tests/unit/homePage.spec.ts`).
+
+### `ion-card` (Home's "Your table")
+`ion-card` > `ion-card-header` (`ion-card-subtitle`, `ion-card-title`) >
+`ion-card-content`, each imported from `@ionic/vue`. Cards carry a side margin
+by default; zero `margin-left/right` to line them up with a width-capped column.
+
+### Asserting `router-link` in tests
+`router-link` on `ion-button` is a **prop** of Ionic's Vue wrapper, not a DOM
+attribute, so `attributes('router-link')` is `undefined`. Read it with
+`wrapper.findAllComponents(IonButton).map((b) => b.props('routerLink'))`, and
+filter by `b.element.closest('.page-class')` to skip the header's Account
+button (`findComponent('.class')` only matches component roots).
 
 ### Read-only detail rows
 For showing values rather than editing them (the Account page), keep `ion-list` /
