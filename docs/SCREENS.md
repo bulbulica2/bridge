@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/35-frontend-docs`._
+_Status as of branch `bulbulica2/36-claims`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -159,8 +159,8 @@ search), bb#45 (`can_manage`).
 ## Play — `/tables/:id/play`
 
 **Logged in, seated at that table** (403 otherwise). Built by #26 (game
-table), #27 (bidding), #28 (card play), #29 (board result and next board);
-**Compare** by #30. Entered from the detail page, automatically when a
+table), #27 (bidding), #28 (card play), #29 (board result and next board),
+#47 (claims); **Compare** by #30. Entered from the detail page, automatically when a
 board is dealt. The header's **Table** button goes back to the detail page.
 
 What it shows by phase:
@@ -171,7 +171,14 @@ What it shows by phase:
 - **play**: the contract bar with tricks won and a **Last trick** peek, the
   current trick in the centre, dummy's cards once the opening lead is made.
   You tap a card from your own hand, or from dummy's if you're declarer.
-- **finished**: the result from your side, the running score at this
+  Anyone but dummy can **Claim** some of the tricks left (or **Concede**
+  them). While a claim is pending, a banner says what is claimed, the
+  claimer's cards lie face up at their seat, no card can be played, the
+  players who still have to answer get **Accept** / **Reject** and the
+  claimer **Withdraw**. A reject or withdrawal toasts and play goes on; the
+  last accept finishes the board.
+- **finished**: the result from your side ("by claim" when a claim ended
+  it), the running score at this
   table, all four hands face up, **Compare with other tables**, and the
   next-board box (who's ready; a manager can deal for everyone).
 
@@ -181,19 +188,20 @@ What it shows by phase:
 | `game.loadBids()` | `GET /bids` (once per session) |
 | `game.call()` | `POST /tables/{id}/calls` |
 | `game.play()` | `POST /tables/{id}/cards` |
+| `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
 | `game.next()` | `POST /tables/{id}/playing/next` |
 | `game.loadSessionScore()` | `GET /api/user/playings` |
 | `tables.loadTable()`, `tables.leave()` | `GET /tables/{id}`, `DELETE /tables/{id}/seats` |
 | channels | `private-table.{id}`: `TableUpdated`, `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt` |
 
-A 409 on a call, card or next board toasts the backend's message and
+A 409 on a call, card, claim or next board toasts the backend's message and
 reloads. A `TableUpdated` whose `board_id` goes back to null mid-board means
 a player left and the board was abandoned: toast, back to waiting.
 
 Backend: bb#18 (deal a board when a table fills), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
-bb#40 (next board), bb#43 (running score, results). Coming: claims (#36,
-bb#59) and board review (#37, bb#60).
+bb#40 (next board), bb#43 (running score, results), bb#59 (claims).
+Coming: board review (#48, bb#60).
 
 ## My boards — `/history`
 

@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/35-frontend-docs`._
+_Status as of branch `bulbulica2/36-claims`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -121,7 +121,7 @@ sends you to `/login` afterwards.
 |---|---|---|
 | `auth` | `user` (own record, with email) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset |
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom` | `load`, `loadTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatedTable`; owns the table channel and the heartbeat |
-| `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `loadBids`, `call`, `play`, `next`, `loadSessionScore`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
+| `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `loadSessionScore`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board | `loadHistory`, `loadMore`, `loadResults` |
 | `users` | public profiles by id | `load` |
 
@@ -134,7 +134,7 @@ and `currentTable`, so the list and the detail page stay in step.
 |---|---|
 | `auth.ts` | `/sanctum/csrf-cookie`, `POST /login`, `/register`, `/logout`, `/forgot-password`, `/reset-password`, `GET` / `PATCH /api/user` |
 | `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `DELETE /tables/{id}/seats/{user}`, `POST /tables/{id}/heartbeat` |
-| `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `POST /tables/{id}/calls`, `POST /tables/{id}/cards`, `POST /tables/{id}/playing/next` |
+| `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `POST /tables/{id}/calls`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
 | `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results` |
 | `users.ts` | `GET /users/{id}`, `GET /users?search=` |
 | `echo.ts` | the websocket, and `POST /broadcasting/auth` to sign private channels |
@@ -156,8 +156,8 @@ A few backend rules the stores rely on:
 - Bid ids are not tied to the bid's rank, so the app reads the 38 calls
   from `GET /bids` once and looks a call up by its level and strain. Never
   hard-code a bid id.
-- The auction and play rules in `src/utils/auction.ts` and `play.ts` are
-  only a hint (dimmed buttons and cards). The backend is the referee: a 409
+- The auction, play and claim rules in `src/utils/auction.ts`, `play.ts`
+  and `claim.ts` are only a hint (dimmed buttons and cards). The backend is the referee: a 409
   toasts its message and reloads the game.
 
 ## Error handling
@@ -223,7 +223,9 @@ doesn't send the XSRF header Sanctum wants.
   pull-to-refresh.
 - HTTP answers and broadcasts race. The `game` store drops a state that is
   behind the one it shows for the same board (fewer calls, fewer cards,
-  earlier phase).
+  earlier phase, fewer accepts of the same claim). A claim appearing or
+  going away always counts as newer: a rejected or withdrawn claim leaves
+  the cards as they were, so there is nothing else to order it by.
 
 **Heartbeat.** The backend frees the seats of players who went quiet. While
 the `tables` store watches a table it sends `POST /tables/{id}/heartbeat`
@@ -242,17 +244,20 @@ arrives, and the app falls back to what each request returns.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; the finished deal |
+| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; a claimer's cards; the finished deal |
 | `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim |
 | `BiddingBox` | the call grid, on your turn during the auction |
 | `AuctionHistory` + `CallLabel` | the calls so far, four columns rotated like the table |
 | `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s) |
-| `DummyColumns` | dummy (or a finished hand) on a side seat |
+| `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat |
+| `ClaimSheet` | the bottom sheet for making a claim: a stepper from 0 to the tricks left, and **Concede** |
+| `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw** |
 | `BoardResultPanel`, `NextBoardBox` | the score once a board is finished, and who is ready for the next |
 
 Pure logic lives in `src/utils/`: `cards.ts` (sorting, rank labels, seat
 rotation, vulnerability), `auction.ts` (call legality hints and labels),
-`play.ts` (follow-suit hint, whose hand you play, trick layout), `result.ts`
+`play.ts` (follow-suit hint, whose hand you play, trick layout), `claim.ts`
+(who may claim, who still has to answer, the claim's wording), `result.ts`
 (the score from your side), `seatMove.ts` (wording for leaving or moving by
 game phase). These are the best-tested parts of the app. For the rules
 themselves see [`GAME-RULES.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/GAME-RULES.md).

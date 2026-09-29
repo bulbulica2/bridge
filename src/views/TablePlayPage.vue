@@ -75,6 +75,17 @@
               </ion-button>
             </p>
           </section>
+          <!-- A claim waiting for its answers: play stops until it is settled. -->
+          <ClaimPanel
+            v-if="pendingClaim"
+            :state="pendingClaim"
+            :my-seat="mySeat"
+            :players="players"
+            :busy="claiming"
+            @accept="answerClaim(true)"
+            @reject="answerClaim(false)"
+            @withdraw="withdrawClaim"
+          />
           <!-- The board is over (13 tricks, or passed out): its score, then
                moving on. The deal lies face up on the table below. -->
           <template v-else-if="playing.phase === 'finished' && playing.result">
@@ -110,6 +121,7 @@
             :my-turn="myTurn"
             :dummy="dummy"
             :dummy-playable="playFrom === 'dummy' ? legalIds(playing.dummy_hand) : null"
+            :claim="pendingClaim ? { seat: pendingClaim.claim.seat, cards: pendingClaim.claim.hand } : null"
             :deal="playing.phase === 'finished' ? playing.deal : null"
             :busy="sendingCard !== null"
             :sending-id="sendingCard"
@@ -165,6 +177,18 @@
             </div>
           </section>
 
+          <!-- Ending the play early: any player but dummy, while no claim is pending. -->
+          <ion-button
+            v-if="mayClaim"
+            expand="block"
+            fill="outline"
+            class="claim-button"
+            :disabled="sendingCard !== null || claiming"
+            @click="claimOpen = true"
+          >
+            Claim
+          </ion-button>
+
           <template v-if="canBid">
             <BiddingBox
               v-if="game.bids.length > 0"
@@ -206,6 +230,13 @@
       </div>
 
       <PlayerProfileSheet :player="player" @close="player = null" />
+      <ClaimSheet
+        :open="claimOpen"
+        :remaining="playing ? tricksLeft(playing) : 0"
+        :busy="claiming"
+        @claim="sendClaim"
+        @close="claimOpen = false"
+      />
     </ion-content>
   </ion-page>
 </template>
@@ -231,6 +262,8 @@ import BiddingBox from '@/components/BiddingBox.vue';
 import BoardResultPanel from '@/components/BoardResultPanel.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
+import ClaimPanel from '@/components/ClaimPanel.vue';
+import ClaimSheet from '@/components/ClaimSheet.vue';
 import HandView from '@/components/HandView.vue';
 import NextBoardBox from '@/components/NextBoardBox.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
@@ -240,10 +273,11 @@ import { useGameStore } from '@/stores/game';
 import { useTablesStore } from '@/stores/tables';
 import { seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
-import type { Bid, Card, PlayedCard, Trick } from '@/services/game';
+import type { Bid, Card, Claim, PlayedCard, Playing, Trick } from '@/services/game';
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
 import { SUIT_NAMES } from '@/utils/cards';
+import { canClaim, tricksLeft } from '@/utils/claim';
 import { handToPlay, legalCards } from '@/utils/play';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { resultSummary } from '@/utils/result';
@@ -272,6 +306,9 @@ const finishedTrick = ref<Trick | null>(null);
 const peeking = ref(false);
 // Asking for the next board, or leaving between boards: one at a time.
 const asking = ref(false);
+// The claim sheet is open; a claim, an answer or a withdrawal is on its way.
+const claimOpen = ref(false);
+const claiming = ref(false);
 
 const me = computed(() => auth.user?.id ?? null);
 
@@ -322,6 +359,15 @@ const playFrom = computed(() => (playing.value ? handToPlay(playing.value, me.va
 const iAmDummy = computed(
   () => !!playing.value?.contract && playing.value.contract.dummy === mySeat.value,
 );
+
+// The claim waiting for its answers, if any (only ever during the play).
+const pendingClaim = computed(() => {
+  const state = playing.value;
+  return state?.phase === 'play' && state.claim ? (state as Playing & { claim: Claim }) : null;
+});
+
+// The Claim button: any player but dummy, while no claim is pending.
+const mayClaim = computed(() => !!playing.value && canClaim(playing.value, mySeat.value));
 
 // Dummy's cards lie face up from the opening lead to the last trick.
 const dummy = computed(() => {
@@ -384,7 +430,8 @@ const status = computed(() => {
     return '';
   }
   if (state.phase === 'play') {
-    return playStatus(state.turn);
+    // A pending claim: its panel says what is going on.
+    return state.claim ? '' : playStatus(state.turn);
   }
   if (myTurn.value) {
     return 'Auction: your turn.';
@@ -503,6 +550,24 @@ watch(
     }
   },
 );
+
+// A claim rejected or withdrawn, seen live: play goes on where it stopped.
+// (Accepted, the board is finished and the toast above tells its score.)
+watch(
+  () => [playing.value?.playing_id, playing.value?.claim ?? null] as const,
+  ([id, claim], [oldId, oldClaim]) => {
+    if (id != null && id === oldId && oldClaim && !claim && playing.value?.phase === 'play') {
+      showToast(`${SEAT_NAMES[oldClaim.seat]}'s claim is off: play goes on.`, 'warning');
+    }
+  },
+);
+
+// Somebody else's claim (or the board moving on) takes the sheet away.
+watch(mayClaim, (may) => {
+  if (!may) {
+    claimOpen.value = false;
+  }
+});
 
 // Each finished board adds to the running score: read it once per board, on
 // a reload as well as live. A failure only hides the line.
@@ -639,6 +704,53 @@ async function refused(e: unknown, fallback: string, on422?: () => Promise<void>
     if (status === 409 || status === 422) {
       await load();
     }
+  }
+}
+
+// Claim `tricks` of the remaining tricks (0 concedes). Refused like a card.
+async function sendClaim(tricks: number) {
+  if (claiming.value) {
+    return;
+  }
+  claiming.value = true;
+  try {
+    await game.claim(tricks);
+    claimOpen.value = false;
+  } catch (e) {
+    claimOpen.value = false;
+    await refused(e, 'Your claim could not be made. Please try again.');
+  } finally {
+    claiming.value = false;
+  }
+}
+
+// Accept or reject the pending claim; the last accept finishes the board.
+async function answerClaim(accept: boolean) {
+  if (claiming.value) {
+    return;
+  }
+  claiming.value = true;
+  try {
+    await game.respondToClaim(accept);
+  } catch (e) {
+    await refused(e, 'Your answer could not be sent. Please try again.');
+  } finally {
+    claiming.value = false;
+  }
+}
+
+// Take our own claim back: play goes on.
+async function withdrawClaim() {
+  if (claiming.value) {
+    return;
+  }
+  claiming.value = true;
+  try {
+    await game.withdrawClaim();
+  } catch (e) {
+    await refused(e, 'Your claim could not be withdrawn. Please try again.');
+  } finally {
+    claiming.value = false;
   }
 }
 
@@ -863,5 +975,9 @@ async function refresh(event: CustomEvent) {
 
 .refresh {
   margin-top: 8px;
+}
+
+.claim-button {
+  margin: 0 0 16px;
 }
 </style>

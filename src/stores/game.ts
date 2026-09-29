@@ -1,7 +1,15 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import * as gameService from '@/services/game';
-import type { Bid, Card, HandDealtEvent, Phase, Playing, PublicPlaying } from '@/services/game';
+import type {
+  Bid,
+  Card,
+  Claim,
+  HandDealtEvent,
+  Phase,
+  Playing,
+  PublicPlaying,
+} from '@/services/game';
 import * as historyService from '@/services/history';
 import type { BroadcastTable, Seat } from '@/services/tables';
 import { leaveUser, listenToUser, onReconnect } from '@/services/echo';
@@ -28,6 +36,7 @@ function waitingState(): Playing {
     current_trick: null,
     tricks_won: null,
     dummy_hand: null,
+    claim: null,
     result: null,
     deal: null,
     ready: null,
@@ -66,7 +75,21 @@ function isBehind(state: PublicPlaying, current: PublicPlaying | null): boolean 
   const a = progress(state);
   const b = progress(current);
   const i = a.findIndex((value, index) => value !== b[index]);
-  return i !== -1 && a[i] < b[i];
+  if (i !== -1) {
+    return a[i] < b[i];
+  }
+  return claimIsBehind(state.claim, current.claim);
+}
+
+// Between two cards a claim comes and goes (a reject or a withdrawal leaves
+// the cards as they were), so it can't be a counter like the rest: a claim
+// appearing or going away is always taken as newer. Only answers to the same
+// claim are ordered, by how many have accepted it.
+function claimIsBehind(state: Claim | null, current: Claim | null): boolean {
+  if (!state || !current || state.seat !== current.seat || state.tricks !== current.tricks) {
+    return false;
+  }
+  return state.accepted.length < current.accepted.length;
 }
 
 export const useGameStore = defineStore('game', () => {
@@ -163,6 +186,23 @@ export const useGameStore = defineStore('game', () => {
   // in `ready`, or the new board itself when we were the last to ask.
   async function next(everyone = false): Promise<Playing> {
     return act((id) => gameService.nextBoard(id, everyone));
+  }
+
+  // Claim `tricks` of the remaining tricks for our side (0 concedes). The
+  // answer races the channel like a card: a defender may already have
+  // answered by the time it lands.
+  async function claim(tricks: number): Promise<Playing> {
+    return act((id) => gameService.makeClaim(id, tricks));
+  }
+
+  // Accept or reject the pending claim. The last accept finishes the board.
+  async function respondToClaim(accept: boolean): Promise<Playing> {
+    return act((id) => gameService.respondToClaim(id, accept));
+  }
+
+  // Take our own pending claim back.
+  async function withdrawClaim(): Promise<Playing> {
+    return act((id) => gameService.withdrawClaim(id));
   }
 
   async function act(send: (id: number) => Promise<Playing>): Promise<Playing> {
@@ -287,6 +327,9 @@ export const useGameStore = defineStore('game', () => {
     loadBids,
     call,
     play,
+    claim,
+    respondToClaim,
+    withdrawClaim,
     next,
     phaseOf,
     loadSessionScore,

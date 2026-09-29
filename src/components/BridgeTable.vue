@@ -5,8 +5,10 @@
        Once dummy is face up its cards lie at its seat: across the top when
        the viewer is declarer (who plays them from there), in suit columns on
        a side seat for a defender, and not at all when the viewer is dummy,
-       whose own hand below is the same cards. Once the board is over, the
-       whole deal lies face up, each hand at its seat. -->
+       whose own hand below is the same cards. While a claim is pending, the
+       claimer's cards lie face up at their seat (the viewer's own are below
+       the table already). Once the board is over, the whole deal lies face
+       up, each hand at its seat. -->
   <div class="bridge-table">
     <div
       v-for="side in SIDES"
@@ -61,6 +63,12 @@
         <DummyColumns v-else :cards="dummy!.cards" />
       </template>
       <DummyColumns
+        v-else-if="claimSide === side"
+        class="claim-hand"
+        :cards="claim!.cards"
+        :label="`${SEAT_NAMES[seatOn[side]]}'s hand, claiming`"
+      />
+      <DummyColumns
         v-else-if="deal"
         class="dealt-hand"
         :cards="deal[seatOn[side]]"
@@ -105,12 +113,22 @@ const props = withDefaults(
     dummy?: { seat: Seat; cards: Card[] } | null;
     // Dummy's cards declarer may play now (see HandView), else null.
     dummyPlayable?: number[] | null;
+    // The claimer's seat and remaining cards while a claim is pending.
+    claim?: { seat: Seat; cards: Card[] } | null;
     // All four hands as dealt, once the board is finished.
     deal?: Record<Seat, Card[]> | null;
     busy?: boolean;
     sendingId?: number | null;
   }>(),
-  { myTurn: null, dummy: null, dummyPlayable: null, deal: null, busy: false, sendingId: null },
+  {
+    myTurn: null,
+    dummy: null,
+    dummyPlayable: null,
+    claim: null,
+    deal: null,
+    busy: false,
+    sendingId: null,
+  },
 );
 
 const emit = defineEmits<{ select: [user: PublicUser]; play: [card: Card] }>();
@@ -133,6 +151,14 @@ const dummySide = computed<ScreenSide | null>(() => {
     return null;
   }
   const side = SIDES.find((s) => seatOn.value[s] === dummy.seat);
+  return side && side !== 'bottom' ? side : null;
+});
+
+// Where the claimer's cards are drawn: nowhere when the claimer is the
+// viewer, whose own hand is below the table.
+const claimSide = computed<ScreenSide | null>(() => {
+  const claim = props.claim;
+  const side = claim ? SIDES.find((s) => seatOn.value[s] === claim.seat) : undefined;
   return side && side !== 'bottom' ? side : null;
 });
 
@@ -180,6 +206,7 @@ function turnLabel(side: ScreenSide): string {
 }
 
 .dummy-hand,
+.claim-hand,
 .dealt-hand {
   margin-top: 4px;
 }

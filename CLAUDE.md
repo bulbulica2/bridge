@@ -186,6 +186,24 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   live. The contract bar above the table carries `tricks_won` and a "Last
   trick" peek. One card is in flight at a time; a 409 toasts and reloads,
   as for calls.
+- **Claims**: during `play` any player but dummy may claim `tricks` of the
+  tricks left (`13 - tricks.length`; 0 concedes) with `POST
+  /tables/{id}/claim`; the other non-dummy players answer through
+  `POST /tables/{id}/claim/response` `{accept}` (one reject cancels it) and
+  the claimer may `DELETE` it. The game store's `claim`,
+  `respondToClaim` and `withdrawClaim` go through the same `act`/`isBehind`
+  path as `call`/`play`. While `claim` (`{seat, tricks, hand, accepted}`)
+  is non-null no card is played, so `handToPlay()` returns null; the
+  claimer's `hand` lies face up at their seat (`BridgeTable`'s `claim`
+  prop). `isBehind` orders answers to one claim by `accepted.length`, but
+  a claim appearing or going away always counts as newer, since a reject
+  or withdrawal leaves the cards unchanged. `src/utils/claim.ts` holds the
+  hints (`canClaim`, `claimAction`: withdraw/answer/null,
+  `claimWaitingFor`, `claimText`); `ClaimSheet.vue` is the stepper sheet,
+  `ClaimPanel.vue` the pending-claim banner with its buttons. A claim
+  going away mid-play toasts; the last accept lands in `finished` with
+  `result.claimed`, which `resultSummary`/`BoardResultPanel` word as
+  "by claim".
 - **Board result and next board**: in `finished` the state carries `result`
   (`score_ns` is from N-S's side whichever side declared; a passed-out board
   has `score_ns: 0` and the rest null), `deal` (all four hands as dealt) and

@@ -63,7 +63,8 @@ export function resultContract(result: BoardResult): string | null {
 }
 
 // One line for the whole board: "4♠ by N, +1: N-S +450", naming the side
-// that scored (an E-W plus when N-S lost points), or "Passed out: 0".
+// that scored (an E-W plus when N-S lost points), "4♠ by N, +1 by claim: …"
+// when the play ended by a claim, or "Passed out: 0".
 export function resultSummary(result: BoardResult): string {
   if (isPassedOut(result) || !result.declarer || result.made_by === null) {
     return 'Passed out: 0';
@@ -71,7 +72,8 @@ export function resultSummary(result: BoardResult): string {
   const call = `${callLabel(result.contract!)}${['', 'X', 'XX'][result.doubled ?? 0]}`;
   const side: Side = result.score_ns >= 0 ? 'ns' : 'ew';
   const score = formatScore(scoreFor(result.score_ns, side));
-  return `${call} by ${result.declarer}, ${madeBy(result.made_by)}: ${SIDE_LABELS[side]} ${score}`;
+  const how = `${madeBy(result.made_by)}${result.claimed ? ' by claim' : ''}`;
+  return `${call} by ${result.declarer}, ${how}: ${SIDE_LABELS[side]} ${score}`;
 }
 
 // The board's score for whoever sits at `seat`: positive when their side

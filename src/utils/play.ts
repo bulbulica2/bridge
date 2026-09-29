@@ -21,9 +21,15 @@ export function legalCards(hand: Card[], trick: PlayedCard[] | null): Card[] {
 
 // Which hand the user plays from right now: their own, dummy's (declarer on
 // dummy's turn), or none. `acting_user_id` says whose move it is; `turn`
-// says which hand the card comes from.
+// says which hand the card comes from. A pending claim stops the play.
 export function handToPlay(state: Playing, userId: number | null): 'own' | 'dummy' | null {
-  if (state.phase !== 'play' || userId === null || state.acting_user_id !== userId || !state.turn) {
+  if (
+    state.phase !== 'play' ||
+    state.claim ||
+    userId === null ||
+    state.acting_user_id !== userId ||
+    !state.turn
+  ) {
     return null;
   }
   if (state.turn === state.my_seat) {
