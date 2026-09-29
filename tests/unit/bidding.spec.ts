@@ -13,6 +13,9 @@ import { useAuthStore } from '@/stores/auth'
 import { showToast } from '@/utils/toast'
 
 vi.mock('@/services/game', () => ({ getPlaying: vi.fn(), getBids: vi.fn(), makeCall: vi.fn() }))
+vi.mock('@/services/history', () => ({
+  getMyPlayings: vi.fn().mockResolvedValue({ data: [], next_page_url: null }),
+}))
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   getTable: vi.fn(),
@@ -297,11 +300,19 @@ describe('TablePlayPage bidding', () => {
 
   test('a passed out board says so and waits for the next one', async () => {
     const wrapper = await mountPage(
-      state({ phase: 'finished', turn: null, acting_user_id: null, auction: calls('N P, E P, S P, W P') }),
+      state({
+        phase: 'finished',
+        turn: null,
+        acting_user_id: null,
+        auction: calls('N P, E P, S P, W P'),
+        result: { contract: null, doubled: null, declarer: null, tricks_won: null, score_ns: 0, made_by: null },
+        ready: [],
+      }),
     )
 
-    expect(wrapper.get('.outcome').text()).toContain('Passed out')
-    expect(wrapper.text()).toContain('Waiting for the next board')
+    expect(wrapper.get('.result-title').text()).toBe('Passed out')
+    expect(wrapper.get('.result-detail').text()).toContain('Nobody bid, so the board scores 0.')
+    expect(wrapper.find('.next-button').exists()).toBe(true)
     expect(wrapper.find('.bidding-box').exists()).toBe(false)
   })
 

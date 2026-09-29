@@ -116,6 +116,11 @@
             {{ table.board_id !== null ? 'Go to the board' : 'Open the game table' }}
           </ion-button>
 
+          <!-- Between boards the Leave button costs the others nothing. -->
+          <p v-if="mySeat && boardPhase === 'finished'" class="between-boards">
+            {{ leaveWarning(boardPhase, game.playing?.board?.number ?? null) }}
+          </p>
+
           <p v-if="seatedElsewhere" class="seated-elsewhere">
             You sit at
             <router-link :to="`/tables/${seatedElsewhere.id}`">
@@ -159,17 +164,19 @@ import AppHeader from '@/components/AppHeader.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
+import { useGameStore } from '@/stores/game';
 import { canManage, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
-import { confirmMove } from '@/utils/seatMove';
+import { confirmMove, leaveWarning } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
 const ionRouter = useIonRouter();
 const store = useTablesStore();
 const auth = useAuthStore();
+const game = useGameStore();
 
 const tableId = ref(0);
 const loading = ref(false);
@@ -199,6 +206,11 @@ const seatedElsewhere = computed(() =>
   store.myTable && store.myTable.id !== tableId.value ? store.myTable : null,
 );
 const isManager = computed(() => !!table.value && canManage(table.value, me.value));
+// The phase of the board here, when the game store holds it: leaving during
+// a board abandons it, between boards (finished) it abandons nothing.
+const boardPhase = computed(() =>
+  table.value?.board_id != null ? game.phaseOf(tableId.value) : null,
+);
 const managerName = computed(() => {
   const current = table.value;
   if (!current) {
@@ -263,6 +275,7 @@ async function load() {
   loadError.value = '';
   try {
     await store.loadTable(tableId.value);
+    loadBoardPhase();
   } catch (e) {
     if (handleExpiredSession(e)) {
       return;
@@ -275,6 +288,15 @@ async function load() {
     loadError.value = errorMessage(e, 'Could not load the table. Please try again.');
   } finally {
     loading.value = false;
+  }
+}
+
+// Seated at a table with a board the game store doesn't hold yet (this page
+// opened by URL): read it, so Leave can say what leaving costs. Only the
+// players seated here may, and a failure only leaves the wording generic.
+function loadBoardPhase() {
+  if (mySeat.value && table.value?.board_id != null && game.phaseOf(tableId.value) === null) {
+    game.load(tableId.value).catch(() => {});
   }
 }
 
@@ -292,7 +314,11 @@ async function sit(seat: Seat) {
     // change at this table doesn't.
     if (!mySeat.value && table.value && me.value) {
       const from = await store.seatedTable();
-      if (from && from.id !== tableId.value && !(await confirmMove(from, table.value, me.value))) {
+      if (
+        from &&
+        from.id !== tableId.value &&
+        !(await confirmMove(from, table.value, me.value, game.phaseOf(from.id)))
+      ) {
         return;
       }
     }
@@ -311,7 +337,12 @@ async function sit(seat: Seat) {
 async function confirmLeave(seat: Seat) {
   const alert = await alertController.create({
     header: 'Leave this table?',
-    message: 'Your seat will be freed. If nobody is left, the table is deleted.',
+    message: [
+      leaveWarning(boardPhase.value, game.playing?.board?.number ?? null),
+      'Your seat will be freed. If nobody is left, the table is deleted.',
+    ]
+      .filter(Boolean)
+      .join(' '),
     buttons: [
       { text: 'Cancel', role: 'cancel' },
       { text: 'Leave', role: 'destructive' },
@@ -541,6 +572,7 @@ function handleExpiredSession(e: unknown): boolean {
   color: var(--ion-color-primary);
 }
 
+.between-boards,
 .seated-elsewhere {
   margin: 0 0 16px;
   font-size: 0.9rem;

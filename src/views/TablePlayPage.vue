@@ -45,9 +45,13 @@
             <span>Refreshing…</span>
           </div>
 
-          <!-- The end of the auction: the contract, or nobody bid at all. It
-               stays above the table for the whole play, with the tricks. -->
-          <section v-if="playing.contract" class="outcome" aria-live="polite">
+          <!-- The end of the auction: the contract. It stays above the table
+               for the whole play, with the tricks. -->
+          <section
+            v-if="playing.phase === 'play' && playing.contract"
+            class="outcome"
+            aria-live="polite"
+          >
             <p class="outcome-title">
               <CallLabel :bid="playing.contract.bid" />{{ doubledSuffix(playing.contract.doubled) }}
               by {{ SEAT_NAMES[playing.contract.declarer] }}
@@ -71,10 +75,22 @@
               </ion-button>
             </p>
           </section>
-          <section v-else-if="passedOut" class="outcome" aria-live="polite">
-            <p class="outcome-title">Passed out</p>
-            <p class="outcome-detail">Nobody bid, so the board scores 0. Waiting for the next board.</p>
-          </section>
+          <!-- The board is over (13 tricks, or passed out): its score, then
+               moving on. The deal lies face up on the table below. -->
+          <template v-else-if="playing.phase === 'finished' && playing.result">
+            <BoardResultPanel :result="playing.result" :my-seat="mySeat" :session="session" />
+            <NextBoardBox
+              :ready="playing.ready ?? []"
+              :players="players"
+              :my-seat="mySeat"
+              :short="shortOfPlayers"
+              :manager="isManager"
+              :busy="asking"
+              @next="askNext(false)"
+              @everyone="askNext(true)"
+              @leave="leave"
+            />
+          </template>
 
           <BridgeTable
             :players="players"
@@ -84,6 +100,7 @@
             :my-turn="myTurn"
             :dummy="dummy"
             :dummy-playable="playFrom === 'dummy' ? legalIds(playing.dummy_hand) : null"
+            :deal="playing.phase === 'finished' ? playing.deal : null"
             :busy="sendingCard !== null"
             :sending-id="sendingCard"
             @select="player = $event"
@@ -92,7 +109,12 @@
             <p class="waiting-title">Waiting for 4 players</p>
             <p class="waiting-count">{{ seatedCount }} of 4 seated</p>
 
-            <template v-if="playing.contract" #centre>
+            <!-- Once the board is over the centre goes back to the board's
+                 details, after the last trick's moment on show. -->
+            <template
+              v-if="playing.contract && (playing.phase === 'play' || finishedTrick)"
+              #centre
+            >
               <TrickArea
                 :cards="shownTrick.cards"
                 :my-seat="mySeat"
@@ -113,7 +135,11 @@
             :players="players"
           />
 
-          <section v-if="playing.phase !== 'waiting'" class="my-hand">
+          <!-- A finished board shows every hand on the table instead. -->
+          <section
+            v-if="playing.phase === 'auction' || playing.phase === 'play'"
+            class="my-hand"
+          >
             <HandView
               v-if="playing.hand"
               :cards="playing.hand"
@@ -185,21 +211,24 @@ import {
   IonRefresherContent,
   IonText,
   IonSpinner,
+  alertController,
   onIonViewWillEnter,
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
 import AuctionHistory from '@/components/AuctionHistory.vue';
 import BiddingBox from '@/components/BiddingBox.vue';
+import BoardResultPanel from '@/components/BoardResultPanel.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
 import HandView from '@/components/HandView.vue';
+import NextBoardBox from '@/components/NextBoardBox.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import TrickArea from '@/components/TrickArea.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
 import { useTablesStore } from '@/stores/tables';
-import { seatsOf } from '@/services/tables';
+import { canManage, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { Bid, Card, PlayedCard, Trick } from '@/services/game';
 import type { PublicUser } from '@/services/users';
@@ -207,6 +236,8 @@ import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
 import { SUIT_NAMES } from '@/utils/cards';
 import { handToPlay, legalCards } from '@/utils/play';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { resultSummary } from '@/utils/result';
+import { leaveWarning } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
@@ -229,6 +260,8 @@ const sendingCard = ref<number | null>(null);
 // A trick just completed, still shown with its winner for a moment.
 const finishedTrick = ref<Trick | null>(null);
 const peeking = ref(false);
+// Asking for the next board, or leaving between boards: one at a time.
+const asking = ref(false);
 
 const me = computed(() => auth.user?.id ?? null);
 
@@ -318,20 +351,12 @@ const shownTrick = computed<{ cards: PlayedCard[]; winner: Seat | null; caption:
     const trick = finishedTrick.value;
     return { cards: trick.cards, winner: trick.winner, caption: wins(trick.winner) };
   }
-  if (state?.phase === 'finished') {
-    return { cards: [], winner: null, caption: 'All 13 tricks played' };
-  }
   return { cards: current, winner: null, caption: `Trick ${(state?.tricks?.length ?? 0) + 1}` };
 });
 
 function wins(seat: Seat): string {
   return seat === mySeat.value ? 'You win' : `${seat} wins`;
 }
-
-// Four passes: the board ends at once, with no contract and no play.
-const passedOut = computed(
-  () => playing.value?.phase === 'finished' && !playing.value.contract,
-);
 
 // "North (ann)", or "North (you)".
 function who(seat: Seat): string {
@@ -344,11 +369,9 @@ function who(seat: Seat): string {
 
 const status = computed(() => {
   const state = playing.value;
-  if (!state || state.phase === 'waiting' || passedOut.value) {
+  // A finished board: the result panel and the next-board box say it all.
+  if (!state || state.phase === 'waiting' || state.phase === 'finished') {
     return '';
-  }
-  if (state.phase === 'finished') {
-    return 'The board is finished.';
   }
   if (state.phase === 'play') {
     return playStatus(state.turn);
@@ -389,6 +412,16 @@ function playStatus(turn: Seat | null): string {
     ? `Play: waiting for ${actor}, from dummy.`
     : `Play: waiting for ${actor}.`;
 }
+
+// Somebody left after the board ended: the finished board stays, and a
+// fourth player sitting down deals the next one (nothing to confirm).
+const shortOfPlayers = computed(() => !!table.value && table.value.seats.length < 4);
+
+// A hint for the "for everyone" button; a 403 corrects it.
+const isManager = computed(() => !!table.value && canManage(table.value, me.value));
+
+// The running score at this table, once the store has read it for this table.
+const session = computed(() => (game.session?.tableId === tableId.value ? game.session : null));
 
 const headerTitle = computed(() => {
   const board = playing.value?.board;
@@ -448,6 +481,33 @@ watch(
       showToast('Passed out: nobody bid.', 'warning');
     }
   },
+);
+
+// The last card, seen live: the board's score in a toast.
+watch(
+  () => [playing.value?.playing_id, playing.value?.phase] as const,
+  ([id, phase], [oldId, oldPhase]) => {
+    const result = playing.value?.result;
+    if (id != null && id === oldId && oldPhase === 'play' && phase === 'finished' && result) {
+      showToast(`Board over: ${resultSummary(result)}.`, 'success');
+    }
+  },
+);
+
+// Each finished board adds to the running score: read it once per board, on
+// a reload as well as live. A failure only hides the line.
+let sessionReadFor: number | null = null;
+watch(
+  () => [playing.value?.playing_id, playing.value?.phase] as const,
+  ([id, phase]) => {
+    if (phase === 'finished' && id != null && id !== sessionReadFor) {
+      sessionReadFor = id;
+      game.loadSessionScore(tableId.value).catch(() => {
+        sessionReadFor = null;
+      });
+    }
+  },
+  { immediate: true },
 );
 
 // The fourth card of a trick, seen live: hold the trick up with its winner
@@ -569,6 +629,82 @@ async function refused(e: unknown, fallback: string, on422?: () => Promise<void>
     if (status === 409 || status === 422) {
       await load();
     }
+  }
+}
+
+// Ask for the next board: for ourselves, or (a manager) for all four. The
+// last one to ask deals it, and the new board replaces this one.
+async function askNext(everyone: boolean) {
+  if (asking.value || (everyone && !(await confirmEveryone()))) {
+    return;
+  }
+  asking.value = true;
+  try {
+    await game.next(everyone);
+  } catch (e) {
+    await refused(e, 'Could not ask for the next board. Please try again.');
+  } finally {
+    asking.value = false;
+  }
+}
+
+async function confirmEveryone(): Promise<boolean> {
+  const alert = await alertController.create({
+    header: 'Deal the next board for everyone?',
+    message: "The players who haven't asked yet move on too.",
+    buttons: [
+      { text: 'Cancel', role: 'cancel' },
+      { text: 'Deal', role: 'confirm' },
+    ],
+  });
+  await alert.present();
+  const { role } = await alert.onDidDismiss();
+  return role === 'confirm';
+}
+
+// Leaving between boards: free, since the board is over.
+async function leave() {
+  if (asking.value) {
+    return;
+  }
+  const alert = await alertController.create({
+    header: 'Leave this table?',
+    message: [
+      leaveWarning(playing.value?.phase ?? null, playing.value?.board?.number ?? null),
+      'Your seat will be freed. If nobody is left, the table is deleted.',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    buttons: [
+      { text: 'Cancel', role: 'cancel' },
+      { text: 'Leave', role: 'destructive' },
+    ],
+  });
+  await alert.present();
+  const { role } = await alert.onDidDismiss();
+  if (role !== 'destructive') {
+    return;
+  }
+  asking.value = true;
+  try {
+    const { tableDeleted } = await tablesStore.leave(tableId.value);
+    game.clear();
+    await showToast(
+      tableDeleted
+        ? 'You left the table. Nobody was left, so it was deleted.'
+        : 'You left the table.',
+      'success',
+    );
+    ionRouter.navigate('/tables', 'back', 'replace');
+  } catch (e) {
+    if (statusOf(e) === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+    } else {
+      await showToast(errorMessage(e, 'Could not leave the table. Please try again.'), 'danger');
+      await load();
+    }
+  } finally {
+    asking.value = false;
   }
 }
 

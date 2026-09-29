@@ -168,6 +168,23 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   live. The contract bar above the table carries `tricks_won` and a "Last
   trick" peek. One card is in flight at a time; a 409 toasts and reloads,
   as for calls.
+- **Board result and next board**: in `finished` the state carries `result`
+  (`score_ns` is from N-S's side whichever side declared; a passed-out board
+  has `score_ns: 0` and the rest null), `deal` (all four hands as dealt) and
+  `ready` (the seats that asked for the next board). `src/utils/result.ts`
+  words it and turns it round for the viewer's side (`resultSummary`,
+  `viewerScore`); `BoardResultPanel.vue` shows it, `BridgeTable`'s `deal`
+  prop lays each hand at its seat, and `NextBoardBox.vue` shows who is ready.
+  The game store's `next(everyone)` posts `POST /tables/{id}/playing/next`
+  through the same `isBehind` guard; the last player to ask gets the new
+  board in the answer, the others through `PlayingUpdated` + `HandDealt`.
+  `everyone` is a manager's call (`canManage()` hint, 403 otherwise). Leaving
+  between boards abandons nothing and keeps `board_id`; with three seated
+  the next ask 409s and a fourth player sitting down deals the board.
+  `leaveWarning()` / `moveConsequences()` in `src/utils/seatMove.ts` word
+  leaving by phase (`game.phaseOf(id)`). The running score at a table comes
+  from `GET /api/user/playings` (`src/services/history.ts`): the store's
+  `loadSessionScore(id)` sums the user's latest run of boards at that table.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
   `username`, `description`, never the email); `TableSeat.user` uses that type

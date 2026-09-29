@@ -29,12 +29,21 @@ in parallel in one response; only serialize when one result feeds the next.
 Give the user a one-line progress note between phases so they're never left
 wondering what's happening.
 
+Edit files with the Edit tool, or write a script with Write to the
+scratchpad and run it. Don't pass a long Python edit through a Bash heredoc:
+it failed with "unexpected EOF" on #27, #28 and #29 (an apostrophe inside
+the heredoc is enough).
+
 ## 1. Understand what the page is
 
 - The branch name encodes the issue: `N-some-slug` → `gh issue view N`. The
   issue body usually names the view file, the route path, guest-only /
   auth-required rules, which store/service to use, and dependencies.
 - Check dependencies with `gh issue list --state all` and `gh pr list --state all`.
+  A "Blocked by bridge_backend#N" in the issue body is not updated when N
+  lands. Check `gh pr list --repo bulbulica2/bridge_backend --state all`
+  before treating the issue as blocked: #28's and #29's blockers had both
+  already merged.
   If a dependency is merged but this branch predates it, `git fetch origin` and
   `git merge --ff-only origin/main` (or a normal merge if it can't fast-forward).
   Branches are often cut before their dependencies land, which is why this matters.
@@ -408,3 +417,13 @@ history below, and commit the skill changes on the page's branch (a separate
   breaks `wrapper.attributes()`. The local backend lacked Reverb. The
   permission classifier can stall every tool for a while; file edits
   worked again after a single retry.
+- Issue #29 (Board result): the third feature on the play page. It adds
+  `BoardResultPanel`, `NextBoardBox`, the finished deal at every seat
+  (`BridgeTable`'s `deal`, reusing `DummyColumns`), `next()` / `phaseOf()`
+  / `loadSessionScore()` in the game store, `utils/result.ts`, a new
+  `services/history.ts` (`GET /api/user/playings`, the running score) and
+  phase-aware leave and move wording. New `assets/next-board-flow.sh`
+  covers the whole between-boards contract. Learned: the "blocked by"
+  backend issues had merged, so step 1 now says to check. A heredoc edit
+  failed a third time, so step 0 now forbids them. Also a class clash
+  (`.next`) in page tests and `-0` from negating a zero score.
