@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/36-claims`._
+_Status as of branch `bulbulica2/37-board-review`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -77,6 +77,7 @@ All routes are flat and lazy loaded, in `src/router/index.ts`:
 | `/tables/:id/play` | `TablePlayPage` | logged in |
 | `/history` | `HistoryPage` | logged in |
 | `/boards/:id/results` | `BoardResultsPage` | logged in |
+| `/playings/:id` | `PlayingReviewPage` | logged in |
 | `/users/:id` | `UserProfilePage` | logged in |
 
 Access is declared as route meta and enforced by one `router.beforeEach`:
@@ -122,7 +123,7 @@ sends you to `/login` afterwards.
 | `auth` | `user` (own record, with email) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset |
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom` | `load`, `loadTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatedTable`; owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `loadSessionScore`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
-| `history` | finished boards per owner (`null` = you, a number = another user), results per board | `loadHistory`, `loadMore`, `loadResults` |
+| `history` | finished boards per owner (`null` = you, a number = another user), results per board, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadReview` |
 | `users` | public profiles by id | `load` |
 
 A table changed by any answer or broadcast is written into both `tables`
@@ -135,7 +136,7 @@ and `currentTable`, so the list and the detail page stay in step.
 | `auth.ts` | `/sanctum/csrf-cookie`, `POST /login`, `/register`, `/logout`, `/forgot-password`, `/reset-password`, `GET` / `PATCH /api/user` |
 | `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `DELETE /tables/{id}/seats/{user}`, `POST /tables/{id}/heartbeat` |
 | `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `POST /tables/{id}/calls`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
-| `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results` |
+| `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /playings/{id}` |
 | `users.ts` | `GET /users/{id}`, `GET /users?search=` |
 | `echo.ts` | the websocket, and `POST /broadcasting/auth` to sign private channels |
 
@@ -244,7 +245,7 @@ arrives, and the app falls back to what each request returns.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; a claimer's cards; the finished deal |
+| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; a claimer's cards; the finished deal (or, in a replay, what is left of it) |
 | `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim |
 | `BiddingBox` | the call grid, on your turn during the auction |
 | `AuctionHistory` + `CallLabel` | the calls so far, four columns rotated like the table |
@@ -259,8 +260,24 @@ rotation, vulnerability), `auction.ts` (call legality hints and labels),
 `play.ts` (follow-suit hint, whose hand you play, trick layout), `claim.ts`
 (who may claim, who still has to answer, the claim's wording), `result.ts`
 (the score from your side), `seatMove.ts` (wording for leaving or moving by
-game phase). These are the best-tested parts of the app. For the rules
+game phase), `review.ts` (a replay's table after N cards: hands left, the
+trick shown, tricks won, the trick-by-trick steps). These are the
+best-tested parts of the app. For the rules
 themselves see [`GAME-RULES.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/GAME-RULES.md).
+
+## The board review
+
+`PlayingReviewPage` (`/playings/:id`) replays one finished playing from
+`GET /playings/{id}` with the same components: `BridgeTable` (with the
+hands left at the current step, `replay` set so they aren't labelled "as
+dealt"), `TrickArea`, `AuctionHistory` and `BoardResultPanel`. It keeps a
+single number, how many cards have been played, and `reviewAt()` in
+`src/utils/review.ts` works out everything else from the deal and the
+tricks. The review is cached in the `history` store by playing id and never
+refetched (a finished playing doesn't change); logout clears it with the
+rest of the store. Playings finished before the backend kept their calls
+and cards come back with an empty `auction`; the page then shows only the
+deal and the result.
 
 ## Tests
 

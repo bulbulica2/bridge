@@ -32,7 +32,7 @@ into the backend repo, the links 404 and the same files are on disk in
 `C:\xampp\htdocs\bridge_docs\backend` (and `bridge_docs\GAME-RULES.md`).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/36-claims` (after #47, claims).
+> branch `bulbulica2/37-board-review` (after #48, board review).
 > They live next to the code, so a PR that changes a route, store, service,
 > env var or backend dependency updates them in the same diff; the
 > frontend's `CLAUDE.md` tells Claude to do so. If you change the frontend

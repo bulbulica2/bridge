@@ -314,7 +314,7 @@ describe('BoardResultsPage', () => {
 })
 
 describe('HistoryPage', () => {
-  test('lists the finished boards, each opening its results', async () => {
+  test('lists the finished boards, each opening its replay', async () => {
     loginAs(bo)
     answer(page([entry(42), entry(41, { contract: null, declarer: null, made_by: null, score_ns: 0, score: 0, tricks_won: null, doubled: null })], 1, 1))
 
@@ -324,7 +324,7 @@ describe('HistoryPage', () => {
     expect(http.get).toHaveBeenCalledWith('/api/user/playings', { params: { page: 1 } })
     const items = wrapper.findAllComponents({ name: 'IonItem' })
     expect(items).toHaveLength(2)
-    expect(items[0].props('routerLink')).toBe('/boards/7/results')
+    expect(items[0].props('routerLink')).toBe('/playings/42')
     expect(items[0].text()).toContain('You sat East with di')
     expect(items[0].text()).toContain('−620')
     expect(items[1].text()).toContain('Passed out')

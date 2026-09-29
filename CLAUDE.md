@@ -46,8 +46,11 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `/tables/:id/play` (`TablePlayPage.vue`, `meta.requiresAuth`, the game at
   that table, entered from the detail page), `/history` (`HistoryPage.vue`,
   `meta.requiresAuth`, the menu's "My boards"), `/boards/:id/results`
-  (`BoardResultsPage.vue`, `meta.requiresAuth`, reached from a history entry
-  or the play page's "Compare with other tables") and
+  (`BoardResultsPage.vue`, `meta.requiresAuth`, reached from a board's
+  review or the play page's "Compare with other tables"),
+  `/playings/:id` (`PlayingReviewPage.vue`, `meta.requiresAuth`, one
+  finished playing replayed, reached from a history entry or a results
+  row) and
   `/users/:id` (`UserProfilePage.vue`, `meta.requiresAuth`, a player's public
   profile, reached from the profile sheet, not from the menu). Adding a
   new top-level section means adding both a view and a route entry here, plus an `ion-item` in
@@ -235,6 +238,23 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   and `HistoryEntryItem.vue` serve both `/history` and the profile page's
   "Boards played". `BoardResultsPage.vue` highlights the tables the viewer
   sat at (`seatOfUser`) with their side's `matchpointPercent`.
+- **Board review**: `GET /playings/{id}` (`getPlayingReview`, typed
+  `PlayingReview` = `PublicPlaying` less `ready`, players nullable) is one
+  finished playing with its auction and tricks, for anyone who finished
+  that board (403 otherwise, 404 unknown or unfinished), even once the
+  table is gone. The history store's `loadReview` caches it by playing id
+  and never refetches it (a finished playing doesn't change); `clear()`
+  drops it. `PlayingReviewPage.vue` holds one number, `step` (cards
+  played), and `src/utils/review.ts` derives the rest: `playedCards` (the
+  tricks, then a claim's unfinished `current_trick`), `reviewAt` (hands
+  left from `deal`, the trick shown with its winner once complete, tricks
+  won, who's next), `nextTrickStep`/`previousTrickStep` and `stepCaption`.
+  It reuses `BridgeTable` (`deal` = hands left, `replay` for the label),
+  `TrickArea`, `AuctionHistory` and, at the last step, `BoardResultPanel`.
+  The viewer sits at the bottom if they played it (`seatOfUser`), else
+  South. An empty `auction` (`isRecorded`) means a playing finished before
+  bb#60: only the deal and the result, with a notice. `HistoryEntryItem`
+  and each `BoardResultsPage` row link to it.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
   `username`, `description`, never the email); `TableSeat.user` uses that type

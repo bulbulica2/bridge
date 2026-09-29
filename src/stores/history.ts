@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import * as historyService from '@/services/history';
-import type { BoardResults, PlayingHistoryEntry } from '@/services/history';
+import type { BoardResults, PlayingHistoryEntry, PlayingReview } from '@/services/history';
 import { statusOf } from '@/utils/errors';
 
 // One player's finished boards, as far as they have been paged in.
@@ -22,11 +22,13 @@ function keyOf(owner: HistoryOwner): string {
 }
 
 // Finished boards after the fact: players' histories (paged in for an
-// infinite scroll) and boards' results at every table. Both come from the
-// playings' seat snapshots, so neither loses anything when a table goes.
+// infinite scroll), boards' results at every table and single playings to
+// review. All come from the playings' seat snapshots, so none loses anything
+// when a table goes.
 export const useHistoryStore = defineStore('history', () => {
   const lists = ref<Record<string, HistoryList>>({});
   const results = ref<Record<number, BoardResults>>({});
+  const reviews = ref<Record<number, PlayingReview>>({});
 
   function listOf(owner: HistoryOwner): HistoryList | null {
     return lists.value[keyOf(owner)] ?? null;
@@ -96,11 +98,35 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
+  // One finished playing, by its id. Unlike a board's results it never
+  // changes once finished, so a cached copy is served without asking again.
+  async function loadReview(playingId: number): Promise<PlayingReview> {
+    const cached = reviews.value[playingId];
+    if (cached) {
+      return cached;
+    }
+    const review = await historyService.getPlayingReview(playingId);
+    reviews.value[playingId] = review;
+    return review;
+  }
+
   // Everything here belongs to whoever was logged in.
   function clear() {
     lists.value = {};
     results.value = {};
+    reviews.value = {};
   }
 
-  return { lists, results, listOf, hasMore, loadHistory, loadMore, loadResults, clear };
+  return {
+    lists,
+    results,
+    reviews,
+    listOf,
+    hasMore,
+    loadHistory,
+    loadMore,
+    loadResults,
+    loadReview,
+    clear,
+  };
 });

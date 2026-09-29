@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/36-claims`._
+_Status as of branch `bulbulica2/37-board-review`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -21,10 +21,10 @@ guest:      Home ─┬─ Login ─┬─ Create account
                   └─ Create account
 
 logged in:  Home ── Your table / Find a table
-            Menu: Tables ─▶ Table detail ─▶ Play ─▶ Board results
+            Menu: Tables ─▶ Table detail ─▶ Play ─▶ Board results ⇄ Board review
                                  │            │
-                                 └── player ──┴──▶ profile sheet ─▶ User profile ─▶ Board results
-            Menu: My boards ─▶ Board results
+                                 └── player ──┴──▶ profile sheet ─▶ User profile ─▶ Board review
+            Menu: My boards ─▶ Board review ⇄ Board results
             Header: Account (view / edit profile, log out)
 ```
 
@@ -201,7 +201,6 @@ a player left and the board was abandoned: toast, back to waiting.
 Backend: bb#18 (deal a board when a table fills), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
 bb#40 (next board), bb#43 (running score, results), bb#59 (claims).
-Coming: board review (#48, bb#60).
 
 ## My boards — `/history`
 
@@ -209,7 +208,8 @@ Coming: board review (#48, bb#60).
 
 Your finished boards, newest first (20 a page, paged in as you scroll):
 board number, contract and result, the seat you sat and your partner, the
-table, and the score from your side. Tapping one opens its results.
+table, and the score from your side. Tapping one opens its
+[review](#board-review--playingsid).
 
 | Calls | Endpoint |
 |---|---|
@@ -220,18 +220,46 @@ Backend: bb#43.
 ## Board results — `/boards/:id/results`
 
 **Logged in, and only after you finished that board** (403 otherwise).
-Built by #30. Reached from a history entry or **Compare with other tables**.
+Built by #30. Reached from a board's review or **Compare with other tables**.
 
 The same board at every table, best N-S score first, each with its
 contract, declarer, score and matchpoints. The tables you sat at are
-highlighted with your side's matchpoint percentage. A 403 or 404 shows as
-a reason on the page, not as an error.
+highlighted with your side's matchpoint percentage. Tapping a row opens
+that table's [review](#board-review--playingsid). A 403 or 404 shows as a
+reason on the page, not as an error.
 
 | Calls | Endpoint |
 |---|---|
 | `history.loadResults()` | `GET /boards/{id}/results` |
 
 Backend: bb#43.
+
+## Board review — `/playings/:id`
+
+**Logged in, and only after you finished that board** (403 otherwise; 404
+for an unknown or unfinished playing). Built by #48. Reached from a history
+entry (yours or another player's) or a row of Board results; not in the
+menu. It works the same after the table is gone.
+
+One table's playing of a board, replayed: the contract and the tricks each
+side has won so far, the four hands face up (you at the bottom if you
+played it, otherwise South), the trick in the middle, and the auction
+below. A stepper moves card by card or a trick at a time (start, previous
+trick, previous card, next card, next trick, end); the hands shrink as the
+cards go. The result panel shows once the replay reaches the end, and
+**Results** (header) / **Results at every table** go back to the board's
+results. A passed-out board has only its auction, the deal and the result;
+a board that ended by a claim stops where the claim was made.
+
+Boards finished before the backend kept their calls and cards (before
+bb#60) say "The auction and play of this board weren't recorded" and show
+only the deal and the result.
+
+| Calls | Endpoint |
+|---|---|
+| `history.loadReview()` | `GET /playings/{id}` (once per session: a finished playing never changes) |
+
+Backend: bb#60.
 
 ## User profile — `/users/:id`
 
@@ -240,7 +268,7 @@ profile sheet (tap a seated player's name on Tables, Table detail or Play,
 then **Full profile**).
 
 A player's public profile (name, username, description, never the email)
-and their finished boards, paged like My boards.
+and their finished boards, paged like My boards (each opens its review).
 
 | Calls | Endpoint |
 |---|---|
@@ -255,7 +283,7 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards).
 |---|---|---|
 | `AppHeader` | every page | none (reads the auth store) |
 | `AppMenu` | the app shell | none (reads the auth store) |
-| `PlayerProfileSheet` | Tables, Table detail, Play | `users.load()` → `GET /users/{id}` |
+| `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}` |
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | route progress bar, boot bar, toasts | the app shell | none (#18) |
