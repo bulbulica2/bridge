@@ -1,6 +1,6 @@
 <template>
   <!-- A finished board's score, as the backend worked it out (`result`):
-       the contract and how it went, the score from the viewer's side, both
+       the contract and how it went (by claim, when one ended the play), the score from the viewer's side, both
        sides' figures, and the running score at this table. -->
   <section class="result" aria-live="polite">
     <p class="result-title">
@@ -12,7 +12,9 @@
     </p>
     <p class="result-detail">
       <template v-if="contract && result.made_by !== null">
-        {{ madeText(result.made_by) }} · {{ result.tricks_won }} tricks
+        {{ madeText(result.made_by) }} · {{ result.tricks_won }} tricks<template
+          v-if="result.claimed"
+        >, by claim</template>
       </template>
       <template v-else>Nobody bid, so the board scores 0.</template>
     </p>

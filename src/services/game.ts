@@ -11,7 +11,8 @@ interface ApiResponse<T> {
 }
 
 // `waiting` until four players sit down, then the auction, the play, and
-// `finished` once the 13th trick is in (or the board was passed out).
+// `finished` once the 13th trick is in, a claim is accepted, or the board was
+// passed out.
 export type Phase = 'waiting' | 'auction' | 'play' | 'finished';
 
 export type Suit = 'S' | 'H' | 'D' | 'C';
@@ -82,6 +83,19 @@ export interface BoardResult {
   tricks_won: number | null;
   score_ns: number;
   made_by: number | null;
+  // The play ended by an accepted claim rather than at trick 13
+  // (`tricks_won` then includes the claimed tricks).
+  claimed: boolean;
+}
+
+// A pending claim: `seat` claims `tricks` of the tricks still to play for
+// their side (0 concedes them all). `hand` is the claimer's remaining cards,
+// face up to everyone; `accepted` the seats that have agreed so far.
+export interface Claim {
+  seat: Seat;
+  tricks: number;
+  hand: Card[];
+  accepted: Seat[];
 }
 
 // What every player at the table may see: the `PlayingUpdated` payload.
@@ -99,6 +113,8 @@ export interface PublicPlaying {
   current_trick: PlayedCard[] | null;
   tricks_won: { ns: number; ew: number } | null;
   dummy_hand: Card[] | null;
+  // Non-null only while a claim waits for its answers: no card is played then.
+  claim: Claim | null;
   result: BoardResult | null;
   deal: Record<Seat, Card[]> | null;
   ready: Seat[] | null;
@@ -166,5 +182,32 @@ export async function nextBoard(tableId: number, everyone = false): Promise<Play
     `/tables/${tableId}/playing/next`,
     everyone ? { everyone: true } : {},
   );
+  return data.data;
+}
+
+// Claim `tricks` of the tricks still to play for the caller's side (0
+// concedes them). Any player but dummy, during the play. 201 with the whole
+// new state; 409 with the reason (a claim already pending, too many tricks,
+// dummy, not the play), 403 unless seated here.
+export async function makeClaim(tableId: number, tricks: number): Promise<Playing> {
+  const { data } = await http.post<ApiResponse<Playing>>(`/tables/${tableId}/claim`, { tricks });
+  return data.data;
+}
+
+// Accept or reject the pending claim (the other non-dummy players). A reject
+// clears it and play goes on; the last accept finishes the board. 200 with
+// the whole new state; 409 with the reason (no claim, your own, already
+// accepted, dummy).
+export async function respondToClaim(tableId: number, accept: boolean): Promise<Playing> {
+  const { data } = await http.post<ApiResponse<Playing>>(`/tables/${tableId}/claim/response`, {
+    accept,
+  });
+  return data.data;
+}
+
+// The claimer takes their pending claim back and play goes on. 200 with the
+// whole new state; 409 with the reason (no claim, somebody else's).
+export async function withdrawClaim(tableId: number): Promise<Playing> {
+  const { data } = await http.delete<ApiResponse<Playing>>(`/tables/${tableId}/claim`);
   return data.data;
 }
