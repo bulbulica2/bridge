@@ -207,6 +207,16 @@ throwaway users (one jar each), fills a table, checks each `/playing` (seat,
 13 own cards, sorted), a non-seated user's 403 and a mid-board leave, then
 empties the table so it gets deleted. Use it as the template for any multi-player check.
 
+**An auction:** `assets/auction-flow.sh <scratchpad as a Windows path>` does
+the same set-up, reads the bid ids from `GET /bids`, plays a full auction from
+the dealer (wrong turn, too low, double twice, then XX, ending in 4♠X) and
+prints each call's status and `message`, then empties the table. Pass the
+scratchpad as `$(cygpath -w <dir>)`: the scripts' inline Python is Windows
+Python, which can't open `/c/...` paths. When it can't, `r.json` never
+exists, the table id comes back empty and every later request 404s. A table
+created before that failure stays behind with its creator seated, so find it
+with `GET /tables` in that user's jar and `DELETE /tables/{id}/seats`.
+
 ## Troubleshooting
 
 **A seat request 500s with `Unknown column 'last_seen_at'` (or another missing
