@@ -222,6 +222,7 @@ describe('TablePlayPage card play', () => {
       user: PLAYERS[seat],
     })),
     free_seats: [],
+    can_manage: false,
   }
 
   const SOUTH = cards('SA', 'S7', 'HK', 'D2')

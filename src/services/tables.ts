@@ -21,7 +21,10 @@ export interface TableSeat {
   user: PublicUser;
 }
 
-export interface Table {
+// A table as `TableUpdated` broadcasts it: every field of the HTTP payload
+// but `can_manage`, which is the caller's own answer and a broadcast has no
+// single caller.
+export interface BroadcastTable {
   id: number;
   name: string | null;
   created_by: number | null;
@@ -31,6 +34,13 @@ export interface Table {
   updated_at: string;
   seats: TableSeat[];
   free_seats: Seat[];
+}
+
+// A table as the HTTP endpoints answer it. `can_manage` is TablePolicy::manage
+// for the caller (the moderator, the creator while seated, any admin), so the
+// manager controls show from it rather than from moderated_by/created_by.
+export interface Table extends BroadcastTable {
+  can_manage: boolean;
 }
 
 export interface CreateTablePayload {
@@ -106,6 +116,18 @@ export async function removePlayer(tableId: number, userId: number): Promise<Sea
   return data.data;
 }
 
+// A manager puts another user into a free seat; the fourth one deals the board,
+// as a join does. 403 when the caller can't manage this table, 409 when the
+// seat is taken or that user already sits at a table (this never moves them).
+export async function seatUser(tableId: number, userId: number, seat: Seat): Promise<Table> {
+  await http.get('/sanctum/csrf-cookie');
+  const { data } = await http.post<ApiResponse<Table>>(`/tables/${tableId}/seats/users`, {
+    user_id: userId,
+    seat,
+  });
+  return data.data;
+}
+
 // The four seats in N, E, S, W order with whoever holds them. The backend only
 // sends the occupied ones, so both table views build the full set from here.
 export function seatsOf(table: Table): { seat: Seat; user: PublicUser | null }[] {
@@ -113,18 +135,4 @@ export function seatsOf(table: Table): { seat: Seat; user: PublicUser | null }[]
     seat,
     user: table.seats.find((s) => s.seat === seat)?.user ?? null,
   }));
-}
-
-// TablePolicy::manage as far as the SPA can see it: the moderator, or the
-// creator while they still hold a seat here. Admins manage every table too, but
-// `is_admin` is hidden from GET /api/user, so they read as non-managers — treat
-// the answer as a hint about what to show and let a 403 correct it.
-export function canManage(table: Table, userId: number | null | undefined): boolean {
-  if (!userId) {
-    return false;
-  }
-  if (table.moderated_by === userId) {
-    return true;
-  }
-  return table.created_by === userId && table.seats.some((s) => s.user_id === userId);
 }

@@ -82,6 +82,17 @@
                 <span v-else>{{ mySeat ? 'Move here' : 'Sit here' }}</span>
               </ion-button>
 
+              <!-- Managers put somebody else in a free seat, found by name. -->
+              <ion-button
+                v-if="!user && isManager"
+                size="small"
+                fill="clear"
+                :disabled="busySeat !== null"
+                @click="seatingAt = seat"
+              >
+                Seat a player
+              </ion-button>
+
               <!-- Managers only; the backend has the final say (403). -->
               <ion-button
                 v-else-if="user && isManager"
@@ -141,6 +152,7 @@
       </div>
 
       <PlayerProfileSheet :player="player" @close="player = null" />
+      <SeatPlayerSheet :seat="seatingAt" @select="seatPlayer" @close="seatingAt = null" />
     </ion-content>
   </ion-page>
 </template>
@@ -162,12 +174,13 @@ import {
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
+import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
-import { canManage, seatsOf } from '@/services/tables';
+import { seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
-import type { PublicUser } from '@/services/users';
+import type { PublicUser, SearchedUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { confirmMove, leaveWarning } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
@@ -186,6 +199,8 @@ const notFound = ref(false);
 const busySeat = ref<Seat | null>(null);
 // The seated player whose profile sheet is open.
 const player = ref<PublicUser | null>(null);
+// The free seat a manager is finding a player for.
+const seatingAt = ref<Seat | null>(null);
 
 // Only trust the store's current table when it is the one this route asks for,
 // otherwise moving from one table to another flashes the previous one. Coming
@@ -205,7 +220,9 @@ const mySeat = computed(
 const seatedElsewhere = computed(() =>
   store.myTable && store.myTable.id !== tableId.value ? store.myTable : null,
 );
-const isManager = computed(() => !!table.value && canManage(table.value, me.value));
+// The backend's own answer for this user (admins included); a 403 corrects it
+// if the role has moved on since.
+const isManager = computed(() => table.value?.can_manage ?? false);
 // The phase of the board here, when the game store holds it: leaving during
 // a board abandons it, between boards (finished) it abandons nothing.
 const boardPhase = computed(() =>
@@ -402,6 +419,34 @@ async function confirmRemove(seat: Seat, user: PublicUser) {
       // 403: you no longer manage this table (the role moves when a manager
       // leaves). 404: they already left. Either way the page is stale.
       await showToast(errorMessage(e, 'Could not remove that player. Please try again.'), 'danger');
+      await load();
+    }
+  } finally {
+    busySeat.value = null;
+  }
+}
+
+async function seatPlayer(user: SearchedUser) {
+  const seat = seatingAt.value;
+  seatingAt.value = null;
+  if (!seat) {
+    return;
+  }
+  // Naming yourself is a plain join (maybe a move), so it goes that way.
+  if (user.id === me.value) {
+    await sit(seat);
+    return;
+  }
+
+  busySeat.value = seat;
+  try {
+    await store.seatUser(tableId.value, user.id, seat);
+    await showToast(`${user.username} now sits at ${seat}.`, 'success');
+  } catch (e) {
+    if (!handleExpiredSession(e)) {
+      // 409: the seat was taken or they sat down somewhere meanwhile. 403:
+      // you no longer manage this table. Either way the page is stale.
+      await showToast(errorMessage(e, 'Could not seat that player. Please try again.'), 'danger');
       await load();
     }
   } finally {

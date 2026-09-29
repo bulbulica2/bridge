@@ -73,7 +73,7 @@ const props = withDefaults(
     mySeat: Seat | null;
     // Fewer than four seated: nothing to confirm, a newcomer deals it.
     short?: boolean;
-    // The manager hint (see canManage): may ask for all four at once.
+    // The table's can_manage: may ask for all four at once.
     manager?: boolean;
     busy?: boolean;
   }>(),

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as tablesService from '@/services/tables';
-import type { CreateTablePayload, Seat, Table } from '@/services/tables';
+import type { BroadcastTable, CreateTablePayload, Seat, Table } from '@/services/tables';
 import { leaveTable, listenToTable, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
@@ -82,6 +82,45 @@ export const useTablesStore = defineStore('tables', () => {
     upsertInList(table);
     if (currentTable.value?.id === table.id) {
       currentTable.value = table;
+    }
+  }
+
+  // Our freshest copy of a table: the detail page's, else the list's.
+  function heldTable(tableId: number): Table | null {
+    if (currentTable.value?.id === tableId) {
+      return currentTable.value;
+    }
+    return tables.value.find((t) => t.id === tableId) ?? null;
+  }
+
+  // `TableUpdated` leaves `can_manage` out, so a broadcast keeps the answer we
+  // last got over HTTP. Only a new moderator changes it for somebody who didn't
+  // make the request, so that asks the backend again.
+  function withCanManage(update: BroadcastTable | Table): Table {
+    if ('can_manage' in update) {
+      return update;
+    }
+    const held = heldTable(update.id);
+    if (!held || held.moderated_by !== update.moderated_by) {
+      refreshCanManage(update.id);
+    }
+    return { ...update, can_manage: held?.can_manage ?? false };
+  }
+
+  // Takes only `can_manage` from the refetch: seats keep coming over the
+  // channel, and a later broadcast may already have overtaken this answer.
+  // Skipped if the moderator changed again meanwhile (that refetches anew).
+  async function refreshCanManage(tableId: number) {
+    let fresh: Table;
+    try {
+      fresh = await tablesService.getTable(tableId);
+    } catch {
+      // Gone or offline: the next load or catch-up says what happened.
+      return;
+    }
+    const held = heldTable(tableId);
+    if (held && held.moderated_by === fresh.moderated_by) {
+      syncTable({ ...held, can_manage: fresh.can_manage });
     }
   }
 
@@ -234,10 +273,11 @@ export const useTablesStore = defineStore('tables', () => {
   // a removal is worded as the idle-seat sweep rather than a kick, which is
   // what it most likely was when the user wasn't looking (the backend doesn't
   // say which).
-  function applyTableUpdate(table: Table, idle = pageHidden()) {
-    if (watchedTableId.value !== table.id) {
+  function applyTableUpdate(update: BroadcastTable | Table, idle = pageHidden()) {
+    if (watchedTableId.value !== update.id) {
       return;
     }
+    const table = withCanManage(update);
     syncTable(table);
     useGameStore().applyTableUpdate(table);
     if (seatsMe(table)) {
@@ -339,6 +379,15 @@ export const useTablesStore = defineStore('tables', () => {
     return applyRemoval(tableId, await tablesService.removePlayer(tableId, userId));
   }
 
+  // A manager seats another user (never themselves: that is a join, and may
+  // be a move). Their broadcast reaches the rest of the table; a fourth seat
+  // deals the board and the pages move the players on from board_id.
+  async function seatUser(tableId: number, userId: number, seat: Seat) {
+    const table = await tablesService.seatUser(tableId, userId, seat);
+    syncTable(table);
+    return table;
+  }
+
   function applyRemoval(tableId: number, result: tablesService.SeatRemovalResult) {
     if (tablesService.isTableDeleted(result)) {
       forget(tableId);
@@ -363,6 +412,7 @@ export const useTablesStore = defineStore('tables', () => {
     join,
     leave,
     removePlayer,
+    seatUser,
     forget,
     watchTable,
     unwatchTable,

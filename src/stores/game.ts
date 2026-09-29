@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import * as gameService from '@/services/game';
 import type { Bid, Card, HandDealtEvent, Phase, Playing, PublicPlaying } from '@/services/game';
 import * as historyService from '@/services/history';
-import type { Seat, Table } from '@/services/tables';
+import type { BroadcastTable, Seat } from '@/services/tables';
 import { leaveUser, listenToUser, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
 import { showToast } from '@/utils/toast';
@@ -219,7 +219,7 @@ export const useGameStore = defineStore('game', () => {
   // A `TableUpdated` for the table we show. A player leaving mid-board
   // abandons it: `board_id` goes back to null and no PlayingUpdated follows,
   // so this is where the table goes back to waiting.
-  function applyTableUpdate(table: Table) {
+  function applyTableUpdate(table: BroadcastTable) {
     const current = playing.value;
     if (tableId.value !== table.id || !current) {
       return;
