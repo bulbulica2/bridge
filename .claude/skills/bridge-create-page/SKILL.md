@@ -215,7 +215,8 @@ missing exactly that way. Fix anything that fails before committing. Don't commi
   affects another session (e.g. taking over port 3000).
   **Exception — if they say up front to "go to the PR" / "take it all the way",
   don't pause for review**: verify, commit, push and open the PR in one run, then
-  launch the app and report. Asking again after they've said that is the friction
+  launch the app and report. If they add "without npm run dev" (#30), skip
+  step 6 and leave the manual checks unticked in the PR. Asking again after they've said that is the friction
   they were removing.
 - Commit message style (the user's rule, also in CLAUDE.md "Git workflow"):
   first line is the branch name, a space, then a short summary, e.g.
@@ -427,3 +428,14 @@ history below, and commit the skill changes on the page's branch (a separate
   backend issues had merged, so step 1 now says to check. A heredoc edit
   failed a third time, so step 0 now forbids them. Also a class clash
   (`.next`) in page tests and `-0` from negating a zero score.
+- Issue #30 (Results and history): two new pages (`/history`, and
+  `/boards/:id/results` with the viewer's table highlighted and a
+  matchpoint %), a `history` store keyed by owner, a shared
+  `HistoryList` with `ion-infinite-scroll` also used on the profile page,
+  and a "Compare" button on the play page. The user asked for the PR only,
+  without `npm run dev`, so step 6 was skipped. The blocker had merged
+  again. Everything passed on the first run. Learned: a 403 for "not
+  allowed yet" belongs in the page's `gone` branch with a reason, not in
+  the red error text, and `HistoryPage` tests can mount the page for real
+  (with `onIonViewWillEnter` as `onMounted`) by mocking `@/services/http`
+  only.
