@@ -8,6 +8,17 @@ import { useGameStore } from '@/stores/game';
 import { statusOf } from '@/utils/errors';
 import { showToast } from '@/utils/toast';
 
+// How often a seated player tells the backend they are still there. It frees
+// a seat after a few idle minutes (BRIDGE_IDLE_SEAT_MINUTES, 5 by default), so
+// a couple of lost beats never cost anybody their seat.
+export const HEARTBEAT_MS = 30_000;
+
+export const IDLE_NOTICE = 'You were removed from the table after being inactive.';
+
+function pageHidden() {
+  return typeof document !== 'undefined' && document.visibilityState === 'hidden';
+}
+
 export const useTablesStore = defineStore('tables', () => {
   const tables = ref<Table[]>([]);
   // The table the detail page is showing, held next to the list so both stay
@@ -25,6 +36,13 @@ export const useTablesStore = defineStore('tables', () => {
   // Our own seat requests in flight. Their broadcast can beat the HTTP
   // response, and an update that unseats us then is our own doing, not a kick.
   let ownSeatRequests = 0;
+  // The heartbeat for the watched table: running while the page is visible,
+  // paused while it is hidden (a closed or backgrounded app is exactly what
+  // the backend should see as idle).
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  // A removal noticed while the page was hidden, told once it shows again (a
+  // toast shown to nobody would be gone by then).
+  let pendingNotice: string | null = null;
 
   const auth = useAuthStore();
 
@@ -89,15 +107,115 @@ export const useTablesStore = defineStore('tables', () => {
     watchedTableId.value = tableId;
     kickedFrom.value = null;
     // The same channel carries the game state; the game store keeps that.
-    listenToTable(tableId, applyTableUpdate, (playing) =>
-      useGameStore().applyPlayingUpdate(tableId, playing),
+    listenToTable(
+      tableId,
+      (table) => applyTableUpdate(table),
+      (playing) => useGameStore().applyPlayingUpdate(tableId, playing),
     );
+    startHeartbeat();
   }
 
+  // Leaving, a kick, a move and logout all end here, and so does the heartbeat.
   function unwatchTable() {
+    stopHeartbeat();
     if (watchedTableId.value !== null) {
       leaveTable(watchedTableId.value);
       watchedTableId.value = null;
+    }
+  }
+
+  function startHeartbeat() {
+    stopHeartbeat();
+    if (watchedTableId.value !== null && !pageHidden()) {
+      heartbeat = setInterval(beat, HEARTBEAT_MS);
+    }
+  }
+
+  function stopHeartbeat() {
+    if (heartbeat !== null) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+  }
+
+  // A 403 or 404 means the seat is already gone (freed as idle, most likely,
+  // with its TableUpdated missed), so look at the table to find out how.
+  // Anything else (offline, a 500) just waits for the next beat.
+  async function beat() {
+    const tableId = watchedTableId.value;
+    if (tableId === null) {
+      return;
+    }
+    try {
+      await tablesService.sendHeartbeat(tableId);
+    } catch (e) {
+      const status = statusOf(e);
+      if (status === 403 || status === 404) {
+        await catchUp(tableId, true);
+      }
+    }
+  }
+
+  // Back from the background: vouch for the seat at once, then catch up with
+  // whatever happened meanwhile. A seat lost while away is told as such.
+  async function resume() {
+    const tableId = watchedTableId.value;
+    if (tableId !== null) {
+      startHeartbeat();
+      await tablesService.sendHeartbeat(tableId).catch(() => {
+        // The refetch below tells whether we still sit there.
+      });
+      await catchUp(tableId, true);
+      const game = useGameStore();
+      if (watchedTableId.value === tableId && game.tableId === tableId) {
+        await game.load(tableId).catch(() => {
+          // The page shows its own errors on its next load; nothing to add here.
+        });
+      }
+    }
+    if (pendingNotice !== null && !pageHidden()) {
+      showToast(pendingNotice, 'warning');
+      pendingNotice = null;
+    }
+  }
+
+  function onVisibilityChange() {
+    if (pageHidden()) {
+      stopHeartbeat();
+    } else {
+      resume();
+    }
+  }
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+
+  // Tell the user they lost their seat, or keep it for when they look again.
+  function announceRemoval(message: string) {
+    if (pageHidden()) {
+      pendingNotice = message;
+    } else {
+      showToast(message, 'warning');
+    }
+  }
+
+  // Refetch the watched table and apply it as an update. `idle`: a removal
+  // found this way happened while the user wasn't looking.
+  async function catchUp(tableId: number, idle: boolean) {
+    try {
+      applyTableUpdate(await tablesService.getTable(tableId), idle);
+    } catch (e) {
+      if (statusOf(e) !== 404 || watchedTableId.value !== tableId) {
+        return;
+      }
+      // Gone with us still in it as far as we knew: we were the last one
+      // there, and our seat went too.
+      forget(tableId);
+      if (ownSeatRequests === 0) {
+        kickedFrom.value = tableId;
+        announceRemoval(idle ? IDLE_NOTICE : 'The table you sat at is gone.');
+      }
     }
   }
 
@@ -111,9 +229,12 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
-  // A `TableUpdated` event (or the refetch after a reconnect). It is the whole
-  // table, so it replaces ours rather than merging into it.
-  function applyTableUpdate(table: Table) {
+  // A `TableUpdated` event (or a refetch after a reconnect or a resume). It is
+  // the whole table, so it replaces ours rather than merging into it. `idle`:
+  // a removal is worded as the idle-seat sweep rather than a kick, which is
+  // what it most likely was when the user wasn't looking (the backend doesn't
+  // say which).
+  function applyTableUpdate(table: Table, idle = pageHidden()) {
     if (watchedTableId.value !== table.id) {
       return;
     }
@@ -125,22 +246,17 @@ export const useTablesStore = defineStore('tables', () => {
     unwatchTable();
     if (ownSeatRequests === 0) {
       kickedFrom.value = table.id;
-      showToast(`You were removed from ${table.name || `table #${table.id}`}.`, 'warning');
+      announceRemoval(
+        idle ? IDLE_NOTICE : `You were removed from ${table.name || `table #${table.id}`}.`,
+      );
     }
   }
 
   // Events sent while the socket was down are gone for good, so catch up once.
   onReconnect(async () => {
     const tableId = watchedTableId.value;
-    if (tableId === null) {
-      return;
-    }
-    try {
-      applyTableUpdate(await tablesService.getTable(tableId));
-    } catch (e) {
-      if (statusOf(e) === 404) {
-        forget(tableId);
-      }
+    if (tableId !== null) {
+      await catchUp(tableId, pageHidden());
     }
   });
 

@@ -87,6 +87,14 @@ export async function leaveSeat(tableId: number): Promise<SeatRemovalResult> {
   return data.data;
 }
 
+// "Still here": keeps the caller's seat from being freed as idle. The backend
+// frees a seat nobody has vouched for in a few minutes (through the normal
+// leave path), so a seated client sends this about every 30 s. 403 once the
+// caller no longer sits here, 404 once the table is gone.
+export async function sendHeartbeat(tableId: number): Promise<void> {
+  await http.post(`/tables/${tableId}/heartbeat`);
+}
+
 // A manager takes another player out of their seat. 403 when the caller can't
 // manage this table, 404 when that player no longer sits here (the seat is
 // addressed in the URL, unlike leaveSeat's 409). Emptying the table deletes it.
