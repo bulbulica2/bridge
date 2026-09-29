@@ -1,8 +1,8 @@
 <template>
-  <!-- Dummy's cards as a bridge diagram lays them out: one column per suit,
-       ♠ ♥ ♦ ♣, high to low down each column. Narrow enough for a side seat,
-       where the viewer is a defender and only looks at them. -->
-  <div class="dummy-columns" aria-label="Dummy's hand">
+  <!-- A hand as a bridge diagram lays it out: one column per suit, ♠ ♥ ♦ ♣,
+       high to low down each column. Narrow enough for a side seat: dummy's
+       cards for a defender, and every hand of a finished deal. -->
+  <div class="dummy-columns" :aria-label="label">
     <div v-for="suit in SUITS" :key="suit" class="column" :class="{ red: isRed(suit) }">
       <span class="suit" :aria-label="SUIT_NAMES[suit]">{{ SUIT_SYMBOLS[suit] }}</span>
       <span v-for="card in bySuit[suit]" :key="card.id" class="rank">{{ rankLabel(card.rank) }}</span>
@@ -16,7 +16,9 @@ import { computed } from 'vue';
 import type { Card, Suit } from '@/services/game';
 import { SUITS, SUIT_NAMES, SUIT_SYMBOLS, isRed, rankLabel, sortHand } from '@/utils/cards';
 
-const props = defineProps<{ cards: Card[] }>();
+const props = withDefaults(defineProps<{ cards: Card[]; label?: string }>(), {
+  label: "Dummy's hand",
+});
 
 const bySuit = computed(() => {
   const sorted = sortHand(props.cards);

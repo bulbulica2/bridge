@@ -5,7 +5,8 @@
        Once dummy is face up its cards lie at its seat: across the top when
        the viewer is declarer (who plays them from there), in suit columns on
        a side seat for a defender, and not at all when the viewer is dummy,
-       whose own hand below is the same cards. -->
+       whose own hand below is the same cards. Once the board is over, the
+       whole deal lies face up, each hand at its seat. -->
   <div class="bridge-table">
     <div
       v-for="side in SIDES"
@@ -59,6 +60,12 @@
         />
         <DummyColumns v-else :cards="dummy!.cards" />
       </template>
+      <DummyColumns
+        v-else-if="deal"
+        class="dealt-hand"
+        :cards="deal[seatOn[side]]"
+        :label="`${SEAT_NAMES[seatOn[side]]}'s hand as dealt`"
+      />
     </div>
 
     <div class="centre" :class="{ 'centre-slot': $slots.centre }">
@@ -80,6 +87,7 @@ import HandView from '@/components/HandView.vue';
 import type { Board, Card } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
+import { SEAT_NAMES } from '@/utils/auction';
 import { isVulnerable, seatAt, vulnerabilityLabel } from '@/utils/cards';
 import type { ScreenSide } from '@/utils/cards';
 
@@ -97,10 +105,12 @@ const props = withDefaults(
     dummy?: { seat: Seat; cards: Card[] } | null;
     // Dummy's cards declarer may play now (see HandView), else null.
     dummyPlayable?: number[] | null;
+    // All four hands as dealt, once the board is finished.
+    deal?: Record<Seat, Card[]> | null;
     busy?: boolean;
     sendingId?: number | null;
   }>(),
-  { myTurn: null, dummy: null, dummyPlayable: null, busy: false, sendingId: null },
+  { myTurn: null, dummy: null, dummyPlayable: null, deal: null, busy: false, sendingId: null },
 );
 
 const emit = defineEmits<{ select: [user: PublicUser]; play: [card: Card] }>();
@@ -169,7 +179,8 @@ function turnLabel(side: ScreenSide): string {
   grid-column: 1 / 4;
 }
 
-.dummy-hand {
+.dummy-hand,
+.dealt-hand {
   margin-top: 4px;
 }
 

@@ -163,6 +163,7 @@ import AppHeader from '@/components/AppHeader.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
+import { useGameStore } from '@/stores/game';
 import { seatsOf } from '@/services/tables';
 import type { Seat, Table } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
@@ -172,6 +173,7 @@ import { showToast } from '@/utils/toast';
 
 const tablesStore = useTablesStore();
 const auth = useAuthStore();
+const game = useGameStore();
 const ionRouter = useIonRouter();
 
 const me = computed(() => auth.user?.id ?? null);
@@ -226,7 +228,12 @@ async function join(table: Table, seat: Seat) {
   // Taking a seat at another table moves you off yours, so ask first; a seat
   // change at your own table costs nothing.
   const from = tablesStore.myTable;
-  if (from && me.value && from.id !== table.id && !(await confirmMove(from, table, me.value))) {
+  if (
+    from &&
+    me.value &&
+    from.id !== table.id &&
+    !(await confirmMove(from, table, me.value, game.phaseOf(from.id)))
+  ) {
     return;
   }
   joining.value = `${table.id}-${seat}`;
