@@ -134,6 +134,23 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   card sorting, rank labels (the backend skips 11: `12`=J … `15`=A), seat
   rotation and vulnerability live in `src/utils/cards.ts`. The detail page
   moves a seated player to `/play` when `board_id` turns non-null.
+- **Bidding**: calls go out as a `bid_id`, and the ids aren't pinned to the
+  rank, so they come from the public `GET /bids` (`getBids`, the 38 calls in
+  `auction[].bid`'s shape), which the game store's `loadBids()` reads once.
+  Never hard-code or compare bid ids; look a call up by `call` or
+  `level`/`strain`. `call(bidId)` posts `POST /tables/{id}/calls` and takes
+  the full state it answers with. Both it and `PlayingUpdated` skip a state
+  that is behind the one shown for the same board (`isBehind`: phase, calls,
+  cards, ready), since the HTTP answer and the channel race. The auction's
+  rules (GAME-RULES.md §4) are mirrored in `src/utils/auction.ts` only as a
+  hint (`isLegalCall`, `canDouble`, `canRedouble`), along with the labels and
+  the grid layout. A 409 from the backend is the final word: the page toasts
+  its `message` and reloads. On the play page, `BiddingBox.vue` shows only
+  on the user's turn during `auction` and stays disabled while a call is in
+  flight. `AuctionHistory.vue` is the four-column grid, rotated like the
+  table (the viewer's column last, so South reads W N E S), starting in the
+  dealer's column. `CallLabel.vue` draws one call. The page announces the
+  contract (or "Passed out") and toasts it when the last call arrives live.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
   `username`, `description`, never the email); `TableSeat.user` uses that type

@@ -1,2 +1,14 @@
 /* For information on how to create your own theme, please see:
 http://ionicframework.com/docs/theming/ */
+
+/* Hearts and diamonds written on the page (the auction, the contract) rather
+   than on a white card face, so the red needs lifting in dark mode. */
+:root {
+  --bridge-red-suit: #c62828;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bridge-red-suit: #ff6b6b;
+  }
+}

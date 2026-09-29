@@ -58,6 +58,30 @@
 
           <p v-if="status" class="status" :class="{ 'status-mine': myTurn }">{{ status }}</p>
 
+          <!-- The end of the auction: the contract, or nobody bid at all. -->
+          <section v-if="playing.contract" class="outcome" aria-live="polite">
+            <p class="outcome-title">
+              <CallLabel :bid="playing.contract.bid" />{{ doubledSuffix(playing.contract.doubled) }}
+              by {{ SEAT_NAMES[playing.contract.declarer] }}
+            </p>
+            <p class="outcome-detail">
+              Declarer {{ who(playing.contract.declarer) }} · Dummy {{ who(playing.contract.dummy) }}
+            </p>
+          </section>
+          <section v-else-if="passedOut" class="outcome" aria-live="polite">
+            <p class="outcome-title">Passed out</p>
+            <p class="outcome-detail">Nobody bid, so the board scores 0. Waiting for the next board.</p>
+          </section>
+
+          <AuctionHistory
+            v-if="playing.phase !== 'waiting' && playing.auction"
+            :auction="playing.auction"
+            :board="playing.board"
+            :my-seat="mySeat"
+            :turn="playing.phase === 'auction' ? playing.turn : null"
+            :players="players"
+          />
+
           <section v-if="playing.phase !== 'waiting'" class="my-hand">
             <HandView v-if="playing.hand" :cards="playing.hand" />
             <div v-else class="dealing">
@@ -65,6 +89,24 @@
               <span>Dealing…</span>
             </div>
           </section>
+
+          <template v-if="canBid">
+            <BiddingBox
+              v-if="game.bids.length > 0"
+              :bids="game.bids"
+              :auction="playing.auction ?? []"
+              :seat="mySeat!"
+              :busy="calling"
+              @call="makeCall"
+            />
+            <div v-else class="bids-missing">
+              <p v-if="bidsError">{{ bidsError }}</p>
+              <p v-else><ion-spinner name="dots" /> Loading the bidding box…</p>
+              <ion-button v-if="bidsError" size="small" fill="outline" @click="loadBids()">
+                Try again
+              </ion-button>
+            </div>
+          </template>
 
           <ion-button
             expand="block"
@@ -98,7 +140,10 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
+import AuctionHistory from '@/components/AuctionHistory.vue';
+import BiddingBox from '@/components/BiddingBox.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
+import CallLabel from '@/components/CallLabel.vue';
 import HandView from '@/components/HandView.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -106,8 +151,11 @@ import { useGameStore } from '@/stores/game';
 import { useTablesStore } from '@/stores/tables';
 import { seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
+import type { Bid } from '@/services/game';
 import type { PublicUser } from '@/services/users';
+import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { showToast } from '@/utils/toast';
 
 const route = useRoute();
 const ionRouter = useIonRouter();
@@ -121,6 +169,9 @@ const loadError = ref('');
 const notFound = ref(false);
 const notSeated = ref(false);
 const player = ref<PublicUser | null>(null);
+// A call on its way: the bidding box stays disabled until it lands.
+const calling = ref(false);
+const bidsError = ref('');
 
 const me = computed(() => auth.user?.id ?? null);
 
@@ -160,9 +211,28 @@ const myTurn = computed(
   () => !!playing.value?.acting_user_id && playing.value.acting_user_id === me.value,
 );
 
+// Our call to make: the box shows only then.
+const canBid = computed(
+  () => playing.value?.phase === 'auction' && myTurn.value && mySeat.value !== null,
+);
+
+// Four passes: the board ends at once, with no contract and no play.
+const passedOut = computed(
+  () => playing.value?.phase === 'finished' && !playing.value.contract,
+);
+
+// "North (ann)", or "North (you)".
+function who(seat: Seat): string {
+  if (seat === mySeat.value) {
+    return `${SEAT_NAMES[seat]} (you)`;
+  }
+  const user = players.value[seat];
+  return user ? `${SEAT_NAMES[seat]} (${user.username})` : SEAT_NAMES[seat];
+}
+
 const status = computed(() => {
   const state = playing.value;
-  if (!state || state.phase === 'waiting') {
+  if (!state || state.phase === 'waiting' || passedOut.value) {
     return '';
   }
   if (state.phase === 'finished') {
@@ -221,6 +291,23 @@ watch(
   },
 );
 
+// The last call of the auction, seen live (not on a reload): announce how it
+// ended, whoever made that call.
+watch(
+  () => [playing.value?.playing_id, playing.value?.phase] as const,
+  ([id, phase], [oldId, oldPhase]) => {
+    if (id == null || id !== oldId || oldPhase !== 'auction' || phase === 'auction') {
+      return;
+    }
+    const contract = playing.value?.contract;
+    if (contract) {
+      showToast(`Contract: ${contractLabel(contract)}.`, 'success');
+    } else if (phase === 'finished') {
+      showToast('Passed out: nobody bid.', 'warning');
+    }
+  },
+);
+
 // Both the table (seats, live channel) and its board; either alone would
 // leave the page half drawn. The playing snapshot also rebuilds everything
 // after a reload.
@@ -230,6 +317,7 @@ async function load() {
   }
   loading.value = true;
   loadError.value = '';
+  loadBids();
   try {
     await Promise.all([tablesStore.loadTable(tableId.value), game.load(tableId.value)]);
   } catch (e) {
@@ -246,6 +334,49 @@ async function load() {
     }
   } finally {
     loading.value = false;
+  }
+}
+
+// The bid ids, read once per app run; a failure only costs the bidding box.
+async function loadBids(force = false) {
+  bidsError.value = '';
+  try {
+    await game.loadBids(force);
+  } catch (e) {
+    bidsError.value = errorMessage(e, 'Could not load the bidding box.');
+  }
+}
+
+// One call at a time. A refused call (409: not our turn, too low, …) means
+// the table moved on or the hint was wrong: say why, then reread the board.
+async function makeCall(bid: Bid) {
+  if (calling.value) {
+    return;
+  }
+  calling.value = true;
+  try {
+    await game.call(bid.id);
+  } catch (e) {
+    const status = statusOf(e);
+    if (status === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+    } else if (status === 403) {
+      notSeated.value = true;
+    } else if (status === 404) {
+      tablesStore.forget(tableId.value);
+      notFound.value = true;
+    } else {
+      showToast(errorMessage(e, 'Your call could not be made. Please try again.'), 'danger');
+      if (status === 422) {
+        // The bid list no longer matches the server's (a reseeded database).
+        await loadBids(true);
+      }
+      if (status === 409 || status === 422) {
+        await load();
+      }
+    }
+  } finally {
+    calling.value = false;
   }
 }
 
@@ -327,6 +458,42 @@ async function refresh(event: CustomEvent) {
 
 .my-hand {
   margin: 8px 0 16px;
+}
+
+.outcome {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.08);
+  text-align: center;
+}
+
+.outcome p {
+  margin: 0;
+}
+
+.outcome-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.outcome .outcome-detail {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--ion-color-medium);
+}
+
+.bids-missing {
+  margin: 12px 0;
+  text-align: center;
+  color: var(--ion-color-medium);
+}
+
+.bids-missing p {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .refresh {
