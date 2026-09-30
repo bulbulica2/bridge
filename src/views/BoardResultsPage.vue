@@ -59,9 +59,13 @@
           </p>
 
           <ion-list class="results" lines="none">
+            <!-- Each row opens that table's playing, to replay it. -->
             <ion-item
               v-for="result in data.results"
               :key="result.playing_id"
+              button
+              detail
+              :router-link="`/playings/${result.playing_id}`"
               class="result-item"
               :class="{ mine: isMine(result) }"
             >

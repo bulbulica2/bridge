@@ -53,10 +53,18 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     // One board's results at every table, with matchpoints. Reached from a
-    // history entry or a finished board's result panel; 403 unless the user
+    // board's replay or a finished board's result panel; 403 unless the user
     // has finished that board.
     path: '/boards/:id/results',
     component: () => import('@/views/BoardResultsPage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    // One finished playing replayed trick by trick: its auction, the play
+    // and the result. Reached from a history entry or a board's results row;
+    // 403 unless the user has finished that board.
+    path: '/playings/:id',
+    component: () => import('@/views/PlayingReviewPage.vue'),
     meta: { requiresAuth: true }
   },
   {

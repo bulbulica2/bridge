@@ -72,7 +72,7 @@
         v-else-if="deal"
         class="dealt-hand"
         :cards="deal[seatOn[side]]"
-        :label="`${SEAT_NAMES[seatOn[side]]}'s hand as dealt`"
+        :label="`${SEAT_NAMES[seatOn[side]]}'s ${replay ? 'cards left' : 'hand as dealt'}`"
       />
     </div>
 
@@ -117,6 +117,8 @@ const props = withDefaults(
     claim?: { seat: Seat; cards: Card[] } | null;
     // All four hands as dealt, once the board is finished.
     deal?: Record<Seat, Card[]> | null;
+    // `deal` is what is left of each hand at a step of a board's replay.
+    replay?: boolean;
     busy?: boolean;
     sendingId?: number | null;
   }>(),
@@ -126,6 +128,7 @@ const props = withDefaults(
     dummyPlayable: null,
     claim: null,
     deal: null,
+    replay: false,
     busy: false,
     sendingId: null,
   },

@@ -1,12 +1,14 @@
 import http from './http';
-import type { Bid, Board } from './game';
+import type { Bid, Board, PublicPlaying } from './game';
 import type { Seat } from './tables';
 import type { PublicUser } from './users';
 
 // Finished boards, read from the playings' seat snapshots, so they outlive
 // the table they were played at: a player's history and a board's results
-// at every table. Same envelope as the table endpoints. See
-// bridge_docs/backend/API.md (Users, GET /users/{user}/playings, and Boards).
+// at every table, and one playing call by call and card by card. Same
+// envelope as the table endpoints. See
+// bridge_docs/backend/API.md (Users, GET /users/{user}/playings, Boards, and
+// GET /playings/{playing}).
 interface ApiResponse<T> {
   status: number;
   message: string;
@@ -93,5 +95,25 @@ export interface BoardResults {
 // has finished that board themselves, 404 for an unknown board.
 export async function getBoardResults(boardId: number): Promise<BoardResults> {
   const { data } = await http.get<ApiResponse<BoardResults>>(`/boards/${boardId}/results`);
+  return data.data;
+}
+
+// One finished playing after the fact: exactly the live game state once
+// `finished` (auction, contract, every trick, result and the deal as
+// dealt), less `ready` and without anybody's own `hand`. A board that ended
+// by a claim has only the tricks up to it (the unfinished one in
+// `current_trick`); a passed-out one has its four passes and no play.
+// Playings finished before the backend kept them come back with an empty
+// `auction` and `tricks`.
+export interface PlayingReview extends Omit<PublicPlaying, 'ready' | 'players'> {
+  // From the seat snapshot; null only if that player's account is gone.
+  players: Record<Seat, PublicUser | null>;
+}
+
+// Any finished playing of a board the caller has finished themselves, even
+// once its table is gone. 403 (a bare {message}) otherwise, 404 for an
+// unknown or unfinished playing.
+export async function getPlayingReview(playingId: number): Promise<PlayingReview> {
+  const { data } = await http.get<ApiResponse<PlayingReview>>(`/playings/${playingId}`);
   return data.data;
 }

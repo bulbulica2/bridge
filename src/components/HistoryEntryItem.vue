@@ -1,8 +1,9 @@
 <template>
   <!-- One finished board from a player's history: the board, the contract
        and how it went, the seat and partner, and the score from that
-       player's side. Opens the board's results at every table. -->
-  <ion-item button :router-link="`/boards/${entry.board.id}/results`" detail lines="full">
+       player's side. Opens its replay, which links on to the board's results
+       at every table. -->
+  <ion-item button :router-link="`/playings/${entry.playing_id}`" detail lines="full">
     <div class="entry">
       <div class="entry-main">
         <p class="entry-board">
