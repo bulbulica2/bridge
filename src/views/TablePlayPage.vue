@@ -119,6 +119,7 @@
             :board="playing.board"
             :turn="playing.turn"
             :my-turn="myTurn"
+            :thinking="robotActing"
             :dummy="dummy"
             :dummy-playable="playFrom === 'dummy' ? legalIds(playing.dummy_hand) : null"
             :claim="pendingClaim ? { seat: pendingClaim.claim.seat, cards: pendingClaim.claim.hand } : null"
@@ -146,7 +147,13 @@
             </template>
           </BridgeTable>
 
-          <p v-if="status" class="status" :class="{ 'status-mine': myTurn }">{{ status }}</p>
+          <p
+            v-if="status"
+            class="status"
+            :class="{ 'status-mine': myTurn, 'status-robot': robotActing }"
+          >
+            {{ status }}
+          </p>
 
           <AuctionHistory
             v-if="playing.phase === 'auction' && playing.auction"
@@ -281,7 +288,7 @@ import { canClaim, tricksLeft } from '@/utils/claim';
 import { handToPlay, legalCards } from '@/utils/play';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { resultSummary } from '@/utils/result';
-import { leaveWarning } from '@/utils/seatMove';
+import { leaveNote, leaveWarning } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
@@ -437,13 +444,26 @@ const status = computed(() => {
     return 'Auction: your turn.';
   }
   const actor = actorName();
-  return actor ? `Auction: waiting for ${actor}.` : 'Auction.';
+  return actor ? `Auction: ${waitingFor(actor)}` : 'Auction.';
 });
 
-function actorName(): string | null {
+// Who must act for `turn` (declarer on dummy's turn), from the players.
+const actor = computed(() => {
   const state = playing.value;
-  const actor = Object.values(state?.players ?? {}).find((u) => u.id === state?.acting_user_id);
-  return actor?.username ?? null;
+  return Object.values(state?.players ?? {}).find((u) => u.id === state?.acting_user_id) ?? null;
+});
+
+// A robot's move is due: it comes by itself about a second later
+// (PlayingUpdated), so the page says it is thinking rather than waiting.
+const robotActing = computed(() => !!actor.value?.is_robot);
+
+function actorName(): string | null {
+  return actor.value?.username ?? null;
+}
+
+// "waiting for ann.", or "robot-1 is thinking…"; `from` goes before the end.
+function waitingFor(name: string, from = ''): string {
+  return robotActing.value ? `${name} is thinking${from}…` : `waiting for ${name}${from}.`;
 }
 
 function playStatus(turn: Seat | null): string {
@@ -466,8 +486,8 @@ function playStatus(turn: Seat | null): string {
     return 'Play.';
   }
   return turn && turn === playing.value?.contract?.dummy
-    ? `Play: waiting for ${actor}, from dummy.`
-    : `Play: waiting for ${actor}.`;
+    ? `Play: ${waitingFor(actor, ', from dummy')}`
+    : `Play: ${waitingFor(actor)}`;
 }
 
 // Somebody left after the board ended: the finished board stays, and a
@@ -793,7 +813,7 @@ async function leave() {
     header: 'Leave this table?',
     message: [
       leaveWarning(playing.value?.phase ?? null, playing.value?.board?.number ?? null),
-      'Your seat will be freed. If nobody is left, the table is deleted.',
+      leaveNote(table.value, me.value),
     ]
       .filter(Boolean)
       .join(' '),
@@ -903,6 +923,10 @@ async function refresh(event: CustomEvent) {
   margin: 16px 0;
   text-align: center;
   color: var(--ion-color-medium);
+}
+
+.status-robot {
+  color: var(--ion-color-tertiary, #5260ff);
 }
 
 .status-mine {

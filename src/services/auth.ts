@@ -21,7 +21,7 @@ export interface User {
   description?: string | null;
 }
 
-// See bridge_docs/backend/AUTH.md for the Sanctum SPA flow.
+// See bridge_backend docs/AUTH.md for the Sanctum SPA flow.
 export async function login(credentials: LoginCredentials): Promise<void> {
   await http.get('/sanctum/csrf-cookie');
   await http.post('/login', credentials);

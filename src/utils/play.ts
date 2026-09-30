@@ -3,7 +3,7 @@ import type { Card, PlayedCard, Playing } from '@/services/game';
 import { screenSide } from '@/utils/cards';
 import type { ScreenSide } from '@/utils/cards';
 
-// The play's rules (bridge_docs/GAME-RULES.md §5), mirrored as a hint for
+// The play's rules (bridge_backend docs/GAME-RULES.md §5), mirrored as a hint for
 // which cards to dim. The backend's CardPlayService is the final word: a card
 // that slips past these answers 409 with its reason.
 

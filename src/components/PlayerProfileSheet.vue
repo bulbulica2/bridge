@@ -10,7 +10,10 @@
     <ion-content class="ion-padding">
       <div v-if="shown" class="profile">
         <h2 class="profile-name">{{ shown.name }}</h2>
-        <p class="profile-username">@{{ shown.username }}</p>
+        <p class="profile-username">
+          @{{ shown.username }}
+          <RobotBadge v-if="shown.is_robot" />
+        </p>
 
         <p v-if="gone" class="profile-gone">This player's account no longer exists.</p>
         <template v-else>
@@ -26,7 +29,8 @@
           <p class="error">{{ loadError }}</p>
         </ion-text>
 
-        <ion-button v-if="!gone" expand="block" fill="outline" @click="openPage">
+        <!-- A robot has no page of its own: nothing more to see there. -->
+        <ion-button v-if="!gone && !shown.is_robot" expand="block" fill="outline" @click="openPage">
           Full profile
         </ion-button>
       </div>
@@ -37,6 +41,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { IonModal, IonContent, IonButton, IonSpinner, IonText, useIonRouter } from '@ionic/vue';
+import RobotBadge from '@/components/RobotBadge.vue';
 import { useUsersStore } from '@/stores/users';
 import type { PublicUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';

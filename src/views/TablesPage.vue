@@ -62,6 +62,10 @@
                     <ion-icon slot="end" :icon="chevronForwardOutline" />
                   </ion-button>
                 </div>
+                <!-- Only robots left: anyone may sit down and run the table. -->
+                <p v-if="table.unattended_since" class="unattended">
+                  Robots only — sit down to take over
+                </p>
                 <div class="seats">
                   <div v-for="{ seat, user } in seatsOf(table)" :key="seat" class="seat">
                     <span class="seat-name">{{ seat }}</span>
@@ -75,6 +79,7 @@
                     >
                       {{ user.username }}
                     </button>
+                    <RobotBadge v-if="user?.is_robot" />
                     <ion-badge v-if="user && user.id === me" color="primary">You</ion-badge>
                     <ion-button
                       v-else
@@ -117,6 +122,14 @@
                   placeholder="Friday club"
                 />
               </ion-item>
+              <!-- Robots fill the other three seats and the first board is
+                   dealt at once, so one person can play straight away. -->
+              <ion-item>
+                <ion-toggle v-model="withRobots">
+                  Play with robots
+                  <p class="toggle-hint">Robots take the other three seats</p>
+                </ion-toggle>
+              </ion-item>
             </ion-list>
 
             <ion-text v-if="createError" color="danger">
@@ -155,12 +168,14 @@ import {
   IonText,
   IonSpinner,
   IonSkeletonText,
+  IonToggle,
   onIonViewWillEnter,
   useIonRouter,
 } from '@ionic/vue';
 import { chevronForwardOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
+import RobotBadge from '@/components/RobotBadge.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
@@ -168,6 +183,7 @@ import { seatsOf } from '@/services/tables';
 import type { Seat, Table } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { navigateAndSettle } from '@/router/loading';
 import { confirmMove } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
@@ -187,6 +203,7 @@ const createOpen = ref(false);
 const creating = ref(false);
 const createError = ref('');
 const name = ref('');
+const withRobots = ref(true);
 // The seated player whose profile sheet is open.
 const player = ref<PublicUser | null>(null);
 
@@ -252,6 +269,7 @@ function closeCreate() {
   createOpen.value = false;
   createError.value = '';
   name.value = '';
+  withRobots.value = true;
 }
 
 async function submitCreate() {
@@ -259,8 +277,15 @@ async function submitCreate() {
   creating.value = true;
   try {
     // The name is optional; an empty field means an unnamed table.
-    await tablesStore.create({ name: name.value.trim() || null });
+    const table = await tablesStore.create({
+      name: name.value.trim() || null,
+      robots: withRobots.value,
+    });
     closeCreate();
+    // Robots filled the table and dealt the first board: straight to it.
+    if (table.board_id !== null) {
+      await navigateAndSettle(ionRouter, `/tables/${table.id}/play`, 'forward', 'push');
+    }
   } catch (e) {
     createError.value = errorMessage(e, 'Could not create the table. Please try again.');
   } finally {
@@ -343,6 +368,18 @@ async function submitCreate() {
 
 .seat-name {
   font-weight: 600;
+  color: var(--ion-color-medium);
+}
+
+.unattended {
+  margin: -4px 0 8px;
+  font-size: 0.85rem;
+  color: var(--ion-color-tertiary, #5260ff);
+}
+
+.toggle-hint {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
   color: var(--ion-color-medium);
 }
 

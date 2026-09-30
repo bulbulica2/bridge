@@ -1,6 +1,6 @@
 # Running the frontend locally
 
-_Last verified: branch `bulbulica2/35-frontend-docs`._
+_Last verified: branch `bulbulica2/38-robots`._
 
 Requirements: Node.js 18 or newer (Vite 5 needs it; 23 works) with npm, and
 a running `bridge_backend` (see [Running it with the backend](#running-it-with-the-backend)).
@@ -75,13 +75,15 @@ are logged in. Start, each in its own terminal (details in
 | MySQL | XAMPP | XAMPP control panel, or `C:\xampp\mysql\bin\mysqld.exe --defaults-file=C:\xampp\mysql\bin\my.ini --standalone` | everything: the backend keeps sessions in the DB, so without MySQL every request 500s |
 | API | `bridge_backend` | `php artisan serve` (port 8000) | everything |
 | Websocket server | `bridge_backend` | `php artisan reverb:start` (port 8080) | live updates |
-| Queue worker | `bridge_backend` | `php artisan queue:work --sleep=0.1` | live updates (broadcasts are queued) |
+| Queue worker | `bridge_backend` | `php artisan queue:work --sleep=0.1` | live updates (broadcasts are queued) and robots (every robot move is a queued job) |
 | Scheduler | `bridge_backend` | `php artisan schedule:work` | freeing idle seats (optional) |
 | SPA | `bridge` | `npm run dev` (port 3000) | the app |
 
 Without Reverb and the queue worker the app still works, but each browser
 only sees its own actions: other players' seats, calls and cards show up on
-the next reload or Refresh. A four-player game is painful that way.
+the next reload or Refresh. A four-player game is painful that way. Robots
+need the queue worker even more: without it they never move, and a table
+waits on them forever (their moves all run once a worker starts).
 
 Log in with the seeded admin, `email@email.com` / `pass` (the other seeded
 users have the password `password`), or create an account from the Login
@@ -89,9 +91,16 @@ page. After `php artisan migrate:fresh --seed` the admin is seated and it
 is their turn to call at the `Your call` table; see the backend's
 [Seeded data](https://github.com/bulbulica2/bridge_backend/blob/main/docs/RUNNING.md#seeded-data).
 
-To play a full table yourself you need four sessions: use four browser
-profiles (or one normal and three private windows of different browsers),
-since the session cookie is per browser profile.
+To play a whole board alone, create a table with **Play with robots** (on
+by default): robots take the other three seats and the board is dealt at
+once. To play against other people locally you need one session each: use
+separate browser profiles (or one normal and private windows of different
+browsers), since the session cookie is per browser profile.
+
+After pulling a backend change that edits an existing migration (as the
+robots did, adding `users.is_robot` and `tables.unattended_since`), run
+`php artisan migrate:fresh --seed` on the backend; a plain `migrate` won't
+see it.
 
 ## Commands
 

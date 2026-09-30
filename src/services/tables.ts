@@ -2,7 +2,7 @@ import http from './http';
 import type { PublicUser } from './users';
 
 // Game endpoints answer with an envelope: {status, message, data}.
-// See bridge_docs/backend/API.md.
+// See bridge_backend docs/API.md.
 interface ApiResponse<T> {
   status: number;
   message: string;
@@ -30,6 +30,10 @@ export interface BroadcastTable {
   created_by: number | null;
   moderated_by: number | null;
   board_id: number | null;
+  // Set while only robots sit here (the last human left): they wait, anyone
+  // may remove them, the first human to sit down runs the table, and the
+  // backend deletes it after UNATTENDED_MINUTES. Null at every other table.
+  unattended_since: string | null;
   created_at: string;
   updated_at: string;
   seats: TableSeat[];
@@ -46,7 +50,13 @@ export interface Table extends BroadcastTable {
 export interface CreateTablePayload {
   name?: string | null;
   seat?: Seat;
+  // Robots take the other three seats, which deals the first board at once.
+  robots?: boolean;
 }
+
+// BRIDGE_UNATTENDED_TABLE_MINUTES' default: how long a table with only robots
+// left is kept for somebody to take it over.
+export const UNATTENDED_MINUTES = 10;
 
 // Newest first. Requires a logged-in session (401 otherwise).
 export async function listTables(): Promise<Table[]> {
@@ -55,7 +65,8 @@ export async function listTables(): Promise<Table[]> {
 }
 
 // Creates the table and seats the creator; 409 if they already sit somewhere
-// or already have 3 active tables.
+// or already have 3 active tables. With `robots` the answer already has a
+// board_id: the robots filled the table and the first board is dealt.
 export async function createTable(payload: CreateTablePayload): Promise<Table> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.post<ApiResponse<Table>>('/tables', payload);
@@ -105,9 +116,10 @@ export async function sendHeartbeat(tableId: number): Promise<void> {
   await http.post(`/tables/${tableId}/heartbeat`);
 }
 
-// A manager takes another player out of their seat. 403 when the caller can't
-// manage this table, 404 when that player no longer sits here (the seat is
-// addressed in the URL, unlike leaveSeat's 409). Emptying the table deletes it.
+// A manager takes another player out of their seat, and at an unattended
+// table anyone may take a robot out. 403 when the caller may not, 404 when
+// that player no longer sits here (the seat is addressed in the URL, unlike
+// leaveSeat's 409). Emptying the table deletes it.
 export async function removePlayer(tableId: number, userId: number): Promise<SeatRemovalResult> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.delete<ApiResponse<SeatRemovalResult>>(
@@ -126,6 +138,22 @@ export async function seatUser(tableId: number, userId: number, seat: Seat): Pro
     seat,
   });
   return data.data;
+}
+
+// A manager puts a robot (the backend picks one from its pool) into a free
+// seat; the fourth one deals the board, as a join does. 403 when the caller
+// can't manage this table, 409 when the seat is taken.
+export async function seatRobot(tableId: number, seat: Seat): Promise<Table> {
+  await http.get('/sanctum/csrf-cookie');
+  const { data } = await http.post<ApiResponse<Table>>(`/tables/${tableId}/seats/robots`, { seat });
+  return data.data;
+}
+
+// Whether the caller may take `user` out of their seat here: a manager may
+// take anyone, and while only robots sit here anybody may take a robot. A
+// hint; the backend's 403 has the final say.
+export function canRemove(table: Table, user: PublicUser): boolean {
+  return table.can_manage || (table.unattended_since !== null && user.is_robot);
 }
 
 // The four seats in N, E, S, W order with whoever holds them. The backend only

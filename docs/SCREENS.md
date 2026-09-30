@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/37-board-review`._
+_Status as of branch `bulbulica2/38-robots`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -34,8 +34,8 @@ logged in:  Home ── Your table / Find a table
 
 - **Guest**: an intro to the app with **Log in** and **Create account**.
 - **Logged in**: a greeting and either a **Your table** card (the table you
-  sit at, from the tables store's `myTable`) or **Find a table**, plus a
-  short how-to-play.
+  sit at, from the tables store's `myTable`, robots badged) or **Find a
+  table**, plus a short how-to-play.
 
 | Calls | Endpoint |
 |---|---|
@@ -109,37 +109,47 @@ Backend: `PATCH /api/user` came with bb#21 (`15-player-identity`).
 ## Tables — `/tables`
 
 **Logged in**, menu item **Tables**. Built by #8; seat moves by #22;
-profile sheet by #24.
+profile sheet by #24; robots by #53.
 
-The list of open tables, each with its four seats. Tap an empty seat to sit
-(or **move here** at your own table), a player's name to open their
-profile sheet, **Open** for the table's page. **Create table** opens a
-modal with an optional name and seat. Moving to another table asks first,
-because leaving your seat can abandon a board there. No live updates on
-this page: pull to refresh.
+The list of open tables, each with its four seats (robots carry a
+**robot** badge). Tap an empty seat to sit (or **move here** at your own
+table), a player's name to open their profile sheet, **Open** for the
+table's page. A table only robots sit at (`unattended_since` set: its last
+person left) reads **Robots only — sit down to take over**. **Create
+table** opens a modal with an optional name and **Play with robots**, on
+by default: robots take the other three seats, the first board is dealt
+at once and the page goes straight to `/play`. Without robots you stay on
+the list and wait for players. Moving to another table asks first, because
+leaving your seat can abandon a board there. No live updates on this page:
+pull to refresh.
 
 | Calls | Endpoint |
 |---|---|
 | `tables.load()` | `GET /tables` |
-| `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` |
+| `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` (`robots: true` by default) |
 | `tables.join()` | `GET /sanctum/csrf-cookie`, `POST /tables/{id}/seats`, then `GET /tables` after a move |
 
 Backend: bb#9 (create table, 3 active per creator), bb#12 (join a seat),
-bb#25 (joining elsewhere moves you).
+bb#25 (joining elsewhere moves you), bb#65 (robots).
 
 ## Table detail — `/tables/:id`
 
 **Logged in.** Built by #15; manager Remove by #16; live updates by #21;
-moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32.
-Reached from a table's **Open** button.
+moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
+robots by #53. Reached from a table's **Open** button.
 
-The four seats as a compass (N/E/S/W). Sit, move or **Leave** (confirmed;
-the last player leaving deletes the table and the page goes back to
-`/tables`). Managers (`can_manage` in the payload) also get **Remove** on
-each player and **Seat a player**, a search sheet over all users. Updates
-live over the table channel; if you are removed, a toast and back to
-`/tables`. When a board is dealt (`board_id` becomes non-null) a seated
-player is taken to `/play`.
+The four seats as a compass (N/E/S/W), robots badged. Sit, move or
+**Leave** (confirmed; the last player leaving deletes the table and the
+page goes back to `/tables`; if only robots are left the confirmation says
+the table waits 10 minutes for somebody to take over). Managers
+(`can_manage` in the payload) also get **Remove** on each player, and on
+an empty seat **Seat a player** (a search sheet over all users, robots
+never listed) and **Add robot**. While only robots sit there
+(`unattended_since`), a note says so and **anyone** gets **Remove** on the
+robots; the first person to sit down becomes the manager. Updates live
+over the table channel; if you are removed, a toast and back to `/tables`.
+When a board is dealt (`board_id` becomes non-null, e.g. a robot in the
+fourth seat) a seated player is taken to `/play`.
 
 | Calls | Endpoint |
 |---|---|
@@ -148,20 +158,31 @@ player is taken to `/play`.
 | `tables.leave()` | `DELETE /tables/{id}/seats` |
 | `tables.removePlayer()` | `DELETE /tables/{id}/seats/{user}` |
 | `tables.seatUser()` (Seat a player sheet) | `GET /users?search=`, `POST /tables/{id}/seats/users` |
+| `tables.seatRobot()` (Add robot) | `POST /tables/{id}/seats/robots` |
 | `game.load()` (when seated at a dealt table) | `GET /tables/{id}/playing` |
 | heartbeat, while seated | `POST /tables/{id}/heartbeat` every 30 s |
 | channel | `private-table.{id}`: `TableUpdated` |
 
 Backend: bb#10 and bb#11 (seat others, kick or quit), bb#22
 (Reverb), bb#25 (moves), bb#41 (idle seats, heartbeat), bb#44 (user
-search), bb#45 (`can_manage`).
+search), bb#45 (`can_manage`), bb#65 (robots, unattended tables).
 
 ## Play — `/tables/:id/play`
 
 **Logged in, seated at that table** (403 otherwise). Built by #26 (game
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
-#47 (claims); **Compare** by #30. Entered from the detail page, automatically when a
-board is dealt. The header's **Table** button goes back to the detail page.
+#47 (claims), #53 (robots); **Compare** by #30. Entered from the detail page, automatically when a
+board is dealt, or straight from **Create table** with robots. The header's
+**Table** button goes back to the detail page.
+
+Robots play by themselves: each of their calls, cards, claim answers and
+"ready"s arrives as an ordinary `PlayingUpdated` about a second apart, so
+nothing on this page drives them. On a robot's turn its seat reads
+**Thinking…** instead of **To act** and the status line says
+"robot-1 is thinking…". Robots are badged at their seat and in the
+next-board box, and are ready for the next board at once, so your **Next
+board** deals it. How they bid and play is in
+[backend `ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 What it shows by phase:
 - **waiting**: who's seated; the board starts when the fourth player sits.
@@ -265,7 +286,7 @@ Backend: bb#60.
 
 **Logged in.** Built by #24; "Boards played" by #30. Reached from the
 profile sheet (tap a seated player's name on Tables, Table detail or Play,
-then **Full profile**).
+then **Full profile**; a robot's sheet has no such link).
 
 A player's public profile (name, username, description, never the email)
 and their finished boards, paged like My boards (each opens its review).
@@ -284,6 +305,7 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards).
 | `AppHeader` | every page | none (reads the auth store) |
 | `AppMenu` | the app shell | none (reads the auth store) |
 | `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}` |
+| `RobotBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `NextBoardBox`), profile sheet | none (`is_robot` on the user) |
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | route progress bar, boot bar, toasts | the app shell | none (#18) |

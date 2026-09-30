@@ -278,7 +278,7 @@ on the #26 run they approved it. Find the cause with
    `artisan serve` (kill whatever owns port 8000 first) and re-run the checks.
 
 **Backend not running / connection refused.** Start it (see SKILL.md step 6).
-First-time DB setup is in `bridge_docs/backend/RUNNING.md`
+First-time DB setup is in `bridge_backend docs/RUNNING.md`
 (`php artisan migrate --seed`; after migration edits, `migrate:fresh --seed`).
 
 **Port 3000/8000 already in use by another worktree.** Each branch worktree

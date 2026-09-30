@@ -1,6 +1,6 @@
 ---
 name: bridge-create-page
-description: End-to-end workflow for adding a new page to the bridge Ionic Vue frontend. It covers reading the GitHub issue and bridge_docs, building the view, route, menu entry and (when the page talks to bridge_backend) axios service + Pinia store + unit test, then verifying, committing, opening the PR and launching the app so the user can see it. Use this whenever the user wants a new page, screen or view in the bridge app (Create account, Reset password, Account, Tables, a settings screen), picks up a page-type issue or branch like "5-create-account-page", or says "you know what to do" on such a branch, even if they never say "page" explicitly.
+description: End-to-end workflow for adding a new page to the bridge Ionic Vue frontend. It covers reading the GitHub issue and the backend's docs, building the view, route, menu entry and (when the page talks to bridge_backend) axios service + Pinia store + unit test, then verifying, committing, opening the PR and launching the app so the user can see it. Use this whenever the user wants a new page, screen or view in the bridge app (Create account, Reset password, Account, Tables, a settings screen), picks up a page-type issue or branch like "5-create-account-page", or says "you know what to do" on such a branch, even if they never say "page" explicitly.
 ---
 
 # Create a page in the bridge frontend
@@ -91,8 +91,7 @@ Read in parallel:
   counter is separate from the issue number (`gh issue list` shows the last
   one). Then branch `bulbulica2/<prefix>-<slug>` in the backend checkout, use
   2-space PHP, `vendor/bin/pint --test`, add a feature test, update the
-  backend's docs in the same change (its `docs/` once bridge_backend#61
-  lands; before that `bridge_docs/backend`, outside git, so just edit it),
+  backend's docs (its `docs/`) in the same change,
   and open a PR. Say in the frontend PR that it depends on that one.
 
 ## 3. Build the page
@@ -456,5 +455,5 @@ history below, and commit the skill changes on the page's branch (a separate
   CLAUDE.md, which step 3's Docs now follows: every page gets a
   `SCREENS.md` section, in the same PR. The docs first went to the shared
   `bridge_docs` folder, but the user moved them into the repo so they're
-  reviewed and versioned with the code; the backend follows in
+  reviewed and versioned with the code; the backend followed in
   bridge_backend#61.

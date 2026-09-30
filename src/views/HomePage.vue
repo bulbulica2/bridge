@@ -54,6 +54,7 @@
                     <span v-if="user">
                       {{ user.username }}<span v-if="user.id === auth.user?.id"> (you)</span>
                     </span>
+                    <RobotBadge v-if="user?.is_robot" />
                     <span v-else class="empty-seat">empty</span>
                   </li>
                 </ul>
@@ -129,6 +130,7 @@ import {
 } from '@ionic/vue';
 import { chevronForwardOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
+import RobotBadge from '@/components/RobotBadge.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useTablesStore } from '@/stores/tables';
 import { seatsOf } from '@/services/tables';

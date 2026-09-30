@@ -2,12 +2,12 @@
 // existing service (auth calls belong in src/services/auth.ts).
 // Always go through the shared axios instance; it carries the Sanctum cookie/XSRF setup.
 // Confirm paths, payloads and response shapes against bridge_backend's routes and
-// controllers, not just bridge_docs.
+// controllers, not just its docs/.
 import http from './http';
 
 export interface __Item__ {
   id: number;
-  // fields from bridge_docs/backend/DATA-MODEL.md / the model's $fillable & casts
+  // fields from bridge_backend docs/DATA-MODEL.md / the model's $fillable & casts
 }
 
 export interface __Create__Payload {
