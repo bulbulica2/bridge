@@ -20,6 +20,7 @@
         >
           <span class="next-mark" aria-hidden="true">{{ ready.includes(seat) ? '✓' : '…' }}</span>
           <span>{{ seat }} {{ seat === mySeat ? 'you' : (players[seat]?.username ?? '') }}</span>
+          <RobotBadge v-if="players[seat]?.is_robot" />
           <span class="sr-only">{{ ready.includes(seat) ? 'ready' : 'not yet' }}</span>
         </li>
       </ul>
@@ -62,6 +63,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { IonButton, IonSpinner } from '@ionic/vue';
+import RobotBadge from '@/components/RobotBadge.vue';
 import { SEATS } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';

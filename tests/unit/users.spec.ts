@@ -27,7 +27,13 @@ function axiosError(status: number, data: unknown): AxiosError {
   return error
 }
 
-const ann: PublicUser = { id: 3, name: 'Ann', username: 'ann', description: 'Plays a strong club.' }
+const ann: PublicUser = {
+  id: 3,
+  name: 'Ann',
+  username: 'ann',
+  description: 'Plays a strong club.',
+  is_robot: false,
+}
 
 // GET /users/{id} as the backend answers it: the public profile in the envelope.
 function answer(user: PublicUser) {
@@ -146,9 +152,42 @@ describe('PlayerProfileSheet', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
     expect(navigate).toHaveBeenCalledWith('/users/3', 'forward')
   })
+
+  test('a robot is marked as one and has no Full profile link', async () => {
+    const robot: PublicUser = {
+      id: 9,
+      name: 'Robot 1',
+      username: 'robot-1',
+      description: 'A robot player.',
+      is_robot: true,
+    }
+    answer(robot)
+    const wrapper = mountSheet(robot)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('robot-1')
+    expect(wrapper.find('.robot-badge').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Full profile')
+  })
+
+  test('a person carries no robot badge', async () => {
+    answer(ann)
+    const wrapper = mountSheet(ann)
+    await flushPromises()
+
+    expect(wrapper.find('.robot-badge').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Full profile')
+  })
 })
 
-const jo: SearchedUser = { id: 7, name: 'Joanna', username: 'jo', description: null, seated: true }
+const jo: SearchedUser = {
+  id: 7,
+  name: 'Joanna',
+  username: 'jo',
+  description: null,
+  is_robot: false,
+  seated: true,
+}
 
 // GET /users?search= as the backend answers it: the matches in the envelope.
 function found(users: SearchedUser[]) {

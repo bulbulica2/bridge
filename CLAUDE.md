@@ -110,7 +110,9 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `DELETE /tables/{id}/seats/{user}` that kicks another player: 403 for
   non-managers, 404 when that player already left, and
   `POST /tables/{id}/seats/users` that seats another user: 403 for
-  non-managers, 409 for a taken seat or a user seated anywhere, never a move)
+  non-managers, 409 for a taken seat or a user seated anywhere, never a move,
+  and `POST /tables/{id}/seats/robots` `{seat}` that seats a robot: 403 for
+  non-managers, 409 for a taken seat)
   and `src/stores/tables.ts` keeps both the list (`tables`) and the table the detail
   page is showing (`currentTable`), syncing a changed table into both. These
   endpoints sit at the root (not under `/api`) and answer with an envelope,
@@ -124,8 +126,8 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   (the response only describes the joined table), and both pages confirm a
   cross-table move first via `src/utils/seatMove.ts`; `myTable` /
   `seatedTable()` tell them where the user sits.
-  The manager controls (Remove, "Seat a player", the next board for
-  everyone) show from the payload's `can_manage` (`TablePolicy::manage` for
+  The manager controls (Remove, "Seat a player", "Add robot", the next
+  board for everyone) show from the payload's `can_manage` (`TablePolicy::manage` for
   the caller, admins included); never re-derive it from
   `moderated_by`/`created_by`. `TableUpdated` leaves it out, so the store's
   `withCanManage` keeps the last HTTP value and refetches the table when
@@ -137,6 +139,27 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   latest answer only, since the endpoint is throttled); `seated` users are
   greyed out. The store's `seatUser` seats the pick; picking yourself is a
   plain join instead.
+- **Robots** (bb#65, backend `docs/ROBOTS.md`): users with `is_robot: true`
+  (on every `PublicUser`; `GET /users?search=` never returns them) that
+  fill seats nobody else takes. `createTable({robots: true})` (the
+  Tables page's "Play with robots" toggle, on by default) seats three and
+  deals at once, so the page goes straight to `/play`; a manager adds one
+  with the store's `seatRobot(id, seat)` ("Add robot" on the detail page).
+  The backend moves them (a queued job per `PlayingUpdated`, about 1 s
+  apart; `queue:work` must run) through the same rules as a human, so the
+  SPA only shows them: `RobotBadge.vue` next to their name (Home, Tables,
+  detail, `BridgeTable`, `NextBoardBox`, the profile sheet, which has no
+  "Full profile" link for a robot), and `BridgeTable`'s `thinking` prop +
+  "robot-1 is thinking…" status when `acting_user_id` is a robot. Robots
+  mark themselves ready after a board, so the human's Next deals the next
+  one. When the last human leaves, the table stays **unattended**
+  (`unattended_since` on `BroadcastTable`, `moderated_by: null`): robots
+  wait, **anyone** may `DELETE /tables/{id}/seats/{robot}` (`canRemove()`
+  in `src/services/tables.ts` is the hint), the first human to sit down
+  becomes moderator, and the backend deletes it after `UNATTENDED_MINUTES`
+  (10). `whoIsLeft()` / `leaveNote()` / `moveConsequences()` in
+  `src/utils/seatMove.ts` word leaving or moving away when only robots
+  would be left.
 - **Game (playing)**: `src/services/game.ts` wraps
   `GET /tables/{id}/playing` (seated players only, 403 otherwise) and types the
   game state (`Playing` = the public `PublicPlaying` + `my_seat` and `hand`,
@@ -257,7 +280,7 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   and each `BoardResultsPage` row link to it.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
-  `username`, `description`, never the email); `TableSeat.user` uses that type
+  `username`, `description`, `is_robot`, never the email); `TableSeat.user` uses that type
   too, since table payloads embed the same profile per seat. The Pinia store
   `src/stores/users.ts` caches profiles by id (a 404 drops the cached one).
   Tapping a seated player's name on either table page opens
@@ -287,7 +310,7 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   a beat) is told as `IDLE_NOTICE` and sets `kickedFrom`. A removal noticed
   while hidden keeps its toast until the page shows again.
   Running it needs `php artisan reverb:start` and `queue:work` on the backend
-  (`bridge_docs/backend/RUNNING.md`, Realtime).
+  (bridge_backend `docs/RUNNING.md`, Realtime).
 - **Error handling**: `src/utils/errors.ts` is the one axios-error reader —
   `errorMessage(e, fallback)` for the text to show, `statusOf(e)` for the
   status to branch on and `fieldErrors(e)` for a 422's first message per field
@@ -342,20 +365,18 @@ data model, read the backend's docs rather than guessing:
 - `RUNNING.md` — how to run the backend locally
 - `GAME-RULES.md` — the bridge rules and how the backend maps them
 
-Where to read them: they are moving into the backend repo's `docs/`
-(bulbulica2/bridge_backend#61). The local checkout can lag or sit on
-another branch, so read `origin/main`, not the working tree:
+Where to read them: the backend repo's `docs/` (plus `ROBOTS.md`, how the
+robot players bid and play). The local checkout can lag or sit on another
+branch, so read `origin/main`, not the working tree:
 
 ```bash
 git -C C:\xampp\htdocs\bridge_backend fetch -q
 git -C C:\xampp\htdocs\bridge_backend show origin/main:docs/API.md
 ```
 
-If `origin/main` has no `docs/` yet, they are still in the old
-out-of-git folder, `C:\xampp\htdocs\bridge_docs\backend\` (and
-`bridge_docs\GAME-RULES.md`). Other `bridge_docs/...` mentions in `src/`
-comments and the skill refer to the same files and get repointed once #61
-lands.
+`src/` comments cite them as `bridge_backend docs/<file>`. The old
+out-of-git `C:\xampp\htdocs\bridge_docs\` folder is out of date since
+bulbulica2/bridge_backend#61 moved the docs into the backend repo; don't read it.
 
 These docs change with the backend — re-read the file rather than trusting
 a summary cached earlier in a conversation.

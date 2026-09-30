@@ -40,12 +40,13 @@
         {{ players[seatOn[side]]!.username }}
       </button>
       <span v-else class="seat-empty">Empty</span>
+      <RobotBadge v-if="players[seatOn[side]]?.is_robot" />
 
       <span v-if="side === 'bottom' && mySeat" class="seat-you">you</span>
       <span v-if="dummy && dummy.seat === seatOn[side] && side !== 'bottom'" class="seat-dummy">
         dummy
       </span>
-      <span v-if="turn === seatOn[side]" class="turn">
+      <span v-if="turn === seatOn[side]" class="turn" :class="{ 'turn-thinking': !myTurn && thinking }">
         <span class="turn-dot" aria-hidden="true" />{{ turnLabel(side) }}
       </span>
 
@@ -92,6 +93,7 @@
 import { computed } from 'vue';
 import DummyColumns from '@/components/DummyColumns.vue';
 import HandView from '@/components/HandView.vue';
+import RobotBadge from '@/components/RobotBadge.vue';
 import type { Board, Card } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
@@ -109,6 +111,9 @@ const props = withDefaults(
     // Whether the viewer acts for `turn` (declarer does on dummy's turn).
     // Left out, the bottom seat's turn is taken to be the viewer's.
     myTurn?: boolean | null;
+    // Whether a robot acts for `turn` (dummy's turn included, when declarer
+    // is one): the seat then reads "Thinking…" rather than "To act".
+    thinking?: boolean;
     // Dummy's seat and remaining cards, once they are face up.
     dummy?: { seat: Seat; cards: Card[] } | null;
     // Dummy's cards declarer may play now (see HandView), else null.
@@ -124,6 +129,7 @@ const props = withDefaults(
   }>(),
   {
     myTurn: null,
+    thinking: false,
     dummy: null,
     dummyPlayable: null,
     claim: null,
@@ -167,7 +173,10 @@ const claimSide = computed<ScreenSide | null>(() => {
 
 function turnLabel(side: ScreenSide): string {
   const mine = props.myTurn ?? side === 'bottom';
-  return mine ? 'Your turn' : 'To act';
+  if (mine) {
+    return 'Your turn';
+  }
+  return props.thinking ? 'Thinking…' : 'To act';
 }
 </script>
 
@@ -306,6 +315,10 @@ function turnLabel(side: ScreenSide): string {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--ion-color-warning-shade, #e0ac08);
+}
+
+.turn.turn-thinking {
+  color: var(--ion-color-tertiary, #5260ff);
 }
 
 .turn-dot {

@@ -4,7 +4,7 @@ import type { AuctionCall, Bid, Contract, Strain } from '@/services/game';
 import { SUIT_SYMBOLS, seatAt } from '@/utils/cards';
 import type { ScreenSide } from '@/utils/cards';
 
-// The auction's rules (bridge_docs/GAME-RULES.md §4), mirrored as a hint for
+// The auction's rules (bridge_backend docs/GAME-RULES.md §4), mirrored as a hint for
 // the bidding box. The backend's AuctionService is the final word: a call
 // that slips past these answers 409 with its reason.
 

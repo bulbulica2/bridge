@@ -56,6 +56,7 @@
                 <span v-if="user.id === me" class="seat-you">you</span>
               </button>
               <span v-else class="seat-empty">Empty</span>
+              <RobotBadge v-if="user?.is_robot" />
 
               <ion-button
                 v-if="user && user.id === me"
@@ -92,10 +93,21 @@
               >
                 Seat a player
               </ion-button>
-
-              <!-- Managers only; the backend has the final say (403). -->
+              <!-- …or a robot, which the backend picks from its pool. -->
               <ion-button
-                v-else-if="user && isManager"
+                v-if="!user && isManager"
+                size="small"
+                fill="clear"
+                :disabled="busySeat !== null"
+                @click="addRobot(seat)"
+              >
+                Add robot
+              </ion-button>
+
+              <!-- Managers, and anyone for a robot while only robots sit here;
+                   the backend has the final say (403). -->
+              <ion-button
+                v-else-if="user && canRemove(table, user)"
                 size="small"
                 fill="clear"
                 color="danger"
@@ -114,6 +126,14 @@
               <p v-if="isManager" class="table-yours">You manage this table</p>
             </div>
           </div>
+
+          <!-- Only robots sit here since the last person left: they wait for
+               somebody to take over, and the backend deletes the table after
+               a few minutes if nobody does. -->
+          <p v-if="table.unattended_since" class="unattended">
+            Robots only — sit down to take over. You'll manage the table, and it is
+            deleted {{ UNATTENDED_MINUTES }} minutes after the last player left if nobody does.
+          </p>
 
           <!-- The game itself lives on its own page; a board being dealt
                (the fourth seat taken) takes the players there by itself. -->
@@ -174,15 +194,16 @@ import {
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
+import RobotBadge from '@/components/RobotBadge.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
-import { seatsOf } from '@/services/tables';
+import { UNATTENDED_MINUTES, canRemove, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { PublicUser, SearchedUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
-import { confirmMove, leaveWarning } from '@/utils/seatMove';
+import { confirmMove, leaveNote, leaveWarning } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
@@ -356,7 +377,7 @@ async function confirmLeave(seat: Seat) {
     header: 'Leave this table?',
     message: [
       leaveWarning(boardPhase.value, game.playing?.board?.number ?? null),
-      'Your seat will be freed. If nobody is left, the table is deleted.',
+      leaveNote(table.value, me.value),
     ]
       .filter(Boolean)
       .join(' '),
@@ -392,7 +413,9 @@ async function confirmLeave(seat: Seat) {
 async function confirmRemove(seat: Seat, user: PublicUser) {
   const alert = await alertController.create({
     header: `Remove ${user.username}?`,
-    message: `${user.username} loses seat ${seat}. They can sit down again afterwards.`,
+    message: user.is_robot
+      ? `The robot leaves seat ${seat}, which becomes free.`
+      : `${user.username} loses seat ${seat}. They can sit down again afterwards.`,
     buttons: [
       { text: 'Cancel', role: 'cancel' },
       { text: 'Remove', role: 'destructive' },
@@ -408,7 +431,8 @@ async function confirmRemove(seat: Seat, user: PublicUser) {
   try {
     const { tableDeleted } = await store.removePlayer(tableId.value, user.id);
     if (tableDeleted) {
-      // Can't normally happen (a manager is still seated), but the id is dead.
+      // The last robot of an unattended table (a manager is otherwise still
+      // seated): the id is dead.
       await showToast(`${user.username} was removed and the table was deleted.`, 'success');
       ionRouter.navigate('/tables', 'back', 'replace');
       return;
@@ -447,6 +471,25 @@ async function seatPlayer(user: SearchedUser) {
       // 409: the seat was taken or they sat down somewhere meanwhile. 403:
       // you no longer manage this table. Either way the page is stale.
       await showToast(errorMessage(e, 'Could not seat that player. Please try again.'), 'danger');
+      await load();
+    }
+  } finally {
+    busySeat.value = null;
+  }
+}
+
+// A manager fills a free seat with a robot. The fourth seat deals the board,
+// which takes a manager seated here to the game (the board_id watch).
+async function addRobot(seat: Seat) {
+  busySeat.value = seat;
+  try {
+    await store.seatRobot(tableId.value, seat);
+    await showToast(`A robot now sits at ${seat}.`, 'success');
+  } catch (e) {
+    if (!handleExpiredSession(e)) {
+      // 409: the seat was taken meanwhile. 403: you no longer manage this
+      // table. Either way the page is stale.
+      await showToast(errorMessage(e, 'Could not add a robot. Please try again.'), 'danger');
       await load();
     }
   } finally {
@@ -615,6 +658,13 @@ function handleExpiredSession(e: unknown): boolean {
 
 .table-yours {
   color: var(--ion-color-primary);
+}
+
+.unattended {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+  text-align: center;
+  color: var(--ion-color-tertiary, #5260ff);
 }
 
 .between-boards,

@@ -27,12 +27,11 @@ for endpoint shapes
 ([`API.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md))
 and the cookie/CORS flow
 ([`AUTH.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/AUTH.md))
-instead of repeating them. Until bulbulica2/bridge_backend#61 moves those
-into the backend repo, the links 404 and the same files are on disk in
-`C:\xampp\htdocs\bridge_docs\backend` (and `bridge_docs\GAME-RULES.md`).
+instead of repeating them. How the robot players bid and play is in
+[`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/37-board-review` (after #48, board review).
+> branch `bulbulica2/38-robots` (after #53, robots).
 > They live next to the code, so a PR that changes a route, store, service,
 > env var or backend dependency updates them in the same diff; the
 > frontend's `CLAUDE.md` tells Claude to do so. If you change the frontend

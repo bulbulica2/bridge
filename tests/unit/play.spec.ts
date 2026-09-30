@@ -406,4 +406,32 @@ describe('TablePlayPage card play', () => {
     expect(showToast).toHaveBeenCalledWith('You must follow suit: Spades were led.', 'danger')
     expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
   })
+
+  describe('robots', () => {
+    // East is a robot.
+    const WITH_ROBOT = { ...PLAYERS, E: { ...PLAYERS.E, username: 'robot-1', is_robot: true } }
+
+    test("a robot's turn reads as thinking, at its seat and in the status line", async () => {
+      const wrapper = await mountPage(
+        state({ players: WITH_ROBOT, turn: 'E', acting_user_id: 2, current_trick: played('W S3, N SQ') }),
+      )
+
+      // South at the bottom, so East is on the right.
+      const east = wrapper.get('.side-right')
+      expect(east.find('.robot-badge').exists()).toBe(true)
+      expect(east.get('.turn').text()).toBe('Thinking…')
+      expect(wrapper.get('.status').text()).toBe('Play: robot-1 is thinking…')
+      expect(wrapper.get('.status').classes()).toContain('status-robot')
+    })
+
+    test("a person's turn still reads as waiting, and people carry no robot badge", async () => {
+      const wrapper = await mountPage(
+        state({ turn: 'E', acting_user_id: 2, current_trick: played('W S3, N SQ') }),
+      )
+
+      expect(wrapper.get('.side-right .turn').text()).toBe('To act')
+      expect(wrapper.get('.status').text()).toBe('Play: waiting for bob.')
+      expect(wrapper.find('.robot-badge').exists()).toBe(false)
+    })
+  })
 })

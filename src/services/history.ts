@@ -7,7 +7,7 @@ import type { PublicUser } from './users';
 // the table they were played at: a player's history and a board's results
 // at every table, and one playing call by call and card by card. Same
 // envelope as the table endpoints. See
-// bridge_docs/backend/API.md (Users, GET /users/{user}/playings, Boards, and
+// bridge_backend docs/API.md (Users, GET /users/{user}/playings, Boards, and
 // GET /playings/{playing}).
 interface ApiResponse<T> {
   status: number;

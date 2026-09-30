@@ -6,7 +6,7 @@ import type { HandDealtEvent, PublicPlaying } from './game';
 import type { BroadcastTable } from './tables';
 
 // Live updates come over Laravel Reverb, which speaks the Pusher protocol.
-// See bridge_docs/backend/AUTH.md (Websocket channels) and API.md (Realtime).
+// See bridge_backend docs/AUTH.md (Websocket channels) and API.md (Realtime).
 
 // What `TableUpdated` carries on `private-table.{id}`: the whole table, in the
 // same shape as GET /tables/{id} less `can_manage`.

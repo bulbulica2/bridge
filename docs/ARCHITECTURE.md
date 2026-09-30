@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/37-board-review`._
+_Status as of branch `bulbulica2/38-robots`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -121,7 +121,7 @@ sends you to `/login` afterwards.
 | Store | Holds | Main actions |
 |---|---|---|
 | `auth` | `user` (own record, with email) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset |
-| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom` | `load`, `loadTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatedTable`; owns the table channel and the heartbeat |
+| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom` | `load`, `loadTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `seatedTable`; owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `loadSessionScore`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadReview` |
 | `users` | public profiles by id | `load` |
@@ -134,7 +134,7 @@ and `currentTable`, so the list and the detail page stay in step.
 | Service | Endpoints (see [backend `API.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)) |
 |---|---|
 | `auth.ts` | `/sanctum/csrf-cookie`, `POST /login`, `/register`, `/logout`, `/forgot-password`, `/reset-password`, `GET` / `PATCH /api/user` |
-| `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `DELETE /tables/{id}/seats/{user}`, `POST /tables/{id}/heartbeat` |
+| `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST /tables/{id}/heartbeat` |
 | `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `POST /tables/{id}/calls`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
 | `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /playings/{id}` |
 | `users.ts` | `GET /users/{id}`, `GET /users?search=` |
@@ -150,10 +150,24 @@ A few backend rules the stores rely on:
 - Taking a seat while you hold one is a **move**, not an error. The pages
   ask before a move to another table, because leaving the old seat can
   abandon a board there.
-- Manager controls (Remove, Seat a player, next board for everyone) show
-  when the table payload's `can_manage` says so. Don't work it out from
-  `moderated_by` or `created_by`; the backend decides (admins can manage
-  any table).
+- Manager controls (Remove, Seat a player, Add robot, next board for
+  everyone) show when the table payload's `can_manage` says so. Don't work
+  it out from `moderated_by` or `created_by`; the backend decides (admins
+  can manage any table).
+- **Robots** are users with `is_robot: true` (on every public profile). They
+  fill seats nobody else takes: `POST /tables` with `robots: true` seats
+  three and deals at once, and a manager adds one with
+  `POST /tables/{id}/seats/robots`. They move by themselves on the backend,
+  so the SPA only shows them (`RobotBadge`, "Thinking…" on their turn); each
+  move arrives as a normal `PlayingUpdated`. How they bid and play:
+  [backend `ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
+- When the last **person** leaves a table with robots, the table is kept
+  but **unattended** (`unattended_since` set, no moderator): the robots
+  wait, anyone may remove them, the first person to sit down manages it,
+  and the backend deletes it after 10 minutes. `canRemove()` in
+  `services/tables.ts` is the hint for who gets Remove (a manager, or anyone
+  for a robot at an unattended table); `whoIsLeft()` / `leaveNote()` in
+  `utils/seatMove.ts` word what leaving does.
 - Bid ids are not tied to the bid's rank, so the app reads the 38 calls
   from `GET /bids` once and looks a call up by its level and strain. Never
   hard-code a bid id.
@@ -254,13 +268,19 @@ arrives, and the app falls back to what each request returns.
 | `ClaimSheet` | the bottom sheet for making a claim: a stepper from 0 to the tricks left, and **Concede** |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw** |
 | `BoardResultPanel`, `NextBoardBox` | the score once a board is finished, and who is ready for the next |
+| `RobotBadge` | the "robot" mark next to a robot's name (also on Home, Tables, Table detail and the profile sheet) |
+
+`BridgeTable`'s `thinking` prop is set when the player acting for `turn`
+(`acting_user_id`, declarer on dummy's turn) is a robot: that seat reads
+"Thinking…" instead of "To act", and the status line under the table says
+"robot-1 is thinking…".
 
 Pure logic lives in `src/utils/`: `cards.ts` (sorting, rank labels, seat
 rotation, vulnerability), `auction.ts` (call legality hints and labels),
 `play.ts` (follow-suit hint, whose hand you play, trick layout), `claim.ts`
 (who may claim, who still has to answer, the claim's wording), `result.ts`
 (the score from your side), `seatMove.ts` (wording for leaving or moving by
-game phase), `review.ts` (a replay's table after N cards: hands left, the
+game phase, and whether only robots would be left), `review.ts` (a replay's table after N cards: hands left, the
 trick shown, tricks won, the trick-by-trick steps). These are the
 best-tested parts of the app. For the rules
 themselves see [`GAME-RULES.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/GAME-RULES.md).

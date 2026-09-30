@@ -3,7 +3,7 @@ import type { Seat } from './tables';
 import type { PublicUser } from './users';
 
 // The game state of a table's current board (a "playing"). Same envelope as
-// the table endpoints. See bridge_docs/backend/API.md (Playing, Realtime).
+// the table endpoints. See bridge_backend docs/API.md (Playing, Realtime).
 interface ApiResponse<T> {
   status: number;
   message: string;

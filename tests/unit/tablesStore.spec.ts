@@ -19,6 +19,7 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   leaveSeat: vi.fn(),
   removePlayer: vi.fn(),
   seatUser: vi.fn(),
+  seatRobot: vi.fn(),
   sendHeartbeat: vi.fn(),
 }))
 
@@ -64,7 +65,8 @@ function setVisibility(state: DocumentVisibilityState) {
   document.dispatchEvent(new Event('visibilitychange'))
 }
 
-// makeTable seats users 1, 2, … in the order the seats are given.
+// makeTable seats users 1, 2, … in the order the seats are given; a
+// `robot-…` username makes that one a robot.
 function logInAs(id: number) {
   useAuthStore().user = { id, name: `user${id}`, username: `user${id}`, email: `user${id}@example.com` }
 }
@@ -77,6 +79,7 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>> = {}): Table
     created_by: 1,
     moderated_by: 1,
     board_id: null,
+    unattended_since: null,
     created_at: '2026-09-20T10:00:00.000000Z',
     updated_at: '2026-09-20T10:00:00.000000Z',
     seats: taken.map(([seat, username], i) => ({
@@ -84,7 +87,13 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>> = {}): Table
       table_id: id,
       user_id: i + 1,
       seat,
-      user: { id: i + 1, name: username, username, description: null },
+      user: {
+        id: i + 1,
+        name: username,
+        username,
+        description: null,
+        is_robot: username.startsWith('robot-'),
+      },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
     can_manage: false,
@@ -406,6 +415,144 @@ describe('tables store', () => {
       await expect(store.seatUser(1, 2, 'E')).rejects.toMatchObject({ response: { status: 409 } })
 
       expect(store.currentTable).toEqual(table)
+    })
+  })
+
+  describe('robots', () => {
+    const since = '2026-10-01T10:00:00.000000Z'
+
+    test('create with robots sends the flag and follows the dealt table', async () => {
+      logInAs(1)
+      const dealt = {
+        ...makeTable(3, { N: 'ana', E: 'robot-1', S: 'robot-2', W: 'robot-3' }),
+        board_id: 11,
+        can_manage: true,
+      }
+      vi.mocked(tablesService.createTable).mockResolvedValue(dealt)
+
+      const store = useTablesStore()
+      const table = await store.create({ name: 'Solo', robots: true })
+
+      expect(tablesService.createTable).toHaveBeenCalledWith({ name: 'Solo', robots: true })
+      expect(table.board_id).toBe(11)
+      expect(store.tables).toEqual([dealt])
+      expect(store.watchedTableId).toBe(3)
+    })
+
+    test('seatRobot replaces the table in the list and the open page', async () => {
+      logInAs(1)
+      const before = { ...makeTable(1, { N: 'ana' }), can_manage: true }
+      const after = { ...makeTable(1, { N: 'ana', E: 'robot-1' }), can_manage: true }
+      vi.mocked(tablesService.listTables).mockResolvedValue([before])
+      vi.mocked(tablesService.getTable).mockResolvedValue(before)
+      vi.mocked(tablesService.seatRobot).mockResolvedValue(after)
+
+      const store = useTablesStore()
+      await store.load()
+      await store.loadTable(1)
+      const result = await store.seatRobot(1, 'E')
+
+      expect(tablesService.seatRobot).toHaveBeenCalledWith(1, 'E')
+      expect(result).toEqual(after)
+      expect(store.tables).toEqual([after])
+      expect(store.currentTable).toEqual(after)
+      expect(store.watchedTableId).toBe(1)
+    })
+
+    test('a robot in the fourth seat brings the board', async () => {
+      logInAs(1)
+      const before = { ...makeTable(1, { N: 'ana', E: 'robot-1', S: 'robot-2' }), can_manage: true }
+      const dealt = {
+        ...makeTable(1, { N: 'ana', E: 'robot-1', S: 'robot-2', W: 'robot-3' }),
+        board_id: 5,
+        can_manage: true,
+      }
+      vi.mocked(tablesService.getTable).mockResolvedValue(before)
+      vi.mocked(tablesService.seatRobot).mockResolvedValue(dealt)
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await store.seatRobot(1, 'W')
+
+      expect(store.currentTable?.board_id).toBe(5)
+    })
+
+    test('a refused seatRobot leaves the table as it was', async () => {
+      const table = { ...makeTable(1, { N: 'ana' }), can_manage: true }
+      vi.mocked(tablesService.getTable).mockResolvedValue(table)
+      vi.mocked(tablesService.seatRobot).mockRejectedValue(axiosError(409))
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      await expect(store.seatRobot(1, 'E')).rejects.toMatchObject({ response: { status: 409 } })
+
+      expect(store.currentTable).toEqual(table)
+    })
+
+    test('anyone taking a robot out of an unattended table updates it without subscribing', async () => {
+      logInAs(9)
+      const unattended = {
+        ...makeTable(1, { E: 'robot-1', S: 'robot-2' }),
+        moderated_by: null,
+        unattended_since: since,
+      }
+      const after = { ...makeTable(1, { S: 'robot-2' }), moderated_by: null, unattended_since: since }
+      vi.mocked(tablesService.getTable).mockResolvedValue(unattended)
+      vi.mocked(tablesService.removePlayer).mockResolvedValue(after)
+
+      const store = useTablesStore()
+      await store.loadTable(1)
+      const { tableDeleted } = await store.removePlayer(1, 1)
+
+      expect(tableDeleted).toBe(false)
+      expect(store.currentTable?.seats).toHaveLength(1)
+      expect(echo.listenToTable).not.toHaveBeenCalled()
+      expect(store.kickedFrom).toBeNull()
+    })
+
+    test('taking out the last robot deletes the table', async () => {
+      logInAs(9)
+      const unattended = {
+        ...makeTable(1, { S: 'robot-2' }),
+        moderated_by: null,
+        unattended_since: since,
+      }
+      vi.mocked(tablesService.listTables).mockResolvedValue([unattended])
+      vi.mocked(tablesService.getTable).mockResolvedValue(unattended)
+      vi.mocked(tablesService.removePlayer).mockResolvedValue({ table_deleted: true })
+
+      const store = useTablesStore()
+      await store.load()
+      await store.loadTable(1)
+      const { tableDeleted } = await store.removePlayer(1, 1)
+
+      expect(tableDeleted).toBe(true)
+      expect(store.tables).toEqual([])
+      expect(store.currentTable).toBeNull()
+    })
+
+    test('sitting down at an unattended table takes it over', async () => {
+      logInAs(3)
+      const unattended = {
+        ...makeTable(1, { N: 'robot-1', E: 'robot-2' }),
+        moderated_by: null,
+        unattended_since: since,
+      }
+      const taken = {
+        ...makeTable(1, { N: 'robot-1', E: 'robot-2', S: 'cy' }),
+        moderated_by: 3,
+        can_manage: true,
+      }
+      vi.mocked(tablesService.listTables).mockResolvedValue([unattended])
+      vi.mocked(tablesService.joinSeat).mockResolvedValue(taken)
+
+      const store = useTablesStore()
+      await store.load()
+      await store.join(1, 'S')
+
+      expect(store.tables[0].unattended_since).toBeNull()
+      expect(store.tables[0].can_manage).toBe(true)
+      expect(store.watchedTableId).toBe(1)
     })
   })
 

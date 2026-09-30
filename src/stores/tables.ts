@@ -374,7 +374,8 @@ export const useTablesStore = defineStore('tables', () => {
     return applyRemoval(tableId, await ownSeatRequest(() => tablesService.leaveSeat(tableId)));
   }
 
-  // A manager kicking someone else answers exactly like leaving does.
+  // A manager kicking someone else (or anyone taking a robot out of an
+  // unattended table) answers exactly like leaving does.
   async function removePlayer(tableId: number, userId: number) {
     return applyRemoval(tableId, await tablesService.removePlayer(tableId, userId));
   }
@@ -384,6 +385,14 @@ export const useTablesStore = defineStore('tables', () => {
   // deals the board and the pages move the players on from board_id.
   async function seatUser(tableId: number, userId: number, seat: Seat) {
     const table = await tablesService.seatUser(tableId, userId, seat);
+    syncTable(table);
+    return table;
+  }
+
+  // A manager puts a robot in a free seat. As with seatUser, a fourth seat
+  // deals the board and the pages move the players on from board_id.
+  async function seatRobot(tableId: number, seat: Seat) {
+    const table = await tablesService.seatRobot(tableId, seat);
     syncTable(table);
     return table;
   }
@@ -413,6 +422,7 @@ export const useTablesStore = defineStore('tables', () => {
     leave,
     removePlayer,
     seatUser,
+    seatRobot,
     forget,
     watchTable,
     unwatchTable,

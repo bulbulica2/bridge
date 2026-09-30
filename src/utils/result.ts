@@ -4,7 +4,7 @@ import type { PlayingHistoryEntry } from '@/services/history';
 import { callLabel, doubledSuffix, SEAT_NAMES } from '@/utils/auction';
 
 // A finished board's score, read from the backend's `result`
-// (bridge_docs/backend/API.md, GET /tables/{table}/playing). The score itself
+// (bridge_backend docs/API.md, GET /tables/{table}/playing). The score itself
 // is the backend's (ScoringService); this only words it and turns it round
 // for the side looking at it.
 

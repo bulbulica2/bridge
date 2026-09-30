@@ -2,7 +2,7 @@ import type { Seat } from '@/services/tables';
 import type { Claim, PublicPlaying } from '@/services/game';
 import { SEAT_NAMES } from '@/utils/auction';
 
-// Claims (bridge_docs/backend/API.md, Claims; GAME-RULES.md §5), mirrored as
+// Claims (bridge_backend docs/API.md, Claims; GAME-RULES.md §5), mirrored as
 // a hint for which buttons to show. The backend's ClaimService is the final
 // word: anything that slips past these answers 409 with its reason.
 
