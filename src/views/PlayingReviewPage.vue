@@ -65,6 +65,7 @@
             :turn="null"
             :deal="total > 0 ? at.hands : review.deal"
             :replay="total > 0"
+            :reserve="total > 0 ? review.deal : null"
             @select="player = $event"
           >
             <template v-if="total > 0" #centre>
@@ -73,9 +74,11 @@
             </template>
           </BridgeTable>
 
-          <!-- Card by card, or a whole trick at a time. -->
+          <!-- Card by card, or a whole trick at a time. The hands keep their
+               dealt height (reserve), and the position line, which may wrap
+               on a phone, sits under the buttons: nothing above them changes
+               size from step to step, so they stay put. -->
           <section v-if="total > 0" class="stepper" aria-label="Replay">
-            <p class="position" aria-live="polite">{{ position }}</p>
             <div class="controls">
               <ion-button
                 fill="clear"
@@ -126,6 +129,7 @@
                 <ion-icon slot="icon-only" :icon="playSkipForward" />
               </ion-button>
             </div>
+            <p class="position" aria-live="polite">{{ position }}</p>
           </section>
 
           <!-- The score once the replay reaches the end (at once when there

@@ -294,7 +294,10 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   tricks, then a claim's unfinished `current_trick`), `reviewAt` (hands
   left from `deal`, the trick shown with its winner once complete, tricks
   won, who's next), `nextTrickStep`/`previousTrickStep` and `stepCaption`.
-  It reuses `BridgeTable` (`deal` = hands left, `replay` for the label),
+  It reuses `BridgeTable` (`deal` = hands left, `replay` for the label,
+  `reserve` = the deal: `DummyColumns`' `rows` pads each hand to its dealt
+  `longestSuit` so the stepper below never moves; its position line sits
+  under the buttons since it may wrap),
   `TrickArea`, `AuctionHistory` and, at the last step, `BoardResultPanel`.
   The viewer sits at the bottom if they played it (`seatOfUser`), else
   South. An empty `auction` (`isRecorded`) means a playing finished before

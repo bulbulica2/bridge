@@ -41,6 +41,12 @@ export function groupBySuit(cards: Card[]): { suit: Suit; cards: Card[] }[] {
   );
 }
 
+// How many cards the hand's longest suit holds (0 for no cards): the
+// height of its suit columns (see DummyColumns).
+export function longestSuit(cards: Card[]): number {
+  return Math.max(0, ...SUITS.map((suit) => cards.filter((c) => c.suit === suit).length));
+}
+
 export type ScreenSide = 'bottom' | 'left' | 'top' | 'right';
 
 // Where a seat sits on screen for a viewer at `mySeat`, who is always drawn at

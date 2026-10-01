@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'vitest'
 import { mount } from '@vue/test-utils'
+import DummyColumns from '@/components/DummyColumns.vue'
 import HandView from '@/components/HandView.vue'
 import type { Card, Suit } from '@/services/game'
 import type { Seat } from '@/services/tables'
 import {
   groupBySuit,
   isVulnerable,
+  longestSuit,
   rankLabel,
   screenSide,
   seatAt,
@@ -49,6 +51,34 @@ describe('sorting a hand', () => {
     expect(groups).toHaveLength(3)
     expect(groups.map((g) => g.findAll('.rank').map((r) => r.text()))).toEqual([['2'], ['10'], ['A', 'J']])
     expect(wrapper.findAll('.playing-card.red')).toHaveLength(3)
+  })
+})
+
+describe('suit columns', () => {
+  const hand = () => [card('S', 15), card('S', 13), card('S', 2), card('H', 10), card('C', 4)]
+  // Every line under a column's suit symbol: ranks, a void's dash, blanks.
+  const lines = (wrapper: ReturnType<typeof mount>) =>
+    wrapper.findAll('.column').map((column) => column.findAll('.rank, .void').length)
+
+  test('longestSuit counts the longest suit', () => {
+    expect(longestSuit(hand())).toBe(3)
+    expect(longestSuit([])).toBe(0)
+  })
+
+  test('without rows each column is as long as its suit', () => {
+    const wrapper = mount(DummyColumns, { props: { cards: hand() } })
+
+    expect(lines(wrapper)).toEqual([3, 1, 1, 1])
+    expect(wrapper.find('.filler').exists()).toBe(false)
+  })
+
+  test('rows pads every column with hidden blanks to the same length', () => {
+    const wrapper = mount(DummyColumns, { props: { cards: hand().slice(1), rows: 5 } })
+
+    expect(lines(wrapper)).toEqual([5, 5, 5, 5])
+    expect(wrapper.findAll('.column')[0].findAll('.filler')).toHaveLength(3)
+    expect(wrapper.findAll('.column')[2].find('.void').exists()).toBe(true)
+    expect(wrapper.findAll('.filler').every((f) => f.attributes('aria-hidden') === 'true')).toBe(true)
   })
 })
 
