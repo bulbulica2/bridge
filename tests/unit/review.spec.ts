@@ -308,6 +308,31 @@ describe('PlayingReviewPage', () => {
     expect(wrapper.find('.position').text()).toBe('Before the opening lead')
   })
 
+  test('the hands keep their dealt height at every step', async () => {
+    loginAs(bo)
+    answer(claimed())
+
+    const wrapper = mount(PlayingReviewPage)
+    await flushPromises()
+
+    // Each hand is one 13-card suit, so every column keeps 13 lines (ranks,
+    // a void's dash or hidden blanks) from the deal to the claim.
+    const lines = () =>
+      wrapper
+        .findAll('.dealt-hand .column')
+        .map((column) => column.findAll('.rank, .void').length)
+    expect(lines()).toEqual(Array(16).fill(13))
+
+    await control(wrapper, 'Next trick').trigger('click')
+    // North's spades are one card down after the first trick.
+    const north = wrapper.get('.dealt-hand[aria-label^="North"] .column')
+    expect(north.findAll('.filler')).toHaveLength(1)
+    expect(lines()).toEqual(Array(16).fill(13))
+
+    await control(wrapper, 'End of the play').trigger('click')
+    expect(lines()).toEqual(Array(16).fill(13))
+  })
+
   test('someone who sat elsewhere sees South at the bottom', async () => {
     loginAs(user(9, 'ed'))
     answer(claimed())
@@ -333,6 +358,8 @@ describe('PlayingReviewPage', () => {
     expect(wrapper.findComponent({ name: 'AuctionHistory' }).exists()).toBe(false)
     expect(wrapper.findComponent({ name: 'BoardResultPanel' }).exists()).toBe(true)
     expect(wrapper.findAll('.dealt-hand')).toHaveLength(4)
+    // Nothing to step through, so nothing to keep room for.
+    expect(wrapper.find('.dealt-hand .filler').exists()).toBe(false)
   })
 
   test('links back to the board results', async () => {

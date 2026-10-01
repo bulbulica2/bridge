@@ -8,7 +8,8 @@
        whose own hand below is the same cards. While a claim is pending, the
        claimer's cards lie face up at their seat (the viewer's own are below
        the table already). Once the board is over, the whole deal lies face
-       up, each hand at its seat. -->
+       up, each hand at its seat (in a replay, what is left of it, in the
+       room the hand took as dealt). -->
   <div class="bridge-table">
     <div
       v-for="side in SIDES"
@@ -74,6 +75,7 @@
         v-else-if="deal"
         class="dealt-hand"
         :cards="deal[seatOn[side]]"
+        :rows="reserve ? longestSuit(reserve[seatOn[side]]) : 0"
         :label="`${SEAT_NAMES[seatOn[side]]}'s ${replay ? 'cards left' : 'hand as dealt'}`"
       />
     </div>
@@ -99,7 +101,7 @@ import type { Board, Card } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES } from '@/utils/auction';
-import { isVulnerable, seatAt, vulnerabilityLabel } from '@/utils/cards';
+import { isVulnerable, longestSuit, seatAt, vulnerabilityLabel } from '@/utils/cards';
 import type { ScreenSide } from '@/utils/cards';
 
 const props = withDefaults(
@@ -127,6 +129,10 @@ const props = withDefaults(
     deal?: Record<Seat, Card[]> | null;
     // `deal` is what is left of each hand at a step of a board's replay.
     replay?: boolean;
+    // The hands as dealt, when `deal` holds fewer cards (a replay): each
+    // hand keeps the height it had as dealt, so the table doesn't shrink as
+    // the cards go.
+    reserve?: Record<Seat, Card[]> | null;
     busy?: boolean;
     sendingId?: number | null;
   }>(),
@@ -139,6 +145,7 @@ const props = withDefaults(
     claim: null,
     deal: null,
     replay: false,
+    reserve: null,
     busy: false,
     sendingId: null,
   },

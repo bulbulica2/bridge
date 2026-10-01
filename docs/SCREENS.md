@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/42-claim-number-buttons`._
+_Status as of branch `bulbulica2/43-review-fixed-hand-layout`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -283,11 +283,14 @@ One table's playing of a board, replayed: the contract and the tricks each
 side has won so far, the four hands face up (you at the bottom if you
 played it, otherwise South), the trick in the middle, and the auction
 below. A stepper moves card by card or a trick at a time (start, previous
-trick, previous card, next card, next trick, end); the hands shrink as the
-cards go. The result panel shows once the replay reaches the end, and
-**Results** (header) / **Results at every table** go back to the board's
-results. A passed-out board has only its auction, the deal and the result;
-a board that ended by a claim stops where the claim was made.
+trick, previous card, next card, next trick, end); the hands lose their
+cards as they go but keep the room they took as dealt, so the buttons stay
+in the same place at every step (#59). The line saying where you are
+(trick and card) sits under the buttons. The result panel shows once the
+replay reaches the end, and **Results** (header) / **Results at every
+table** go back to the board's results. A passed-out board has only its
+auction, the deal and the result; a board that ended by a claim stops where
+the claim was made.
 
 Boards finished before the backend kept their calls and cards (before
 bb#60) say "The auction and play of this board weren't recorded" and show
