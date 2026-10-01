@@ -63,16 +63,6 @@
               <span>NS {{ playing.tricks_won.ns }}</span>
               <span aria-hidden="true">·</span>
               <span>EW {{ playing.tricks_won.ew }}</span>
-              <ion-button
-                v-if="lastTrick"
-                size="small"
-                fill="clear"
-                class="peek"
-                :aria-pressed="peeking"
-                @click="peeking = !peeking"
-              >
-                {{ peeking ? 'Hide last trick' : 'Last trick' }}
-              </ion-button>
             </p>
           </section>
           <!-- A claim waiting for its answers: play stops until it is settled. -->
@@ -144,7 +134,12 @@
                 :my-seat="mySeat"
                 :winner="shownTrick.winner"
               />
-              <p class="trick-caption" aria-live="polite">{{ shownTrick.caption }}</p>
+              <div class="trick-foot">
+                <p class="trick-caption" aria-live="polite">{{ shownTrick.caption }}</p>
+                <!-- The last trick in a pop-up, so the trick in progress
+                     stays in the middle. -->
+                <LastTrickPopover v-if="peekTrick" :trick="peekTrick" :my-seat="mySeat" />
+              </div>
             </template>
           </BridgeTable>
 
@@ -275,6 +270,7 @@ import CallLabel from '@/components/CallLabel.vue';
 import ClaimPanel from '@/components/ClaimPanel.vue';
 import ClaimSheet from '@/components/ClaimSheet.vue';
 import HandView from '@/components/HandView.vue';
+import LastTrickPopover from '@/components/LastTrickPopover.vue';
 import NextBoardBox from '@/components/NextBoardBox.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import TrickArea from '@/components/TrickArea.vue';
@@ -314,7 +310,6 @@ const bidsError = ref('');
 const sendingCard = ref<number | null>(null);
 // A trick just completed, still shown with its winner for a moment.
 const finishedTrick = ref<Trick | null>(null);
-const peeking = ref(false);
 // Asking for the next board, or leaving between boards: one at a time.
 const asking = ref(false);
 // The claim sheet is open; a claim, an answer or a withdrawal is on its way.
@@ -437,24 +432,28 @@ const mustFollow = computed(() => {
   return led && hand?.some((card) => card.suit === led) ? led : null;
 });
 
-const lastTrick = computed(() => playing.value?.tricks?.at(-1) ?? null);
+// The trick just won, still in the middle of the table for a moment after
+// its fourth card, until the next lead replaces it.
+const heldTrick = computed(() =>
+  (playing.value?.current_trick ?? []).length === 0 ? finishedTrick.value : null,
+);
 
-// What the middle of the table shows: the last trick while peeking, the
-// trick in progress, or, for a moment after its fourth card, the trick just
-// won, until the next lead replaces it.
+// What the middle of the table shows: the trick held up, else the trick in
+// progress.
 const shownTrick = computed<{ cards: PlayedCard[]; winner: Seat | null; caption: string }>(() => {
+  const held = heldTrick.value;
+  if (held) {
+    return { cards: held.cards, winner: held.winner, caption: wins(held.winner) };
+  }
   const state = playing.value;
-  const current = state?.current_trick ?? [];
-  if (peeking.value && lastTrick.value) {
-    const trick = lastTrick.value;
-    return { cards: trick.cards, winner: trick.winner, caption: `Last trick: ${wins(trick.winner)}` };
-  }
-  if (current.length === 0 && finishedTrick.value) {
-    const trick = finishedTrick.value;
-    return { cards: trick.cards, winner: trick.winner, caption: wins(trick.winner) };
-  }
-  return { cards: current, winner: null, caption: `Trick ${(state?.tricks?.length ?? 0) + 1}` };
+  return { cards: state?.current_trick ?? [], winner: null, caption: `Trick ${(state?.tricks?.length ?? 0) + 1}` };
 });
+
+// The last trick, on demand beside the trick in progress: from the second
+// trick of the play on, but not while that trick is still held up anyway.
+const peekTrick = computed(() =>
+  playing.value?.phase === 'play' && !heldTrick.value ? (playing.value.tricks?.at(-1) ?? null) : null,
+);
 
 function wins(seat: Seat): string {
   return seat === mySeat.value ? 'You win' : `${seat} wins`;
@@ -668,14 +667,6 @@ watch(
       finishedTrick.value = playing.value!.tricks![count - 1];
       pauseTimer = setTimeout(() => (finishedTrick.value = null), TRICK_PAUSE_MS);
     }
-  },
-);
-
-// Any new card puts the last-trick peek away: the table has moved on.
-watch(
-  () => [playing.value?.playing_id, playing.value?.current_trick?.length, lastTrick.value?.round],
-  () => {
-    peeking.value = false;
   },
 );
 
@@ -993,8 +984,17 @@ async function refresh(event: CustomEvent) {
   margin: 8px 0 16px;
 }
 
-.trick-caption {
+.trick-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 8px;
   margin-top: 4px;
+}
+
+.trick-caption {
+  margin: 0;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--ion-color-medium);
@@ -1008,12 +1008,6 @@ async function refresh(event: CustomEvent) {
   margin-top: 6px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-}
-
-.peek {
-  margin: 0;
-  --padding-start: 6px;
-  --padding-end: 6px;
 }
 
 .outcome {

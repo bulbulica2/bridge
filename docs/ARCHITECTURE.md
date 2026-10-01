@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/41-auto-play-forced-card`._
+_Status as of branch `bulbulica2/40-last-trick-popover`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -286,6 +286,7 @@ arrives, and the app falls back to what each request returns.
 | `BiddingBox` | the call grid, on your turn during the auction |
 | `AuctionHistory` + `CallLabel` | the calls so far, four columns rotated like the table |
 | `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s) |
+| `LastTrickPopover` | the **Last trick** button under the trick in progress and its pop-up with the last trick's cards (a `TrickArea`); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it |
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat |
 | `ClaimSheet` | the bottom sheet for making a claim: a stepper from 0 to the tricks left, and **Concede** |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw** |
