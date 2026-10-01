@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/40-last-trick-popover`._
+_Status as of branch `bulbulica2/42-claim-number-buttons`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -206,7 +206,10 @@ What it shows by phase:
   Never on a lead. Opening the claim sheet, a claim or any new card on the
   table stops the countdown.
   Anyone but dummy can **Claim** some of the tricks left (or **Concede**
-  them). While a claim is pending, a banner says what is claimed, the
+  them): the claim sheet has one button per number, 1 up to the tricks
+  left, wrapping onto a second row; tapping one picks it and the send
+  button then reads **Claim 4 tricks**, which sends it. Nothing is picked
+  when the sheet opens. **Concede the rest** is its own button. While a claim is pending, a banner says what is claimed, the
   claimer's cards lie face up at their seat, no card can be played, the
   players who still have to answer get **Accept** / **Reject** and the
   claimer **Withdraw**. A reject or withdrawal toasts and play goes on; the

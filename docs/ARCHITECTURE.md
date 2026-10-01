@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/40-last-trick-popover`._
+_Status as of branch `bulbulica2/42-claim-number-buttons`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -288,7 +288,7 @@ arrives, and the app falls back to what each request returns.
 | `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s) |
 | `LastTrickPopover` | the **Last trick** button under the trick in progress and its pop-up with the last trick's cards (a `TrickArea`); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it |
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat |
-| `ClaimSheet` | the bottom sheet for making a claim: a stepper from 0 to the tricks left, and **Concede** |
+| `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest** |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw** |
 | `BoardResultPanel`, `NextBoardBox` | the score once a board is finished, and who is ready for the next |
 | `RobotBadge` | the "robot" mark next to a robot's name (also on Home, Tables, Table detail and the profile sheet) |

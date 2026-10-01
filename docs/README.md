@@ -31,7 +31,7 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/40-last-trick-popover` (after #56, the last trick in a pop-up).
+> branch `bulbulica2/42-claim-number-buttons` (after #58, one button per number on the claim sheet).
 > They live next to the code, so a PR that changes a route, store, service,
 > env var or backend dependency updates them in the same diff; the
 > frontend's `CLAUDE.md` tells Claude to do so. If you change the frontend
