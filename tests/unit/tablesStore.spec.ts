@@ -158,6 +158,20 @@ describe('tables store', () => {
     expect(store.tables).toEqual([created, existing])
   })
 
+  test('create makes the new table the current one, so the next page needs no GET', async () => {
+    logInAs(1)
+    const created = makeTable(2, { N: 'ana' })
+    vi.mocked(tablesService.createTable).mockResolvedValue(created)
+
+    const store = useTablesStore()
+    await store.create({ name: null })
+    const opened = await store.openTable(2)
+
+    expect(store.currentTable).toEqual(created)
+    expect(opened).toEqual(created)
+    expect(tablesService.getTable).not.toHaveBeenCalled()
+  })
+
   test('failed create leaves the list unchanged', async () => {
     vi.mocked(tablesService.createTable).mockRejectedValue(new Error('409'))
 
@@ -165,6 +179,29 @@ describe('tables store', () => {
     await expect(store.create({ name: 'Table 2' })).rejects.toThrow()
 
     expect(store.tables).toEqual([])
+    expect(store.currentTable).toBeNull()
+  })
+
+  test('openTable reuses a table followed live and fetches any other', async () => {
+    logInAs(1)
+    const mine = makeTable(1, { N: 'ana' })
+    const other = makeTable(2)
+    vi.mocked(tablesService.listTables).mockResolvedValue([other, mine])
+    vi.mocked(tablesService.getTable).mockResolvedValue(other)
+
+    const store = useTablesStore()
+    await store.load()
+    expect(store.watchedTableId).toBe(1)
+
+    // The user's own table: the channel keeps the list's copy current.
+    expect(await store.openTable(1)).toEqual(mine)
+    expect(store.currentTable).toEqual(mine)
+    expect(tablesService.getTable).not.toHaveBeenCalled()
+
+    // Somebody else's: we get no updates for it, so it is read fresh.
+    expect(await store.openTable(2)).toEqual(other)
+    expect(tablesService.getTable).toHaveBeenCalledWith(2)
+    expect(store.currentTable).toEqual(other)
   })
 
   test('join replaces that table in place', async () => {

@@ -330,10 +330,25 @@ export const useTablesStore = defineStore('tables', () => {
     return table;
   }
 
-  // The list is newest first (as the backend orders it), so a new table goes on top.
+  // A page opening a table: the copy we already follow live is as fresh as a
+  // refetch would be (TableUpdated replaces it on every change), so only a
+  // table we don't watch costs a GET. Pull-to-refresh still calls loadTable().
+  async function openTable(tableId: number) {
+    const held = watchedTableId.value === tableId ? heldTable(tableId) : null;
+    if (!held) {
+      return loadTable(tableId);
+    }
+    currentTable.value = held;
+    return held;
+  }
+
+  // The list is newest first (as the backend orders it), so a new table goes on
+  // top. It is also the table the next page shows (the detail page, or the game
+  // when robots dealt at once), so that page can draw it without a GET.
   async function create(payload: CreateTablePayload) {
     const table = await ownSeatRequest(() => tablesService.createTable(payload));
     tables.value = [table, ...tables.value];
+    currentTable.value = table;
     followSeat(table);
     return table;
   }
@@ -416,6 +431,7 @@ export const useTablesStore = defineStore('tables', () => {
     kickedFrom,
     load,
     loadTable,
+    openTable,
     seatedTable,
     create,
     join,

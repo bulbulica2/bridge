@@ -1,6 +1,6 @@
 # Running the frontend locally
 
-_Last verified: branch `bulbulica2/38-robots`._
+_Last verified: branch `bulbulica2/39-fast-table-entry`._
 
 Requirements: Node.js 18 or newer (Vite 5 needs it; 23 works) with npm, and
 a running `bridge_backend` (see [Running it with the backend](#running-it-with-the-backend)).
@@ -73,7 +73,7 @@ are logged in. Start, each in its own terminal (details in
 | Process | Where | Command | Needed for |
 |---|---|---|---|
 | MySQL | XAMPP | XAMPP control panel, or `C:\xampp\mysql\bin\mysqld.exe --defaults-file=C:\xampp\mysql\bin\my.ini --standalone` | everything: the backend keeps sessions in the DB, so without MySQL every request 500s |
-| API | `bridge_backend` | `php artisan serve` (port 8000) | everything |
+| API | `bridge_backend` | `php artisan serve --host=localhost` (port 8000; see [Local speed](#local-speed) for the `--host`) | everything |
 | Websocket server | `bridge_backend` | `php artisan reverb:start` (port 8080) | live updates |
 | Queue worker | `bridge_backend` | `php artisan queue:work --sleep=0.1` | live updates (broadcasts are queued) and robots (every robot move is a queued job) |
 | Scheduler | `bridge_backend` | `php artisan schedule:work` | freeing idle seats (optional) |
@@ -101,6 +101,49 @@ After pulling a backend change that edits an existing migration (as the
 robots did, adding `users.is_robot` and `tables.unattended_since`), run
 `php artisan migrate:fresh --seed` on the backend; a plain `migrate` won't
 see it.
+
+
+## Local speed
+
+On Windows, `php artisan serve` is PHP's built-in web server, and three things
+about it decide how fast the app feels locally. Measured on this machine
+(Windows 11, PHP 8.2, #55), timing "Create table" with robots up to the
+answer the game page draws from:
+
+| Backend started with | Create → dealt board |
+|---|---|
+| `php artisan serve` | ~850 ms |
+| `php artisan serve --host=localhost` | ~430 ms |
+
+- **Start it with `--host=localhost`.** Plain `php artisan serve` listens
+  on `127.0.0.1` only, but the SPA calls `http://localhost:8000` (it has
+  to, for the cookies; see [Why port 3000](#why-port-3000)). Windows
+  resolves `localhost` to IPv6 `::1` first, finds nothing listening there,
+  and the browser falls back to IPv4 after a 200–300 ms delay. The built-in
+  server closes every connection after one answer, so **every request**
+  pays that delay (a request measured ~140 ms through `127.0.0.1` and
+  ~350 ms through `localhost`). `--host=localhost` listens on `::1`, which
+  is the address `localhost` tries first, so the delay is gone. Keep using
+  `localhost` everywhere then: `http://127.0.0.1:8000` no longer answers.
+- **Requests run one at a time.** The built-in server answers one request
+  before it reads the next, so requests the SPA sends together still queue.
+  `PHP_CLI_SERVER_WORKERS=4` would let it answer four at once, but only on
+  macOS/Linux: PHP can't fork on Windows, and there it changed nothing
+  (four parallel requests took ~520 ms either way, four times one). This is
+  why the game page waits only for the board on the way in (see
+  [ARCHITECTURE.md](ARCHITECTURE.md), Table pages).
+- **`DEBUGBAR_ENABLED=false` makes no measurable difference** for the API
+  (~150 ms per request either way): the debugbar only renders into HTML
+  pages, and the JSON endpoints the SPA calls stay as cheap as without it.
+  Leave it as you like.
+
+One backend cost is not about the server: `POST /tables` with robots
+spends about 165 ms per robot it has to **create** (it hashes a password
+for each one, with bcrypt at `BCRYPT_ROUNDS=12`). Robots are reused once
+idle, but a table only robots keep stays theirs for 10 minutes, so
+creating robot tables one after another locally creates three robots each
+time and adds ~0.5 s to Create. That is a backend fix, not something the
+SPA can avoid.
 
 ## Commands
 

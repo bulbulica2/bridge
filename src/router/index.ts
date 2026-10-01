@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from '@ionic/vue-router';
 import { RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useGameStore } from '@/stores/game';
 import { navigationEnded, navigationStarted } from './loading';
 
 declare module 'vue-router' {
@@ -125,6 +126,7 @@ router.beforeEach(async (to) => {
 router.afterEach((to) => {
   navigationEnded(to.fullPath);
   prefetchPages();
+  prefetchBids();
 })
 router.onError(() => {
   navigationEnded();
@@ -146,6 +148,27 @@ function prefetchPages() {
           // Only a head start; the real navigation retries and reports errors.
         });
       }
+    }
+  }, 1000);
+}
+
+// The bid list (GET /bids) is the same for every table and only needed on the
+// user's turn to call, so it is read once in the background a moment after a
+// logged-in page is up (after login, or the first page of a reload) instead of
+// on the way into a table, where it would queue ahead of the board itself.
+let bidsTimer: ReturnType<typeof setTimeout> | null = null;
+function prefetchBids() {
+  const auth = useAuthStore();
+  const game = useGameStore();
+  if (!auth.isAuthenticated || game.bids.length > 0 || bidsTimer !== null) {
+    return;
+  }
+  bidsTimer = setTimeout(() => {
+    bidsTimer = null;
+    if (auth.isAuthenticated) {
+      game.loadBids().catch(() => {
+        // Only a head start; the game page asks again and shows its own error.
+      });
     }
   }, 1000);
 }

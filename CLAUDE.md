@@ -71,9 +71,11 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   After the first page shows, the router prefetches every lazy page chunk.
   Toasts go through `src/utils/toast.ts`; they outlive a navigation, so
   logout presents its toast once `/login` is up, and login/sign-up greet the
-  user with `showWelcomeToast` once `/account` is up. Its styles live in
+  user with `showWelcomeToast` once `/account` is up. The toasts' styles live in
   `src/theme/toasts.css`: toasts render outside the pages, so the CSS is
-  global and styles the toast's shadow parts through `::part()`.
+  global and styles the toast's shadow parts through `::part()`. Create
+  table is the exception to `navigateAndSettle`: its modal closes and it
+  navigates to `/play` as soon as `POST /tables` answers (#55).
 - **App shell**: `App.vue` renders `<AppMenu />` (the left `ion-menu`) next to
   `<ion-router-outlet id="main-content" />`; the menu's `content-id` must match
   that outlet id. Every page wraps its content in `<ion-page>` and uses
@@ -114,8 +116,14 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   and `POST /tables/{id}/seats/robots` `{seat}` that seats a robot: 403 for
   non-managers, 409 for a taken seat)
   and `src/stores/tables.ts` keeps both the list (`tables`) and the table the detail
-  page is showing (`currentTable`), syncing a changed table into both. These
-  endpoints sit at the root (not under `/api`) and answer with an envelope,
+  page is showing (`currentTable`), syncing a changed table into both.
+  `create` seeds `currentTable`, and `openTable(id)` (the detail and play
+  pages' entry) reuses the held copy of the table the store watches
+  instead of a `GET /tables/{id}`; their refreshes still `loadTable`. The
+  local backend answers one request at a time (`php artisan serve` on
+  Windows), so the play page awaits only `GET /tables/{id}/playing` on
+  entry and asks for bids after it (#55, `docs/RUNNING.md` Local speed). The
+  table endpoints sit at the root (not under `/api`) and answer with an envelope,
   `{status, message, data}`, so the service returns `data.data`; 409s carry
   their reason in `message`. A table exists only while somebody sits at it, so
   the last player leaving **deletes** it: that response's `data` is
@@ -180,7 +188,9 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   moves a seated player to `/play` when `board_id` turns non-null.
 - **Bidding**: calls go out as a `bid_id`, and the ids aren't pinned to the
   rank, so they come from the public `GET /bids` (`getBids`, the 38 calls in
-  `auction[].bid`'s shape), which the game store's `loadBids()` reads once.
+  `auction[].bid`'s shape), which the game store's `loadBids()` reads once;
+  `prefetchBids` in `src/router/index.ts` reads it in the background a
+  second after a logged-in page shows.
   Never hard-code or compare bid ids; look a call up by `call` or
   `level`/`strain`. `call(bidId)` posts `POST /tables/{id}/calls` and takes
   the full state it answers with. Both it and `PlayingUpdated` skip a state

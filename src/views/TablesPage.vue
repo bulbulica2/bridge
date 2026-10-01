@@ -183,7 +183,6 @@ import { seatsOf } from '@/services/tables';
 import type { Seat, Table } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
-import { navigateAndSettle } from '@/router/loading';
 import { confirmMove } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
@@ -282,9 +281,11 @@ async function submitCreate() {
       robots: withRobots.value,
     });
     closeCreate();
-    // Robots filled the table and dealt the first board: straight to it.
+    // Robots filled the table and dealt the first board: straight to it. Not
+    // awaited: the game page shows its own loading state while it reads the
+    // board, so the form has nothing left to wait for.
     if (table.board_id !== null) {
-      await navigateAndSettle(ionRouter, `/tables/${table.id}/play`, 'forward', 'push');
+      ionRouter.navigate(`/tables/${table.id}/play`, 'forward', 'push');
     }
   } catch (e) {
     createError.value = errorMessage(e, 'Could not create the table. Please try again.');
