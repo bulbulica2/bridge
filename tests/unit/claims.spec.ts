@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import BoardResultPanel from '@/components/BoardResultPanel.vue'
+import ClaimSheet from '@/components/ClaimSheet.vue'
 import * as gameService from '@/services/game'
 import * as tablesService from '@/services/tables'
 import type { Bid, BoardResult, Card, Claim, Playing, Suit, Trick } from '@/services/game'
@@ -286,6 +287,78 @@ describe('game store claims', () => {
   })
 })
 
+describe('ClaimSheet', () => {
+  const modalStub = { template: '<div><slot /></div>' }
+
+  const mountSheet = (props: { open?: boolean; remaining: number; busy?: boolean }) =>
+    mount(ClaimSheet, {
+      props: { open: true, ...props },
+      global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } },
+    })
+
+  const picks = (wrapper: ReturnType<typeof mountSheet>) => wrapper.findAll('.trick-pick').map((b) => b.text())
+  const isDisabled = (el: { element: Element }) => (el.element as HTMLButtonElement).disabled
+
+  test('one button per trick left, nothing picked and Claim disabled to start with', () => {
+    const wrapper = mountSheet({ remaining: 6 })
+
+    expect(picks(wrapper)).toEqual(['1', '2', '3', '4', '5', '6'])
+    expect(wrapper.findAll('.trick-pick.picked')).toHaveLength(0)
+    expect(wrapper.get('.send-claim').text()).toBe('Pick a number')
+    expect(isDisabled(wrapper.get('.send-claim'))).toBe(true)
+  })
+
+  test('with 13 tricks left there are 13 buttons, with 1 left a single one', () => {
+    expect(picks(mountSheet({ remaining: 13 }))).toHaveLength(13)
+    expect(picks(mountSheet({ remaining: 1 }))).toEqual(['1'])
+  })
+
+  test('a pick only selects; the send button then claims that number', async () => {
+    const wrapper = mountSheet({ remaining: 6 })
+
+    await wrapper.get('[data-tricks="4"]').trigger('click')
+    expect(wrapper.emitted('claim')).toBeUndefined()
+    expect(isDisabled(wrapper.get('.send-claim'))).toBe(false)
+    expect(wrapper.get('.picked').text()).toBe('4')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 4 tricks')
+
+    // Changing the pick is one more tap.
+    await wrapper.get('[data-tricks="1"]').trigger('click')
+    expect(wrapper.findAll('.picked').map((b) => b.text())).toEqual(['1'])
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 1 trick')
+
+    await wrapper.get('[data-tricks="4"]').trigger('click')
+    await wrapper.get('.send-claim').trigger('click')
+    expect(wrapper.emitted('claim')).toEqual([[4]])
+  })
+
+  test('Concede the rest claims 0 without a pick', async () => {
+    const wrapper = mountSheet({ remaining: 6 })
+
+    await wrapper.get('.concede').trigger('click')
+    expect(wrapper.emitted('claim')).toEqual([[0]])
+  })
+
+  test('busy disables every button', () => {
+    const wrapper = mountSheet({ remaining: 3, busy: true })
+
+    for (const b of wrapper.findAll('ion-button')) {
+      expect(isDisabled(b)).toBe(true)
+    }
+  })
+
+  test('reopening the sheet clears the pick', async () => {
+    const wrapper = mountSheet({ remaining: 6 })
+    await wrapper.get('[data-tricks="3"]').trigger('click')
+
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+
+    expect(wrapper.findAll('.picked')).toHaveLength(0)
+    expect(wrapper.get('.send-claim').text()).toBe('Pick a number')
+  })
+})
+
 describe('TablePlayPage claims', () => {
   const table: Table = {
     id: 5,
@@ -322,14 +395,14 @@ describe('TablePlayPage claims', () => {
   const buttonTexts = (wrapper: ReturnType<typeof mount>, selector: string) =>
     wrapper.findAll(`${selector} ion-button`).map((b) => b.text())
 
-  test('declarer claims from the sheet: all tricks to start with, one fewer sent', async () => {
+  test('declarer claims from the sheet: a number picked, then sent', async () => {
     const wrapper = await mountPage(state())
     vi.mocked(gameService.makeClaim).mockResolvedValue(state({ claim: pending() }))
 
     await wrapper.get('.claim-button').trigger('click')
-    expect(wrapper.get('.step-value').text()).toBe('5')
-    await wrapper.get('.step-down').trigger('click')
-    expect(wrapper.get('.send-claim').text()).toBe('Claim 4')
+    expect(wrapper.findAll('.trick-pick').map((b) => b.text())).toEqual(['1', '2', '3', '4', '5'])
+    await wrapper.get('[data-tricks="4"]').trigger('click')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 4 tricks')
     await wrapper.get('.send-claim').trigger('click')
     await flushPromises()
 
@@ -413,6 +486,7 @@ describe('TablePlayPage claims', () => {
     vi.mocked(gameService.makeClaim).mockRejectedValue(refused('A claim is already pending: E claims 0.'))
 
     await wrapper.get('.claim-button').trigger('click')
+    await wrapper.get('[data-tricks="5"]').trigger('click')
     await wrapper.get('.send-claim').trigger('click')
     await flushPromises()
 

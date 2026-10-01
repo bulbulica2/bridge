@@ -246,7 +246,8 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   a claim appearing or going away always counts as newer, since a reject
   or withdrawal leaves the cards unchanged. `src/utils/claim.ts` holds the
   hints (`canClaim`, `claimAction`: withdraw/answer/null,
-  `claimWaitingFor`, `claimText`); `ClaimSheet.vue` is the stepper sheet,
+  `claimWaitingFor`, `claimText`); `ClaimSheet.vue` is the sheet (one button per number, then
+  "Claim N tricks"; Concede sends 0),
   `ClaimPanel.vue` the pending-claim banner with its buttons. A claim
   going away mid-play toasts; the last accept lands in `finished` with
   `result.claimed`, which `resultSummary`/`BoardResultPanel` word as

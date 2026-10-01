@@ -1,7 +1,7 @@
 <template>
-  <!-- A bottom sheet for making a claim: how many of the tricks still to
-       play our side takes (all of them to start with), or Concede for none.
-       The parent owns whether it is open and sends the claim. -->
+  <!-- A bottom sheet for making a claim: one button per number of the tricks
+       still to play, then a send button for the number picked, or Concede
+       for none. The parent owns whether it is open and sends the claim. -->
   <ion-modal
     :is-open="open"
     :initial-breakpoint="0.5"
@@ -16,32 +16,31 @@
           side take? Your hand is shown to everyone while the others answer.
         </p>
 
-        <div class="stepper" role="group" aria-label="Tricks to claim">
+        <div class="trick-picks" role="group" aria-label="Tricks to claim">
           <ion-button
-            fill="outline"
-            class="step-down"
-            aria-label="One trick fewer"
-            :disabled="busy || tricks <= 0"
-            @click="tricks--"
+            v-for="n in remaining"
+            :key="n"
+            :fill="tricks === n ? 'solid' : 'outline'"
+            class="trick-pick"
+            :class="{ picked: tricks === n }"
+            :aria-pressed="tricks === n"
+            :data-tricks="n"
+            :disabled="busy"
+            @click="tricks = n"
           >
-            −
-          </ion-button>
-          <output class="step-value" aria-live="polite">{{ tricks }}</output>
-          <ion-button
-            fill="outline"
-            class="step-up"
-            aria-label="One trick more"
-            :disabled="busy || tricks >= remaining"
-            @click="tricks++"
-          >
-            +
+            {{ n }}
           </ion-button>
         </div>
-        <p class="claim-detail">of {{ remaining }}</p>
 
-        <ion-button expand="block" class="send-claim" :disabled="busy" @click="emit('claim', tricks)">
+        <ion-button
+          expand="block"
+          class="send-claim"
+          :disabled="busy || tricks === null"
+          @click="tricks !== null && emit('claim', tricks)"
+        >
           <ion-spinner v-if="busy" name="crescent" />
-          <span v-else>{{ tricks === 0 ? 'Concede all' : `Claim ${tricks}` }}</span>
+          <span v-else-if="tricks === null">Pick a number</span>
+          <span v-else>Claim {{ tricks }} trick{{ tricks === 1 ? '' : 's' }}</span>
         </ion-button>
         <ion-button
           expand="block"
@@ -75,15 +74,14 @@ const props = withDefaults(
 
 const emit = defineEmits<{ claim: [tricks: number]; close: [] }>();
 
-const tricks = ref(props.remaining);
+// The number picked; nothing is sent until the send button is pressed.
+const tricks = ref<number | null>(null);
 
-// Each opening starts from "all of them".
+// Each opening (or a trick finishing meanwhile) starts with nothing picked.
 watch(
   () => [props.open, props.remaining] as const,
-  ([open]) => {
-    if (open) {
-      tricks.value = props.remaining;
-    }
+  () => {
+    tricks.value = null;
   },
   { immediate: true },
 );
@@ -102,29 +100,27 @@ watch(
   font-weight: 700;
 }
 
-.claim-help,
-.claim-detail {
+.claim-help {
   margin: 0 0 12px;
   font-size: 0.9rem;
   color: var(--ion-color-medium);
 }
 
-.stepper {
+/* Up to 13 buttons wrap onto two or three rows on a phone. */
+.trick-picks {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 16px;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 
-.stepper ion-button {
-  min-width: 48px;
-  font-size: 1.3rem;
-}
-
-.step-value {
-  min-width: 2ch;
-  font-size: 2rem;
-  font-weight: 800;
+.trick-pick {
+  width: 48px;
+  height: 48px;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
