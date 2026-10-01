@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/39-fast-table-entry`._
+_Status as of branch `bulbulica2/41-auto-play-forced-card`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -172,7 +172,7 @@ search), bb#45 (`can_manage`), bb#65 (robots, unattended tables).
 
 **Logged in, seated at that table** (403 otherwise). Built by #26 (game
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
-#47 (claims), #53 (robots); **Compare** by #30. Entered from the detail page, automatically when a
+#47 (claims), #53 (robots), #57 (forced cards play themselves); **Compare** by #30. Entered from the detail page, automatically when a
 board is dealt, or straight from **Create table** with robots. The header's
 **Table** button goes back to the detail page.
 
@@ -193,6 +193,11 @@ What it shows by phase:
 - **play**: the contract bar with tricks won and a **Last trick** peek, the
   current trick in the centre, dummy's cards once the opening lead is made.
   You tap a card from your own hand, or from dummy's if you're declarer.
+  When only one card may follow suit (say dummy holds a single card in
+  the suit led), it pulses and plays itself after 3 s, with the status
+  line counting down ("Playing ♥7 in 3 s…"); tapping it plays it at once.
+  Never on a lead. Opening the claim sheet, a claim or any new card on the
+  table stops the countdown.
   Anyone but dummy can **Claim** some of the tricks left (or **Concede**
   them). While a claim is pending, a banner says what is claimed, the
   claimer's cards lie face up at their seat, no card can be played, the

@@ -1,5 +1,6 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { effectScope, nextTick, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import HandView from '@/components/HandView.vue'
@@ -11,7 +12,8 @@ import type { Bid, Card, PlayedCard, Playing, Suit, Trick } from '@/services/gam
 import type { Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
-import { handToPlay, legalCards, trickBySide } from '@/utils/play'
+import { forcedCard, handToPlay, legalCards, trickBySide } from '@/utils/play'
+import { FORCED_PLAY_SECONDS, useForcedPlay } from '@/composables/useForcedPlay'
 import { showToast } from '@/utils/toast'
 
 vi.mock('@/services/game', () => ({
@@ -81,6 +83,112 @@ describe('follow-suit hint', () => {
 
   test('a hand out of the suit led may play anything', () => {
     expect(legalCards(hand, played('N C5'))).toEqual(hand)
+  })
+})
+
+describe('forced card', () => {
+  test('the only card that may follow is forced', () => {
+    expect(forcedCard(cards('SQ', 'H3', 'C9'), played('W S3'))).toEqual(c('SQ'))
+    // The last card of the hand, following or not.
+    expect(forcedCard(cards('D2'), played('W S3, N SQ'))).toEqual(c('D2'))
+  })
+
+  test('two or more legal cards leave the choice to the player', () => {
+    expect(forcedCard(cards('SQ', 'S4', 'H3'), played('W S3'))).toBeNull()
+    // Out of the suit led: anything goes.
+    expect(forcedCard(cards('H3', 'C9'), played('W S3'))).toBeNull()
+  })
+
+  test('never on the lead, even with a single card left', () => {
+    expect(forcedCard(cards('D2'), [])).toBeNull()
+    expect(forcedCard(cards('D2'), null)).toBeNull()
+  })
+
+  test('an empty hand has nothing to play', () => {
+    expect(forcedCard([], played('W S3'))).toBeNull()
+  })
+})
+
+describe('forced card timer', () => {
+  type Forced = { key: string; card: Card } | null
+  const SQ = c('SQ')
+
+  function start(initial: Forced) {
+    const forced = ref<Forced>(initial)
+    const play = vi.fn()
+    const scope = effectScope()
+    const timer = scope.run(() => useForcedPlay(() => forced.value, play))!
+    return { forced, play, timer, scope }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test('counts down, then plays the card once', () => {
+    const { play, timer } = start({ key: 'a', card: SQ })
+
+    expect(timer.card.value).toEqual(SQ)
+    expect(timer.secondsLeft.value).toBe(FORCED_PLAY_SECONDS)
+    vi.advanceTimersByTime(1000)
+    expect(timer.secondsLeft.value).toBe(FORCED_PLAY_SECONDS - 1)
+    vi.advanceTimersByTime(FORCED_PLAY_SECONDS * 1000 - 1001)
+    expect(play).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    expect(play).toHaveBeenCalledTimes(1)
+    expect(play).toHaveBeenCalledWith(SQ)
+    expect(timer.card.value).toBeNull()
+
+    vi.advanceTimersByTime(10_000)
+    expect(play).toHaveBeenCalledTimes(1)
+  })
+
+  test('a new state restarts the countdown; nothing forced cancels it', async () => {
+    const { forced, play, timer } = start({ key: 'a', card: SQ })
+    vi.advanceTimersByTime(2000)
+
+    forced.value = { key: 'b', card: c('H3') }
+    await nextTick()
+    expect(timer.secondsLeft.value).toBe(FORCED_PLAY_SECONDS)
+    vi.advanceTimersByTime(2000)
+    expect(play).not.toHaveBeenCalled()
+
+    // A claim, a card in flight, the page left: no card goes.
+    forced.value = null
+    await nextTick()
+    expect(timer.card.value).toBeNull()
+    vi.advanceTimersByTime(10_000)
+    expect(play).not.toHaveBeenCalled()
+  })
+
+  test('the same state back after a pause counts down again, but not once it fired', async () => {
+    const { forced, play } = start({ key: 'a', card: SQ })
+    forced.value = null
+    await nextTick()
+    forced.value = { key: 'a', card: SQ }
+    await nextTick()
+    vi.advanceTimersByTime(FORCED_PLAY_SECONDS * 1000)
+    expect(play).toHaveBeenCalledTimes(1)
+
+    // The card was refused and the reload shows the same state: wait for a tap.
+    forced.value = null
+    await nextTick()
+    forced.value = { key: 'a', card: SQ }
+    await nextTick()
+    vi.advanceTimersByTime(10_000)
+    expect(play).toHaveBeenCalledTimes(1)
+  })
+
+  test('stops with its scope (the page going away)', () => {
+    const { play, scope } = start({ key: 'a', card: SQ })
+    scope.stop()
+    vi.advanceTimersByTime(10_000)
+    expect(play).not.toHaveBeenCalled()
   })
 })
 
@@ -198,6 +306,9 @@ describe('HandView on play', () => {
 })
 
 describe('TablePlayPage card play', () => {
+  // A forced card's countdown must not outlive its test.
+  enableAutoUnmount(afterEach)
+
   const PLAYERS = {
     N: { id: 1, name: 'Ann', username: 'ann', description: null },
     E: { id: 2, name: 'Bob', username: 'bob', description: null },
@@ -294,12 +405,14 @@ describe('TablePlayPage card play', () => {
   })
 
   test("declarer plays dummy's cards from the top of the table, following suit", async () => {
-    const wrapper = await mountPage(state())
+    const wrapper = await mountPage(state({ dummy_hand: cards('SQ', 'S4', 'H3', 'C9') }))
 
     const top = wrapper.get('.side-top')
     expect(top.classes()).toContain('seat-wide')
     expect(top.text()).toContain('dummy')
-    expect(enabledCards(wrapper, '.side-top')).toEqual([c('SQ').id])
+    expect(enabledCards(wrapper, '.side-top')).toEqual([c('SQ').id, c('S4').id])
+    // Two cards may follow: nothing plays itself.
+    expect(wrapper.find('.forced').exists()).toBe(false)
     // Our own hand waits: it isn't South's turn.
     expect(wrapper.findAll('.my-hand button')).toHaveLength(0)
     expect(wrapper.text()).toContain('Play: your turn from dummy (N). Follow suit: spades.')
@@ -405,6 +518,98 @@ describe('TablePlayPage card play', () => {
 
     expect(showToast).toHaveBeenCalledWith('You must follow suit: Spades were led.', 'danger')
     expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+  })
+
+  describe('a forced card', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    test("dummy's only spade plays itself after 3 s", async () => {
+      vi.mocked(gameService.playCard).mockReturnValue(new Promise(() => {}))
+      const wrapper = await mountPage(state())
+
+      expect(wrapper.get('.side-top .forced').attributes('data-card')).toBe(String(c('SQ').id))
+      expect(wrapper.get('.status').text()).toBe('Play: your turn from dummy (N). Playing ♠Q in 3 s…')
+      vi.advanceTimersByTime(1000)
+      await nextTick()
+      expect(wrapper.get('.status').text()).toContain('Playing ♠Q in 2 s…')
+      expect(gameService.playCard).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(2000)
+      await flushPromises()
+      expect(gameService.playCard).toHaveBeenCalledTimes(1)
+      expect(gameService.playCard).toHaveBeenCalledWith(5, c('SQ').id)
+      expect(wrapper.text()).toContain('Playing your card…')
+    })
+
+    test('tapped during the countdown, it goes at once, and only once', async () => {
+      vi.mocked(gameService.playCard).mockReturnValue(new Promise(() => {}))
+      const wrapper = await mountPage(state())
+
+      await wrapper.get(`.side-top button[data-card="${c('SQ').id}"]`).trigger('click')
+      expect(gameService.playCard).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(10_000)
+      await flushPromises()
+      expect(gameService.playCard).toHaveBeenCalledTimes(1)
+    })
+
+    test('our own hand counts too', async () => {
+      vi.mocked(gameService.playCard).mockReturnValue(new Promise(() => {}))
+      const wrapper = await mountPage(
+        state({ turn: 'S', current_trick: played('W D9, N C9, E D5'), dummy_hand: cards('SQ', 'H3') }),
+      )
+
+      expect(wrapper.get('.my-hand .forced').attributes('data-card')).toBe(String(c('D2').id))
+      vi.advanceTimersByTime(3000)
+      await flushPromises()
+      expect(gameService.playCard).toHaveBeenCalledWith(5, c('D2').id)
+    })
+
+    test('nothing plays itself on the lead', async () => {
+      const wrapper = await mountPage(state({ turn: 'S', current_trick: [], hand: cards('D2') }))
+
+      expect(wrapper.find('.forced').exists()).toBe(false)
+      vi.advanceTimersByTime(10_000)
+      await flushPromises()
+      expect(gameService.playCard).not.toHaveBeenCalled()
+    })
+
+    test('a new card on the table restarts it; a claim stops it', async () => {
+      // South holds a single spade.
+      const hand = cards('S7', 'HK', 'D2')
+      const wrapper = await mountPage(
+        state({ turn: 'E', acting_user_id: 2, current_trick: played('W S3, N SQ'), hand, dummy_hand: cards('H3', 'C9') }),
+      )
+      const game = useGameStore()
+      expect(wrapper.find('.forced').exists()).toBe(false)
+
+      // East plays: South's seven is forced.
+      const afterEast = state({ turn: 'S', current_trick: played('W S3, N SQ, E S5'), hand, dummy_hand: cards('H3', 'C9') })
+      game.applyPlayingUpdate(5, afterEast)
+      await flushPromises()
+      expect(wrapper.get('.my-hand .forced').attributes('data-card')).toBe(String(c('S7').id))
+      vi.advanceTimersByTime(2000)
+
+      // West claims the rest before the card goes.
+      game.applyPlayingUpdate(5, { ...afterEast, claim: { seat: 'W', tricks: 13, hand: cards('CA'), accepted: [] } })
+      await flushPromises()
+      expect(wrapper.find('.forced').exists()).toBe(false)
+      vi.advanceTimersByTime(10_000)
+      await flushPromises()
+      expect(gameService.playCard).not.toHaveBeenCalled()
+    })
+
+    test('opening the claim sheet stops it', async () => {
+      const wrapper = await mountPage(state({ claim: null }))
+      expect(wrapper.find('.forced').exists()).toBe(true)
+
+      await wrapper.get('.claim-button').trigger('click')
+      expect(wrapper.find('.forced').exists()).toBe(false)
+      vi.advanceTimersByTime(10_000)
+      await flushPromises()
+      expect(gameService.playCard).not.toHaveBeenCalled()
+    })
   })
 
   describe('robots', () => {

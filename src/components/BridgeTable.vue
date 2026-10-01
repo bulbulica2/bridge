@@ -59,6 +59,7 @@
           :playable="dummyPlayable"
           :busy="busy"
           :sending-id="sendingId"
+          :forced-id="dummyForcedId"
           @play="emit('play', $event)"
         />
         <DummyColumns v-else :cards="dummy!.cards" />
@@ -118,6 +119,8 @@ const props = withDefaults(
     dummy?: { seat: Seat; cards: Card[] } | null;
     // Dummy's cards declarer may play now (see HandView), else null.
     dummyPlayable?: number[] | null;
+    // Dummy's only legal card, about to play itself (see HandView).
+    dummyForcedId?: number | null;
     // The claimer's seat and remaining cards while a claim is pending.
     claim?: { seat: Seat; cards: Card[] } | null;
     // All four hands as dealt, once the board is finished.
@@ -132,6 +135,7 @@ const props = withDefaults(
     thinking: false,
     dummy: null,
     dummyPlayable: null,
+    dummyForcedId: null,
     claim: null,
     deal: null,
     replay: false,

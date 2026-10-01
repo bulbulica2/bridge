@@ -2,7 +2,9 @@
   <!-- One overlapping run of cards per suit, ♠ ♥ ♦ ♣, high to low. A suit
        never splits across lines; on a narrow screen whole suits wrap.
        Given `playable`, the hand is the one being played: every card is a
-       button, and the ones that can't legally go now are dimmed. -->
+       button, and the ones that can't legally go now are dimmed. The
+       `forcedId` card, the only legal one, is about to play itself: it
+       stands raised and pulses until it goes (see useForcedPlay). -->
   <div class="hand" :class="{ active: playable }" :aria-label="label" :aria-busy="busy">
     <div v-for="group in groups" :key="group.suit" class="suit-group">
       <template v-if="playable">
@@ -11,7 +13,11 @@
           :key="card.id"
           type="button"
           class="card card-button"
-          :class="{ illegal: !playable.includes(card.id), sending: card.id === sendingId }"
+          :class="{
+            illegal: !playable.includes(card.id),
+            sending: card.id === sendingId,
+            forced: card.id === forcedId,
+          }"
           :data-card="card.id"
           :disabled="busy || !playable.includes(card.id)"
           @click="emit('play', card)"
@@ -42,8 +48,10 @@ const props = withDefaults(
     // A card is on its way: nothing more can be tapped until it lands.
     busy?: boolean;
     sendingId?: number | null;
+    // The only legal card, counting down to playing itself.
+    forcedId?: number | null;
   }>(),
-  { label: 'Your hand', playable: null, busy: false, sendingId: null },
+  { label: 'Your hand', playable: null, busy: false, sendingId: null, forcedId: null },
 );
 
 const emit = defineEmits<{ play: [card: Card] }>();
@@ -85,8 +93,31 @@ const groups = computed(() => groupBySuit(props.cards));
 
 .card-button:not(:disabled):hover,
 .card-button:not(:disabled):focus-visible,
-.card-button.sending {
+.card-button.sending,
+.card-button.forced {
   transform: translateY(-10px);
+}
+
+/* About to play itself: a pulsing ring until it goes, or is tapped. */
+.card-button.forced :deep(.playing-card) {
+  animation: forced-pulse 1s ease-in-out infinite;
+}
+
+@keyframes forced-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px var(--ion-color-warning, #ffc409);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(var(--ion-color-warning-rgb, 255, 196, 9), 0.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-button.forced :deep(.playing-card) {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--ion-color-warning, #ffc409);
+  }
 }
 
 .card-button:focus-visible {

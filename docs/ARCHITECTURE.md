@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/39-fast-table-entry`._
+_Status as of branch `bulbulica2/41-auto-play-forced-card`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -35,7 +35,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance) and `echo.ts` (the websocket) |
-| `src/composables/` | `useUserSearch` (debounced user lookup) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording |
 | `src/theme/` | Ionic variables and the global toast styles |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
@@ -282,7 +282,7 @@ arrives, and the app falls back to what each request returns.
 | Component | Shows |
 |---|---|
 | `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; a claimer's cards; the finished deal (or, in a replay, what is left of it) |
-| `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim |
+| `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses |
 | `BiddingBox` | the call grid, on your turn during the auction |
 | `AuctionHistory` + `CallLabel` | the calls so far, four columns rotated like the table |
 | `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s) |
@@ -297,9 +297,21 @@ arrives, and the app falls back to what each request returns.
 "Thinking…" instead of "To act", and the status line under the table says
 "robot-1 is thinking…".
 
+When the hand you play from (your own, or dummy's as declarer) has exactly
+one legal card to follow with, `forcedCard()` in `play.ts` names it (never
+on the lead) and the play page's `useForcedPlay` plays it after 3 s:
+the card pulses and the status line counts down ("Playing ♥7 in 3 s…").
+Tapping it plays it at once. The countdown is tied to the state it started
+in (board, trick, cards in the trick, turn, card), so any new card restarts
+or drops it; it also stops while a card or claim is in flight, the claim
+sheet is open, a claim is pending or another page is on top. A state the
+timer already sent a card for is not counted down again, so a refused card
+waits for a tap. The backend's `isBehind` guard and a 409 → reload remain
+the backstop.
+
 Pure logic lives in `src/utils/`: `cards.ts` (sorting, rank labels, seat
 rotation, vulnerability), `auction.ts` (call legality hints and labels),
-`play.ts` (follow-suit hint, whose hand you play, trick layout), `claim.ts`
+`play.ts` (follow-suit hint, the forced card, whose hand you play, trick layout), `claim.ts`
 (who may claim, who still has to answer, the claim's wording), `result.ts`
 (the score from your side), `seatMove.ts` (wording for leaving or moving by
 game phase, and whether only robots would be left), `review.ts` (a replay's table after N cards: hands left, the

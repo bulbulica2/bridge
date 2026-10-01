@@ -122,6 +122,7 @@
             :thinking="robotActing"
             :dummy="dummy"
             :dummy-playable="playFrom === 'dummy' ? legalIds(playing.dummy_hand) : null"
+            :dummy-forced-id="playFrom === 'dummy' ? (autoPlay.card.value?.id ?? null) : null"
             :claim="pendingClaim ? { seat: pendingClaim.claim.seat, cards: pendingClaim.claim.hand } : null"
             :deal="playing.phase === 'finished' ? playing.deal : null"
             :busy="sendingCard !== null"
@@ -176,6 +177,7 @@
               :playable="playFrom === 'own' ? legalIds(playing.hand) : null"
               :busy="sendingCard !== null"
               :sending-id="sendingCard"
+              :forced-id="playFrom === 'own' ? (autoPlay.card.value?.id ?? null) : null"
               @play="playCard"
             />
             <div v-else class="dealing">
@@ -261,6 +263,7 @@ import {
   IonSpinner,
   alertController,
   onIonViewWillEnter,
+  onIonViewWillLeave,
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
@@ -275,6 +278,7 @@ import HandView from '@/components/HandView.vue';
 import NextBoardBox from '@/components/NextBoardBox.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import TrickArea from '@/components/TrickArea.vue';
+import { useForcedPlay } from '@/composables/useForcedPlay';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
 import { useTablesStore } from '@/stores/tables';
@@ -283,9 +287,9 @@ import type { Seat } from '@/services/tables';
 import type { Bid, Card, Claim, PlayedCard, Playing, Trick } from '@/services/game';
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
-import { SUIT_NAMES } from '@/utils/cards';
+import { SUIT_NAMES, SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
 import { canClaim, tricksLeft } from '@/utils/claim';
-import { handToPlay, legalCards } from '@/utils/play';
+import { forcedCard, handToPlay, legalCards } from '@/utils/play';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { resultSummary } from '@/utils/result';
 import { leaveNote, leaveWarning } from '@/utils/seatMove';
@@ -316,6 +320,8 @@ const asking = ref(false);
 // The claim sheet is open; a claim, an answer or a withdrawal is on its way.
 const claimOpen = ref(false);
 const claiming = ref(false);
+// The page is on screen: a forced card only plays itself while it is.
+const viewActive = ref(false);
 
 const me = computed(() => auth.user?.id ?? null);
 
@@ -388,6 +394,39 @@ const dummy = computed(() => {
 // The ids of the cards `hand` may follow with (a hint; the backend decides).
 function legalIds(hand: Card[] | null): number[] {
   return legalCards(hand ?? [], playing.value?.current_trick ?? null).map((card) => card.id);
+}
+
+// The one card the hand on play may play to this trick, if only one is legal
+// (never on the lead), keyed by the state it is forced in. Nothing while a
+// card or a claim is on its way, the claim sheet is open or the page is left.
+const forced = computed(() => {
+  const state = playing.value;
+  const from = playFrom.value;
+  if (
+    !state ||
+    !from ||
+    !viewActive.value ||
+    sendingCard.value !== null ||
+    claimOpen.value ||
+    claiming.value
+  ) {
+    return null;
+  }
+  const card = forcedCard((from === 'dummy' ? state.dummy_hand : state.hand) ?? [], state.current_trick);
+  if (!card) {
+    return null;
+  }
+  const trick = state.current_trick?.length ?? 0;
+  return { key: `${state.playing_id}:${state.tricks?.length ?? 0}:${trick}:${state.turn}:${card.id}`, card };
+});
+
+// Nothing to decide: the forced card plays itself after a few seconds,
+// unless it is tapped first (playCard sends one card at a time either way).
+const autoPlay = useForcedPlay(() => forced.value, playCard);
+
+// "♥7".
+function cardLabel(card: Card): string {
+  return `${SUIT_SYMBOLS[card.suit]}${rankLabel(card.rank)}`;
 }
 
 // The suit we must follow, when we are on play and still hold it.
@@ -473,6 +512,10 @@ function playStatus(turn: Seat | null): string {
   const leading = (playing.value?.current_trick ?? []).length === 0;
   if (playFrom.value) {
     const from = playFrom.value === 'dummy' ? ` from dummy (${turn})` : '';
+    const auto = autoPlay.card.value;
+    if (auto) {
+      return `Play: your turn${from}. Playing ${cardLabel(auto)} in ${autoPlay.secondsLeft.value} s…`;
+    }
     if (mustFollow.value) {
       return `Play: your turn${from}. Follow suit: ${SUIT_NAMES[mustFollow.value]}.`;
     }
@@ -517,7 +560,13 @@ onIonViewWillEnter(() => {
   tableId.value = id;
   notFound.value = false;
   notSeated.value = false;
+  viewActive.value = true;
   load(false);
+});
+
+// Off screen (another page pushed on top): no card plays itself meanwhile.
+onIonViewWillLeave(() => {
+  viewActive.value = false;
 });
 
 // Kicked (the tables store has already said so in a toast): nothing to see.

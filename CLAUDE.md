@@ -211,7 +211,14 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   dummy's turn), so `handToPlay()` in `src/utils/play.ts` says whether the
   user plays their own hand, dummy's, or nothing (dummy never plays).
   `legalCards()` is the follow-suit hint that dims cards in `HandView`
-  (given `playable` ids it turns into buttons). `trickBySide()` places a
+  (given `playable` ids it turns into buttons). When the hand on play has
+  exactly one legal card to follow with, `forcedCard()` (null on the lead)
+  names it and `src/composables/useForcedPlay.ts` plays it after 3 s
+  (`HandView`'s `forcedId` pulses it, the status line counts down). The
+  page keys it by playing/trick/cards/turn/card, so a new state restarts
+  or drops it; it is null while a card or claim is in flight, the claim
+  sheet is open or the view is left (`onIonViewWillLeave`), and a key it
+  already fired for isn't re-armed. `trickBySide()` places a
   trick's cards by seat for `TrickArea.vue`, which fills `BridgeTable`'s
   `centre` slot. `dummy_hand` is public only after the opening lead.
   `BridgeTable` lays it across the top for declarer, where it can be tapped,

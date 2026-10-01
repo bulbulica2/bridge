@@ -19,6 +19,18 @@ export function legalCards(hand: Card[], trick: PlayedCard[] | null): Card[] {
   return following.length > 0 ? following : hand;
 }
 
+// The one card `hand` may play to the trick in progress, when there is only
+// one: nothing to decide, so the play page sends it by itself. Never on the
+// lead (an empty trick): any card may lead, and a single card left only
+// leads the last trick.
+export function forcedCard(hand: Card[], trick: PlayedCard[] | null): Card | null {
+  if (!trick?.length) {
+    return null;
+  }
+  const legal = legalCards(hand, trick);
+  return legal.length === 1 ? legal[0] : null;
+}
+
 // Which hand the user plays from right now: their own, dummy's (declarer on
 // dummy's turn), or none. `acting_user_id` says whose move it is; `turn`
 // says which hand the card comes from. A pending claim stops the play.
