@@ -10,6 +10,7 @@ import * as tablesService from '@/services/tables'
 import type { AuctionCall, Bid, Playing, Strain } from '@/services/game'
 import type { Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
+import { useTablesStore } from '@/stores/tables'
 import { showToast } from '@/utils/toast'
 
 vi.mock('@/services/game', () => ({ getPlaying: vi.fn(), getBids: vi.fn(), makeCall: vi.fn() }))
@@ -260,6 +261,30 @@ describe('TablePlayPage bidding', () => {
     expect(wrapper.find('.bidding-box').exists()).toBe(false)
     expect(wrapper.text()).toContain('Auction: waiting for di.')
     expect(wrapper.findAll('.auction td').map((td) => td.text())).toContain('2♣')
+  })
+
+  test('entering a table the store follows live reads only the board, then the bids', async () => {
+    // As right after Create or a join: the table is held and its channel followed.
+    const tables = useTablesStore()
+    tables.currentTable = table
+    tables.watchTable(5)
+
+    const wrapper = await mountPage(state())
+
+    expect(tablesService.getTable).not.toHaveBeenCalled()
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
+    expect(gameService.getBids).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(gameService.getBids).mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(gameService.getPlaying).mock.invocationCallOrder[0],
+    )
+    expect(wrapper.find('.bidding-box').exists()).toBe(true)
+
+    // Refresh is the user asking: everything is read again.
+    await wrapper.get('ion-button.refresh').trigger('click')
+    await flushPromises()
+    expect(tablesService.getTable).toHaveBeenCalledWith(5)
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+    tables.unwatchTable()
   })
 
   test("the box stays hidden when it isn't our turn", async () => {

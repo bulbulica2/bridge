@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/38-robots`._
+_Status as of branch `bulbulica2/39-fast-table-entry`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -118,7 +118,8 @@ table's page. A table only robots sit at (`unattended_since` set: its last
 person left) reads **Robots only — sit down to take over**. **Create
 table** opens a modal with an optional name and **Play with robots**, on
 by default: robots take the other three seats, the first board is dealt
-at once and the page goes straight to `/play`. Without robots you stay on
+at once and the page goes straight to `/play` (the modal closes as soon as
+the table exists; #55). Without robots you stay on
 the list and wait for players. Moving to another table asks first, because
 leaving your seat can abandon a board there. No live updates on this page:
 pull to refresh.
@@ -153,7 +154,7 @@ fourth seat) a seated player is taken to `/play`.
 
 | Calls | Endpoint |
 |---|---|
-| `tables.loadTable()` | `GET /tables/{id}` |
+| `tables.openTable()` on entry, `tables.loadTable()` on refresh | `GET /tables/{id}`, skipped on entry for the table you sit at (it is followed live) |
 | `tables.join()` | `POST /tables/{id}/seats` |
 | `tables.leave()` | `DELETE /tables/{id}/seats` |
 | `tables.removePlayer()` | `DELETE /tables/{id}/seats/{user}` |
@@ -205,14 +206,15 @@ What it shows by phase:
 
 | Calls | Endpoint |
 |---|---|
-| `game.load()` | `GET /tables/{id}/playing` |
-| `game.loadBids()` | `GET /bids` (once per session) |
+| `game.load()` | `GET /tables/{id}/playing`, the only request the page waits for on entry |
+| `game.loadBids()` | `GET /bids`, once per session, normally already read in the background after login; asked again only after the board is drawn |
 | `game.call()` | `POST /tables/{id}/calls` |
 | `game.play()` | `POST /tables/{id}/cards` |
 | `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
 | `game.next()` | `POST /tables/{id}/playing/next` |
 | `game.loadSessionScore()` | `GET /api/user/playings` |
-| `tables.loadTable()`, `tables.leave()` | `GET /tables/{id}`, `DELETE /tables/{id}/seats` |
+| `tables.openTable()` on entry, `tables.loadTable()` on Refresh or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
+| `tables.leave()` | `DELETE /tables/{id}/seats` |
 | channels | `private-table.{id}`: `TableUpdated`, `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt` |
 
 A 409 on a call, card, claim or next board toasts the backend's message and

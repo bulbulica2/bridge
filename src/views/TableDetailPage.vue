@@ -274,7 +274,7 @@ onIonViewWillEnter(() => {
   }
   tableId.value = id;
   notFound.value = false;
-  load();
+  load(false);
 });
 
 // While seated here the store follows the table live (TableUpdated). When an
@@ -308,11 +308,13 @@ watch(
   },
 );
 
-async function load() {
+// `refetchTable: false` (entering the page) reuses the table the store
+// already follows live, such as the user's own coming back from the game.
+async function load(refetchTable = true) {
   loading.value = true;
   loadError.value = '';
   try {
-    await store.loadTable(tableId.value);
+    await (refetchTable ? store.loadTable(tableId.value) : store.openTable(tableId.value));
     loadBoardPhase();
   } catch (e) {
     if (handleExpiredSession(e)) {

@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/38-robots`._
+_Status as of branch `bulbulica2/39-fast-table-entry`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -30,7 +30,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 |---|---|
 | `src/main.ts` | creates the app: Ionic, Pinia, the router, Ionic's CSS, dark mode |
 | `src/App.vue` | the shell: side menu, router outlet, route progress bar |
-| `src/router/` | `index.ts` (routes + guard + chunk prefetch), `loading.ts` (the progress bar flag, `navigateAndSettle`) |
+| `src/router/` | `index.ts` (routes + guard + chunk and bid-list prefetch), `loading.ts` (the progress bar flag, `navigateAndSettle`) |
 | `src/views/` | one `*Page.vue` per route |
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
@@ -121,13 +121,32 @@ sends you to `/login` afterwards.
 | Store | Holds | Main actions |
 |---|---|---|
 | `auth` | `user` (own record, with email) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset |
-| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom` | `load`, `loadTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `seatedTable`; owns the table channel and the heartbeat |
+| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom` | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `seatedTable`; owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `loadSessionScore`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadReview` |
 | `users` | public profiles by id | `load` |
 
 A table changed by any answer or broadcast is written into both `tables`
-and `currentTable`, so the list and the detail page stay in step.
+and `currentTable`, so the list and the detail page stay in step. `create`
+also makes the new table the `currentTable`, so whichever page opens next
+draws it straight away.
+
+**Entering a table page costs one request at most** (#55). Locally the
+backend answers one request at a time (see [RUNNING.md](RUNNING.md#local-speed)),
+so every extra request on the way in delays the one the page needs:
+- `openTable(id)` returns the copy the store already holds when it follows
+  that table's channel (the user's own table, after Create, a join or a
+  `load`), since `TableUpdated` keeps it current; any other table is read
+  with `loadTable`. The detail and play pages use it on entry; their
+  Refresh and pull-to-refresh still call `loadTable`.
+- The play page waits only for `GET /tables/{id}/playing` (plus
+  `GET /tables/{id}` when it doesn't hold the table, e.g. after a reload),
+  and asks for the bid list after that. The bid list is normally already
+  there: the router reads it in the background a second after the first
+  logged-in page shows (`prefetchBids` in `src/router/index.ts`).
+- Create with robots closes the modal and moves to `/play` as soon as
+  `POST /tables` answers, without waiting for the game page; that page
+  shows its own spinner until the board arrives.
 
 ## Services
 
@@ -169,7 +188,8 @@ A few backend rules the stores rely on:
   for a robot at an unattended table); `whoIsLeft()` / `leaveNote()` in
   `utils/seatMove.ts` word what leaving does.
 - Bid ids are not tied to the bid's rank, so the app reads the 38 calls
-  from `GET /bids` once and looks a call up by its level and strain. Never
+  from `GET /bids` once (in the background after login, see above) and
+  looks a call up by its level and strain. Never
   hard-code a bid id.
 - The auction, play and claim rules in `src/utils/auction.ts`, `play.ts`
   and `claim.ts` are only a hint (dimmed buttons and cards). The backend is the referee: a 409
@@ -203,7 +223,9 @@ and policy failures. `errorMessage` handles all three.
 - **Forms that navigate on success** (login, sign up, profile) call
   `navigateAndSettle(ionRouter, path)` and stay disabled until the next
   page is up. That prevents double submits (Ionic's own `navigate()`
-  returns nothing to wait on).
+  returns nothing to wait on). Create table is the exception: its modal
+  closes as soon as the table exists, and the game page shows its own
+  loading state.
 - **Pages that load data** show a skeleton or spinner only when there's
   nothing to show yet. Data already in a store stays on screen with a small
   "Refreshing…" row.

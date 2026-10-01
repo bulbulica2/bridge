@@ -517,7 +517,7 @@ onIonViewWillEnter(() => {
   tableId.value = id;
   notFound.value = false;
   notSeated.value = false;
-  load();
+  load(false);
 });
 
 // Kicked (the tables store has already said so in a toast): nothing to see.
@@ -538,7 +538,7 @@ watch(
   (boardId) => {
     const shown = playing.value?.board?.id ?? null;
     if (boardId && boardId !== shown && !loading.value) {
-      load();
+      load(false);
     }
   },
 );
@@ -634,16 +634,22 @@ onBeforeUnmount(() => clearTimeout(pauseTimer));
 
 // Both the table (seats, live channel) and its board; either alone would
 // leave the page half drawn. The playing snapshot also rebuilds everything
-// after a reload.
-async function load() {
+// after a reload. `refetchTable: false` (entering the page, a new board)
+// reuses the table the store already follows live, as it does right after
+// Create or a join, so the first frame waits for GET /playing alone. The
+// bids come after it: they are only needed on our turn to call, and
+// usually already cached (the router reads them once after login).
+async function load(refetchTable = true) {
   if (!tableId.value) {
     return;
   }
   loading.value = true;
   loadError.value = '';
-  loadBids();
   try {
-    await Promise.all([tablesStore.loadTable(tableId.value), game.load(tableId.value)]);
+    const id = tableId.value;
+    const table = refetchTable ? tablesStore.loadTable(id) : tablesStore.openTable(id);
+    await Promise.all([table, game.load(id)]);
+    loadBids();
   } catch (e) {
     const status = statusOf(e);
     if (status === 401) {

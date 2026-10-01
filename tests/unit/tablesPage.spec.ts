@@ -5,7 +5,6 @@ import { IonToggle } from '@ionic/vue'
 import TablesPage from '@/views/TablesPage.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTablesStore } from '@/stores/tables'
-import { navigateAndSettle } from '@/router/loading'
 import * as tablesService from '@/services/tables'
 import type { Seat, Table } from '@/services/tables'
 
@@ -22,10 +21,10 @@ vi.mock('@/services/echo', () => ({
   onReconnect: vi.fn(),
   disconnectEcho: vi.fn(),
 }))
-vi.mock('@/router/loading', () => ({ navigateAndSettle: vi.fn() }))
+const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }))
 vi.mock('@ionic/vue', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ionic/vue')>()),
-  useIonRouter: () => ({ navigate: vi.fn() }),
+  useIonRouter: () => ({ navigate }),
 }))
 
 const ana = { id: 1, name: 'Ana', username: 'ana', email: 'ana@example.com' }
@@ -78,7 +77,6 @@ describe('TablesPage.vue with robots', () => {
     setActivePinia(createPinia())
     vi.resetAllMocks()
     useAuthStore().user = ana
-    vi.mocked(navigateAndSettle).mockResolvedValue()
   })
 
   test('marks robots and unattended tables in the list', () => {
@@ -105,7 +103,11 @@ describe('TablesPage.vue with robots', () => {
     await flushPromises()
 
     expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true })
-    expect(navigateAndSettle).toHaveBeenCalledWith(expect.anything(), '/tables/3/play', 'forward', 'push')
+    expect(navigate).toHaveBeenCalledWith('/tables/3/play', 'forward', 'push')
+    // The game page draws from this copy rather than fetching the table again.
+    expect(useTablesStore().currentTable).toEqual(dealt)
+    // The form is free again at once: nothing waits for the game page to be up.
+    expect(wrapper.find('form ion-spinner').exists()).toBe(false)
   })
 
   test('creating without robots stays on the list', async () => {
@@ -117,7 +119,7 @@ describe('TablesPage.vue with robots', () => {
     await flushPromises()
 
     expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: false })
-    expect(navigateAndSettle).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
     expect(useTablesStore().tables.map((t) => t.id)).toEqual([3])
   })
 })
