@@ -465,18 +465,32 @@ describe('TablePlayPage card play', () => {
       }),
     )
     await flushPromises()
-    expect(wrapper.findAll('.trick .playing-card')).toHaveLength(4)
+    expect(wrapper.findAll('.centre > .trick .playing-card')).toHaveLength(4)
     expect(wrapper.get('.trick-caption').text()).toBe('E wins')
+    // That trick is on show already: no last-trick button meanwhile.
+    expect(wrapper.find('.last-trick-button').exists()).toBe(false)
 
     vi.advanceTimersByTime(2000)
     await flushPromises()
-    expect(wrapper.findAll('.trick .playing-card')).toHaveLength(0)
+    expect(wrapper.findAll('.centre > .trick .playing-card')).toHaveLength(0)
     expect(wrapper.get('.trick-caption').text()).toBe('Trick 2')
 
-    // The last trick can still be looked at.
-    await wrapper.get('.peek').trigger('click')
-    expect(wrapper.findAll('.trick .playing-card')).toHaveLength(4)
-    expect(wrapper.get('.trick-caption').text()).toBe('Last trick: E wins')
+    // The last trick can still be looked at, in a pop-up: the trick in
+    // progress stays in the middle.
+    await wrapper.get('.last-trick-button').trigger('click')
+    expect(wrapper.findAll('.last-trick-popup .playing-card')).toHaveLength(4)
+    expect(wrapper.get('.last-trick-title').text()).toBe('Trick 1 · E wins')
+    expect(wrapper.findAll('.centre > .trick .playing-card')).toHaveLength(0)
+    expect(wrapper.get('.trick-caption').text()).toBe('Trick 2')
+    // Nor is it in the contract bar any more.
+    expect(wrapper.get('.outcome').text()).not.toContain('Last trick')
+  })
+
+  test('no last trick before the first one is won', async () => {
+    const wrapper = await mountPage(state())
+
+    expect(wrapper.get('.trick-caption').text()).toBe('Trick 1')
+    expect(wrapper.find('.last-trick-button').exists()).toBe(false)
   })
 
   test('dummy sees their hand played for them and taps nothing', async () => {

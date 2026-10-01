@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/41-auto-play-forced-card`._
+_Status as of branch `bulbulica2/40-last-trick-popover`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -172,7 +172,8 @@ search), bb#45 (`can_manage`), bb#65 (robots, unattended tables).
 
 **Logged in, seated at that table** (403 otherwise). Built by #26 (game
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
-#47 (claims), #53 (robots), #57 (forced cards play themselves); **Compare** by #30. Entered from the detail page, automatically when a
+#47 (claims), #53 (robots), #57 (forced cards play themselves), #56 (last trick
+pop-up); **Compare** by #30. Entered from the detail page, automatically when a
 board is dealt, or straight from **Create table** with robots. The header's
 **Table** button goes back to the detail page.
 
@@ -190,8 +191,14 @@ What it shows by phase:
 - **auction**: your hand, the auction grid, and on your turn the bidding
   box. The contract (or "Passed out") is announced when the last call
   arrives.
-- **play**: the contract bar with tricks won and a **Last trick** peek, the
-  current trick in the centre, dummy's cards once the opening lead is made.
+- **play**: the contract bar with tricks won, the current trick in the
+  centre, dummy's cards once the opening lead is made. From the second
+  trick on, a **Last trick** button sits under the trick in progress:
+  hovering it with a mouse pops up the last trick's four cards (each at its
+  seat, turned like the table, the winner ringed), and moving away hides
+  it; on a phone a tap opens it and a tap outside (or Escape) closes it.
+  The trick in progress stays in the centre meanwhile. The button is hidden
+  for the 2 s the trick just won is still shown in the centre.
   You tap a card from your own hand, or from dummy's if you're declarer.
   When only one card may follow suit (say dummy holds a single card in
   the suit led), it pulses and plays itself after 3 s, with the status

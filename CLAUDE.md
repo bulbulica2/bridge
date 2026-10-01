@@ -226,9 +226,13 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   dummy, whose own hand is the same cards. `current_trick` empties as soon
   as a trick's fourth card lands, so the page holds that trick (the last of
   `tricks`) with its winner for 2 s before clearing it, but only when seen
-  live. The contract bar above the table carries `tricks_won` and a "Last
-  trick" peek. One card is in flight at a time; a 409 toasts and reloads,
-  as for calls.
+  live. The contract bar above the table carries `tricks_won`. Under the
+  trick in progress, `LastTrickPopover.vue` (from the second trick on, not
+  while a trick is held) pops up the last of `tricks` in a `TrickArea`:
+  mouse hover opens it and leaving closes it (`pointerType === 'mouse'`
+  only), a click toggles it, a pointerdown outside or Escape closes it.
+  The centre keeps the trick in progress meanwhile. One card is in flight
+  at a time; a 409 toasts and reloads, as for calls.
 - **Claims**: during `play` any player but dummy may claim `tricks` of the
   tricks left (`13 - tricks.length`; 0 concedes) with `POST
   /tables/{id}/claim`; the other non-dummy players answer through
