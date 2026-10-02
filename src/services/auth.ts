@@ -3,6 +3,10 @@ import http from './http';
 export interface LoginCredentials {
   email: string;
   password: string;
+  // Laravel's remember-me: the backend also sets a long-lived remember_web_*
+  // cookie, which logs the user back in once the session has expired.
+  // POST /logout clears it.
+  remember?: boolean;
 }
 
 export interface RegistrationData {

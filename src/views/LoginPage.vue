@@ -27,6 +27,11 @@
                 :disabled="submitting"
               />
             </ion-item>
+            <ion-item lines="none">
+              <ion-checkbox v-model="remember" label-placement="end" justify="start" :disabled="submitting">
+                Remember me
+              </ion-checkbox>
+            </ion-item>
           </ion-list>
 
           <ion-text v-if="error" color="danger">
@@ -56,6 +61,7 @@ import {
   IonList,
   IonItem,
   IonInput,
+  IonCheckbox,
   IonButton,
   IonText,
   IonSpinner,
@@ -72,6 +78,8 @@ const ionRouter = useIonRouter();
 
 const email = ref('');
 const password = ref('');
+// Off by default; see LoginCredentials.remember.
+const remember = ref(false);
 const error = ref('');
 const submitting = ref(false);
 
@@ -82,7 +90,7 @@ async function submit() {
   error.value = '';
   submitting.value = true;
   try {
-    await auth.login({ email: email.value, password: password.value });
+    await auth.login({ email: email.value, password: password.value, remember: remember.value });
     password.value = '';
     // Stay busy until /account is up, so the form can't be edited or
     // resubmitted while its chunk loads.

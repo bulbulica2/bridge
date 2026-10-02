@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/43-review-fixed-hand-layout`._
+_Status as of branch `bulbulica2/44-remember-me`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -109,6 +109,15 @@ flow, and why the origin must be `localhost:3000`, is in
 the `game` store follow the user's private channel; logout drops that and
 the table channel, closes the socket and clears the `history` store (see
 [Realtime](#realtime)).
+
+**Remember me**: `login` takes an optional `remember` (the Login page's
+checkbox) and sends it in the `POST /login` body. With it, the backend
+sets Laravel's long-lived `remember_web_*` cookie next to the session
+cookie. Sanctum authenticates through the `web` guard, so once the session
+has expired, the guard's `GET /api/user` logs the user back in from that
+cookie, and a reload lands logged in. `POST /logout` clears the remember
+token on the server, so after a logout the next reload is a guest's.
+Registration doesn't remember the user.
 
 Password reset is a two-step guest flow: `/reset-password` posts your email
 to `/forgot-password`, the backend emails a link to

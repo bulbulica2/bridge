@@ -93,7 +93,11 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `GET /api/user`, `PATCH /api/user`), and the Pinia store `src/stores/auth.ts`
   holds the logged-in user and exposes `login`, `register`, `logout`,
   `loadSession`, `requestPasswordReset`, `resetPassword` and `updateProfile`.
-  Views call the store, not the services directly.
+  Views call the store, not the services directly. `LoginCredentials` has an
+  optional `remember` (the Login page's "Remember me", off by default, #65):
+  the backend then sets its long-lived `remember_web_*` cookie, so
+  `loadSession()` stays logged in after the session expires; `/logout`
+  clears it. Registration never remembers.
 - **Profile edit** lives on `AccountPage.vue` as an in-page edit mode (no
   route of its own). `PATCH /api/user` takes only `name` and `description`
   (`null` clears it; username/email/password are ignored) and, unlike
