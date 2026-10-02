@@ -4,12 +4,15 @@
     <ion-progress-bar v-if="routeLoading" type="indeterminate" class="route-progress" />
     <AppMenu />
     <ion-router-outlet id="main-content" />
+    <!-- Banned just now (UserBanned): why, until dismissed. -->
+    <BanNotice />
   </ion-app>
 </template>
 
 <script setup lang="ts">
 import { IonApp, IonProgressBar, IonRouterOutlet } from '@ionic/vue';
 import AppMenu from '@/components/AppMenu.vue';
+import BanNotice from '@/components/BanNotice.vue';
 import { routeLoading } from '@/router/loading';
 </script>
 

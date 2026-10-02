@@ -2,6 +2,7 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import type { ChannelAuthorizationCallback } from 'pusher-js';
 import http from './http';
+import type { Ban } from './auth';
 import type { HandDealtEvent, PublicPlaying } from './game';
 import type { BroadcastTable } from './tables';
 
@@ -88,9 +89,17 @@ export function listenToTable(
 }
 
 // The user's own channel carries what only they may see: their cards
-// (`HandDealt`) each time a board is dealt at their table.
-export function listenToUser(userId: number, onHandDealt: (event: HandDealtEvent) => void) {
-  getEcho().private(`App.Models.User.${userId}`).listen('HandDealt', onHandDealt);
+// (`HandDealt`) each time a board is dealt at their table, and `UserBanned`
+// when an admin bans them (their session is already gone by then).
+export function listenToUser(
+  userId: number,
+  onHandDealt: (event: HandDealtEvent) => void,
+  onBanned: (ban: Ban) => void,
+) {
+  getEcho()
+    .private(`App.Models.User.${userId}`)
+    .listen('HandDealt', onHandDealt)
+    .listen('UserBanned', onBanned);
 }
 
 export function leaveUser(userId: number) {

@@ -92,7 +92,7 @@ export const useGameStore = defineStore('game', () => {
   // Only the table the play page last loaded: events for any other are ignored.
   const playing = ref<Playing | null>(null);
   const tableId = ref<number | null>(null);
-  // The user whose own channel (HandDealt) we listen on.
+  // The user whose own channel (HandDealt, UserBanned) we listen on.
   const watchedUserId = ref<number | null>(null);
   // A HandDealt that beat its board's PlayingUpdated: both come from the same
   // request, but on different channels, so either can arrive first.
@@ -301,14 +301,15 @@ export const useGameStore = defineStore('game', () => {
   }
 
   // Follow the user's own channel from login to logout: a board can be dealt
-  // while they look at any page, and its HandDealt is sent only once.
+  // while they look at any page, and its HandDealt is sent only once. The
+  // channel also brings UserBanned, which the auth store handles.
   function watchUser(userId: number) {
     if (watchedUserId.value === userId) {
       return;
     }
     unwatchUser();
     watchedUserId.value = userId;
-    listenToUser(userId, applyHandDealt);
+    listenToUser(userId, applyHandDealt, (ban) => auth.applyBan(ban));
   }
 
   function unwatchUser() {
