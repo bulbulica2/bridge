@@ -1301,3 +1301,66 @@ describe('tables store', () => {
     })
   })
 })
+
+describe('tables store edge cases', () => {
+  function runningSet(): Table {
+    const table = makeTable(1, { N: 'ana', E: 'bob', S: 'cy', W: 'dee' })
+    table.board_id = 9
+    table.set = { id: 5, number: 3, board: 2, of: 4, finished: false, ended: null, forfeited_by: null }
+    return table
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    visibility = 'visible'
+    vi.mocked(tablesService.sendHeartbeat).mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    useTablesStore().unwatchTable()
+    vi.restoreAllMocks()
+  })
+
+  test('a failed can_manage refetch keeps the last value', async () => {
+    logInAs(2)
+    vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(1, { N: 'ana', E: 'bob' }))
+    const store = useTablesStore()
+    await store.loadTable(1)
+
+    vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
+    pushUpdate(broadcastOf({ ...makeTable(1, { N: 'ana', E: 'bob' }), moderated_by: 2 }))
+    await flushPromises()
+
+    expect(store.currentTable?.moderated_by).toBe(2)
+    expect(store.currentTable?.can_manage).toBe(false)
+  })
+
+  test('a browser that refuses localStorage only loses the set memory', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied')
+    })
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('denied')
+    })
+    logInAs(2)
+    vi.mocked(tablesService.getTable).mockResolvedValue(runningSet())
+
+    await expect(useTablesStore().loadTable(1)).resolves.toMatchObject({ id: 1 })
+    expect(setItem).toHaveBeenCalled()
+  })
+
+  test('a held Leave from a table we were not following starts following it, held', async () => {
+    logInAs(2)
+    const held = runningSet()
+    held.seats[1].away_since = '2026-10-03T12:00:00.000000Z'
+    held.seats[1].forfeit_at = '2026-10-03T12:03:00.000000Z'
+    vi.mocked(tablesService.leaveSeat).mockResolvedValue(held)
+    const store = useTablesStore()
+
+    await expect(store.leave(1)).resolves.toEqual({ tableDeleted: false, held: true })
+
+    expect(store.watchedTableId).toBe(1)
+    expect(store.heldTableId).toBe(1)
+  })
+})

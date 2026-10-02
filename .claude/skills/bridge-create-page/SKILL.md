@@ -210,7 +210,19 @@ Two sets, both in the same change as the code:
 
 ## 4. Verify
 
-Run in parallel: `npm run build` (vue-tsc + vite), `npm run lint`, `npx vitest run`.
+Run in parallel: `npm run build` (vue-tsc + vite), `npm run lint`, `npm run test:coverage`.
+
+**Coverage is a hard gate (CLAUDE.md, "Coverage: 95 % on every task"):** every
+file the page adds or touches (view, service, store, components, utils) must
+have ≥ 95 % of its lines covered, and the app's totals stay above the
+thresholds in `vite.config.ts`. Read the per-file table `test:coverage`
+prints; open `coverage/index.html` for the uncovered lines. A page test
+covers each state (loading, loaded, empty, 401 → /login, 404, other error),
+every button and emitted event, and pull to refresh (emit `ionRefresh` on
+`IonRefresher` with `{ target: { complete } }`). `onIonViewWillEnter` never
+fires in jsdom: mock it as `onMounted`; stub `IonModal` with
+`<div><slot /></div>` so a sheet's content renders. Never lower a threshold
+or exclude a file to pass.
 Run `npm install` first if `node_modules` is missing (fresh worktrees don't have it)
 **or if Vite reports a dependency it "could not resolve"** — a `node_modules` that
 exists can still be stale after the lockfile changes, and `pinia`/`axios` went
@@ -286,7 +298,8 @@ missing exactly that way. Fix anything that fails before committing. Don't commi
 
 ## 7. Report
 
-Keep it short: PR link, what's on the page, what was verified (build/lint/tests,
+Keep it short: PR link, what's on the page, what was verified (build/lint/tests
+and the coverage of the files touched,
 real backend responses), what's still running in the background, anything
 blocked (with the exact cause and the fix you need from the user), and what you
 changed in this skill in step 8.
@@ -457,3 +470,6 @@ history below, and commit the skill changes on the page's branch (a separate
   `bridge_docs` folder, but the user moved them into the repo so they're
   reviewed and versioned with the code; the backend followed in
   bridge_backend#61.
+- Issue #91 (code coverage, no page): `npm run test:coverage` replaced
+  `npx vitest run` in Verify; every file a page touches must stay ≥ 95 % of
+  lines (the user's rule for every task), with the page-test checklist above.

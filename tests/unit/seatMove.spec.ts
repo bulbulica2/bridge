@@ -1,7 +1,29 @@
-import { describe, expect, test } from 'vitest'
-import { heldNotice, leaveMessage, leaveNote, leaveWarning, moveConsequences, whoIsLeft } from '@/utils/seatMove'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { alertController } from '@ionic/vue'
+import {
+  confirmLeave,
+  confirmMove,
+  heldNotice,
+  leaveMessage,
+  leaveNote,
+  leaveWarning,
+  moveConsequences,
+  whoIsLeft,
+} from '@/utils/seatMove'
 import type { SetAtStake } from '@/utils/away'
 import type { Seat, Table } from '@/services/tables'
+
+// The alert answers with whichever role the test picks.
+let dismissedWith: string | undefined
+vi.mock('@ionic/vue', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ionic/vue')>()),
+  alertController: {
+    create: vi.fn(async () => ({
+      present: vi.fn(),
+      onDidDismiss: async () => ({ role: dismissedWith }),
+    })),
+  },
+}))
 
 // Seats are given as seat -> user id; ids from 100 up are robots.
 function makeTable(
@@ -173,5 +195,68 @@ describe('moving mid-set', () => {
     const lines = moveConsequences(makeTable({ N: 1, E: 2, S: 3, W: 4 }, { moderatedBy: 2, boardId: 9 }), 1, 'finished', NO_FORFEIT)
 
     expect(lines[1]).toBe('Set 3 there ends with no winner.')
+  })
+})
+
+describe('confirmation alerts', () => {
+  const stake: SetAtStake = { number: 2, seat: 'N', side: 'NS', forfeits: true }
+
+  beforeEach(() => {
+    vi.mocked(alertController.create).mockClear()
+  })
+
+  function lastAlert() {
+    return vi.mocked(alertController.create).mock.calls.at(-1)![0] as {
+      header: string
+      message: string
+      buttons: { text: string; role: string }[]
+    }
+  }
+
+  test('confirmMove asks before moving and says yes only on Move', async () => {
+    const from = makeTable({ N: 1, E: 2 }, { moderatedBy: 2 })
+    dismissedWith = 'confirm'
+
+    await expect(confirmMove(from, { id: 9, name: 'Late night' }, 1)).resolves.toBe(true)
+    expect(lastAlert().header).toBe('Move to Late night?')
+    expect(lastAlert().message).toBe(moveConsequences(from, 1).join(' '))
+    expect(lastAlert().buttons.map((b) => b.text)).toEqual(['Cancel', 'Move'])
+
+    dismissedWith = 'cancel'
+    await expect(confirmMove(from, { id: 9, name: 'Late night' }, 1)).resolves.toBe(false)
+  })
+
+  test('confirmMove is sterner when the move loses the set', async () => {
+    dismissedWith = 'backdrop'
+
+    await expect(
+      confirmMove(makeTable({ N: 1, E: 2, S: 3, W: 4 }), { id: 9, name: 'Late night' }, 1, 'play', stake),
+    ).resolves.toBe(false)
+    expect(lastAlert().header).toBe('Move to Late night and lose the set?')
+    expect(lastAlert().buttons[1].text).toBe('Move anyway')
+  })
+
+  test('confirmLeave asks before leaving and says yes only on Leave', async () => {
+    const table = makeTable({ N: 1, E: 2 })
+    dismissedWith = 'destructive'
+
+    await expect(confirmLeave(table, 1, 'finished', 3)).resolves.toBe(true)
+    expect(lastAlert().header).toBe('Leave this table?')
+    expect(lastAlert().message).toBe(leaveMessage(table, 1, 'finished', 3))
+    expect(lastAlert().buttons[1].text).toBe('Leave')
+
+    dismissedWith = 'cancel'
+    await expect(confirmLeave(table, 1, 'finished', 3)).resolves.toBe(false)
+  })
+
+  test('confirmLeave names the set at stake', async () => {
+    dismissedWith = 'destructive'
+
+    await confirmLeave(makeTable({ N: 1, E: 2, S: 3, W: 4 }), 1, 'play', 2, stake)
+    expect(lastAlert().header).toBe('Leave in the middle of set 2?')
+    expect(lastAlert().buttons[1].text).toBe('Leave anyway')
+
+    await confirmLeave(makeTable({ N: 1, E: 2, S: 3, W: 4 }), 1, 'play', 2, { ...stake, forfeits: false })
+    expect(lastAlert().buttons[1].text).toBe('Leave')
   })
 })

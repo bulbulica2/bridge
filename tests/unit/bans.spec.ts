@@ -179,6 +179,15 @@ describe('BanUserForm', () => {
     return mount(BanUserForm, { props: { user: bob } })
   }
 
+  test('Cancel gives up without sending', async () => {
+    const wrapper = mountForm()
+
+    await wrapper.findAll('ion-button').find((b) => b.text() === 'Cancel')!.trigger('click')
+
+    expect(wrapper.emitted('cancel')).toHaveLength(1)
+    expect(http.post).not.toHaveBeenCalled()
+  })
+
   test('refuses to send without a reason', async () => {
     const wrapper = mountForm()
 
@@ -261,6 +270,33 @@ describe('Ban on the profile sheet', () => {
     useAuthStore().user = admin
     expect(banButton(mountSheet(otherAdmin))).toBeUndefined()
     expect(banButton(mountSheet(robot))).toBeUndefined()
+  })
+
+  test('the form closes on a ban (showing it) or Cancel, and dismissing closes the sheet', async () => {
+    useAuthStore().user = admin
+    // A stub that passes the modal's dismissal on.
+    const dismissable = { name: 'IonModal', emits: ['didDismiss'], template: '<div><slot /></div>' }
+    vi.mocked(http.get).mockResolvedValue({ data: { status: 200, message: '', data: bob } })
+    const wrapper = mount(PlayerProfileSheet, {
+      props: { player: bob },
+      global: { stubs: { IonModal: dismissable, 'ion-modal': dismissable } },
+    })
+    await flushPromises()
+
+    await banButton(wrapper)!.trigger('click')
+    useUsersStore().profiles[9] = { ...bob, ban: adminBan() }
+    wrapper.findComponent(BanUserForm).vm.$emit('banned', adminBan())
+    await flushPromises()
+    expect(wrapper.findComponent(BanUserForm).exists()).toBe(false)
+    expect(wrapper.text()).toContain('Banned until 12 Oct 2026')
+
+    await banButton(wrapper)!.trigger('click')
+    wrapper.findComponent(BanUserForm).vm.$emit('cancel')
+    await flushPromises()
+    expect(wrapper.findComponent(BanUserForm).exists()).toBe(false)
+
+    wrapper.findComponent({ name: 'IonModal' }).vm.$emit('didDismiss')
+    expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
   test('shows an admin the ban in force', async () => {

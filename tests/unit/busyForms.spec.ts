@@ -131,6 +131,18 @@ describe('Login form remember me', () => {
     expect(authService.login).toHaveBeenCalledWith(expect.objectContaining({ remember: false }))
   })
 
+  test('sends the email and password typed in', async () => {
+    const wrapper = mount(LoginPage)
+    const [email, password] = wrapper.findAllComponents(IonInput)
+    await email.setValue('ana@example.com')
+    await password.setValue('secret12')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(authService.login).toHaveBeenCalledWith({ email: 'ana@example.com', password: 'secret12', remember: false })
+  })
+
   test('sends remember: true once ticked', async () => {
     const wrapper = mount(LoginPage)
     wrapper.findComponent(IonCheckbox).vm.$emit('update:modelValue', true)
@@ -232,6 +244,16 @@ describe('Profile edit', () => {
     expect(showToast).toHaveBeenCalledWith('Profile updated.', 'success')
     expect(wrapper.find('form').exists()).toBe(false)
     expect(wrapper.find('.identity h1').text()).toBe('Ana Maria')
+  })
+
+  test('Cancel leaves the edit mode without saving', async () => {
+    const wrapper = await editPage()
+    expect(wrapper.find('form').exists()).toBe(true)
+
+    await button(wrapper, 'Cancel').trigger('click')
+
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(authService.updateProfile).not.toHaveBeenCalled()
   })
 
   test('clearing the description sends null', async () => {

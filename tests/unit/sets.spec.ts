@@ -8,6 +8,7 @@ import type { PlayingHistoryEntry, SetBoardRow, SetResults } from '@/services/hi
 import type { Bid, PublicPlaying, SetPosition } from '@/services/game'
 import type { BroadcastTable, Seat } from '@/services/tables'
 import type { PublicUser } from '@/services/users'
+import { IonButton, IonInfiniteScroll, IonRefresher } from '@ionic/vue'
 import SetResultsPanel from '@/components/SetResultsPanel.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useHistoryStore } from '@/stores/history'
@@ -354,5 +355,122 @@ describe('SetResultsPage', () => {
 
     expect(http.get).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain("This set doesn't exist.")
+  })
+})
+
+describe('SetResultsPage failures and refreshing', () => {
+  test('a 404 is a set that does not exist', async () => {
+    vi.mocked(http.get).mockRejectedValueOnce(axiosError(404, { message: 'Not Found' }))
+
+    const wrapper = mount(SetResultsPage)
+    await flushPromises()
+
+    expect(wrapper.get('.gone').text()).toContain("This set doesn't exist.")
+  })
+
+  test('a 401 sends the user to log in', async () => {
+    vi.mocked(http.get).mockRejectedValueOnce(axiosError(401, { message: 'Unauthenticated.' }))
+
+    mount(SetResultsPage)
+    await flushPromises()
+
+    expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
+  })
+
+  test('another failure shows an error; Refresh and pull to refresh read it again', async () => {
+    useAuthStore().user = { id: 4, name: 'Di', username: 'di', email: 'di@example.com' }
+    vi.mocked(http.get).mockRejectedValueOnce(new Error('offline'))
+    const wrapper = mount(SetResultsPage)
+    await flushPromises()
+    expect(wrapper.get('.error').text()).toBe('Could not load the set. Please try again.')
+
+    answer(results())
+    const complete = vi.fn()
+    wrapper.findComponent(IonRefresher).vm.$emit('ionRefresh', { target: { complete } })
+    await flushPromises()
+    expect(complete).toHaveBeenCalled()
+    expect(wrapper.find('.error').exists()).toBe(false)
+
+    answer(results())
+    await wrapper.findAllComponents(IonButton).find((b) => b.classes('refresh'))!.trigger('click')
+    await flushPromises()
+    expect(http.get).toHaveBeenCalledTimes(3)
+  })
+
+  test('pull to refresh on a dead set only closes the refresher', async () => {
+    route.params = { id: 'abc' }
+    const wrapper = mount(SetResultsPage)
+    await flushPromises()
+    const complete = vi.fn()
+
+    wrapper.findComponent(IonRefresher).vm.$emit('ionRefresh', { target: { complete } })
+    await flushPromises()
+
+    expect(http.get).not.toHaveBeenCalled()
+    expect(complete).toHaveBeenCalled()
+  })
+})
+
+describe('My boards, paging and refreshing', () => {
+  const firstPage = (last: number) => ({
+    current_page: 1,
+    data: [entry(48, null, 420)],
+    last_page: last,
+    next_page_url: null,
+    per_page: 20,
+    total: 2,
+  })
+
+  beforeEach(() => {
+    useAuthStore().user = { id: 2, name: 'Bo', username: 'bo', email: 'bo@example.com' }
+  })
+
+  test('pull to refresh reads the first page again', async () => {
+    answer(firstPage(1))
+    const wrapper = mount(HistoryPage)
+    await flushPromises()
+    const complete = vi.fn()
+
+    answer(firstPage(1))
+    wrapper.findComponent(IonRefresher).vm.$emit('ionRefresh', { target: { complete } })
+    await flushPromises()
+
+    expect(http.get).toHaveBeenCalledTimes(2)
+    expect(complete).toHaveBeenCalled()
+  })
+
+  test('scrolling down pages in older boards', async () => {
+    answer(firstPage(2))
+    const wrapper = mount(HistoryPage)
+    await flushPromises()
+    const complete = vi.fn()
+
+    answer({ ...firstPage(2), current_page: 2, data: [entry(40, null, -50)] })
+    wrapper.findComponent(IonInfiniteScroll).vm.$emit('ionInfinite', { target: { complete } })
+    await flushPromises()
+
+    expect(complete).toHaveBeenCalled()
+    expect(wrapper.findAllComponents({ name: 'IonItem' }).map((i) => i.props('routerLink'))).toEqual([
+      '/playings/48',
+      '/playings/40',
+    ])
+  })
+
+  test('a failed older page says so, and an expired session goes to log in', async () => {
+    answer(firstPage(3))
+    const wrapper = mount(HistoryPage)
+    await flushPromises()
+    const complete = vi.fn()
+
+    vi.mocked(http.get).mockRejectedValueOnce(new Error('offline'))
+    wrapper.findComponent(IonInfiniteScroll).vm.$emit('ionInfinite', { target: { complete } })
+    await flushPromises()
+    expect(wrapper.get('.error').text()).toBe('Could not load older boards. Pull down to try again.')
+    expect(complete).toHaveBeenCalled()
+
+    vi.mocked(http.get).mockRejectedValueOnce(axiosError(401, { message: 'Unauthenticated.' }))
+    wrapper.findComponent(IonInfiniteScroll).vm.$emit('ionInfinite', { target: { complete } })
+    await flushPromises()
+    expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
   })
 })

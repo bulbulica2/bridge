@@ -17,7 +17,8 @@ npm run build         # type-check (vue-tsc) then production build to dist/
 npm run preview        # serve the production build locally
 npm run lint          # eslint .
 npm run test:unit        # run unit tests (Vitest, jsdom environment, watch mode)
-npm run test:unit:ci      # run unit tests once (vitest run), as CI does
+npm run test:unit:ci      # run unit tests once (vitest run)
+npm run test:coverage      # unit tests once with coverage + the 95 % rule, as CI does
 npm run test:e2e        # run e2e tests headlessly (Cypress)
 ```
 
@@ -32,11 +33,36 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
 
 CI (`.github/workflows/ci.yml`, Node from `.nvmrc`) runs four parallel jobs on
 every PR to `main` and every push to `main`: `lint` (`npm run lint`), `unit`
-(`npm run test:unit:ci`), `build` (`npm run build`) and `e2e` (the guest-only
+(`npm run test:coverage`), `build` (`npm run build`) and `e2e` (the guest-only
 smoke `tests/e2e/specs/home.cy.ts` against `vite preview` on port 3000, no
 backend: it stubs `GET /api/user` as 401). Keep all four green; the job names
 are what branch protection requires, so don't rename them. Ubuntu is
 case-sensitive: an import's case must match the file's.
+
+## Coverage: 95 % on every task, no exceptions
+
+The user's standing rule (#91): **no task may leave code coverage under
+95 %.** Every task ships as close to perfect as it can be.
+
+- Every file under `src/` keeps **≥ 95 % of its lines** covered
+  (`scripts/coverage-check.mjs`), and the app as a whole ≥ 95 % of lines,
+  statements and functions and ≥ 90 % of branches (thresholds in
+  `vite.config.ts`). `npm run test:coverage` and CI's `unit` job fail
+  otherwise.
+- Each task writes the tests for the code it adds or changes in the same
+  PR: aim for every new line, branch and function covered, not just the
+  95 % floor. Touching a file means it leaves the PR at ≥ 95 % even if it
+  was lower before.
+- Run `npm run test:coverage` before every commit of a task and read the
+  table for the files you touched; `coverage/index.html` shows the
+  uncovered lines.
+- Never lower a threshold, add a file to the coverage `exclude`, or add
+  `/* v8 ignore */` comments to get under the bar. Raise the branches
+  threshold when the totals allow it.
+- Every new issue (card) written for this repo lists in its Acceptance:
+  "`npm run test:coverage` passes; every file the task adds or touches has
+  ≥ 95 % of its lines covered by unit tests". Every PR's test plan reports
+  the coverage of the files it touched.
 
 ## Architecture
 
