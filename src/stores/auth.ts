@@ -6,6 +6,7 @@ import { useGameStore } from '@/stores/game';
 import { useHistoryStore } from '@/stores/history';
 import { useTablesStore } from '@/stores/tables';
 import type {
+  Ban,
   LoginCredentials,
   PasswordResetData,
   PasswordResetRequest,
@@ -17,6 +18,13 @@ import type {
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null);
   const isAuthenticated = computed(() => user.value !== null);
+  // The ban in force on the logged-in user (GET /api/user's `ban`): every
+  // page shows it (AppHeader's BanBanner) and the game is closed to them.
+  // It ends by itself at `until`; the next reload finds it gone.
+  const ban = computed(() => user.value?.ban ?? null);
+  const isBanned = computed(() => ban.value !== null);
+  // A ban that has just thrown the user out (UserBanned), shown until dismissed.
+  const banNotice = ref<Ban | null>(null);
 
   // The store lives in memory, but the Sanctum session lives in a cookie, so on
   // a page reload we have to ask the backend who we are before the router guard
@@ -27,6 +35,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(credentials: LoginCredentials) {
     await authService.login(credentials);
     user.value = await authService.fetchUser();
+    banNotice.value = null;
     useGameStore().watchUser(user.value.id);
     sessionCheck = Promise.resolve();
   }
@@ -42,16 +51,36 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       await authService.logout();
     } finally {
-      // Whatever the server says, this client is done with the session, and
-      // with the table and user channels it could only hold while logged in.
-      useTablesStore().unwatchTable();
-      useTablesStore().dismissLostSet();
-      useGameStore().unwatchUser();
-      useHistoryStore().clear();
-      disconnectEcho();
-      user.value = null;
-      sessionCheck = Promise.resolve();
+      endSession();
     }
+  }
+
+  // This client is done with the session, and with the table and user
+  // channels it could only hold while logged in.
+  function endSession() {
+    useTablesStore().unwatchTable();
+    useTablesStore().dismissLostSet();
+    useGameStore().unwatchUser();
+    useHistoryStore().clear();
+    disconnectEcho();
+    user.value = null;
+    sessionCheck = Promise.resolve();
+  }
+
+  // UserBanned on our own channel (the game store's watchUser listens): the
+  // backend has already freed our seat and deleted the session, so there is
+  // no POST /logout, only the local half of it. The ban stays in `banNotice`
+  // until the user dismisses it (BanNotice.vue, which also goes to /login).
+  function applyBan(ban: Ban) {
+    if (!user.value) {
+      return;
+    }
+    banNotice.value = ban;
+    endSession();
+  }
+
+  function dismissBanNotice() {
+    banNotice.value = null;
   }
 
   // Resolves once we know whether there is a live session. Safe to await on
@@ -97,6 +126,9 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user,
     isAuthenticated,
+    ban,
+    isBanned,
+    banNotice,
     login,
     register,
     logout,
@@ -104,5 +136,7 @@ export const useAuthStore = defineStore('auth', () => {
     requestPasswordReset,
     resetPassword,
     updateProfile,
+    applyBan,
+    dismissBanNotice,
   };
 });

@@ -37,6 +37,29 @@
             <p v-else class="profile-empty">No description yet.</p>
           </div>
 
+          <!-- Admins only: GET /users/{id} gives them the ban in force. -->
+          <div v-if="profile.ban" class="card ban-card">
+            <p class="ban-until">Banned until {{ banDate(profile.ban.until) }}</p>
+            <p class="ban-reason">{{ profile.ban.reason }}</p>
+            <p class="ban-by">
+              Since {{ banDate(profile.ban.banned_at) }}<template v-if="profile.ban.banned_by">,
+              by @{{ profile.ban.banned_by.username }}</template>
+            </p>
+            <ion-button size="small" fill="outline" :disabled="lifting" @click="lift">
+              <ion-spinner v-if="lifting" name="crescent" />
+              <span v-else>Lift ban</span>
+            </ion-button>
+          </div>
+
+          <template v-if="canBan(auth.user, profile)">
+            <div v-if="banning" class="card">
+              <BanUserForm :user="profile" @banned="banning = false" @cancel="banning = false" />
+            </div>
+            <ion-button v-else expand="block" color="danger" fill="outline" class="ban-open" @click="banning = true">
+              {{ profile.ban ? 'Ban again' : 'Ban' }}
+            </ion-button>
+          </template>
+
           <p v-if="isMe" class="profile-mine">
             This is you. Edit it on your <router-link to="/account">Account</router-link> page.
           </p>
@@ -78,10 +101,13 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
+import BanUserForm from '@/components/BanUserForm.vue';
 import HistoryList from '@/components/HistoryList.vue';
 import { useUsersStore } from '@/stores/users';
 import { useAuthStore } from '@/stores/auth';
+import { banDate, canBan } from '@/utils/ban';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { showToast } from '@/utils/toast';
 
 const route = useRoute();
 const ionRouter = useIonRouter();
@@ -92,6 +118,9 @@ const userId = ref(0);
 const loading = ref(false);
 const loadError = ref('');
 const notFound = ref(false);
+// The admin's ban form is open, and a lift is on its way.
+const banning = ref(false);
+const lifting = ref(false);
 
 const profile = computed(() => store.profiles[userId.value] ?? null);
 const isMe = computed(() => !!userId.value && auth.user?.id === userId.value);
@@ -111,6 +140,7 @@ onIonViewWillEnter(() => {
   }
   userId.value = id;
   notFound.value = false;
+  banning.value = false;
   load();
 });
 
@@ -136,6 +166,20 @@ async function load() {
     loadError.value = errorMessage(e, 'Could not load this profile. Please try again.');
   } finally {
     loading.value = false;
+  }
+}
+
+// The user just logs in again to play: the ban already ended their sessions.
+async function lift() {
+  lifting.value = true;
+  try {
+    await store.liftBan(userId.value);
+    await showToast('Ban lifted. They can play once they log in again.', 'success');
+  } catch (e) {
+    // 404: it had already ended or been lifted, and the store dropped it.
+    await showToast(errorMessage(e, 'Could not lift the ban. Please try again.'), 'danger');
+  } finally {
+    lifting.value = false;
   }
 }
 
@@ -235,6 +279,32 @@ async function refresh(event: CustomEvent) {
 
 .refresh {
   margin-top: 8px;
+}
+
+.ban-card {
+  border-color: var(--ion-color-danger);
+}
+
+.ban-until {
+  margin: 0 0 8px;
+  font-weight: 600;
+  color: var(--ion-color-danger);
+}
+
+.ban-reason {
+  margin: 0 0 8px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.ban-by {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: var(--ion-color-medium);
+}
+
+.ban-open {
+  margin-bottom: 16px;
 }
 
 .boards-title {

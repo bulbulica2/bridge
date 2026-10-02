@@ -69,7 +69,8 @@ case-sensitive: an import's case must match the file's.
 - **Route guard**: a single `router.beforeEach` in `src/router/index.ts` enforces
   the route meta declared in the same file (`RouteMeta` is augmented there):
   `requiresAuth` sends guests to `/login`, `guestOnly` sends logged-in users to
-  `/account`. It awaits `authStore.loadSession()` first, which calls
+  `/account`, `notBanned` (on `/tables/:id` and `/tables/:id/play`) sends a
+  banned user (`auth.isBanned`) to `/tables`. It awaits `authStore.loadSession()` first, which calls
   `GET /api/user` once per page load so a reload on an auth-only page doesn't
   bounce a user whose Sanctum session cookie is still valid.
 - **Loading feedback**: `src/router/loading.ts` holds the route-loading flag.
@@ -97,7 +98,9 @@ case-sensitive: an import's case must match the file's.
   that outlet id. Every page wraps its content in `<ion-page>` and uses
   `src/components/AppHeader.vue` (menu button + `title` prop, an `end` slot for
   per-page header actions, and an "Account" button linking to `/account` that
-  the header itself renders whenever the auth store says somebody is logged in).
+  the header itself renders whenever the auth store says somebody is logged in,
+  and `BanBanner.vue` under the toolbar while the user is banned).
+  `App.vue` also holds `BanNotice.vue` (see Bans).
   `AppMenu.vue` is auth-aware too: "Login" while logged out, "Tables" and
   "My boards" once logged in. Because both read the auth store, mounting any page in a unit test
   needs an active Pinia.
@@ -198,7 +201,8 @@ case-sensitive: an import's case must match the file's.
   a reload or reconnect rebuilds it); `PlayingUpdated` replaces the public part
   and carries the hand over (less any card played); `HandDealt` on the user's
   own channel `private-App.Models.User.{id}` brings a new board's hand, kept
-  as pending if it beats that board's `PlayingUpdated`. A `TableUpdated` whose
+  as pending if it beats that board's `PlayingUpdated` (the same channel's
+  `UserBanned` goes to the auth store, see Bans). A `TableUpdated` whose
   `board_id` went back to null mid-board means a player left and the board was
   abandoned: toast and back to `waiting`. The auth store follows the user
   channel from login/session restore to logout (`watchUser`/`unwatchUser`).
@@ -367,7 +371,7 @@ case-sensitive: an import's case must match the file's.
   `confirmLeave`/`leaveMessage`/`leaveWarning`/`heldNotice` and
   `confirmMove`/`moveConsequences` in `seatMove.ts`. The game store toasts
   a forfeit once (`forfeitToldFor`). `User.is_admin` (own record) is read
-  only for `setAtStake`.
+  only for `setAtStake` and `canBan` (Bans).
 - **Results and history**: `src/services/history.ts` also wraps
   `GET /users/{id}/playings` and `GET /boards/{id}/results` (every table's
   finished playing of a board, best N-S first, with `matchpoints` `{ns, ew}`
@@ -422,9 +426,32 @@ case-sensitive: an import's case must match the file's.
   `printing-board` to `<body>`, teleports `BoardPrintout.vue` there,
   `window.print()`, and drops it on `afterprint`/view leave;
   `src/theme/print.css` hides the rest and unpins Ionic's fixed body.
+- **Bans** (#75, bb#77, backend `docs/API.md` Bans, `docs/AUTH.md` Bans):
+  an admin bans a user for 1–365 days with a reason. `src/utils/ban.ts`:
+  `canBan(viewer, target)` (viewer `is_admin`, target never themselves, an
+  admin (`PublicUser.is_admin`, public since bb#45) or a robot),
+  `banFormErrors`, `banDate` ("12 Oct 2026", spelled out, not
+  `toLocaleDateString`), `banText`. `BanUserForm.vue` (inline on
+  `UserProfilePage` and in `PlayerProfileSheet`; quick picks 1/7/30)
+  calls the users store's `ban` (`POST /users/{id}/ban`, toasts the
+  answer's message), which writes the ban onto the cached profile; an
+  admin's `GET /users/{id}` carries `ban` (`UserBan`: `banned_by`,
+  `lifted_*`, `active`) and `bans`. The profile page shows it with **Lift
+  ban** (`liftBan`, `DELETE`, a 404 drops the cached ban). The banned user:
+  the own `User.ban` (`Ban` = `{reason, until, banned_at}`, no admin) is
+  the auth store's `ban`/`isBanned`; `UserBanned` on the user channel
+  (`listenToUser`'s third handler, from the game store's `watchUser`) calls
+  `auth.applyBan`, which runs `endSession()` (logout's local half, no
+  `POST /logout`: the backend already deleted the session) and sets
+  `banNotice`; `BanNotice.vue` navigates to `/login` and shows it in a
+  modal until `dismissBanNotice` (plain text, not `ion-alert`, whose
+  message is HTML). Logged in while banned: `BanBanner` on every page,
+  the guard's `notBanned`, and `TablesPage` replaces Create with the ban,
+  disables seats and hides Open. Game actions 403 with the ban in the
+  message, which `errorMessage` already shows.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
-  `username`, `description`, `is_robot`, never the email); `TableSeat.user` uses that type
+  `username`, `description`, `is_robot`, `is_admin`, never the email); `TableSeat.user` uses that type
   too, since table payloads embed the same profile per seat. The Pinia store
   `src/stores/users.ts` caches profiles by id (a 404 drops the cached one).
   Tapping a seated player's name on either table page opens

@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/57-ci-tests-on-pr`._
+_Status as of branch `bulbulica2/54-user-bans`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -29,14 +29,14 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | Folder | What lives there |
 |---|---|
 | `src/main.ts` | creates the app: Ionic, Pinia, the router, Ionic's CSS, dark mode |
-| `src/App.vue` | the shell: side menu, router outlet, route progress bar |
+| `src/App.vue` | the shell: side menu, router outlet, route progress bar, the ban notice |
 | `src/router/` | `index.ts` (routes + guard + chunk and bid-list prefetch), `loading.ts` (the progress bar flag, `navigateAndSettle`) |
 | `src/views/` | one `*Page.vue` per route |
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance) and `echo.ts` (the websocket) |
 | `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away countdown) |
-| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording |
+| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
@@ -50,7 +50,10 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 that id. Every page wraps its content in `<ion-page>` and starts with
 `<AppHeader title="…">`, which draws the menu button, the title, an `end`
 slot for page actions and, while somebody is logged in, an **Account**
-button.
+button. While the logged-in user is banned, `AppHeader` also shows
+`BanBanner` under its toolbar (**You are banned until 12 Oct 2026:
+<reason>**), so the ban is on every page. `App.vue` holds `BanNotice`,
+the dialog shown when a ban throws the user out (see [Bans](#bans)).
 
 The menu depends on the auth state: **Home** always, **Login** for guests,
 **Tables** and **My boards** once logged in. Other pages are reached from
@@ -73,8 +76,8 @@ All routes are flat and lazy loaded, in `src/router/index.ts`:
 | `/password-reset/:token` | `ResetPasswordPage` (choose a new password) | guests only |
 | `/account` | `AccountPage` | logged in |
 | `/tables` | `TablesPage` | logged in |
-| `/tables/:id` | `TableDetailPage` | logged in |
-| `/tables/:id/play` | `TablePlayPage` | logged in |
+| `/tables/:id` | `TableDetailPage` | logged in, not banned |
+| `/tables/:id/play` | `TablePlayPage` | logged in, not banned |
 | `/history` | `HistoryPage` | logged in |
 | `/boards/:id/results` | `BoardResultsPage` | logged in |
 | `/sets/:id` | `SetResultsPage` | logged in |
@@ -83,7 +86,9 @@ All routes are flat and lazy loaded, in `src/router/index.ts`:
 
 Access is declared as route meta and enforced by one `router.beforeEach`:
 `meta.requiresAuth` sends a guest to `/login`, `meta.guestOnly` sends a
-logged-in user to `/account`. Before deciding, the guard awaits
+logged-in user to `/account`, and `meta.notBanned` sends a banned user to
+`/tables`, where the lobby is still readable but its actions are replaced
+by the ban. Before deciding, the guard awaits
 `authStore.loadSession()`, which calls `GET /api/user` **once per page
 load**. That's what keeps you logged in across a browser reload: the
 Sanctum session cookie is still valid, the SPA just has to ask.
@@ -106,7 +111,9 @@ flow, and why the origin must be `localhost:3000`, is in
 
 `src/stores/auth.ts` holds the logged-in `user` and exposes `login`,
 `register`, `logout`, `loadSession`, `requestPasswordReset`,
-`resetPassword` and `updateProfile`. On login or session restore it has
+`resetPassword` and `updateProfile`, plus the ban state (`ban`,
+`isBanned`, `banNotice`, `applyBan`, `dismissBanNotice`, see
+[Bans](#bans)). On login or session restore it has
 the `game` store follow the user's private channel; logout drops that and
 the table channel, closes the socket and clears the `history` store (see
 [Realtime](#realtime)).
@@ -126,15 +133,45 @@ to `/forgot-password`, the backend emails a link to
 the "choose a new password" form. A reset doesn't log you in, so the page
 sends you to `/login` afterwards.
 
+## Bans
+
+An admin can ban a user for 1–365 days with a reason (bb#77, backend
+[`API.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md#bans)
+and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs/AUTH.md#bans)).
+
+- **The admin's side.** `canBan(viewer, target)` in `src/utils/ban.ts` says
+  who gets **Ban**: an admin (`user.is_admin`), never on themselves, another
+  admin or a robot. `BanUserForm.vue` (on the profile page and in the
+  profile sheet) checks the days and reason with `banFormErrors` and calls
+  the `users` store's `ban`, which posts `POST /users/{id}/ban` and puts the
+  answer on the cached profile. An admin's `GET /users/{id}` carries the
+  user's `ban` (and `bans`, the history); the profile page shows it with
+  **Lift ban** (`liftBan`, `DELETE /users/{id}/ban`).
+- **Thrown out at once.** The ban frees the user's seat and deletes their
+  sessions on the server, then sends `UserBanned` on their own channel. The
+  `game` store's user-channel listener hands it to `auth.applyBan`, which
+  does the local half of a logout (no `POST /logout`: the session is
+  already gone) and keeps the ban in `banNotice`. `BanNotice.vue` (in
+  `App.vue`) goes to `/login` and shows why until the user taps OK.
+- **Logged in while banned.** Logging in still works. `GET /api/user`
+  carries `ban` (`{reason, until, banned_at}`), which the `auth` store
+  exposes as `ban` / `isBanned`. Every page shows it through `BanBanner`;
+  the guard keeps the user off the table and play pages; the Tables page
+  shows the ban in place of **Create table**, disables the seat buttons and
+  hides **Open**. History, profiles and the account work as usual. The ban
+  ends by itself at `until`; the app notices on the next reload.
+- **Anything else** a banned user tries gets a 403 whose message names the
+  ban, which `errorMessage` shows as it comes.
+
 ## Stores
 
 | Store | Holds | Main actions |
 |---|---|---|
-| `auth` | `user` (own record, with email) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset |
+| `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `lostSet` (a set your side forfeited while you were away) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `comeBack`, `stakeOf`, `dismissLostSet`; owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `adopt`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadSet`, `loadReview` |
-| `users` | public profiles by id | `load` |
+| `users` | public profiles by id (with `ban`/`bans` for an admin) | `load`, `ban`, `liftBan` |
 
 A table changed by any answer or broadcast is written into both `tables`
 and `currentTable`, so the list and the detail page stay in step. `create`
@@ -171,7 +208,7 @@ so every extra request on the way in delays the one the page needs:
 | `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
 | `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `POST /tables/{id}/calls`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
 | `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /playings/{id}`, `GET /sets/{id}` |
-| `users.ts` | `GET /users/{id}`, `GET /users?search=` |
+| `users.ts` | `GET /users/{id}`, `GET /users?search=`, `POST` / `DELETE /users/{id}/ban` |
 | `echo.ts` | the websocket, and `POST /broadcasting/auth` to sign private channels |
 
 Most game endpoints sit at the root (not under `/api`) and answer with an
@@ -292,7 +329,7 @@ doesn't send the XSRF header Sanctum wants.
 | Channel | Who owns it | Events |
 |---|---|---|
 | `private-table.{id}` | `tables` store, following your seat | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state, handed to the `game` store) |
-| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board) |
+| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
 
 - The table channel only admits players seated there, and the server never
   ends a subscription. So the `tables` store subscribes and unsubscribes

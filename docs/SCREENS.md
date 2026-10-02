@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/53-set-forfeit`._
+_Status as of branch `bulbulica2/54-user-bans`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -12,6 +12,13 @@ Endpoint shapes are in [backend `API.md`](https://github.com/bulbulica2/bridge_b
 Every page also goes through the router guard, which calls
 `GET /api/user` once per page load (see
 [`ARCHITECTURE.md`](ARCHITECTURE.md#routes-and-the-guard)).
+
+**Banned users** (#75, bb#77): while the logged-in user is banned, every
+page's header shows **You are banned until 12 Oct 2026: <reason>**, and
+the guard sends them from Table detail and Play to Tables. A ban that
+lands while the app is open (`UserBanned`) ends the session at once: the
+app goes to Login under a dialog with the reason and the end date, which
+stays until **OK**. See [`ARCHITECTURE.md`](ARCHITECTURE.md#bans).
 
 ## Map
 
@@ -128,7 +135,7 @@ Backend: `PATCH /api/user` came with bb#21 (`15-player-identity`).
 
 **Logged in**, menu item **Tables**. Built by #8; seat moves by #22;
 profile sheet by #24; robots by #53; a seat opening the table by #67;
-Start by #68; held seat by #74.
+Start by #68; held seat by #74; banned users by #75.
 
 The list of open tables, each with its four seats (robots carry a
 **robot** badge). Tap an empty seat to sit (or **move here** at your own
@@ -154,6 +161,10 @@ bb#76). After a Leave mid-set a notice at the top counts down to the
 forfeit, with **Come back to …** (opens the game). No live updates on this
 page: pull to refresh.
 
+A **banned** user still sees the list, but the ban (reason and end date)
+takes the place of **Create table**, every seat button is disabled and
+there is no **Open**.
+
 | Calls | Endpoint |
 |---|---|
 | `tables.load()` | `GET /tables` |
@@ -162,7 +173,7 @@ page: pull to refresh.
 
 Backend: bb#9 (create table, 3 active per creator), bb#12 (join a seat),
 bb#25 (joining elsewhere moves you), bb#65 (robots), bb#73 (nothing is
-dealt before Start).
+dealt before Start), bb#77 (bans).
 
 ## Table detail — `/tables/:id`
 
@@ -460,7 +471,7 @@ Backend: bb#60.
 
 ## User profile — `/users/:id`
 
-**Logged in.** Built by #24; "Boards played" by #30. Reached from the
+**Logged in.** Built by #24; "Boards played" by #30; bans by #75. Reached from the
 profile sheet (tap a seated player's name on Tables, Table detail or Play,
 then **Full profile**; a robot's sheet has no such link).
 
@@ -468,20 +479,34 @@ A player's public profile (name, username, description, never the email)
 and their finished boards, paged and grouped by set like My boards (each
 opens its review).
 
+**Admins** see more. A banned player's profile shows the ban in force
+(until when, the reason, since when and by which admin) with **Lift ban**.
+Any player but themselves, another admin or a robot has **Ban** (**Ban
+again** while banned, which replaces the ban): a form with the number of
+days (1–365, quick picks 1, 7 and 30) and a required reason, which the
+player is shown. Sending it toasts the backend's **User banned until …**;
+the player is taken off their table (mid-set their side loses the set)
+and logged out at once. The profile sheet has the same **Ban** form and
+shows the ban, but lifting it is only here.
+
 | Calls | Endpoint |
 |---|---|
-| `users.load()` | `GET /users/{id}` |
+| `users.load()` | `GET /users/{id}` (an admin also gets `ban` and `bans`) |
 | `history.loadHistory(id)`, `history.loadMore(id)` | `GET /users/{id}/playings?page=N` |
+| `users.ban()` (admins) | `POST /users/{id}/ban` |
+| `users.liftBan()` (admins) | `DELETE /users/{id}/ban` |
 
-Backend: bb#21 (public profiles), bb#43 (other users' boards).
+Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans).
 
 ## Shared pieces
 
 | Piece | Where | Calls |
 |---|---|---|
-| `AppHeader` | every page | none (reads the auth store) |
+| `AppHeader` | every page | none (reads the auth store; `BanBanner` under it while you are banned) |
+| `BanNotice` | the app shell | none (shows `auth.banNotice` after `UserBanned`, goes to Login) |
+| `BanUserForm` | User profile, profile sheet (admins) | `users.ban()` → `POST /users/{id}/ban` |
 | `AppMenu` | the app shell | none (reads the auth store) |
-| `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}` |
+| `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}`; **Ban** for admins (`BanUserForm`) |
 | `RobotBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `NextBoardBox`), profile sheet | none (`is_robot` on the user) |
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |

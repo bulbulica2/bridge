@@ -19,6 +19,32 @@ export interface PublicUser {
   username: string;
   description: string | null;
   is_robot: boolean;
+  // An admin: their seat has no Remove for anyone but another admin, and they
+  // can't be banned (bridge_backend docs/API.md, Users).
+  is_admin?: boolean;
+  // Only for an admin reading GET /users/{id}: the ban in force (null when
+  // there is none) and every ban the user has had, latest first.
+  ban?: UserBan | null;
+  bans?: UserBan[];
+}
+
+// A ban as admins see it (bridge_backend docs/API.md, Bans): who gave it and
+// who lifted it. `active` is false once lifted or past `until`.
+export interface UserBan {
+  id: number;
+  user_id: number;
+  reason: string;
+  banned_at: string;
+  until: string;
+  banned_by: PublicUser | null;
+  lifted_at: string | null;
+  lifted_by: PublicUser | null;
+  active: boolean;
+}
+
+export interface BanRequest {
+  days: number;
+  reason: string;
 }
 
 // Another user's public profile. 404 for an unknown id, 401 for guests.
@@ -39,5 +65,22 @@ export interface SearchedUser extends PublicUser {
 // minute (429), so callers debounce the input.
 export async function searchUsers(search: string): Promise<SearchedUser[]> {
   const { data } = await http.get<ApiResponse<SearchedUser[]>>('/users', { params: { search } });
+  return data.data;
+}
+
+// Admins only: bans the user for `days` (1–365) with a reason they are shown.
+// The backend frees their seat (mid-set their side forfeits), logs them out
+// and sends UserBanned. 201 with the ban and a message naming its end (plus
+// the forfeit, if it cost a set); 403 for a non-admin or a target that can't
+// be banned (yourself, an admin, a robot), 422 for bad fields.
+export async function banUser(id: number, request: BanRequest): Promise<{ ban: UserBan; message: string }> {
+  const { data } = await http.post<ApiResponse<UserBan>>(`/users/${id}/ban`, request);
+  return { ban: data.data, message: data.message };
+}
+
+// Admins only: lifts the ban in force at once. 200 with the lifted ban
+// (`active: false`), 404 when the user isn't banned.
+export async function liftBan(id: number): Promise<UserBan> {
+  const { data } = await http.delete<ApiResponse<UserBan>>(`/users/${id}/ban`);
   return data.data;
 }

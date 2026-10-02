@@ -26,6 +26,17 @@ export interface User {
   // An admin's absence never costs their side a set, and their own Leave
   // mid-set is immediate (bridge_backend docs/API.md, Away mid-set).
   is_admin?: boolean;
+  // The ban keeping the user away from the game, null when there is none
+  // (bridge_backend docs/AUTH.md, Bans). A banned user can still log in.
+  ban?: Ban | null;
+}
+
+// What the banned user is told of their ban: GET /api/user's `ban` and the
+// UserBanned event on their own channel. Never says which admin gave it.
+export interface Ban {
+  reason: string;
+  until: string;
+  banned_at: string;
 }
 
 // See bridge_backend docs/AUTH.md for the Sanctum SPA flow.
