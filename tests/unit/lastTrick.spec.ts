@@ -64,6 +64,14 @@ describe('LastTrickPopover', () => {
       right: 'E K♠',
       bottom: 'S 7♠',
     })
+    // Spread apart, each card tagged with its seat (the viewer's as "You").
+    expect(wrapper.get('.last-trick-popup .trick').classes()).toContain('spread')
+    expect(wrapper.findAll('.last-trick-popup .seat-tag').map((t) => t.text())).toEqual([
+      'N',
+      'W',
+      'E',
+      'You',
+    ])
     // The winner is ringed and named.
     expect(wrapper.get('.last-trick-popup .won').attributes('data-seat')).toBe('E')
     expect(wrapper.get('.last-trick-title').text()).toBe('Trick 4 · E wins')

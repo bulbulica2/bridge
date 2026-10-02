@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/48-forced-play-declarer-only`._
+_Status as of branch `bulbulica2/49-last-trick-readable`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -315,8 +315,8 @@ arrives, and the app falls back to what each request returns.
 | `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses |
 | `BiddingBox` | the call grid, on your turn during the auction |
 | `AuctionHistory` + `CallLabel` | the calls so far, four columns rotated like the table |
-| `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s) |
-| `LastTrickPopover` | the **Last trick** button under the trick in progress and its pop-up with the last trick's cards (a `TrickArea`); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it |
+| `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s); the winner is ringed but never drawn over a neighbour's rank and suit. `spread` (the pop-up) parts the four cards and tags each with its seat or **You** |
+| `LastTrickPopover` | the **Last trick** button under the trick in progress and its pop-up with the last trick's cards (a spread `TrickArea`, shifted sideways if centring it on the button would cross the screen's edge); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it |
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat; given `rows`, every suit column keeps room for that many cards |
 | `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest** |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw** |
