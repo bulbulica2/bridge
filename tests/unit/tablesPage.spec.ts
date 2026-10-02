@@ -6,13 +6,22 @@ import TablesPage from '@/views/TablesPage.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTablesStore } from '@/stores/tables'
 import * as tablesService from '@/services/tables'
+import { confirmMove } from '@/utils/seatMove'
+import { showToast } from '@/utils/toast'
 import type { Seat, Table } from '@/services/tables'
 
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   listTables: vi.fn(),
   createTable: vi.fn(),
+  joinSeat: vi.fn(),
+  sendHeartbeat: vi.fn(),
 }))
+vi.mock('@/utils/seatMove', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/seatMove')>()),
+  confirmMove: vi.fn(),
+}))
+vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
   leaveTable: vi.fn(),
@@ -121,5 +130,88 @@ describe('TablesPage.vue with robots', () => {
     expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: false })
     expect(navigate).not.toHaveBeenCalled()
     expect(useTablesStore().tables.map((t) => t.id)).toEqual([3])
+  })
+})
+
+describe('TablesPage.vue taking a seat', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.resetAllMocks()
+    useAuthStore().user = ana
+  })
+
+  // The seat button of `seat` in the row of table `id`.
+  function seatButton(wrapper: ReturnType<typeof mountWith>, id: number, seat: Seat) {
+    const row = wrapper.findAll('ion-list ion-item').find((r) => r.text().includes(`Table ${id}`))!
+    return row.findAll('.seat').find((s) => s.get('.seat-name').text() === seat)!.get('ion-button')
+  }
+
+  // Ionic's web components take `disabled` as a DOM property, not an attribute.
+  function isDisabled(button: ReturnType<typeof seatButton>) {
+    return (button.element as Element & { disabled?: boolean }).disabled
+  }
+
+  test('a table still waiting for players opens its page', async () => {
+    vi.mocked(tablesService.joinSeat).mockResolvedValue(makeTable(1, { N: 'bob', E: 'ana' }))
+    const wrapper = mountWith([makeTable(1, { N: 'bob' })])
+
+    await seatButton(wrapper, 1, 'E').trigger('click')
+    await flushPromises()
+
+    expect(tablesService.joinSeat).toHaveBeenCalledWith(1, 'E')
+    expect(navigate).toHaveBeenCalledWith('/tables/1', 'forward', 'push')
+    // The buttons stay disabled while the page changes.
+    expect(isDisabled(seatButton(wrapper, 1, 'S'))).toBe(true)
+  })
+
+  test('the answer, not the list row, decides: a board goes to /play', async () => {
+    vi.mocked(tablesService.joinSeat).mockResolvedValue(
+      makeTable(1, { N: 'bob', E: 'carol', S: 'dan', W: 'ana' }, { board_id: 5 }),
+    )
+    const wrapper = mountWith([makeTable(1, { N: 'bob', E: 'carol', S: 'dan' })])
+
+    await seatButton(wrapper, 1, 'W').trigger('click')
+    await flushPromises()
+
+    expect(navigate).toHaveBeenCalledWith('/tables/1/play', 'forward', 'push')
+  })
+
+  test('a confirmed move goes to the new table', async () => {
+    const from = makeTable(1, { N: 'ana', E: 'bob' })
+    const to = makeTable(2, { N: 'carol', S: 'ana' })
+    vi.mocked(confirmMove).mockResolvedValue(true)
+    vi.mocked(tablesService.joinSeat).mockResolvedValue(to)
+    vi.mocked(tablesService.listTables).mockResolvedValue([to, makeTable(1, { E: 'bob' })])
+    const wrapper = mountWith([makeTable(2, { N: 'carol' }), from])
+
+    await seatButton(wrapper, 2, 'S').trigger('click')
+    await flushPromises()
+
+    expect(confirmMove).toHaveBeenCalled()
+    expect(navigate).toHaveBeenCalledWith('/tables/2', 'forward', 'push')
+  })
+
+  test('a cancelled move stays on the list', async () => {
+    vi.mocked(confirmMove).mockResolvedValue(false)
+    const wrapper = mountWith([makeTable(2, { N: 'carol' }), makeTable(1, { N: 'ana', E: 'bob' })])
+
+    await seatButton(wrapper, 2, 'S').trigger('click')
+    await flushPromises()
+
+    expect(tablesService.joinSeat).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  test('a seat taken meanwhile toasts and stays on the list', async () => {
+    vi.mocked(tablesService.joinSeat).mockRejectedValue(new Error('That seat is already taken.'))
+    const wrapper = mountWith([makeTable(1, { N: 'bob' })])
+
+    await seatButton(wrapper, 1, 'E').trigger('click')
+    await flushPromises()
+
+    expect(showToast).toHaveBeenCalledWith(expect.any(String), 'danger')
+    expect(navigate).not.toHaveBeenCalled()
+    // The seats are free to tap again.
+    expect(isDisabled(seatButton(wrapper, 1, 'E'))).toBe(false)
   })
 })

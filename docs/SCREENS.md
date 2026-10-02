@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/45-account-read-only-cursor`._
+_Status as of branch `bulbulica2/46-join-opens-table`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -118,12 +118,18 @@ Backend: `PATCH /api/user` came with bb#21 (`15-player-identity`).
 ## Tables — `/tables`
 
 **Logged in**, menu item **Tables**. Built by #8; seat moves by #22;
-profile sheet by #24; robots by #53.
+profile sheet by #24; robots by #53; a seat opening the table by #67.
 
 The list of open tables, each with its four seats (robots carry a
 **robot** badge). Tap an empty seat to sit (or **move here** at your own
-table), a player's name to open their profile sheet, **Open** for the
-table's page. A table only robots sit at (`unattended_since` set: its last
+table), a player's name to open their profile sheet, **Open** to look at a
+table's page. Taking a seat takes you to the table as soon as the seat
+request answers: to `/play` when the table the answer describes has a
+board (`board_id` set: you were the fourth player and it was dealt, or you
+took over a robot table between boards), otherwise to its page. The seat's
+spinner and the disabled seat buttons stay until the page has changed. A
+cancelled move or a seat taken meanwhile (409, toasted) keeps you on the
+list. A table only robots sit at (`unattended_since` set: its last
 person left) reads **Robots only — sit down to take over**. **Create
 table** opens a modal with an optional name and **Play with robots**, on
 by default: robots take the other three seats, the first board is dealt
