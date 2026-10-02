@@ -56,7 +56,8 @@ describe('AppMenu', () => {
 describe('App', () => {
   test('shows the route progress bar only while a slow navigation runs', async () => {
     vi.useFakeTimers()
-    const wrapper = mount(App, { global: { stubs: { IonRouterOutlet: true } } })
+    // BanNotice needs Ionic's router; bans.spec.ts covers it.
+    const wrapper = mount(App, { global: { stubs: { IonRouterOutlet: true, BanNotice: true } } })
     expect(wrapper.find('.route-progress').exists()).toBe(false)
 
     navigationStarted('/tables')

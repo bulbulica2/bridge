@@ -10,6 +10,8 @@ declare module 'vue-router' {
     requiresAuth?: boolean;
     /** Only reachable while logged out; logged-in users are sent to /account. */
     guestOnly?: boolean;
+    /** Closed to a banned user (the game itself); they are sent to /tables. */
+    notBanned?: boolean;
   }
 }
 
@@ -37,14 +39,14 @@ const routes: Array<RouteRecordRaw> = [
     // Tables list, not from the menu.
     path: '/tables/:id',
     component: () => import('@/views/TableDetailPage.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, notBanned: true }
   },
   {
     // The game at one table: the board, the four players and your own hand.
     // Entered from the detail page (automatically when a board is dealt).
     path: '/tables/:id/play',
     component: () => import('@/views/TablePlayPage.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, notBanned: true }
   },
   {
     // The user's finished boards (the menu's "My boards"), paged in as it scrolls.
@@ -112,7 +114,7 @@ const router = createRouter({
   routes
 })
 
-// Enforces the requiresAuth / guestOnly route meta. loadSession() asks the
+// Enforces the requiresAuth / guestOnly / notBanned route meta. loadSession() asks the
 // backend once per page load whether the Sanctum session cookie is still valid,
 // so a reload on an auth-only page doesn't bounce a logged-in user to /login.
 router.beforeEach(async (to) => {
@@ -125,6 +127,11 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.guestOnly && auth.isAuthenticated) {
     return { path: '/account' };
+  }
+  // Every game action would 403 (bridge_backend docs/AUTH.md, Bans): the
+  // lobby stays readable, with the ban in place of its actions.
+  if (to.meta.notBanned && auth.isBanned) {
+    return { path: '/tables' };
   }
   return true;
 })

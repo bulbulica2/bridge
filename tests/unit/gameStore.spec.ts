@@ -258,7 +258,7 @@ describe('game store', () => {
     game.watchUser(3)
     game.watchUser(3)
     expect(echo.listenToUser).toHaveBeenCalledTimes(1)
-    expect(echo.listenToUser).toHaveBeenCalledWith(3, expect.any(Function))
+    expect(echo.listenToUser).toHaveBeenCalledWith(3, expect.any(Function), expect.any(Function))
 
     game.unwatchUser()
     expect(echo.leaveUser).toHaveBeenCalledWith(3)

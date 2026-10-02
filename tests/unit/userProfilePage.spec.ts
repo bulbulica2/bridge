@@ -4,13 +4,17 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { IonRefresher } from '@ionic/vue'
 import UserProfilePage from '@/views/UserProfilePage.vue'
-import { getUser } from '@/services/users'
+import { getUser, liftBan } from '@/services/users'
+import type { UserBan } from '@/services/users'
+import BanUserForm from '@/components/BanUserForm.vue'
+import { showToast } from '@/utils/toast'
 import { getMyPlayings, getUserPlayings } from '@/services/history'
 import type { PublicUser } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 
-vi.mock('@/services/users', () => ({ getUser: vi.fn() }))
+vi.mock('@/services/users', () => ({ getUser: vi.fn(), liftBan: vi.fn() }))
+vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
 vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn(), getUserPlayings: vi.fn() }))
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
@@ -146,5 +150,69 @@ describe('UserProfilePage', () => {
 
     expect(getUser).toHaveBeenCalledTimes(2)
     expect(complete).toHaveBeenCalled()
+  })
+})
+
+describe('UserProfilePage for an admin', () => {
+  const ban: UserBan = {
+    id: 4,
+    user_id: 3,
+    reason: 'Playing two accounts at once.',
+    banned_at: '2026-10-05T12:00:00.000Z',
+    until: '2026-10-12T12:00:00.000Z',
+    banned_by: { id: 1, name: 'Admin', username: 'admin', description: null, is_robot: false },
+    lifted_at: null,
+    lifted_by: null,
+    active: true,
+  }
+
+  beforeEach(() => {
+    useAuthStore().user = { id: 1, name: 'Admin', username: 'admin', email: 'admin@example.com', is_admin: true }
+  })
+
+  const button = (wrapper: ReturnType<typeof mountPage>, text: string) =>
+    wrapper.findAll('ion-button').find((b) => b.text() === text)
+
+  test('shows the ban in force and lifts it', async () => {
+    vi.mocked(getUser).mockResolvedValue({ ...ann, ban })
+    vi.mocked(liftBan).mockResolvedValue({ ...ban, active: false, lifted_at: '2026-10-06T12:00:00.000Z' })
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('.ban-reason').text()).toBe('Playing two accounts at once.')
+    expect(wrapper.find('.ban-by').text()).toContain('by @admin')
+
+    await button(wrapper, 'Lift ban')!.trigger('click')
+    await flushPromises()
+
+    expect(liftBan).toHaveBeenCalledWith(3)
+    expect(showToast).toHaveBeenCalledWith('Ban lifted. They can play once they log in again.', 'success')
+  })
+
+  test('a failed lift says why', async () => {
+    vi.mocked(getUser).mockResolvedValue({ ...ann, ban })
+    vi.mocked(liftBan).mockRejectedValue(new Error('offline'))
+    const wrapper = mountPage()
+    await flushPromises()
+
+    await button(wrapper, 'Lift ban')!.trigger('click')
+    await flushPromises()
+
+    expect(showToast).toHaveBeenCalledWith('Could not lift the ban. Please try again.', 'danger')
+  })
+
+  test('Ban opens the form, which closes on a ban or Cancel', async () => {
+    vi.mocked(getUser).mockResolvedValue(ann)
+    const wrapper = mountPage()
+    await flushPromises()
+
+    await button(wrapper, 'Ban')!.trigger('click')
+    wrapper.findComponent(BanUserForm).vm.$emit('banned', ban)
+    await flushPromises()
+    expect(wrapper.findComponent(BanUserForm).exists()).toBe(false)
+
+    await button(wrapper, 'Ban')!.trigger('click')
+    wrapper.findComponent(BanUserForm).vm.$emit('cancel')
+    await flushPromises()
+    expect(wrapper.findComponent(BanUserForm).exists()).toBe(false)
   })
 })

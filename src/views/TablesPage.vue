@@ -7,7 +7,14 @@
       </ion-refresher>
 
       <div class="tables-page">
-        <ion-button expand="block" @click="createOpen = true">Create table</ion-button>
+        <!-- Banned: the lobby stays readable, but nobody may sit or create. -->
+        <div v-if="auth.ban" class="banned" role="status">
+          <ion-text color="danger">
+            <p class="banned-why">{{ banText(auth.ban) }}</p>
+          </ion-text>
+          <p class="banned-what">Until then you can't create a table or take a seat.</p>
+        </div>
+        <ion-button v-else expand="block" @click="createOpen = true">Create table</ion-button>
 
         <!-- Left mid-set: the seat waits a few minutes, opening the game
              comes back to it. -->
@@ -66,6 +73,7 @@
                        four seat buttons, and a button inside a button swallows
                        their taps. -->
                   <ion-button
+                    v-if="!auth.isBanned"
                     fill="clear"
                     size="small"
                     :router-link="`/tables/${table.id}`"
@@ -98,7 +106,7 @@
                       v-else
                       size="small"
                       fill="outline"
-                      :disabled="joining !== null"
+                      :disabled="joining !== null || auth.isBanned"
                       @click="join(table, seat)"
                     >
                       <ion-spinner v-if="isJoining(table.id, seat)" name="crescent" />
@@ -197,6 +205,7 @@ import { useGameStore } from '@/stores/game';
 import { seatsOf } from '@/services/tables';
 import type { Seat, Table } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
+import { banText } from '@/utils/ban';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { confirmMove } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
@@ -367,6 +376,28 @@ async function submitCreate() {
 
 .error {
   margin: 8px 16px;
+}
+
+.banned {
+  padding: 12px 16px;
+  border: 1px solid var(--ion-color-danger);
+  border-radius: 8px;
+}
+
+.banned p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.banned-why {
+  font-weight: 600;
+  white-space: pre-line;
+}
+
+.banned .banned-what {
+  margin-top: 4px;
+  color: var(--ion-color-medium);
+  font-size: 0.9rem;
 }
 
 .table-row {

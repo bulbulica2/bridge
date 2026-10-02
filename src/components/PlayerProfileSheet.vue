@@ -29,6 +29,18 @@
           <p class="error">{{ loadError }}</p>
         </ion-text>
 
+        <!-- Admins only: the ban in force (GET /users/{id} gives it to them),
+             and the form to ban this player. Lifting is on the full profile. -->
+        <p v-if="!gone && shown.ban" class="profile-banned">
+          Banned until {{ banDate(shown.ban.until) }}: {{ shown.ban.reason }}
+        </p>
+        <template v-if="!gone && canBan(auth.user, shown)">
+          <BanUserForm v-if="banning" :user="shown" class="ban-form" @banned="onBanned" @cancel="banning = false" />
+          <ion-button v-else expand="block" color="danger" fill="outline" class="ban-open" @click="banning = true">
+            {{ shown.ban ? 'Ban again' : 'Ban' }}
+          </ion-button>
+        </template>
+
         <!-- A robot has no page of its own: nothing more to see there. -->
         <ion-button v-if="!gone && !shown.is_robot" expand="block" fill="outline" @click="openPage">
           Full profile
@@ -41,15 +53,19 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { IonModal, IonContent, IonButton, IonSpinner, IonText, useIonRouter } from '@ionic/vue';
+import BanUserForm from '@/components/BanUserForm.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
+import { useAuthStore } from '@/stores/auth';
 import { useUsersStore } from '@/stores/users';
 import type { PublicUser } from '@/services/users';
+import { banDate, canBan } from '@/utils/ban';
 import { errorMessage, statusOf } from '@/utils/errors';
 
 const props = defineProps<{ player: PublicUser | null }>();
 const emit = defineEmits<{ close: [] }>();
 
 const store = useUsersStore();
+const auth = useAuthStore();
 const ionRouter = useIonRouter();
 
 // Starts as the copy the table payload embedded, so the sheet has something to
@@ -58,6 +74,8 @@ const shown = ref<PublicUser | null>(null);
 const refreshing = ref(false);
 const loadError = ref('');
 const gone = ref(false);
+// An admin has the ban form open.
+const banning = ref(false);
 
 watch(
   () => props.player,
@@ -67,6 +85,7 @@ watch(
     }
     shown.value = player;
     gone.value = false;
+    banning.value = false;
     loadError.value = '';
     refreshing.value = true;
     try {
@@ -93,6 +112,14 @@ watch(
   },
   { immediate: true },
 );
+
+// The store put the ban on the cached profile; show that copy.
+function onBanned() {
+  banning.value = false;
+  if (shown.value && store.profiles[shown.value.id]) {
+    shown.value = store.profiles[shown.value.id];
+  }
+}
 
 function openPage() {
   const id = shown.value?.id;
@@ -153,5 +180,17 @@ function openPage() {
 
 .error {
   margin: 0 0 12px;
+}
+
+.profile-banned {
+  margin: 0 0 12px;
+  color: var(--ion-color-danger);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.ban-form,
+.ban-open {
+  margin-bottom: 12px;
 }
 </style>

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import * as usersService from '@/services/users';
-import type { PublicUser } from '@/services/users';
+import type { BanRequest, PublicUser, UserBan } from '@/services/users';
 import { statusOf } from '@/utils/errors';
 
 // Other players' public profiles, by id. Table payloads already embed one per
@@ -24,5 +24,48 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
-  return { profiles, load };
+  // An admin's ban or lift answers with the ban itself: put it on the cached
+  // profile (the ban in force, and its row in the history) so the page shows
+  // it without another GET.
+  function recordBan(id: number, ban: UserBan) {
+    const profile = profiles.value[id];
+    if (!profile) {
+      return;
+    }
+    const bans = profile.bans ?? [];
+    if (ban.active) {
+      // A new ban also closes the one in force; the history shows that from
+      // the next read on.
+      profile.ban = ban;
+      profile.bans = [ban, ...bans.filter((b) => b.id !== ban.id)];
+    } else {
+      profile.ban = null;
+      profile.bans = bans.map((b) => (b.id === ban.id ? ban : b));
+    }
+  }
+
+  // Admins only (see banUser): resolves with the ban and the backend's
+  // "User banned until …" message.
+  async function ban(id: number, request: BanRequest) {
+    const result = await usersService.banUser(id, request);
+    recordBan(id, result.ban);
+    return result;
+  }
+
+  // Admins only: lifts the ban in force. A 404 means it had already ended or
+  // been lifted, so the cached one goes too before the error reaches the caller.
+  async function liftBan(id: number): Promise<UserBan> {
+    try {
+      const lifted = await usersService.liftBan(id);
+      recordBan(id, lifted);
+      return lifted;
+    } catch (e) {
+      if (statusOf(e) === 404 && profiles.value[id]) {
+        profiles.value[id].ban = null;
+      }
+      throw e;
+    }
+  }
+
+  return { profiles, load, ban, liftBan };
 });

@@ -191,7 +191,7 @@ ignored) is the browsable report, with the uncovered lines highlighted.
 Every file under `src/` is counted, whether a test imports it or not, except
 `src/main.ts` (it only mounts the app) and `.d.ts` files.
 
-As of #91: 98.7 % of lines, 95.3 % of functions and 91.3 % of branches, every
+As of #91: 98.8 % of lines, 95.7 % of functions and 91.5 % of branches, every
 file at 95 % of lines or more (from 86.7 % / 75.1 % / 88.0 % before it).
 
 **End-to-end tests** (Cypress) live in `tests/e2e/`. They drive a real

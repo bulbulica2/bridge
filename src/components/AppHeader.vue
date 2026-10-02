@@ -14,6 +14,7 @@
         </ion-button>
       </ion-buttons>
     </ion-toolbar>
+    <BanBanner />
   </ion-header>
 </template>
 
@@ -28,6 +29,7 @@ import {
   IonTitle,
 } from '@ionic/vue';
 import { personCircleOutline } from 'ionicons/icons';
+import BanBanner from '@/components/BanBanner.vue';
 import { useAuthStore } from '@/stores/auth';
 
 defineProps<{
