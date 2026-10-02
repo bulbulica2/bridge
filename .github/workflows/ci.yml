@@ -48,7 +48,16 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run test:unit:ci
+      # The unit tests with coverage (#91): fails under the thresholds in
+      # vite.config.ts or when any file is under 95 % of its lines, and puts
+      # the totals in the job summary.
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: ignore
 
   build:
     runs-on: ubuntu-latest

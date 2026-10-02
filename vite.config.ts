@@ -24,6 +24,24 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'jsdom'
+    environment: 'jsdom',
+    // npm run test:coverage (docs/RUNNING.md, Code coverage). `all` counts
+    // the files no test imports too, so a page without tests shows as 0 %.
+    coverage: {
+      provider: 'v8',
+      all: true,
+      include: ['src/**/*.{ts,vue}'],
+      // main.ts only mounts the app; the .d.ts files hold no code.
+      exclude: ['src/main.ts', 'src/**/*.d.ts'],
+      reporter: ['text', 'html', 'json-summary'],
+      reportsDirectory: 'coverage',
+      // The whole app's floor: a run under any of these fails. Every file
+      // also keeps 95 % of its lines (scripts/coverage-check.mjs). Branches
+      // count each v-if/?. a template compiles to, hence the lower bar.
+      lines: 95,
+      statements: 95,
+      functions: 95,
+      branches: 90,
+    },
   }
 })

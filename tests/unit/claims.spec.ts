@@ -176,6 +176,12 @@ describe('claim hints', () => {
     expect(claimWaitingFor(s)).toEqual(['E'])
   })
 
+  test('without a claim, or a viewer not seated, nobody has anything to do', () => {
+    expect(claimWaitingFor(state())).toEqual([])
+    expect(claimAction(state(), 'S')).toBeNull()
+    expect(claimAction(state({ claim: pending() }), null)).toBeNull()
+  })
+
   test("a defender's claim is answered by declarer and the other defender", () => {
     const s = state({ claim: pending({ seat: 'E', tricks: 0 }) })
 
@@ -410,6 +416,17 @@ describe('TablePlayPage claims', () => {
     expect(wrapper.get('.claim-text').text()).toBe('You claim 4 of the remaining 5 tricks')
     expect(buttonTexts(wrapper, '.claim-buttons')).toEqual(['Withdraw'])
     expect(wrapper.find('.claim-button').exists()).toBe(false)
+  })
+
+  test('the claimer takes the claim back with Withdraw', async () => {
+    const wrapper = await mountPage(state({ claim: pending() }))
+    vi.mocked(gameService.withdrawClaim).mockResolvedValue(state())
+
+    await wrapper.get('.withdraw').trigger('click')
+    await flushPromises()
+
+    expect(gameService.withdrawClaim).toHaveBeenCalledWith(5)
+    expect(wrapper.find('.claim-text').exists()).toBe(false)
   })
 
   test('a defender concedes in one tap', async () => {

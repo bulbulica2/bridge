@@ -33,9 +33,9 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/57-ci-tests-on-pr` (after #87, every PR to `main` runs
-> lint, unit tests, the build and a guest e2e smoke test on GitHub Actions;
-> see [`RUNNING.md`](RUNNING.md#continuous-integration)).
+> branch `bulbulica2/58-code-coverage` (after #91, unit tests cover 98.7 % of the app's lines,
+> and CI fails any PR that leaves a file under 95 %; see
+> [`RUNNING.md`](RUNNING.md#code-coverage)).
 > They live next to the code, so a PR that changes a route, store, service,
 > env var or backend dependency updates them in the same diff; the
 > frontend's `CLAUDE.md` tells Claude to do so. If you change the frontend

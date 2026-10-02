@@ -1,6 +1,6 @@
 # Running the frontend locally
 
-_Last verified: branch `bulbulica2/57-ci-tests-on-pr`._
+_Last verified: branch `bulbulica2/58-code-coverage`._
 
 Requirements: Node.js 18 or newer (Vite 5 needs it; 23 works) with npm
 (`.nvmrc` names 22, the LTS that CI uses; `nvm use` picks it up), and
@@ -154,7 +154,8 @@ npm run build        # type-check (vue-tsc), then production build to dist/
 npm run preview      # serve dist/ (see the port note above)
 npm run lint         # eslint .
 npm run test:unit    # Vitest in watch mode
-npm run test:unit:ci # Vitest, one pass (what CI runs)
+npm run test:unit:ci # Vitest, one pass
+npm run test:coverage # Vitest, one pass with coverage and its 95 % rule (what CI runs)
 npm run test:e2e     # Cypress, headless
 ```
 
@@ -170,7 +171,28 @@ npx vitest run -t "ignores updates for another table"  # by test name
 ```
 
 `npm run test:unit` starts Vitest in watch mode, which reruns on every
-save; `npm run test:unit:ci` (`vitest run`) is a single pass, as CI runs it.
+save; `npm run test:unit:ci` (`vitest run`) is a single pass.
+
+### Code coverage
+
+`npm run test:coverage` runs the suite once with V8 coverage (#91) and
+fails if the app slips under **the 95 % rule**:
+
+- **Every file** under `src/` keeps at least **95 % of its lines** covered
+  (`scripts/coverage-check.mjs`). A new page, store or util ships with the
+  tests that cover it, and touching a file never leaves it under the line.
+- **The whole app** keeps 95 % of lines, statements and functions, and 90 %
+  of branches (the thresholds in `vite.config.ts`). Branches count every
+  `v-if` and `?.` a Vue template compiles to, which is why their bar is
+  lower; raise it as tests catch up, never lower it.
+
+It prints a table per file, then the totals; `coverage/index.html` (git
+ignored) is the browsable report, with the uncovered lines highlighted.
+Every file under `src/` is counted, whether a test imports it or not, except
+`src/main.ts` (it only mounts the app) and `.d.ts` files.
+
+As of #91: 98.7 % of lines, 95.3 % of functions and 91.3 % of branches, every
+file at 95 % of lines or more (from 86.7 % / 75.1 % / 88.0 % before it).
 
 **End-to-end tests** (Cypress) live in `tests/e2e/`. They drive a real
 browser against `baseUrl: http://localhost:3000` (`cypress.config.ts`), so
@@ -197,7 +219,7 @@ parallel on Ubuntu, each a check of its own on the PR:
 | Check | What it runs | Reproduce locally |
 |---|---|---|
 | `lint` | ESLint | `npm run lint` |
-| `unit` | Vitest, one pass | `npm run test:unit:ci` |
+| `unit` | Vitest, one pass with coverage and the 95 % rule | `npm run test:coverage` |
 | `build` | `vue-tsc` type-check + `vite build` | `npm run build` |
 | `e2e` | builds, serves `dist/` on port 3000, runs Cypress | `npm run build`, then `npx vite preview --port 3000 --strictPort` and, in another terminal, `npm run test:e2e` |
 
@@ -211,6 +233,9 @@ parallel on Ubuntu, each a check of its own on the PR:
   each module on first request, which can outlast Cypress's 4 s timeout on
   a cold runner; preview serves the built bundle (and `index.html` for any
   SPA route).
+- **Coverage**: the `unit` job writes the totals (and any file under 95 %
+  of its lines) to the run's **Summary** page and uploads the HTML report as
+  `coverage-report` under **Artifacts**, pass or fail.
 - **A failed e2e run** uploads Cypress's screenshots: open the run (the
   check's **Details**, then **Summary**) and download
   `cypress-screenshots` under **Artifacts**.

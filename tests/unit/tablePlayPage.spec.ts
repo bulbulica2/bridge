@@ -1,0 +1,394 @@
+import { VueWrapper, flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { AxiosError, AxiosHeaders } from 'axios'
+import { IonRefresher } from '@ionic/vue'
+import TablePlayPage from '@/views/TablePlayPage.vue'
+import BiddingBox from '@/components/BiddingBox.vue'
+import ClaimPanel from '@/components/ClaimPanel.vue'
+import NextBoardBox from '@/components/NextBoardBox.vue'
+import StartBox from '@/components/StartBox.vue'
+import * as gameService from '@/services/game'
+import * as tablesService from '@/services/tables'
+import type { Bid, Card, Playing, Seat, Suit } from '@/services/game'
+import type { Table } from '@/services/tables'
+import { useAuthStore } from '@/stores/auth'
+import { useGameStore } from '@/stores/game'
+import { useTablesStore } from '@/stores/tables'
+import { confirmLeave } from '@/utils/seatMove'
+import { showToast } from '@/utils/toast'
+
+// The play page's ways out and its failure paths; the game itself (bidding,
+// play, claims, the result) has its own specs.
+vi.mock('@/services/game', () => ({
+  getPlaying: vi.fn(),
+  getBids: vi.fn(),
+  makeCall: vi.fn(),
+  playCard: vi.fn(),
+  nextBoard: vi.fn(),
+  makeClaim: vi.fn(),
+  respondToClaim: vi.fn(),
+  withdrawClaim: vi.fn(),
+}))
+vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn(), getSet: vi.fn(() => new Promise(() => {})) }))
+vi.mock('@/services/tables', async (importOriginal) => ({
+  ...(await importOriginal<typeof tablesService>()),
+  getTable: vi.fn(),
+  cancelStart: vi.fn(),
+  sendHeartbeat: vi.fn(),
+}))
+vi.mock('@/services/echo', () => ({
+  listenToTable: vi.fn(),
+  leaveTable: vi.fn(),
+  listenToUser: vi.fn(),
+  leaveUser: vi.fn(),
+  onReconnect: vi.fn(),
+  disconnectEcho: vi.fn(),
+}))
+vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
+vi.mock('@/utils/seatMove', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/seatMove')>()),
+  confirmLeave: vi.fn(),
+}))
+const { navigate, route } = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  route: { params: { id: '5' } as Record<string, string> },
+}))
+vi.mock('vue-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('vue-router')>()),
+  useRoute: () => route,
+}))
+vi.mock('@ionic/vue', async (importOriginal) => {
+  const { onMounted } = await import('vue')
+  return {
+    ...(await importOriginal<typeof import('@ionic/vue')>()),
+    useIonRouter: () => ({ navigate }),
+    onIonViewWillEnter: (hook: () => void) => onMounted(hook),
+  }
+})
+
+function axiosError(status: number, message = 'Refused.'): AxiosError {
+  const config = { headers: new AxiosHeaders() }
+  const error = new AxiosError('Request failed', 'ERR_BAD_REQUEST', config)
+  error.response = { status, data: { message }, statusText: '', headers: {}, config }
+  return error
+}
+
+const PLAYERS = {
+  N: { id: 1, name: 'Ann', username: 'ann', description: null, is_robot: false },
+  E: { id: 2, name: 'Bob', username: 'bob', description: null, is_robot: false },
+  S: { id: 3, name: 'Cy', username: 'cy', description: null, is_robot: false },
+  W: { id: 4, name: 'Di', username: 'di', description: null, is_robot: false },
+}
+
+function hand(seat: Seat): Card[] {
+  const suits: Suit[] = ['S', 'H', 'D', 'C']
+  const offset = ['N', 'E', 'S', 'W'].indexOf(seat)
+  return Array.from({ length: 13 }, (_, i) => {
+    const n = offset * 13 + i
+    return { id: n + 1, suit: suits[Math.floor(n / 13)], rank: 2 + (n % 13), rank_name: '' }
+  })
+}
+
+function makeTable(overrides: Partial<Table> = {}): Table {
+  const seated: Seat[] = ['N', 'E', 'S', 'W']
+  return {
+    id: 5,
+    name: 'Club',
+    created_by: 1,
+    moderated_by: 1,
+    board_id: 7,
+    unattended_since: null,
+    created_at: '',
+    updated_at: '',
+    seats: seated.map((seat, i) => ({
+      id: i + 1,
+      table_id: 5,
+      user_id: PLAYERS[seat].id,
+      seat,
+      ready: false,
+      user: PLAYERS[seat],
+    })),
+    free_seats: [],
+    set: null,
+    can_manage: false,
+    ...overrides,
+  }
+}
+
+const pass = { id: 1, call: 'P', level: null, strain: null } as unknown as Bid
+
+// The user is South (Cy) in the auction, on turn.
+function auction(overrides: Partial<Playing> = {}): Playing {
+  return {
+    phase: 'auction',
+    playing_id: 42,
+    set: null,
+    board: { id: 7, number: 7, dealer: 'S', vulnerable: '' },
+    players: PLAYERS,
+    turn: 'S',
+    acting_user_id: 3,
+    auction: [],
+    contract: null,
+    tricks: null,
+    current_trick: null,
+    tricks_won: null,
+    dummy_hand: null,
+    claim: null,
+    result: null,
+    deal: null,
+    ready: null,
+    my_seat: 'S',
+    hand: hand('S'),
+    ...overrides,
+  } as Playing
+}
+
+function finished(): Playing {
+  return auction({
+    phase: 'finished',
+    turn: null,
+    acting_user_id: null,
+    result: { contract: null, declarer: null, tricks: null, score_ns: 0, claimed: false } as unknown as Playing['result'],
+    deal: { N: hand('N'), E: hand('E'), S: hand('S'), W: hand('W') },
+    ready: [],
+    hand: [],
+  })
+}
+
+const modalStub = { template: '<div><slot /></div>' }
+
+async function mountPage(playing: Playing | Error, table: Table = makeTable()) {
+  vi.mocked(tablesService.getTable).mockResolvedValue(table)
+  if (playing instanceof Error) {
+    vi.mocked(gameService.getPlaying).mockRejectedValue(playing)
+  } else {
+    vi.mocked(gameService.getPlaying).mockResolvedValue(playing)
+  }
+  const wrapper = mount(TablePlayPage, {
+    global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub, 'router-link': true } },
+  })
+  await flushPromises()
+  return wrapper
+}
+
+async function emitFrom(wrapper: VueWrapper, component: object, event: string, ...args: unknown[]) {
+  wrapper.findComponent(component).vm.$emit(event, ...args)
+  await flushPromises()
+}
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+  vi.clearAllMocks()
+  route.params = { id: '5' }
+  useAuthStore().user = { id: 3, name: 'Cy', username: 'cy', email: 'cy@example.com' }
+  vi.mocked(gameService.getBids).mockResolvedValue([pass])
+})
+
+describe('TablePlayPage loading', () => {
+  test('a nonsense id is a dead table', async () => {
+    route.params = { id: '-1' }
+    const wrapper = await mountPage(auction())
+
+    expect(gameService.getPlaying).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('This table no longer exists.')
+  })
+
+  test('a 404 is a table that no longer exists', async () => {
+    const wrapper = await mountPage(axiosError(404))
+
+    expect(wrapper.text()).toContain('This table no longer exists.')
+  })
+
+  test('a 403 means the user does not sit here', async () => {
+    const wrapper = await mountPage(axiosError(403))
+
+    expect(wrapper.text()).toContain("You don't sit at this table, so you can't see its board.")
+  })
+
+  test('a 401 sends the user to log in', async () => {
+    await mountPage(axiosError(401))
+
+    expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
+  })
+
+  test('another failure shows an error', async () => {
+    const wrapper = await mountPage(new Error('offline'))
+
+    expect(wrapper.text()).toContain('Could not load the board. Please try again.')
+  })
+
+  test('a bidding box that failed to load offers to try again', async () => {
+    vi.mocked(gameService.getBids).mockRejectedValueOnce(new Error('offline'))
+    const wrapper = await mountPage(auction())
+    expect(wrapper.find('.bids-missing').text()).toContain('Could not load the bidding box.')
+
+    await wrapper.find('.bids-missing ion-button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.bids-missing').exists()).toBe(false)
+    expect(wrapper.findComponent(BiddingBox).exists()).toBe(true)
+  })
+
+  test('pull to refresh reloads and completes the refresher', async () => {
+    const wrapper = await mountPage(auction())
+    const complete = vi.fn()
+
+    await emitFrom(wrapper, IonRefresher, 'ionRefresh', { target: { complete } })
+
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+    expect(complete).toHaveBeenCalled()
+  })
+
+  test('a kick sends the user back to the list', async () => {
+    await mountPage(auction())
+
+    useTablesStore().kickedFrom = 5
+    await flushPromises()
+
+    expect(navigate).toHaveBeenCalledWith('/tables', 'back', 'replace')
+  })
+
+  test('an auction that passes out live says so', async () => {
+    await mountPage(auction())
+
+    useGameStore().applyPlayingUpdate(5, finished())
+    await flushPromises()
+
+    expect(showToast).toHaveBeenCalledWith('Passed out: nobody bid.', 'warning')
+  })
+})
+
+describe('TablePlayPage refused moves', () => {
+  test('a 403 means the seat is gone', async () => {
+    const wrapper = await mountPage(auction())
+    vi.mocked(gameService.makeCall).mockRejectedValue(axiosError(403))
+
+    await emitFrom(wrapper, BiddingBox, 'call', pass)
+
+    expect(wrapper.text()).toContain("You don't sit at this table")
+  })
+
+  test('a 404 means the table is gone', async () => {
+    const wrapper = await mountPage(auction())
+    vi.mocked(gameService.makeCall).mockRejectedValue(axiosError(404))
+
+    await emitFrom(wrapper, BiddingBox, 'call', pass)
+
+    expect(wrapper.text()).toContain('This table no longer exists.')
+  })
+
+  test('a 401 sends the user to log in', async () => {
+    const wrapper = await mountPage(auction())
+    vi.mocked(gameService.makeCall).mockRejectedValue(axiosError(401))
+
+    await emitFrom(wrapper, BiddingBox, 'call', pass)
+
+    expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
+  })
+
+  test('a 422 rereads the bid list, then the board', async () => {
+    const wrapper = await mountPage(auction())
+    vi.mocked(gameService.makeCall).mockRejectedValue(axiosError(422, 'The selected bid id is invalid.'))
+
+    await emitFrom(wrapper, BiddingBox, 'call', pass)
+
+    expect(showToast).toHaveBeenCalledWith('The selected bid id is invalid.', 'danger')
+    expect(gameService.getBids).toHaveBeenCalledTimes(2)
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('TablePlayPage claims and Start', () => {
+  test('the claimer withdraws, and a refusal is told', async () => {
+    const claimed = auction({
+      phase: 'play',
+      contract: { bid: pass, doubled: 0, declarer: 'S', dummy: 'N' } as unknown as Playing['contract'],
+      tricks: [],
+      current_trick: [],
+      tricks_won: { ns: 0, ew: 0 },
+      dummy_hand: hand('N'),
+      claim: { seat: 'S', tricks: 13, hand: hand('S'), accepted: [] },
+    })
+    const wrapper = await mountPage(claimed)
+    vi.mocked(gameService.withdrawClaim).mockResolvedValue({ ...claimed, claim: null })
+
+    await emitFrom(wrapper, ClaimPanel, 'withdraw')
+    expect(gameService.withdrawClaim).toHaveBeenCalledWith(5)
+
+    useGameStore().applyPlayingUpdate(5, claimed)
+    await flushPromises()
+    vi.mocked(gameService.withdrawClaim).mockRejectedValue(new Error('offline'))
+    await emitFrom(wrapper, ClaimPanel, 'withdraw')
+    expect(showToast).toHaveBeenCalledWith('Your claim could not be withdrawn. Please try again.', 'danger')
+  })
+
+  test('takes a Start back, and tells a refusal', async () => {
+    const waiting = auction({ phase: 'waiting', board: null, turn: null, acting_user_id: null, hand: [] })
+    const table = makeTable({ board_id: null })
+    table.seats[2].ready = true
+    const wrapper = await mountPage(waiting, table)
+    vi.mocked(tablesService.cancelStart).mockResolvedValue({ ...table, seats: table.seats.map((s) => ({ ...s, ready: false })) })
+
+    await emitFrom(wrapper, StartBox, 'cancel')
+    expect(tablesService.cancelStart).toHaveBeenCalledWith(5)
+
+    vi.mocked(tablesService.cancelStart).mockRejectedValue(axiosError(409, 'The board is dealt.'))
+    await emitFrom(wrapper, StartBox, 'cancel')
+    expect(showToast).toHaveBeenCalledWith('The board is dealt.', 'danger')
+  })
+})
+
+describe('TablePlayPage leaving between boards', () => {
+  test('nothing happens when the user cancels', async () => {
+    const wrapper = await mountPage(finished())
+    const leave = vi.spyOn(useTablesStore(), 'leave')
+    vi.mocked(confirmLeave).mockResolvedValue(false)
+
+    await wrapper.get('.next-leave ion-button').trigger('click')
+    await flushPromises()
+
+    expect(confirmLeave).toHaveBeenCalled()
+
+    expect(leave).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    [{ tableDeleted: false, held: false }, 'You left the table.', 'success'],
+    [{ tableDeleted: true, held: false }, 'You left the table. Nobody was left, so it was deleted.', 'success'],
+    [{ tableDeleted: false, held: true }, expect.stringContaining('Your seat is held'), 'warning'],
+  ])('leaves (%o), says how and goes to the list', async (answer, message, color) => {
+    const wrapper = await mountPage(finished())
+    vi.spyOn(useTablesStore(), 'leave').mockResolvedValue(answer)
+    const clear = vi.spyOn(useGameStore(), 'clear')
+    vi.mocked(confirmLeave).mockResolvedValue(true)
+
+    await emitFrom(wrapper, NextBoardBox, 'leave')
+
+    expect(clear).toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith(message, color)
+    expect(navigate).toHaveBeenCalledWith('/tables', 'back', 'replace')
+  })
+
+  test('a failed leave toasts the reason and reloads', async () => {
+    const wrapper = await mountPage(finished())
+    vi.spyOn(useTablesStore(), 'leave').mockRejectedValue(new Error('offline'))
+    vi.mocked(confirmLeave).mockResolvedValue(true)
+
+    await emitFrom(wrapper, NextBoardBox, 'leave')
+
+    expect(showToast).toHaveBeenCalledWith('Could not leave the table. Please try again.', 'danger')
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+  })
+
+  test('an expired session on leaving goes to log in', async () => {
+    const wrapper = await mountPage(finished())
+    vi.spyOn(useTablesStore(), 'leave').mockRejectedValue(axiosError(401))
+    vi.mocked(confirmLeave).mockResolvedValue(true)
+
+    await emitFrom(wrapper, NextBoardBox, 'leave')
+
+    expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
+    expect(showToast).not.toHaveBeenCalled()
+  })
+})

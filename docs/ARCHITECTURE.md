@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/57-ci-tests-on-pr`._
+_Status as of branch `bulbulica2/58-code-coverage`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -469,12 +469,18 @@ the menu offers only Copy as text (`Capacitor.isNativePlatform()`).
   - Ionic's `disabled` and `color` are DOM properties, not attributes.
   - `onIonViewWillEnter` never fires in jsdom; page tests mock it as
     `onMounted`.
+  - `IonModal` only renders its content once presented, which jsdom never
+    does: sheet tests stub it with `<div><slot /></div>`.
+  - **Coverage** (#91): every file under `src/` keeps 95 % of its lines
+    covered, and the app as a whole 95 % of lines, statements and functions
+    and 90 % of branches. `npm run test:coverage` (and CI's `unit` job)
+    fails otherwise; see [`RUNNING.md`](RUNNING.md#code-coverage).
 - **E2E** (`tests/e2e/`, Cypress): one guest-only smoke spec, `home.cy.ts`
   (`/` redirects to `/home`, the intro and its Log in / Create account
   buttons, Log in reaches `/login`). It stubs `GET /api/user` as 401, so
   it needs no backend; flows behind a login are #34.
-- **CI** (`.github/workflows/ci.yml`, #87): lint, unit, build and e2e as
-  four parallel jobs on every PR to `main` and every push to `main`; see
+- **CI** (`.github/workflows/ci.yml`, #87): lint, unit (with coverage),
+  build and e2e as four parallel jobs on every PR to `main` and every push to `main`; see
   [`RUNNING.md`](RUNNING.md#continuous-integration).
 
 See [`RUNNING.md`](RUNNING.md#tests) for the commands.
