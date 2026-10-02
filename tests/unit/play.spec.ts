@@ -12,7 +12,7 @@ import type { Bid, Card, PlayedCard, Playing, Suit, Trick } from '@/services/gam
 import type { Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
-import { forcedCard, handToPlay, legalCards, trickBySide } from '@/utils/play'
+import { autoPlaysForced, forcedCard, handToPlay, legalCards, trickBySide } from '@/utils/play'
 import { FORCED_PLAY_SECONDS, useForcedPlay } from '@/composables/useForcedPlay'
 import { showToast } from '@/utils/toast'
 
@@ -231,6 +231,18 @@ describe('whose hand is on play', () => {
   test("nothing while it is someone else's move, or outside the play", () => {
     expect(handToPlay(state({ turn: 'W', acting_user_id: 4 }), 3)).toBeNull()
     expect(handToPlay(state({ phase: 'auction' }), 3)).toBeNull()
+  })
+
+  // 4♠ by South: a forced card plays itself for declarer alone.
+  test("declarer's forced cards play themselves, from either hand", () => {
+    expect(autoPlaysForced(state({}))).toBe(true)
+    expect(autoPlaysForced(state({ turn: 'N' }))).toBe(true)
+  })
+
+  test("a defender's never do", () => {
+    expect(autoPlaysForced(state({ my_seat: 'E', turn: 'E', acting_user_id: 2 }))).toBe(false)
+    expect(autoPlaysForced(state({ my_seat: 'W', turn: 'W', acting_user_id: 4 }))).toBe(false)
+    expect(autoPlaysForced(state({ contract: null }))).toBe(false)
   })
 })
 
@@ -578,6 +590,33 @@ describe('TablePlayPage card play', () => {
       vi.advanceTimersByTime(3000)
       await flushPromises()
       expect(gameService.playCard).toHaveBeenCalledWith(5, c('D2').id)
+    })
+
+    test('a defender taps their only card themselves', async () => {
+      // East, a defender, holds a single spade after West's lead and dummy's queen.
+      logIn(2, 'Bob')
+      vi.mocked(gameService.playCard).mockReturnValue(new Promise(() => {}))
+      const wrapper = await mountPage(
+        state({
+          turn: 'E',
+          acting_user_id: 2,
+          my_seat: 'E',
+          hand: cards('S5', 'HK', 'D2'),
+          current_trick: played('W S3, N SQ'),
+          dummy_hand: cards('H3', 'C9'),
+        }),
+      )
+
+      // The hint stays: only the spade can be tapped.
+      expect(enabledCards(wrapper, '.my-hand')).toEqual([c('S5').id])
+      expect(wrapper.find('.forced').exists()).toBe(false)
+      expect(wrapper.get('.status').text()).not.toContain('Playing')
+      vi.advanceTimersByTime(10_000)
+      await flushPromises()
+      expect(gameService.playCard).not.toHaveBeenCalled()
+
+      await wrapper.get(`.my-hand button[data-card="${c('S5').id}"]`).trigger('click')
+      expect(gameService.playCard).toHaveBeenCalledWith(5, c('S5').id)
     })
 
     test('nothing plays itself on the lead', async () => {

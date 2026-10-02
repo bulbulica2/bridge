@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/47-start-button`._
+_Status as of branch `bulbulica2/48-forced-play-declarer-only`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -206,7 +206,7 @@ search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
 **Logged in, seated at that table** (403 otherwise). Built by #26 (game
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #53 (robots), #57 (forced cards play themselves), #56 (last trick
-pop-up), #68 (Start); **Compare** by #30. Entered from the detail page,
+pop-up), #68 (Start), #69 (forced cards for declarer only); **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
 detail page.
@@ -236,10 +236,11 @@ What it shows by phase:
   The trick in progress stays in the centre meanwhile. The button is hidden
   for the 2 s the trick just won is still shown in the centre.
   You tap a card from your own hand, or from dummy's if you're declarer.
-  When only one card may follow suit (say dummy holds a single card in
-  the suit led), it pulses and plays itself after 3 s, with the status
-  line counting down ("Playing ♥7 in 3 s…"); tapping it plays it at once.
-  Never on a lead. Opening the claim sheet, a claim or any new card on the
+  As declarer, when only one card may follow suit (say dummy holds a
+  single card in the suit led), it pulses and plays itself after 3 s, with
+  the status line counting down ("Playing ♥7 in 3 s…"); tapping it plays
+  it at once. Never on a lead, and never for a defender: their other cards
+  are dimmed, but they tap the one left themselves. Opening the claim sheet, a claim or any new card on the
   table stops the countdown.
   Anyone but dummy can **Claim** some of the tricks left (or **Concede**
   them): the claim sheet has one button per number, 1 up to the tricks
