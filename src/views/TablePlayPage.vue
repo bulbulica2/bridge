@@ -90,11 +90,13 @@
             >
               Compare with other tables
             </ion-button>
+            <!-- The same four go on with Next; once one of them has been
+                 replaced, it is Start again (below). -->
             <NextBoardBox
+              v-if="!showStart"
               :ready="playing.ready ?? []"
               :players="players"
               :my-seat="mySeat"
-              :short="shortOfPlayers"
               :manager="isManager"
               :busy="asking"
               @next="askNext(false)"
@@ -102,6 +104,19 @@
               @leave="leave"
             />
           </template>
+
+          <!-- No board yet (or a finished one with new players): the same
+               Start as on the table's page, so opening the game table early
+               is no dead end. The last Start deals the board here. -->
+          <StartBox
+            v-if="showStart && table"
+            :table="table"
+            :me="me"
+            show-seats
+            :busy="asking"
+            @start="start"
+            @cancel="cancelStart"
+          />
 
           <BridgeTable
             :players="players"
@@ -120,7 +135,9 @@
             @select="player = $event"
             @play="playCard"
           >
-            <p class="waiting-title">Waiting for 4 players</p>
+            <p class="waiting-title">
+              {{ seatedCount < 4 ? 'Waiting for 4 players' : 'Waiting for Start' }}
+            </p>
             <p class="waiting-count">{{ seatedCount }} of 4 seated</p>
 
             <!-- Once the board is over the centre goes back to the board's
@@ -273,6 +290,7 @@ import HandView from '@/components/HandView.vue';
 import LastTrickPopover from '@/components/LastTrickPopover.vue';
 import NextBoardBox from '@/components/NextBoardBox.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
+import StartBox from '@/components/StartBox.vue';
 import TrickArea from '@/components/TrickArea.vue';
 import { useForcedPlay } from '@/composables/useForcedPlay';
 import { useAuthStore } from '@/stores/auth';
@@ -289,6 +307,7 @@ import { forcedCard, handToPlay, legalCards } from '@/utils/play';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { resultSummary } from '@/utils/result';
 import { leaveNote, leaveWarning } from '@/utils/seatMove';
+import { startNeeded } from '@/utils/start';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
@@ -310,7 +329,8 @@ const bidsError = ref('');
 const sendingCard = ref<number | null>(null);
 // A trick just completed, still shown with its winner for a moment.
 const finishedTrick = ref<Trick | null>(null);
-// Asking for the next board, or leaving between boards: one at a time.
+// Asking for the next board, Start (or taking it back), or leaving between
+// boards: one at a time.
 const asking = ref(false);
 // The claim sheet is open; a claim, an answer or a withdrawal is on its way.
 const claimOpen = ref(false);
@@ -532,9 +552,16 @@ function playStatus(turn: Seat | null): string {
     : `Play: ${waitingFor(actor)}`;
 }
 
-// Somebody left after the board ended: the finished board stays, and a
-// fourth player sitting down deals the next one (nothing to confirm).
-const shortOfPlayers = computed(() => !!table.value && table.value.seats.length < 4);
+// The next board waits for every human's Start: none dealt yet (or one
+// abandoned), or a finished board whose four players aren't all still in
+// their seats. The table's seats say who sits here: a newcomer isn't in the
+// finished board's players.
+const showStart = computed(
+  () =>
+    !!table.value &&
+    table.value.seats.some((s) => s.user_id === me.value) &&
+    startNeeded(table.value, playing.value),
+);
 
 // A hint for the "for everyone" button; a 403 corrects it.
 const isManager = computed(() => table.value?.can_manage ?? false);
@@ -579,8 +606,8 @@ watch(
   },
 );
 
-// A new board on the table the events haven't described yet (the fourth
-// seat taken, or the next board): read it rather than wait.
+// A new board on the table the events haven't described yet (the last
+// Start, or the next board): read it rather than wait.
 watch(
   () => table.value?.board_id,
   (boardId) => {
@@ -831,6 +858,36 @@ async function askNext(everyone: boolean) {
     await game.next(everyone);
   } catch (e) {
     await refused(e, 'Could not ask for the next board. Please try again.');
+  } finally {
+    asking.value = false;
+  }
+}
+
+// Our Start. The answer that deals is the new board's state, which the
+// store takes at once; until then the box says who we wait for.
+async function start() {
+  if (asking.value) {
+    return;
+  }
+  asking.value = true;
+  try {
+    await tablesStore.start(tableId.value);
+  } catch (e) {
+    await refused(e, 'Could not start. Please try again.');
+  } finally {
+    asking.value = false;
+  }
+}
+
+async function cancelStart() {
+  if (asking.value) {
+    return;
+  }
+  asking.value = true;
+  try {
+    await tablesStore.cancelStart(tableId.value);
+  } catch (e) {
+    await refused(e, 'Could not take your Start back. Please try again.');
   } finally {
     asking.value = false;
   }

@@ -103,18 +103,19 @@ describe('TablesPage.vue with robots', () => {
     expect(plain.find('.robot-badge').exists()).toBe(false)
   })
 
-  test('creating with robots (the default) goes straight to the dealt board', async () => {
-    const dealt = makeTable(3, { N: 'ana', E: 'robot-1', S: 'robot-2', W: 'robot-3' }, { board_id: 8 })
-    vi.mocked(tablesService.createTable).mockResolvedValue(dealt)
+  test('creating with robots (the default) goes to the table, where Start is', async () => {
+    // Full, but nothing is dealt until the creator presses Start.
+    const full = makeTable(3, { N: 'ana', E: 'robot-1', S: 'robot-2', W: 'robot-3' })
+    vi.mocked(tablesService.createTable).mockResolvedValue(full)
     const wrapper = mountWith([])
 
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
     expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true })
-    expect(navigate).toHaveBeenCalledWith('/tables/3/play', 'forward', 'push')
-    // The game page draws from this copy rather than fetching the table again.
-    expect(useTablesStore().currentTable).toEqual(dealt)
+    expect(navigate).toHaveBeenCalledWith('/tables/3', 'forward', 'push')
+    // The table page draws from this copy rather than fetching the table again.
+    expect(useTablesStore().currentTable).toEqual(full)
     // The form is free again at once: nothing waits for the game page to be up.
     expect(wrapper.find('form ion-spinner').exists()).toBe(false)
   })

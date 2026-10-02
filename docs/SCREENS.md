@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/46-join-opens-table`._
+_Status as of branch `bulbulica2/47-start-button`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -118,23 +118,26 @@ Backend: `PATCH /api/user` came with bb#21 (`15-player-identity`).
 ## Tables — `/tables`
 
 **Logged in**, menu item **Tables**. Built by #8; seat moves by #22;
-profile sheet by #24; robots by #53; a seat opening the table by #67.
+profile sheet by #24; robots by #53; a seat opening the table by #67;
+Start by #68.
 
 The list of open tables, each with its four seats (robots carry a
 **robot** badge). Tap an empty seat to sit (or **move here** at your own
 table), a player's name to open their profile sheet, **Open** to look at a
 table's page. Taking a seat takes you to the table as soon as the seat
 request answers: to `/play` when the table the answer describes has a
-board (`board_id` set: you were the fourth player and it was dealt, or you
-took over a robot table between boards), otherwise to its page. The seat's
+board (`board_id` set: a finished board still on it, waiting for its seats
+to be refilled), otherwise to its page, where you press **Start**. Sitting
+down never deals a board. The seat's
 spinner and the disabled seat buttons stay until the page has changed. A
 cancelled move or a seat taken meanwhile (409, toasted) keeps you on the
 list. A table only robots sit at (`unattended_since` set: its last
 person left) reads **Robots only — sit down to take over**. **Create
 table** opens a modal with an optional name and **Play with robots**, on
-by default: robots take the other three seats, the first board is dealt
-at once and the page goes straight to `/play` (the modal closes as soon as
-the table exists; #55). Without robots you stay on
+by default: robots take the other three seats and the page goes to the
+new table's page, where your **Start** deals the first board (robots are
+always ready; the modal closes as soon as the table exists, #55). Without
+robots you stay on
 the list and wait for players. Moving to another table asks first, because
 leaving your seat can abandon a board there. No live updates on this page:
 pull to refresh.
@@ -146,13 +149,15 @@ pull to refresh.
 | `tables.join()` | `GET /sanctum/csrf-cookie`, `POST /tables/{id}/seats`, then `GET /tables` after a move |
 
 Backend: bb#9 (create table, 3 active per creator), bb#12 (join a seat),
-bb#25 (joining elsewhere moves you), bb#65 (robots).
+bb#25 (joining elsewhere moves you), bb#65 (robots), bb#73 (nothing is
+dealt before Start).
 
 ## Table detail — `/tables/:id`
 
 **Logged in.** Built by #15; manager Remove by #16; live updates by #21;
 moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
-robots by #53. Reached from a table's **Open** button.
+robots by #53; Start by #68. Reached from a table's **Open** button, by
+taking a seat, or from **Create table** with robots.
 
 The four seats as a compass (N/E/S/W), robots badged. Sit, move or
 **Leave** (confirmed; the last player leaving deletes the table and the
@@ -164,8 +169,19 @@ never listed) and **Add robot**. While only robots sit there
 (`unattended_since`), a note says so and **anyone** gets **Remove** on the
 robots; the first person to sit down becomes the manager. Updates live
 over the table channel; if you are removed, a toast and back to `/tables`.
-When a board is dealt (`board_id` becomes non-null, e.g. a robot in the
-fourth seat) a seated player is taken to `/play`.
+
+**Start.** A board is dealt only once the table is full and every person
+seated there has pressed **Start**; robots are always ready. While the
+next board waits for it (no board yet, one abandoned when somebody left,
+or a finished one whose four players aren't all still in their seats), a
+seated player sees the Start box: **Start**, then **Waiting for the
+others…** with **Cancel**, and a line saying what is missing ("Waiting for
+a fourth player, and for East (bob) to press Start."). Each ready seat on
+the compass is marked **✓ Ready**. Everyone presses their own, the manager
+included. Between boards with the same four players nothing changes:
+**Next board** on the play page. When a board is dealt (`board_id` changes
+to a new board, from the Start answer or a `TableUpdated`) a seated player
+is taken to `/play`, the one whose Start dealt it included.
 
 | Calls | Endpoint |
 |---|---|
@@ -175,22 +191,25 @@ fourth seat) a seated player is taken to `/play`.
 | `tables.removePlayer()` | `DELETE /tables/{id}/seats/{user}` |
 | `tables.seatUser()` (Seat a player sheet) | `GET /users?search=`, `POST /tables/{id}/seats/users` |
 | `tables.seatRobot()` (Add robot) | `POST /tables/{id}/seats/robots` |
+| `tables.start()`, `tables.cancelStart()` (Start box) | `POST /tables/{id}/start`, `DELETE /tables/{id}/start` |
 | `game.load()` (when seated at a dealt table) | `GET /tables/{id}/playing` |
 | heartbeat, while seated | `POST /tables/{id}/heartbeat` every 30 s |
 | channel | `private-table.{id}`: `TableUpdated` |
 
 Backend: bb#10 and bb#11 (seat others, kick or quit), bb#22
 (Reverb), bb#25 (moves), bb#41 (idle seats, heartbeat), bb#44 (user
-search), bb#45 (`can_manage`), bb#65 (robots, unattended tables).
+search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
+(Start).
 
 ## Play — `/tables/:id/play`
 
 **Logged in, seated at that table** (403 otherwise). Built by #26 (game
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #53 (robots), #57 (forced cards play themselves), #56 (last trick
-pop-up); **Compare** by #30. Entered from the detail page, automatically when a
-board is dealt, or straight from **Create table** with robots. The header's
-**Table** button goes back to the detail page.
+pop-up), #68 (Start); **Compare** by #30. Entered from the detail page,
+automatically when a board is dealt, or from **Open the game table** before
+anyone has pressed Start. The header's **Table** button goes back to the
+detail page.
 
 Robots play by themselves: each of their calls, cards, claim answers and
 "ready"s arrives as an ordinary `PlayingUpdated` about a second apart, so
@@ -202,7 +221,9 @@ board** deals it. How they bid and play is in
 [backend `ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 What it shows by phase:
-- **waiting**: who's seated; the board starts when the fourth player sits.
+- **waiting**: who's seated, and the same Start box as on the detail page
+  (with each seat's ready mark), so opening the game table early is no dead
+  end. The last Start deals the board right here.
 - **auction**: your hand, the auction grid, and on your turn the bidding
   box. The contract (or "Passed out") is announced when the last call
   arrives.
@@ -232,7 +253,9 @@ What it shows by phase:
 - **finished**: the result from your side ("by claim" when a claim ended
   it), the running score at this
   table, all four hands face up, **Compare with other tables**, and the
-  next-board box (who's ready; a manager can deal for everyone).
+  next-board box (who's ready; a manager can deal for everyone). If one of
+  the four has left or been replaced since, the Start box takes the
+  next-board box's place: the next board waits for every person's Start.
 
 | Calls | Endpoint |
 |---|---|
@@ -242,6 +265,7 @@ What it shows by phase:
 | `game.play()` | `POST /tables/{id}/cards` |
 | `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
 | `game.next()` | `POST /tables/{id}/playing/next` |
+| `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
 | `game.loadSessionScore()` | `GET /api/user/playings` |
 | `tables.openTable()` on entry, `tables.loadTable()` on Refresh or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` |
@@ -249,9 +273,10 @@ What it shows by phase:
 
 A 409 on a call, card, claim or next board toasts the backend's message and
 reloads. A `TableUpdated` whose `board_id` goes back to null mid-board means
-a player left and the board was abandoned: toast, back to waiting.
+a player left and the board was abandoned: toast, back to waiting (and to
+Start once the table is full again).
 
-Backend: bb#18 (deal a board when a table fills), bb#36 (game state),
+Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
 bb#40 (next board), bb#43 (running score, results), bb#59 (claims).
 

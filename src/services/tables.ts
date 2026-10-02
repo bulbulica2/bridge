@@ -1,4 +1,5 @@
 import http from './http';
+import type { Playing } from './game';
 import type { PublicUser } from './users';
 
 // Game endpoints answer with an envelope: {status, message, data}.
@@ -18,6 +19,9 @@ export interface TableSeat {
   table_id: number;
   user_id: number;
   seat: Seat;
+  // Whether this player has pressed Start (POST /tables/{id}/start). Public,
+  // so everyone sees who the board waits for; a robot's is always true.
+  ready: boolean;
   user: PublicUser;
 }
 
@@ -50,7 +54,8 @@ export interface Table extends BroadcastTable {
 export interface CreateTablePayload {
   name?: string | null;
   seat?: Seat;
-  // Robots take the other three seats, which deals the first board at once.
+  // Robots take the other three seats. Nothing is dealt until the creator
+  // presses Start, which then deals at once (robots are always ready).
   robots?: boolean;
 }
 
@@ -65,8 +70,8 @@ export async function listTables(): Promise<Table[]> {
 }
 
 // Creates the table and seats the creator; 409 if they already sit somewhere
-// or already have 3 active tables. With `robots` the answer already has a
-// board_id: the robots filled the table and the first board is dealt.
+// or already have 3 active tables. With `robots` the table is full, but its
+// board_id stays null until the creator presses Start.
 export async function createTable(payload: CreateTablePayload): Promise<Table> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.post<ApiResponse<Table>>('/tables', payload);
@@ -128,8 +133,8 @@ export async function removePlayer(tableId: number, userId: number): Promise<Sea
   return data.data;
 }
 
-// A manager puts another user into a free seat; the fourth one deals the board,
-// as a join does. 403 when the caller can't manage this table, 409 when the
+// A manager puts another user into a free seat. It deals nothing: the newcomer
+// presses Start like everybody else. 403 when the caller can't manage this table, 409 when the
 // seat is taken or that user already sits at a table (this never moves them).
 export async function seatUser(tableId: number, userId: number, seat: Seat): Promise<Table> {
   await http.get('/sanctum/csrf-cookie');
@@ -141,11 +146,36 @@ export async function seatUser(tableId: number, userId: number, seat: Seat): Pro
 }
 
 // A manager puts a robot (the backend picks one from its pool) into a free
-// seat; the fourth one deals the board, as a join does. 403 when the caller
+// seat. A robot is ready at once, so the fourth seat taken this way deals the
+// board if every human has already pressed Start. 403 when the caller
 // can't manage this table, 409 when the seat is taken.
 export async function seatRobot(tableId: number, seat: Seat): Promise<Table> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.post<ApiResponse<Table>>(`/tables/${tableId}/seats/robots`, { seat });
+  return data.data;
+}
+
+// The answer to Start: the table, plus the caller's game state when the table
+// has a playing after the request (the board this Start dealt, or a finished
+// one still on the table), else null.
+export interface StartedTable extends Table {
+  playing: Playing | null;
+}
+
+// "I'm ready to play." The board is dealt once the table is full and every
+// human there has pressed it; robots are always ready. Nobody presses it for
+// anybody else, a manager included. 409 while a board is in progress (or a
+// finished one the same four go on from with playing/next).
+export async function startTable(tableId: number): Promise<StartedTable> {
+  await http.get('/sanctum/csrf-cookie');
+  const { data } = await http.post<ApiResponse<StartedTable>>(`/tables/${tableId}/start`);
+  return data.data;
+}
+
+// Takes our Start back while nothing is dealt; harmless if we hadn't pressed.
+export async function cancelStart(tableId: number): Promise<Table> {
+  await http.get('/sanctum/csrf-cookie');
+  const { data } = await http.delete<ApiResponse<Table>>(`/tables/${tableId}/start`);
   return data.data;
 }
 
