@@ -1,0 +1,91 @@
+# Runs the checks a PR needs before review and merge (#87). One job per
+# check, so the PR's checks list says what broke, and branch protection on
+# main can require each by its job name: keep lint/unit/build/e2e stable.
+# None of them needs bridge_backend or any secret (docs/RUNNING.md,
+# Continuous integration).
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A new push to the same PR (or main) cancels the run it makes outdated.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Only the e2e job runs Cypress; skip downloading its binary.
+      CYPRESS_INSTALL_BINARY: 0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CYPRESS_INSTALL_BINARY: 0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit:ci
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CYPRESS_INSTALL_BINARY: 0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # vue-tsc type-check, then vite build (the 500 kB chunk warning is
+      # only a warning).
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      # npm ci (cached, Cypress binary included), build, serve, run.
+      - uses: cypress-io/github-action@v7
+        with:
+          build: npm run build
+          # The production build on port 3000, so cypress.config.ts's baseUrl
+          # works unchanged; preview serves index.html for SPA routes.
+          start: npx vite preview --port 3000 --strictPort
+          wait-on: 'http://localhost:3000'
+          wait-on-timeout: 60
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: tests/e2e/screenshots
+          if-no-files-found: ignore

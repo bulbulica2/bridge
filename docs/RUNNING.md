@@ -1,8 +1,9 @@
 # Running the frontend locally
 
-_Last verified: branch `bulbulica2/53-set-forfeit`._
+_Last verified: branch `bulbulica2/57-ci-tests-on-pr`._
 
-Requirements: Node.js 18 or newer (Vite 5 needs it; 23 works) with npm, and
+Requirements: Node.js 18 or newer (Vite 5 needs it; 23 works) with npm
+(`.nvmrc` names 22, the LTS that CI uses; `nvm use` picks it up), and
 a running `bridge_backend` (see [Running it with the backend](#running-it-with-the-backend)).
 `node_modules/` isn't committed; `npm install` builds it from
 `package-lock.json`.
@@ -153,6 +154,7 @@ npm run build        # type-check (vue-tsc), then production build to dist/
 npm run preview      # serve dist/ (see the port note above)
 npm run lint         # eslint .
 npm run test:unit    # Vitest in watch mode
+npm run test:unit:ci # Vitest, one pass (what CI runs)
 npm run test:e2e     # Cypress, headless
 ```
 
@@ -168,20 +170,60 @@ npx vitest run -t "ignores updates for another table"  # by test name
 ```
 
 `npm run test:unit` starts Vitest in watch mode, which reruns on every
-save; use `npx vitest run` for a single pass (as CI would).
+save; `npm run test:unit:ci` (`vitest run`) is a single pass, as CI runs it.
 
 **End-to-end tests** (Cypress) live in `tests/e2e/`. They drive a real
 browser against `baseUrl: http://localhost:3000` (`cypress.config.ts`), so
-start `npm run dev` and the backend first.
+start `npm run dev` first.
 
 ```bash
 npm run test:e2e                                      # all specs, headless
 npx cypress open                                      # interactive runner
-npx cypress run --spec "tests/e2e/specs/test.cy.ts"   # one spec
+npx cypress run --spec "tests/e2e/specs/home.cy.ts"   # one spec
 ```
 
-Right now the only spec is the Ionic starter's `test.cy.ts`; real flows
-(sign up, login, tables, a scripted board) are issue #34.
+Right now the only spec is `home.cy.ts`, a smoke test of what a guest sees
+on `/` (redirect to `/home`, the intro, Log in and Create account, Log in
+reaching `/login`). It stubs `GET /api/user` as 401, so it needs **no
+backend**. Flows behind a login (tables, a scripted board) are issue #34.
+
+## Continuous integration
+
+Every pull request against `main` (when opened, reopened, and on every push
+to it), every push to `main` and a manual run (Actions → CI → Run workflow)
+start the **CI** workflow, `.github/workflows/ci.yml`. It runs four jobs in
+parallel on Ubuntu, each a check of its own on the PR:
+
+| Check | What it runs | Reproduce locally |
+|---|---|---|
+| `lint` | ESLint | `npm run lint` |
+| `unit` | Vitest, one pass | `npm run test:unit:ci` |
+| `build` | `vue-tsc` type-check + `vite build` | `npm run build` |
+| `e2e` | builds, serves `dist/` on port 3000, runs Cypress | `npm run build`, then `npx vite preview --port 3000 --strictPort` and, in another terminal, `npm run test:e2e` |
+
+- **Node** comes from `.nvmrc` (22). Every job installs with `npm ci`, so a
+  `package-lock.json` out of step with `package.json` fails it: commit the
+  lockfile.
+- **No backend, no secrets.** The committed `.env` is all the build needs,
+  unit tests mock the API, and the e2e spec is a guest-only smoke test that
+  stubs the session check. Anything needing a login isn't run in CI yet.
+- **e2e uses `vite preview`, not `npm run dev`**: the dev server compiles
+  each module on first request, which can outlast Cypress's 4 s timeout on
+  a cold runner; preview serves the built bundle (and `index.html` for any
+  SPA route).
+- **A failed e2e run** uploads Cypress's screenshots: open the run (the
+  check's **Details**, then **Summary**) and download
+  `cypress-screenshots` under **Artifacts**.
+- A new push to the same PR cancels the run still going for the old one.
+- **Case matters on CI.** Ubuntu's file system is case-sensitive and
+  Windows' isn't, so an import like `@/components/appHeader.vue` for
+  `AppHeader.vue` passes locally and fails `unit`/`build` there: fix the
+  import.
+- The build's "Some chunks are larger than 500 kB" is a warning and doesn't
+  fail `build`.
+
+The four check names are what `main`'s branch protection requires, so
+renaming a job means updating that rule too.
 
 ## Native builds (Capacitor)
 
