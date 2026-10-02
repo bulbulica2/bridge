@@ -23,6 +23,9 @@ export interface User {
   username: string;
   email: string;
   description?: string | null;
+  // An admin's absence never costs their side a set, and their own Leave
+  // mid-set is immediate (bridge_backend docs/API.md, Away mid-set).
+  is_admin?: boolean;
 }
 
 // See bridge_backend docs/AUTH.md for the Sanctum SPA flow.

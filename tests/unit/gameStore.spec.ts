@@ -193,6 +193,32 @@ describe('game store', () => {
     expect(game.playing?.hand).toBeNull()
   })
 
+  test('a side forfeiting the set mid-board: told once, and back to waiting', async () => {
+    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, forfeited_by: null }
+    const game = await loaded({ ...fullState(), set })
+    const table = makeTable(['N', 'S', 'W'], null)
+    table.set = { ...set, finished: true, ended: 'forfeit', forfeited_by: 'EW' }
+
+    game.applyTableUpdate(table)
+    game.applyTableUpdate(table)
+
+    expect(showToast).toHaveBeenCalledTimes(1)
+    expect(showToast).toHaveBeenCalledWith('bob is gone: E-W lose set 2 by forfeit.', 'warning')
+    expect(game.playing?.phase).toBe('waiting')
+  })
+
+  test('a forfeit between boards is told too, and the finished board stays', async () => {
+    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, forfeited_by: null }
+    const game = await loaded({ ...fullState({ phase: 'finished', turn: null }), set })
+    const table = makeTable(['N', 'E', 'S'], 7)
+    table.set = { ...set, finished: true, ended: 'forfeit', forfeited_by: 'EW' }
+
+    game.applyTableUpdate(table)
+
+    expect(showToast).toHaveBeenCalledWith('di is gone: E-W lose set 2 by forfeit.', 'warning')
+    expect(game.playing?.phase).toBe('finished')
+  })
+
   test('a seat change that keeps the board says nothing', async () => {
     const game = await loaded()
 

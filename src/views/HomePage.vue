@@ -39,6 +39,25 @@
               <p class="error">{{ loadError }}</p>
             </ion-text>
 
+            <!-- Our side lost a set by forfeit while we were away from it
+                 (told live, or on the next visit): its results are a tap away. -->
+            <ion-card v-if="tablesStore.lostSet" class="lost-set" color="warning">
+              <ion-card-header>
+                <ion-card-subtitle>Set {{ tablesStore.lostSet.number }} lost by forfeit</ion-card-subtitle>
+              </ion-card-header>
+              <ion-card-content>
+                <p>{{ lostSetText(tablesStore.lostSet) }}</p>
+                <div class="lost-set-actions">
+                  <ion-button size="small" :router-link="`/sets/${tablesStore.lostSet.id}`">
+                    See the set
+                  </ion-button>
+                  <ion-button size="small" fill="clear" color="dark" @click="tablesStore.dismissLostSet()">
+                    Dismiss
+                  </ion-button>
+                </div>
+              </ion-card-content>
+            </ion-card>
+
             <ion-card v-if="myTable" class="your-table">
               <ion-card-header>
                 <ion-card-subtitle>Your table</ion-card-subtitle>
@@ -48,6 +67,8 @@
                 <ion-badge v-if="myTable.board_id !== null" color="success" class="board">
                   Board in progress
                 </ion-badge>
+                <!-- Left mid-set: the seat waits a few minutes for us. -->
+                <AwayNotice v-if="held" :table="myTable" :me="auth.user?.id ?? null" held />
                 <ul class="players">
                   <li v-for="{ seat, user } in seatsOf(myTable)" :key="seat">
                     <span class="seat-name">{{ seat }}</span>
@@ -61,11 +82,13 @@
                 <ion-button
                   expand="block"
                   :router-link="
-                    myTable.board_id !== null ? `/tables/${myTable.id}/play` : `/tables/${myTable.id}`
+                    held || myTable.board_id !== null
+                      ? `/tables/${myTable.id}/play`
+                      : `/tables/${myTable.id}`
                   "
                   router-direction="forward"
                 >
-                  {{ myTable.board_id !== null ? 'Go to the board' : 'Go to table' }}
+                  {{ held ? 'Come back' : myTable.board_id !== null ? 'Go to the board' : 'Go to table' }}
                   <ion-icon slot="end" :icon="chevronForwardOutline" />
                 </ion-button>
               </ion-card-content>
@@ -111,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import {
   IonPage,
@@ -130,15 +153,19 @@ import {
 } from '@ionic/vue';
 import { chevronForwardOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
+import AwayNotice from '@/components/AwayNotice.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useTablesStore } from '@/stores/tables';
 import { seatsOf } from '@/services/tables';
+import { lostSetText } from '@/utils/away';
 import { errorMessage } from '@/utils/errors';
 
 const auth = useAuthStore();
 const tablesStore = useTablesStore();
 const { myTable } = storeToRefs(tablesStore);
+// Our seat at it is held after a Leave mid-set: opening the game comes back.
+const held = computed(() => !!myTable.value && tablesStore.heldTableId === myTable.value.id);
 
 const loading = ref(false);
 const loadError = ref('');
@@ -195,6 +222,15 @@ ion-card {
 
 .board {
   margin-bottom: 8px;
+}
+
+.lost-set p {
+  margin: 0 0 8px;
+}
+
+.lost-set-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .players {

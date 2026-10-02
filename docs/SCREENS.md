@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/52-board-sets`._
+_Status as of branch `bulbulica2/53-set-forfeit`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -31,16 +31,24 @@ logged in:  Home ── Your table / Find a table
 
 ## Home — `/home`
 
-**Everyone.** Built by #3 (menu + home) and #25 (the real home page).
+**Everyone.** Built by #3 (menu + home) and #25 (the real home page);
+held seat and lost set by #74.
 
 - **Guest**: an intro to the app with **Log in** and **Create account**.
 - **Logged in**: a greeting and either a **Your table** card (the table you
   sit at, from the tables store's `myTable`, robots badged) or **Find a
-  table**, plus a short how-to-play.
+  table**, plus a short how-to-play. After a Leave mid-set the card counts
+  down ("Your seat is held. N-S lose the set in 2:41 unless you come
+  back.") and its button reads **Come back** (it opens the game, which
+  brings you back).
+- **Set N lost by forfeit**: a card when your side lost a set because you
+  were away too long, whether seen live or found on this visit (the set
+  you were in the middle of is remembered in the browser), with **See the
+  set** (`/sets/:id`) and **Dismiss**.
 
 | Calls | Endpoint |
 |---|---|
-| `tables.load()` (logged in only) | `GET /tables` |
+| `tables.load()` (logged in only) | `GET /tables`; then `GET /sets/{id}` once, if you were in the middle of a set at a table you no longer sit at |
 
 ## Login — `/login`
 
@@ -120,7 +128,7 @@ Backend: `PATCH /api/user` came with bb#21 (`15-player-identity`).
 
 **Logged in**, menu item **Tables**. Built by #8; seat moves by #22;
 profile sheet by #24; robots by #53; a seat opening the table by #67;
-Start by #68.
+Start by #68; held seat by #74.
 
 The list of open tables, each with its four seats (robots carry a
 **robot** badge). Tap an empty seat to sit (or **move here** at your own
@@ -140,8 +148,11 @@ new table's page, where your **Start** deals the first board (robots are
 always ready; the modal closes as soon as the table exists, #55). Without
 robots you stay on
 the list and wait for players. Moving to another table asks first, because
-leaving your seat can abandon a board there. No live updates on this page:
-pull to refresh.
+leaving your seat can abandon a board there; in the middle of a set it
+says **Your side loses the set now** (the backend forfeits it at once,
+bb#76). After a Leave mid-set a notice at the top counts down to the
+forfeit, with **Come back to …** (opens the game). No live updates on this
+page: pull to refresh.
 
 | Calls | Endpoint |
 |---|---|
@@ -157,7 +168,7 @@ dealt before Start).
 
 **Logged in.** Built by #15; manager Remove by #16; live updates by #21;
 moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
-robots by #53; Start by #68; the set line by #73. Reached from a table's **Open** button, by
+robots by #53; Start by #68; the set line by #73; away and the forfeit by #74. Reached from a table's **Open** button, by
 taking a seat, or from **Create table** with robots.
 
 The four seats as a compass (N/E/S/W), robots badged. Sit, move or
@@ -170,6 +181,19 @@ never listed) and **Add robot**. While only robots sit there
 (`unattended_since`), a note says so and **anyone** gets **Remove** on the
 robots; the first person to sit down becomes the moderator. Updates live
 over the table channel; if you are removed, a toast and back to `/tables`.
+
+**Away mid-set** (#74, bb#76). A player quiet for a minute in the middle
+of a set is marked **away** on the compass, and a notice counts down from
+their seat's `forfeit_at`: "East is away. E-W lose the set in 2:41 unless
+they come back." It clears the moment they are back. **Leave** mid-set is
+confirmed more sternly ("If you don't come back within 3 minutes, N-S lose
+the set."): the backend holds the seat (202), the page goes to `/tables`
+with a toast, and the store stops the heartbeat. Opening this page again
+shows your held seat counting down, with **Come back** (no Leave or seat
+buttons meanwhile). Not back in time, your side forfeits: the seat is
+freed and you are sent to the set's results. Removing a player mid-set
+says what it costs: a player who is away loses the set for their side,
+one who is there only ends it with no winner.
 
 **Start.** A board is dealt only once the table is full and every person
 seated there has pressed **Start**; robots are always ready. While the
@@ -190,7 +214,8 @@ is taken to `/play`, the one whose Start dealt it included.
 |---|---|
 | `tables.openTable()` on entry, `tables.loadTable()` on refresh | `GET /tables/{id}`, skipped on entry for the table you sit at (it is followed live) |
 | `tables.join()` | `POST /tables/{id}/seats` |
-| `tables.leave()` | `DELETE /tables/{id}/seats` |
+| `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
+| `tables.comeBack()` (Come back) | `POST /tables/{id}/heartbeat`, `GET /tables/{id}` |
 | `tables.removePlayer()` | `DELETE /tables/{id}/seats/{user}` |
 | `tables.seatUser()` (Seat a player sheet) | `GET /users?search=`, `POST /tables/{id}/seats/users` |
 | `tables.seatRobot()` (Add robot) | `POST /tables/{id}/seats/robots` |
@@ -202,7 +227,7 @@ is taken to `/play`, the one whose Start dealt it included.
 Backend: bb#10 and bb#11 (seat others, kick or quit), bb#22
 (Reverb), bb#25 (moves), bb#41 (idle seats, heartbeat), bb#44 (user
 search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
-(Start).
+(Start), bb#76 (away mid-set, the forfeit, Leave holds the seat).
 
 ## Play — `/tables/:id/play`
 
@@ -210,7 +235,8 @@ search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #53 (robots), #57 (forced cards play themselves), #56 (last trick
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
-trick), #72 (no next board "for everyone"), #73 (sets of four boards); **Compare** by #30. Entered from the detail page,
+trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
+and the forfeit); **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
 detail page.
@@ -228,6 +254,21 @@ Play goes in **sets of four boards** (#73): Start deals board 1, **Next
 board** boards 2 to 4, and after the fourth the set is over. A line at the
 top says where the table is: **Board 2 of 4 · Set 3** (**· set over** once
 it is).
+
+**Going away costs the set** (#74, bb#76). A player quiet for a minute
+mid-set is tagged **away** at their seat, and a notice above the status
+line counts down from their seat's `forfeit_at`: "East is away. E-W lose
+the set in 2:41 unless they come back." (the last minute in red; with no
+deadline, an admin away, "The table waits for them."). It clears the
+moment they are back. Opening this page is coming back: a seat held after
+a Leave, or marked away, is yours again, with a **Welcome back. The set
+goes on.** toast and the board reloaded. Mid-set the heartbeat keeps going
+while the tab is hidden, so switching tabs is not going away. Not back in
+3 minutes, their side **forfeits**: a toast ("bob is gone: E-W lose set 2
+by forfeit."), the board in progress is abandoned, and the set's results
+show (below). If it was you, your seat is freed and the page goes to the
+set's results. **Leave the table** mid-set (in the next-board box) is
+confirmed more sternly, as on the detail page.
 
 What it shows by phase:
 - **waiting**: who's seated, and the same Start box as on the detail page
@@ -293,8 +334,9 @@ What it shows by phase:
 | `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
 | `history.loadSet()` (after each finished board, and when the set ends) | `GET /sets/{id}` |
 | `tables.openTable()` on entry, `tables.loadTable()` on Refresh or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
-| `tables.leave()` | `DELETE /tables/{id}/seats` |
-| channels | `private-table.{id}`: `TableUpdated`, `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt` |
+| `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
+| `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
+| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a forfeit), `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt` |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
 reloads (after a set's last board, Next 409s: "The set is over: press Start
@@ -305,7 +347,7 @@ Start once the table is full again).
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
 bb#40 (next board; bb#74 dropped its `everyone`), bb#43 (results), bb#59 (claims),
-bb#75 (sets of four boards).
+bb#75 (sets of four boards), bb#76 (away mid-set and the forfeit).
 
 ## My boards — `/history`
 
@@ -444,4 +486,5 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards).
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | `SetResultsPanel` | Play (set over), Set results | none (given the set from `history.loadSet`) |
+| `AwayNotice` | Play, Table detail (who is away, counting down); Table detail, Tables, Home (your held seat) | none (reads `away_since` / `forfeit_at` from the table) |
 | route progress bar, boot bar, toasts | the app shell | none (#18) |

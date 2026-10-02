@@ -22,6 +22,14 @@ export interface TableSeat {
   // Whether this player has pressed Start (POST /tables/{id}/start). Public,
   // so everyone sees who the board waits for; a robot's is always true.
   ready: boolean;
+  // Mid-set only: since when this player has been away (their last sign of
+  // life, or their Leave), their seat held for them, and when their side
+  // forfeits the set unless they are back by then. `forfeit_at` is null for
+  // an away admin, and for everyone while an admin here is away (the table
+  // just waits). Both null when they are here. See bridge_backend
+  // docs/API.md, Away mid-set, and utils/away.
+  away_since: string | null;
+  forfeit_at: string | null;
   user: PublicUser;
 }
 
@@ -111,7 +119,11 @@ export async function getTable(tableId: number): Promise<Table> {
   return data.data;
 }
 
-// Gives up your own seat; 409 if you don't sit here.
+// Gives up your own seat; 409 if you don't sit here. In the middle of a set
+// it is a 202 that *holds* the seat instead: the table comes back with us
+// still in it, away, and any request at the table (a heartbeat, GET
+// /playing) within BRIDGE_SET_FORFEIT_MINUTES brings us back; otherwise our
+// side forfeits the set and the seat is freed then.
 export async function leaveSeat(tableId: number): Promise<SeatRemovalResult> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.delete<ApiResponse<SeatRemovalResult>>(`/tables/${tableId}/seats`);
@@ -120,8 +132,10 @@ export async function leaveSeat(tableId: number): Promise<SeatRemovalResult> {
 
 // "Still here": keeps the caller's seat from being freed as idle. The backend
 // frees a seat nobody has vouched for in a few minutes (through the normal
-// leave path), so a seated client sends this about every 30 s. 403 once the
-// caller no longer sits here, 404 once the table is gone.
+// leave path) and, mid-set, marks a player away after a minute and forfeits
+// their side's set after three, so a seated client sends this about every
+// 30 s. It also brings an away player back (a held seat after a Leave too).
+// 403 once the caller no longer sits here, 404 once the table is gone.
 export async function sendHeartbeat(tableId: number): Promise<void> {
   await http.post(`/tables/${tableId}/heartbeat`);
 }

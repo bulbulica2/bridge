@@ -97,6 +97,9 @@ export const useGameStore = defineStore('game', () => {
   // A HandDealt that beat its board's PlayingUpdated: both come from the same
   // request, but on different channels, so either can arrive first.
   let pendingHand: HandDealtEvent | null = null;
+  // The set whose forfeit we have told (applyTableUpdate), so a later event
+  // of the same table doesn't tell it again.
+  let forfeitToldFor: number | null = null;
   // The 38 calls from GET /bids: a call is sent as its id, and ids aren't
   // pinned, so they are read once rather than hard-coded.
   const bids = ref<Bid[]>([]);
@@ -255,17 +258,40 @@ export const useGameStore = defineStore('game', () => {
       clear();
       return;
     }
-    if (table.board_id !== null || (current.phase !== 'auction' && current.phase !== 'play')) {
-      return;
-    }
     const leaver = Object.values(current.players ?? {}).find(
       (user) => !table.seats.some((s) => s.user_id === user.id),
     );
-    playing.value = waitingState();
-    showToast(
-      `${leaver ? leaver.username : 'A player'} left, the board was abandoned.`,
-      'warning',
-    );
+    const set = table.set;
+    // A side forfeited the set this board belongs to (a player away too
+    // long, or walking out), mid-board or between boards: say so once. The
+    // set's results show next on the play page.
+    const forfeit =
+      set?.ended === 'forfeit' &&
+      set.forfeited_by &&
+      set.id === current.set?.id &&
+      !current.set.ended &&
+      forfeitToldFor !== set.id
+        ? set
+        : null;
+    if (forfeit) {
+      forfeitToldFor = forfeit.id;
+    }
+    const inProgress = current.phase === 'auction' || current.phase === 'play';
+    if (table.board_id === null && inProgress) {
+      playing.value = waitingState();
+    }
+    if (forfeit) {
+      const side = forfeit.forfeited_by === 'NS' ? 'N-S' : 'E-W';
+      showToast(
+        `${leaver ? `${leaver.username} is gone` : 'A player is gone'}: ${side} lose set ${forfeit.number} by forfeit.`,
+        'warning',
+      );
+    } else if (table.board_id === null && inProgress) {
+      showToast(
+        `${leaver ? leaver.username : 'A player'} left, the board was abandoned.`,
+        'warning',
+      );
+    }
   }
 
   function clear() {
