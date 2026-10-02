@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/43-review-fixed-hand-layout`._
+_Status as of branch `bulbulica2/44-remember-me`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -45,8 +45,15 @@ logged in:  Home ── Your table / Find a table
 
 **Guests only.** Built by #4.
 
-Email and password; links to Create account and Reset password. On success
-it goes to `/account` and shows a welcome toast.
+Email, password and a **Remember me** checkbox (off by default, #65);
+links to Create account and Reset password. On success it goes to
+`/account` and shows a welcome toast.
+
+Ticked, `POST /login` carries `remember: true` and the backend also sets
+Laravel's long-lived remember cookie, so a reload after the session cookie
+has expired (`SESSION_LIFETIME`, 120 minutes by default) still lands
+logged in: the guard's `GET /api/user` logs the user back in from it.
+Unticked, the login lasts as long as the session. Log out ends both.
 
 | Calls | Endpoint |
 |---|---|
@@ -61,7 +68,8 @@ first backend commit), described in [backend `AUTH.md`](https://github.com/bulbu
 
 Name, username, email, password and confirmation; each 422 error shows
 under its field. On success the user is logged in, lands on `/account`
-and gets a welcome toast.
+and gets a welcome toast. There is no Remember me here: a new account is
+logged in for the session only, and Remember me is on the Login page.
 
 | Calls | Endpoint |
 |---|---|

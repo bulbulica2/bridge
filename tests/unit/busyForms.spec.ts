@@ -2,7 +2,7 @@ import { DOMWrapper, VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonInput, IonTextarea } from '@ionic/vue'
+import { IonCheckbox, IonInput, IonTextarea } from '@ionic/vue'
 import LoginPage from '@/views/LoginPage.vue'
 import AccountPage from '@/views/AccountPage.vue'
 import * as authService from '@/services/auth'
@@ -71,6 +71,7 @@ describe('Login form busy state', () => {
     for (const input of wrapper.findAll('ion-input')) {
       expect(isDisabled(input)).toBe(true)
     }
+    expect(isDisabled(wrapper.find('ion-checkbox'))).toBe(true)
     for (const button of wrapper.find('.login').findAll('ion-button')) {
       expect(isDisabled(button)).toBe(true)
     }
@@ -109,6 +110,36 @@ describe('Login form busy state', () => {
     expect(showWelcomeToast).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('Login failed')
     expect(isDisabled(wrapper.find('ion-input'))).toBe(false)
+  })
+})
+
+describe('Login form remember me', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.resetAllMocks()
+    vi.mocked(authService.fetchUser).mockResolvedValue(user)
+    vi.mocked(navigateAndSettle).mockResolvedValue()
+  })
+
+  test('is off by default and sends remember: false', async () => {
+    const wrapper = mount(LoginPage)
+    expect(wrapper.text()).toContain('Remember me')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(authService.login).toHaveBeenCalledWith(expect.objectContaining({ remember: false }))
+  })
+
+  test('sends remember: true once ticked', async () => {
+    const wrapper = mount(LoginPage)
+    wrapper.findComponent(IonCheckbox).vm.$emit('update:modelValue', true)
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(authService.login).toHaveBeenCalledWith(expect.objectContaining({ remember: true }))
   })
 })
 

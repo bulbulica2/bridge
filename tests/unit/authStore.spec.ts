@@ -43,6 +43,14 @@ describe('auth store', () => {
     expect(auth.isAuthenticated).toBe(true)
   })
 
+  test('login passes remember through unchanged', async () => {
+    vi.mocked(authService.fetchUser).mockResolvedValue({ id: 1, name: 'Ana', username: 'ana', email: 'ana@example.com' })
+
+    await useAuthStore().login({ email: 'ana@example.com', password: 'secret', remember: true })
+
+    expect(authService.login).toHaveBeenCalledWith({ email: 'ana@example.com', password: 'secret', remember: true })
+  })
+
   test('failed login leaves the user logged out', async () => {
     vi.mocked(authService.login).mockRejectedValue(new Error('422'))
 
