@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/51-remove-next-board-for-everyone`._
+_Status as of branch `bulbulica2/52-board-sets`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -22,9 +22,10 @@ guest:      Home ─┬─ Login ─┬─ Create account
 
 logged in:  Home ── Your table / Find a table
             Menu: Tables ─▶ Table detail ─▶ Play ─▶ Board results ⇄ Board review
-                                 │            │
+                                 │            │      (set over: each board ─▶ Board review)
                                  └── player ──┴──▶ profile sheet ─▶ User profile ─▶ Board review
-            Menu: My boards ─▶ Board review ⇄ Board results
+            Menu: My boards ─┬▶ Board review ⇄ Board results
+                             └▶ Set results ─▶ Board review
             Header: Account (view / edit profile, log out)
 ```
 
@@ -156,7 +157,7 @@ dealt before Start).
 
 **Logged in.** Built by #15; manager Remove by #16; live updates by #21;
 moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
-robots by #53; Start by #68. Reached from a table's **Open** button, by
+robots by #53; Start by #68; the set line by #73. Reached from a table's **Open** button, by
 taking a seat, or from **Create table** with robots.
 
 The four seats as a compass (N/E/S/W), robots badged. Sit, move or
@@ -179,7 +180,9 @@ others…** with **Cancel**, and a line saying what is missing ("Waiting for
 a fourth player, and for East (bob) to press Start."). Each ready seat on
 the compass is marked **✓ Ready**. Everyone presses their own, the manager
 included. Between boards with the same four players nothing changes:
-**Next board** on the play page. When a board is dealt (`board_id` changes
+**Next board** on the play page, until the set of four is over (#73): then
+it is everyone's Start again. While a set is going on, the table's info
+says where it is: **Board 2 of 4 · Set 3**. When a board is dealt (`board_id` changes
 to a new board, from the Start answer or a `TableUpdated`) a seated player
 is taken to `/play`, the one whose Start dealt it included.
 
@@ -207,7 +210,7 @@ search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #53 (robots), #57 (forced cards play themselves), #56 (last trick
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
-trick), #72 (no next board "for everyone"); **Compare** by #30. Entered from the detail page,
+trick), #72 (no next board "for everyone"), #73 (sets of four boards); **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
 detail page.
@@ -220,6 +223,11 @@ nothing on this page drives them. On a robot's turn its seat reads
 next-board box, and are ready for the next board at once, so your **Next
 board** deals it. How they bid and play is in
 [backend `ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
+
+Play goes in **sets of four boards** (#73): Start deals board 1, **Next
+board** boards 2 to 4, and after the fourth the set is over. A line at the
+top says where the table is: **Board 2 of 4 · Set 3** (**· set over** once
+it is).
 
 What it shows by phase:
 - **waiting**: who's seated, and the same Start box as on the detail page
@@ -254,13 +262,25 @@ What it shows by phase:
   claimer **Withdraw**. A reject or withdrawal toasts and play goes on; the
   last accept finishes the board.
 - **finished**: the result from your side ("by claim" when a claim ended
-  it), the running score at this
-  table, all four hands face up, **Compare with other tables**, **Review
+  it), the set's running score so far ("Set 3 so far: 2 of 4 boards, you
+  +450", read from the set), all four hands face up, **Compare with other tables**, **Review
   and export** (this board's [review](#board-review--playingsid), where the
   Export menu is, #71), and the next-board box (who's ready, and **Next board** to ask for
   yourself; nobody, a manager included, asks for the others, #72). If one of
   the four has left or been replaced since, the Start box takes the
   next-board box's place: the next board waits for every person's Start.
+- **set over** (after the fourth board, or earlier when a side forfeits
+  between boards): the set's results take the board result's place: who
+  won, from your side ("You won the set.", "You lost the set by
+  forfeit."), a forfeit's reason ("N-S forfeited, East didn't come back in
+  time."), the four boards (number, contract and declarer, result, your
+  side's score and matchpoint %, each opening its review) and the totals.
+  Below it the Start box: everyone's Start opens the next set, **Board 1
+  of 4 · Set 4**. A set that ended mid-board (a forfeit, or a player taken
+  out of it) shows its results the same way once the table is back to
+  waiting. They update live for all four: the set ending arrives with the
+  last card's `PlayingUpdated` (or a forfeit's `TableUpdated`), and the
+  page then reads the set again.
 
 | Calls | Endpoint |
 |---|---|
@@ -271,34 +291,60 @@ What it shows by phase:
 | `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
 | `game.next()` | `POST /tables/{id}/playing/next` |
 | `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
-| `game.loadSessionScore()` | `GET /api/user/playings` |
+| `history.loadSet()` (after each finished board, and when the set ends) | `GET /sets/{id}` |
 | `tables.openTable()` on entry, `tables.loadTable()` on Refresh or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` |
 | channels | `private-table.{id}`: `TableUpdated`, `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt` |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
-reloads. A `TableUpdated` whose `board_id` goes back to null mid-board means
+reloads (after a set's last board, Next 409s: "The set is over: press Start
+for a new one.", though the page shows Start instead by then). A `TableUpdated` whose `board_id` goes back to null mid-board means
 a player left and the board was abandoned: toast, back to waiting (and to
 Start once the table is full again).
 
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
-bb#40 (next board; bb#74 dropped its `everyone`), bb#43 (running score, results), bb#59 (claims).
+bb#40 (next board; bb#74 dropped its `everyone`), bb#43 (results), bb#59 (claims),
+bb#75 (sets of four boards).
 
 ## My boards — `/history`
 
-**Logged in**, menu item **My boards**. Built by #30.
+**Logged in**, menu item **My boards**. Built by #30; grouped by set by #73.
 
-Your finished boards, newest first (20 a page, paged in as you scroll):
-board number, contract and result, the seat you sat and your partner, the
-table, and the score from your side. Tapping one opens its
-[review](#board-review--playingsid).
+Your finished boards, newest first (20 a page, paged in as you scroll),
+grouped by the set they were dealt in. Each set's header reads **Set 3 ·
+table 5**, how many of its boards are listed ("2 of 4 boards") and your
+total over them, and opens the [set's results](#set-results--setsid). Under
+it, each board: board number, contract and result, the seat you sat and
+your partner, the table, and the score from your side. Tapping one opens
+its [review](#board-review--playingsid). Boards played before sets existed
+have no header.
 
 | Calls | Endpoint |
 |---|---|
 | `history.loadHistory(null)`, `history.loadMore(null)` | `GET /api/user/playings?page=N` |
 
 Backend: bb#43.
+
+## Set results — `/sets/:id`
+
+**Logged in, and only for a player of that set, or after you finished all
+its boards** (403 otherwise). Built by #73. Reached from a set's header in My
+boards (yours or another player's); not in the menu. The backend has
+`GET /sets/{id}`, so the set has a page of its own rather than only showing
+inline. It works the same after the table is gone, and while the set is
+still going on (with the boards finished so far).
+
+The table and when the set finished (or started), the two pairs, and the
+same set view as on the play page: who won (from your side if you played
+it, else N-S's), a forfeit, each board opening its review, and the totals. A
+403 or 404 shows as a reason on the page.
+
+| Calls | Endpoint |
+|---|---|
+| `history.loadSet()` | `GET /sets/{id}` |
+
+Backend: bb#75.
 
 ## Board results — `/boards/:id/results`
 
@@ -377,7 +423,8 @@ profile sheet (tap a seated player's name on Tables, Table detail or Play,
 then **Full profile**; a robot's sheet has no such link).
 
 A player's public profile (name, username, description, never the email)
-and their finished boards, paged like My boards (each opens its review).
+and their finished boards, paged and grouped by set like My boards (each
+opens its review).
 
 | Calls | Endpoint |
 |---|---|
@@ -396,4 +443,5 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards).
 | `RobotBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `NextBoardBox`), profile sheet | none (`is_robot` on the user) |
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
+| `SetResultsPanel` | Play (set over), Set results | none (given the set from `history.loadSet`) |
 | route progress bar, boot bar, toasts | the app shell | none (#18) |

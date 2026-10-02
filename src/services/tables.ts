@@ -1,5 +1,5 @@
 import http from './http';
-import type { Playing } from './game';
+import type { Playing, SetPosition } from './game';
 import type { PublicUser } from './users';
 
 // Game endpoints answer with an envelope: {status, message, data}.
@@ -42,6 +42,11 @@ export interface BroadcastTable {
   updated_at: string;
   seats: TableSeat[];
   free_seats: Seat[];
+  // The set the table is on, or the one it finished last; `board` is how
+  // many of its boards have been dealt. Null before the first Start. A
+  // board finishing sends no TableUpdated, so after the last board only the
+  // game state's `set` says the set is over (`currentSet` in utils/sets).
+  set: SetPosition | null;
 }
 
 // A table as the HTTP endpoints answer it. `can_manage` is TablePolicy::manage
@@ -165,7 +170,8 @@ export interface StartedTable extends Table {
 // "I'm ready to play." The board is dealt once the table is full and every
 // human there has pressed it; robots are always ready. Nobody presses it for
 // anybody else, a manager included. 409 while a board is in progress (or a
-// finished one the same four go on from with playing/next).
+// finished one the same four go on from with playing/next, its set not
+// over). After a set's last board it deals the first of the next set.
 export async function startTable(tableId: number): Promise<StartedTable> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.post<ApiResponse<StartedTable>>(`/tables/${tableId}/start`);

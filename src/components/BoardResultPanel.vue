@@ -1,7 +1,7 @@
 <template>
   <!-- A finished board's score, as the backend worked it out (`result`):
        the contract and how it went (by claim, when one ended the play), the score from the viewer's side, both
-       sides' figures, and the running score at this table. -->
+       sides' figures, and the set's running score (GET /sets/{id}). -->
   <section class="result" aria-live="polite">
     <p class="result-title">
       <template v-if="contract">
@@ -32,10 +32,11 @@
     </p>
     <p class="result-summary">{{ resultSummary(result) }}</p>
 
-    <p v-if="session && session.boards > 0" class="result-session">
-      At this table: {{ session.boards }} board{{ session.boards === 1 ? '' : 's' }},
-      <strong :class="tone(session.mine)">you {{ formatScore(session.mine) }}</strong>
-      (N-S {{ formatScore(session.ns) }})
+    <p v-if="setSoFar && setSoFar.boards.length > 0" class="result-session">
+      Set {{ setSoFar.number }} so far: {{ setSoFar.boards.length }} of {{ setSoFar.of }}
+      boards,
+      <strong :class="tone(setMine)">{{ mySeat ? 'you' : 'N-S' }} {{ formatScore(setMine) }}</strong>
+      (N-S {{ formatScore(setSoFar.totals.score.ns) }})
     </p>
   </section>
 </template>
@@ -44,6 +45,7 @@
 import { computed } from 'vue';
 import CallLabel from '@/components/CallLabel.vue';
 import type { BoardResult } from '@/services/game';
+import type { SetResults } from '@/services/history';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES, doubledSuffix } from '@/utils/auction';
 import {
@@ -54,20 +56,22 @@ import {
   sideOf,
   viewerScore,
 } from '@/utils/result';
-import type { SessionScore } from '@/utils/result';
+import { setTotals } from '@/utils/sets';
 
 const props = withDefaults(
   defineProps<{
     result: BoardResult;
     mySeat: Seat | null;
-    session?: SessionScore | null;
+    // The set this board belongs to, as far as it has got: its running score.
+    setSoFar?: SetResults | null;
   }>(),
-  { session: null },
+  { setSoFar: null },
 );
 
 const contract = computed(() => (props.result.declarer ? props.result.contract : null));
 const mine = computed(() => viewerScore(props.result, props.mySeat));
 const mySide = computed(() => (props.mySeat ? sideOf(props.mySeat) : null));
+const setMine = computed(() => (props.setSoFar ? setTotals(props.setSoFar, props.mySeat).score : 0));
 
 function tone(score: number): string {
   if (score === 0) {

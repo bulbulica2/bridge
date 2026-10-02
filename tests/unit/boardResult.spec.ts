@@ -8,10 +8,11 @@ import * as gameService from '@/services/game'
 import * as historyService from '@/services/history'
 import * as tablesService from '@/services/tables'
 import type { Bid, BoardResult, Card, Playing, Suit } from '@/services/game'
-import type { PlayingHistoryEntry } from '@/services/history'
+import type { SetResults } from '@/services/history'
 import type { Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
+import { useTablesStore } from '@/stores/tables'
 import {
   formatScore,
   madeBy,
@@ -19,7 +20,6 @@ import {
   resultContract,
   resultSummary,
   scoreFor,
-  sessionScore,
   viewerScore,
 } from '@/utils/result'
 import { leaveWarning, moveConsequences } from '@/utils/seatMove'
@@ -32,7 +32,7 @@ vi.mock('@/services/game', () => ({
   playCard: vi.fn(),
   nextBoard: vi.fn(),
 }))
-vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn() }))
+vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn(), getSet: vi.fn() }))
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   getTable: vi.fn(),
@@ -85,6 +85,36 @@ const PASSED_OUT: BoardResult = {
   tricks_won: null,
   score_ns: 0,
   made_by: null,
+}
+
+// A set two boards in, as GET /sets/{id} answers while it goes on.
+function setSoFar(overrides: Partial<SetResults> = {}): SetResults {
+  const row = (position: number, scoreNs: number) => ({
+    ...result({ score_ns: scoreNs }),
+    claimed: false,
+    position,
+    playing_id: 40 + position,
+    board: { id: position, number: position, dealer: 'N' as const, vulnerable: '' as const },
+    top: 2,
+    matchpoints: { ns: 1, ew: 1 },
+  })
+  return {
+    id: 5,
+    number: 1,
+    table_id: 5,
+    of: 4,
+    boards_dealt: 2,
+    started_at: '2026-10-01T12:00:00Z',
+    finished_at: null,
+    finished: false,
+    ended: null,
+    forfeited_by: null,
+    players: { N: null, E: null, S: null, W: null },
+    boards: [row(1, 420), row(2, 450)],
+    totals: { score: { ns: 870, ew: -870 }, matchpoints: { ns: 2, ew: 2 }, top: 4 },
+    winner: null,
+    ...overrides,
+  }
 }
 
 describe('result formatting', () => {
@@ -146,7 +176,7 @@ describe('result formatting', () => {
 describe('BoardResultPanel', () => {
   test('shows the score from an E-W viewer, and both sides', () => {
     const wrapper = mount(BoardResultPanel, {
-      props: { result: result(), mySeat: 'E', session: { boards: 2, ns: 870, mine: -870 } },
+      props: { result: result(), mySeat: 'E', setSoFar: setSoFar() },
     })
 
     expect(wrapper.get('.result-title').text()).toBe('4♠ by North')
@@ -156,8 +186,9 @@ describe('BoardResultPanel', () => {
     expect(wrapper.get('.result-sides').text()).toContain('N-S +450')
     expect(wrapper.get('.result-sides').text()).toContain('E-W −450')
     expect(wrapper.get('.side-mine').text()).toContain('E-W')
-    expect(wrapper.get('.result-session').text()).toContain('2 boards')
+    expect(wrapper.get('.result-session').text()).toContain('Set 1 so far: 2 of 4 boards')
     expect(wrapper.get('.result-session').text()).toContain('you −870')
+    expect(wrapper.get('.result-session').text()).toContain('(N-S +870)')
   })
 
   test('a passed-out board', () => {
@@ -167,36 +198,6 @@ describe('BoardResultPanel', () => {
     expect(wrapper.get('.result-mine-value').text()).toBe('0')
     expect(wrapper.get('.result-summary').text()).toBe('Passed out: 0')
     expect(wrapper.find('.result-session').exists()).toBe(false)
-  })
-})
-
-describe('session score', () => {
-  function entry(tableId: number | null, scoreNs: number, seat: Seat = 'S'): PlayingHistoryEntry {
-    return {
-      playing_id: 1,
-      table_id: tableId,
-      board: { id: 1, number: 1, dealer: 'N', vulnerable: '' },
-      seat,
-      partner: { id: 9, name: 'P', username: 'p', description: null },
-      contract: null,
-      doubled: null,
-      declarer: null,
-      tricks_won: null,
-      score_ns: scoreNs,
-      made_by: null,
-      score: seat === 'N' || seat === 'S' ? scoreNs : -scoreNs,
-      finished_at: '',
-    }
-  }
-
-  test('sums the latest run of boards at this table only', () => {
-    const total = sessionScore([entry(5, 450), entry(5, -100, 'E'), entry(3, 620), entry(5, 50)], 5)
-    expect(total).toEqual({ boards: 2, ns: 350, mine: 550, complete: true })
-  })
-
-  test('says when an older page may hold more', () => {
-    expect(sessionScore([entry(5, 420)], 5).complete).toBe(false)
-    expect(sessionScore([], 5)).toEqual({ boards: 0, ns: 0, mine: 0, complete: false })
   })
 })
 
@@ -258,8 +259,16 @@ describe('TablePlayPage between boards', () => {
       updated_at: '',
       seats: seated.map((seat, i) => ({ id: i + 1, table_id: 5, user_id: PLAYERS[seat].id, seat, user: PLAYERS[seat] })),
       free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !seated.includes(s)),
+      set: { id: 5, number: 1, board: 2, of: 4, finished: false, ended: null, forfeited_by: null },
       can_manage: false,
     }
+  }
+
+  // The fourth board of set 1, just finished: the set is over.
+  function lastBoard(): Playing {
+    return finished({
+      set: { id: 5, number: 1, board: 4, of: 4, finished: true, ended: 'completed', forfeited_by: null },
+    })
   }
 
   // 4♠ by North, made with an overtrick; the user is South.
@@ -267,6 +276,7 @@ describe('TablePlayPage between boards', () => {
     return {
       phase: 'finished',
       playing_id: 42,
+      set: { id: 5, number: 1, board: 2, of: 4, finished: false, ended: null, forfeited_by: null },
       board: { id: 7, number: 7, dealer: 'N', vulnerable: '' },
       players: PLAYERS,
       turn: null,
@@ -291,6 +301,7 @@ describe('TablePlayPage between boards', () => {
       ...finished(),
       phase: 'auction',
       playing_id: 43,
+      set: { id: 5, number: 1, board: 3, of: 4, finished: false, ended: null, forfeited_by: null },
       board: { id: 8, number: 8, dealer: 'E', vulnerable: 'N-S' },
       turn: 'E',
       acting_user_id: 2,
@@ -329,14 +340,7 @@ describe('TablePlayPage between boards', () => {
     vi.resetAllMocks()
     logIn(3, 'Cy')
     vi.mocked(gameService.getBids).mockResolvedValue([])
-    vi.mocked(historyService.getMyPlayings).mockResolvedValue({
-      current_page: 1,
-      data: [],
-      last_page: 1,
-      next_page_url: null,
-      per_page: 20,
-      total: 0,
-    })
+    vi.mocked(historyService.getSet).mockResolvedValue(setSoFar())
   })
 
   test('shows the result, the whole deal and who is ready', async () => {
@@ -349,8 +353,11 @@ describe('TablePlayPage between boards', () => {
     expect(wrapper.find('.my-hand').exists()).toBe(false)
     expect(nextBox(wrapper).text()).toContain('2 of 4 ready')
     expect(nextBox(wrapper).findAll('li.is-ready').map((li) => li.attributes('data-seat'))).toEqual(['N', 'W'])
-    // The running score is read from the history for this table.
-    expect(historyService.getMyPlayings).toHaveBeenCalledWith(1)
+    // The running score is the set's, read from GET /sets/{id}.
+    expect(historyService.getSet).toHaveBeenCalledWith(5)
+    expect(wrapper.get('.result-session').text()).toContain('Set 1 so far: 2 of 4 boards, you +870')
+    // Where the table is in its set.
+    expect(wrapper.get('.set-bar').text()).toBe('Board 2 of 4 · Set 1')
     // And the same board at the other tables is one tap away.
     const compare = wrapper.findAllComponents({ name: 'IonButton' }).find((b) => b.classes('compare'))
     expect(compare?.props('routerLink')).toMatch(/^\/boards\/\d+\/results$/)
@@ -457,6 +464,73 @@ describe('TablePlayPage between boards', () => {
     expect(wrapper.text()).toContain('Waiting for Start')
     expect(wrapper.get('.start-box').text()).toContain('Ready to play?')
     expect(wrapper.get('.start-box').findAll('.start-seats li')).toHaveLength(4)
+  })
+
+  test("after the set's last board: the set's results and Start, not Next", async () => {
+    const over = setSoFar({
+      finished: true,
+      ended: 'completed',
+      finished_at: '2026-10-01T13:00:00Z',
+      boards_dealt: 4,
+      boards: [1, 2, 3, 4].map((position) => ({
+        ...setSoFar().boards[0],
+        position,
+        playing_id: 40 + position,
+        score_ns: position === 3 ? -100 : 420,
+        board: { id: position, number: position, dealer: 'N' as const, vulnerable: '' as const },
+      })),
+      totals: { score: { ns: 1160, ew: -1160 }, matchpoints: { ns: 5, ew: 3 }, top: 8 },
+      winner: 'NS',
+    })
+    vi.mocked(historyService.getSet).mockResolvedValue(over)
+    const wrapper = await mountPage(lastBoard())
+
+    expect(wrapper.get('.set-bar').text()).toBe('Board 4 of 4 · Set 1 · set over')
+    const panel = wrapper.get('.set-results')
+    expect(panel.get('.set-title').text()).toBe('Set 1 over')
+    expect(panel.get('.set-winner').text()).toBe('You won the set.')
+    expect(panel.findAll('.set-board')).toHaveLength(4)
+    expect(panel.get('.set-total-value').text()).toBe('+1160')
+    // The board's own result panel and Next give way to the set and Start.
+    expect(wrapper.find('.result').exists()).toBe(false)
+    expect(wrapper.find('.next-board').exists()).toBe(false)
+    expect(wrapper.get('.start-box').text()).toContain('Ready to play?')
+  })
+
+  test("Start after a set deals board 1 of the next one", async () => {
+    vi.mocked(historyService.getSet).mockResolvedValue(setSoFar({ finished: true, ended: 'completed', winner: 'EW' }))
+    const wrapper = await mountPage(lastBoard())
+
+    const next = newBoard()
+    next.set = { id: 6, number: 2, board: 1, of: 4, finished: false, ended: null, forfeited_by: null }
+    vi.mocked(tablesService.startTable).mockResolvedValue({ ...makeTable(), board_id: 8, set: next.set, playing: next })
+    await wrapper.get('.start-button').trigger('click')
+    await flushPromises()
+
+    expect(tablesService.startTable).toHaveBeenCalledWith(5)
+    expect(wrapper.find('.set-results').exists()).toBe(false)
+    expect(wrapper.get('.set-bar').text()).toBe('Board 1 of 4 · Set 2')
+    expect(wrapper.findAll('.my-hand .playing-card')).toHaveLength(13)
+  })
+
+  test('a forfeit between boards comes with the table and ends the set there', async () => {
+    const forfeit = setSoFar({ finished: true, ended: 'forfeit', forfeited_by: 'EW', winner: 'NS' })
+    vi.mocked(historyService.getSet).mockResolvedValue(forfeit)
+    const wrapper = await mountPage(finished())
+    expect(wrapper.find('.set-results').exists()).toBe(false)
+
+    // East went away and didn't come back: their seat is free, the set over.
+    const table = makeTable(['N', 'S', 'W'])
+    table.set = { ...table.set!, finished: true, ended: 'forfeit', forfeited_by: 'EW' }
+    forfeit.players = { N: PLAYERS.N, E: PLAYERS.E, S: PLAYERS.S, W: PLAYERS.W }
+    useTablesStore().applyTableUpdate(table)
+    await flushPromises()
+
+    expect(historyService.getSet).toHaveBeenCalledTimes(2)
+    const panel = wrapper.get('.set-results')
+    expect(panel.get('.set-winner').text()).toBe('You won the set by forfeit.')
+    expect(panel.get('.set-forfeit').text()).toBe("E-W forfeited, East didn't come back in time.")
+    expect(wrapper.get('.start-box').text()).toContain('Waiting for a fourth player')
   })
 
   test('a refused request says why and rereads the board', async () => {

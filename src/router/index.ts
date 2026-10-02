@@ -61,6 +61,14 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    // One set of four boards: each board's result, the totals and the
+    // winner. Reached from a set in "My boards"; 403 unless the user played
+    // in it or has finished all its boards.
+    path: '/sets/:id',
+    component: () => import('@/views/SetResultsPage.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     // One finished playing replayed trick by trick: its auction, the play
     // and the result. Reached from a history entry or a board's results row;
     // 403 unless the user has finished that board.

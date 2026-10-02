@@ -14,9 +14,7 @@ import { useTablesStore } from '@/stores/tables'
 import { showToast } from '@/utils/toast'
 
 vi.mock('@/services/game', () => ({ getPlaying: vi.fn(), getBids: vi.fn(), makeCall: vi.fn() }))
-vi.mock('@/services/history', () => ({
-  getMyPlayings: vi.fn().mockResolvedValue({ data: [], next_page_url: null }),
-}))
+vi.mock('@/services/history', () => ({ getSet: vi.fn() }))
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   getTable: vi.fn(),

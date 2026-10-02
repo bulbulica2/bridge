@@ -48,6 +48,8 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `meta.requiresAuth`, the menu's "My boards"), `/boards/:id/results`
   (`BoardResultsPage.vue`, `meta.requiresAuth`, reached from a board's
   review or the play page's "Compare with other tables"),
+  `/sets/:id` (`SetResultsPage.vue`, `meta.requiresAuth`, one set of
+  four boards' results, reached from a set's header in a history list),
   `/playings/:id` (`PlayingReviewPage.vue`, `meta.requiresAuth`, one
   finished playing replayed, reached from a history entry or a results
   row) and
@@ -208,12 +210,12 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   detail page's `board_id` watch moves the presser on with the board in
   hand; `start`/`cancelStart` skip syncing an answer if a `TableUpdated`
   arrived while it was in flight (two Starts race). `src/utils/start.ts`:
-  `startNeeded(table, playing)` (no board, or a finished one whose four
-  aren't all still in their seats: then Start, not Next; unknown phase
-  says no), `isReady`, `startWaiting` (the "Waiting for …" line).
+  `startNeeded(table, playing)` (no board, a finished one whose set is
+  over (`currentSet`), or one whose four aren't all still in their seats:
+  then Start, not Next; unknown phase says no), `isReady`, `startWaiting` (the "Waiting for …" line).
   `StartBox.vue` shows it on the detail page (whose compass marks ready
   seats) and on the play page (`showSeats`), in `waiting` and in place of
-  `NextBoardBox` for a finished board with new players.
+  `NextBoardBox` for a finished board with new players or a set over.
 - **Bidding**: calls go out as a `bid_id`, and the ids aren't pinned to the
   rank, so they come from the public `GET /bids` (`getBids`, the 38 calls in
   `auction[].bid`'s shape), which the game store's `loadBids()` reads once;
@@ -301,9 +303,33 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   the next ask 409s, and once a fourth player sits down everyone's Start
   deals the board (the play page swaps `NextBoardBox` for `StartBox`).
   `leaveWarning()` / `moveConsequences()` in `src/utils/seatMove.ts` word
-  leaving by phase (`game.phaseOf(id)`). The running score at a table comes
-  from `GET /api/user/playings` (`src/services/history.ts`): the store's
-  `loadSessionScore(id)` sums the user's latest run of boards at that table.
+  leaving by phase (`game.phaseOf(id)`). The running score under a board's
+  result is its set's (`BoardResultPanel`'s `setSoFar`, below).
+- **Sets of four boards** (#73, bb#75, backend `docs/API.md` Sets): Start
+  deals a set's first board, Next the other three, after the fourth Next
+  409s ("The set is over…") and everyone's Start opens the next set. `set`
+  (`SetPosition` in `src/services/game.ts`: `id`, `number` at the table,
+  `board` (this board's place / boards dealt), `of`, `finished`, `ended`
+  `completed|forfeit|abandoned`, `forfeited_by` `NS|EW`) is on
+  `PublicPlaying` and `BroadcastTable` (null before the first Start).
+  A board finishing sends no `TableUpdated` and a forfeit between boards
+  sends only that, so read it through `currentSet(table, playing)` in
+  `src/utils/sets.ts`, which merges both copies (a higher id wins). The
+  play page shows `setLabel` ("Board 2 of 4 · Set 3") at the top, the
+  detail page while a set runs. `getSet(id)` (`GET /sets/{id}`, in
+  `src/services/history.ts`: finished `boards` with `matchpoints`/`top`,
+  `totals`, `winner`; 403 unless a player of it or finished all its
+  boards) is cached by the history store's `loadSet` (replaced on every
+  read, 403/404 drop it). The play page reads it once per finished board
+  and when the set ends (keyed, failures ignored: a newcomer gets 403),
+  feeds `BoardResultPanel`'s "Set N so far" line and, once the set is
+  over (`endedSet`), shows `SetResultsPanel.vue` instead of the board
+  result (also in `waiting` for a set ended mid-board), with `StartBox`
+  below. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
+  side, "by forfeit"), `forfeitedSeat` (the forfeiting side's seat whose
+  player is no longer at the table) + `forfeitText`, `setTotals` and
+  `groupBySet` (history runs of one set, the owner's score summed).
+  Away countdowns and mid-set leave wording are #74.
 - **Results and history**: `src/services/history.ts` also wraps
   `GET /users/{id}/playings` and `GET /boards/{id}/results` (every table's
   finished playing of a board, best N-S first, with `matchpoints` `{ns, ew}`
@@ -313,13 +339,16 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   keeps histories by owner (`null` = the user, a number = anyone) as far
   as they are paged in (`loadHistory` = first page, `loadMore` = next,
   skipping rows that slid down a page) and results by board id (a 403/404
-  drops the cached one); logout clears it. `src/components/HistoryList.vue`
-  (loading states + `ion-infinite-scroll`, `load()` exposed to the page)
+  drops the cached one) and sets by set id (`loadSet`); logout clears it.
+  History rows carry `set` (`{id, number, board, of}` or null).
+  `src/components/HistoryList.vue` (loading states +
+  `ion-infinite-scroll`, `load()` exposed to the page, entries grouped by
+  set under a header linking to `/sets/:id`)
   and `HistoryEntryItem.vue` serve both `/history` and the profile page's
   "Boards played". `BoardResultsPage.vue` highlights the tables the viewer
   sat at (`seatOfUser`) with their side's `matchpointPercent`.
 - **Board review**: `GET /playings/{id}` (`getPlayingReview`, typed
-  `PlayingReview` = `PublicPlaying` less `ready`, players nullable) is one
+  `PlayingReview` = `PublicPlaying` less `ready` and `set`, players nullable) is one
   finished playing with its auction and tricks, for anyone who finished
   that board (403 otherwise, 404 unknown or unfinished), even once the
   table is gone. The history store's `loadReview` caches it by playing id

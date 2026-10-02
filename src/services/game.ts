@@ -99,11 +99,38 @@ export interface Claim {
   accepted: Seat[];
 }
 
+// The side that forfeited a set, in the backend's spelling.
+export type SideCode = 'NS' | 'EW';
+
+// How a set ended: all its boards played, given up by one side (a player
+// away too long, see bridge_backend docs/API.md, Away mid-set), or broken off
+// with no winner (one of its four taken out of the table otherwise).
+export type SetEnding = 'completed' | 'forfeit' | 'abandoned';
+
+// Where a table is in its set of boards (bridge_backend docs/API.md, Sets):
+// the set's `id` (for GET /sets/{id}), its `number` at the table (1, 2, 3…)
+// and `board`, this board's place in it out of `of` (4). `finished` turns
+// true after the last board, or earlier when the set ends early, while that
+// board is still on show.
+export interface SetPosition {
+  id: number;
+  number: number;
+  board: number;
+  of: number;
+  finished: boolean;
+  // Null while the set goes on.
+  ended: SetEnding | null;
+  // Set on a forfeit only.
+  forfeited_by: SideCode | null;
+}
+
 // What every player at the table may see: the `PlayingUpdated` payload.
 // While `waiting`, everything but `phase` is null.
 export interface PublicPlaying {
   phase: Phase;
   playing_id: number | null;
+  // The set this board was dealt in.
+  set: SetPosition | null;
   board: Board | null;
   players: Record<Seat, PublicUser> | null;
   turn: Seat | null;
@@ -177,7 +204,8 @@ export async function playCard(tableId: number, cardId: number): Promise<Playing
 // the finished board with the caller's seat in `ready` while others have yet
 // to ask, or the next board's auction once the last one does. Asking twice
 // changes nothing. 409 with the reason (not finished, no board, short of a
-// player, the set's last board), 403 unless seated here.
+// player, and after the set's last board "The set is over: press Start for
+// a new one."), 403 unless seated here.
 export async function nextBoard(tableId: number): Promise<Playing> {
   const { data } = await http.post<ApiResponse<Playing>>(`/tables/${tableId}/playing/next`);
   return data.data;
