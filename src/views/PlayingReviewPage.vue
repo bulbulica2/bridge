@@ -2,6 +2,10 @@
   <ion-page>
     <AppHeader :title="review?.board ? `Board ${review.board.number} review` : 'Board review'">
       <template #end>
+        <ion-button v-if="review && !gone" aria-haspopup="menu" @click="exportOpen = true">
+          <ion-icon slot="start" :icon="shareOutline" />
+          Export
+        </ion-button>
         <ion-button
           v-if="review?.board"
           :router-link="`/boards/${review.board.id}/results`"
@@ -163,12 +167,26 @@
       </div>
 
       <PlayerProfileSheet :player="player" @close="player = null" />
+
+      <!-- Taking the board out of the app (src/utils/export.ts). Files and
+           printing need a browser; a native shell only copies. -->
+      <ion-action-sheet
+        :is-open="exportOpen"
+        header="Export board"
+        :buttons="exportButtons"
+        @did-dismiss="exportOpen = false"
+      />
     </ion-content>
+
+    <!-- Only while the print dialog is up (src/theme/print.css). -->
+    <Teleport to="body">
+      <BoardPrintout v-if="printing && review" :review="review" :extras="extras" />
+    </Teleport>
   </ion-page>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   IonPage,
@@ -177,7 +195,9 @@ import {
   IonIcon,
   IonText,
   IonSpinner,
+  IonActionSheet,
   onIonViewWillEnter,
+  onIonViewWillLeave,
   useIonRouter,
 } from '@ionic/vue';
 import {
@@ -187,20 +207,27 @@ import {
   playForward,
   playSkipBack,
   playSkipForward,
+  shareOutline,
 } from 'ionicons/icons';
+import { Capacitor } from '@capacitor/core';
 import AppHeader from '@/components/AppHeader.vue';
 import AuctionHistory from '@/components/AuctionHistory.vue';
 import BoardResultPanel from '@/components/BoardResultPanel.vue';
+import BoardPrintout from '@/components/BoardPrintout.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import TrickArea from '@/components/TrickArea.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useHistoryStore } from '@/stores/history';
+import type { PlayingReview } from '@/services/history';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES, doubledSuffix } from '@/utils/auction';
+import { copyText, downloadFile } from '@/utils/download';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { boardJson, boardPbn, boardText, exportFileName } from '@/utils/export';
+import type { ExportExtras } from '@/utils/export';
 import { seatOfUser } from '@/utils/result';
 import {
   clampStep,
@@ -211,6 +238,7 @@ import {
   reviewAt,
   stepCaption,
 } from '@/utils/review';
+import { showToast } from '@/utils/toast';
 
 const route = useRoute();
 const ionRouter = useIonRouter();
@@ -259,6 +287,79 @@ function who(seat: Seat): string {
   const user = review.value?.players[seat];
   return user ? `${SEAT_NAMES[seat]} (${user.username})` : SEAT_NAMES[seat];
 }
+
+const exportOpen = ref(false);
+const printing = ref(false);
+const native = Capacitor.isNativePlatform();
+
+// This playing's matchpoints, when the board's results are already loaded
+// (the results page was visited): exports carry them, the page doesn't ask.
+const extras = computed<ExportExtras>(() => {
+  const board = review.value?.board;
+  const results = board ? store.results[board.id] : undefined;
+  const row = results?.results.find((r) => r.playing_id === playingId.value);
+  return row ? { matchpoints: row.matchpoints, top: results!.top } : {};
+});
+
+const exportButtons = computed(() => [
+  { text: 'Copy as text', handler: copyAsText },
+  ...(native
+    ? []
+    : [
+        { text: 'Download .txt', handler: () => download('txt') },
+        { text: 'Download .pbn', handler: () => download('pbn') },
+        { text: 'Download .json', handler: () => download('json') },
+        { text: 'Print / Save as PDF', handler: print },
+      ]),
+  { text: 'Cancel', role: 'cancel' },
+]);
+
+async function copyAsText() {
+  const board = review.value;
+  if (!board) {
+    return;
+  }
+  try {
+    await copyText(boardText(board, extras.value));
+    await showToast(`Board ${board.board?.number ?? ''} copied as text.`, 'success');
+  } catch {
+    await showToast('Could not copy to the clipboard. Try Download .txt instead.', 'danger');
+  }
+}
+
+const FORMATS = {
+  txt: { type: 'text/plain;charset=utf-8', write: (r: PlayingReview) => boardText(r, extras.value) },
+  pbn: { type: 'text/plain;charset=utf-8', write: boardPbn },
+  json: { type: 'application/json', write: boardJson },
+};
+
+function download(format: keyof typeof FORMATS) {
+  const board = review.value;
+  if (board) {
+    downloadFile(exportFileName(board, format), FORMATS[format].write(board), FORMATS[format].type);
+  }
+}
+
+// The printout exists only while the print dialog is up: shown, printed,
+// then dropped on `afterprint` (window.print() doesn't block everywhere).
+async function print() {
+  printing.value = true;
+  document.body.classList.add('printing-board');
+  await nextTick();
+  window.addEventListener('afterprint', stopPrinting, { once: true });
+  window.print();
+}
+
+function stopPrinting() {
+  printing.value = false;
+  document.body.classList.remove('printing-board');
+}
+
+onIonViewWillLeave(() => {
+  exportOpen.value = false;
+  window.removeEventListener('afterprint', stopPrinting);
+  stopPrinting();
+});
 
 function go(to: number) {
   step.value = clampStep(to, total.value);

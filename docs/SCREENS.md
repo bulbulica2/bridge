@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/49-last-trick-readable`._
+_Status as of branch `bulbulica2/50-export-board`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -255,8 +255,9 @@ What it shows by phase:
   last accept finishes the board.
 - **finished**: the result from your side ("by claim" when a claim ended
   it), the running score at this
-  table, all four hands face up, **Compare with other tables**, and the
-  next-board box (who's ready; a manager can deal for everyone). If one of
+  table, all four hands face up, **Compare with other tables**, **Review
+  and export** (this board's [review](#board-review--playingsid), where the
+  Export menu is, #71), and the next-board box (who's ready; a manager can deal for everyone). If one of
   the four has left or been replaced since, the Start box takes the
   next-board box's place: the next board waits for every person's Start.
 
@@ -338,6 +339,29 @@ the claim was made.
 Boards finished before the backend kept their calls and cards (before
 bb#60) say "The auction and play of this board weren't recorded" and show
 only the deal and the result.
+
+**Export** (header, #71) opens a menu to take the board out of the app:
+
+- **Copy as text**: a plain summary for a chat: board, dealer and
+  vulnerability, the players (robots marked "(robot)"), the four hands as
+  dealt, the auction as a W N E S grid, contract, declarer and opening
+  lead, one line per trick (leader, the four cards in the order played,
+  winner), where a claim ended the play and how the tricks left went, the
+  result and, if you opened the board's results this session, the
+  matchpoints.
+- **Download .txt**: the same text as a file.
+- **Download .pbn**: the board in Portable Bridge Notation 2.1 (export
+  format), for other bridge software: deal, auction, play (a claim ends it
+  with `*`), contract, result and score.
+- **Download .json**: the review exactly as the backend sent it, for
+  debugging and for work on the robots.
+- **Print / Save as PDF**: the browser's print dialog with a paper layout
+  of the board (no app menu or header): the board line and result, the
+  hands round a compass, the auction and a trick-by-trick table.
+
+A board without a recorded auction and play exports the deal and the result
+and says why nothing else is there. The files and printing need a browser:
+in the native app the menu only offers Copy as text.
 
 | Calls | Endpoint |
 |---|---|

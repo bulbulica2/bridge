@@ -335,7 +335,24 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   The viewer sits at the bottom if they played it (`seatOfUser`), else
   South. An empty `auction` (`isRecorded`) means a playing finished before
   bb#60: only the deal and the result, with a notice. `HistoryEntryItem`
-  and each `BoardResultsPage` row link to it.
+  and each `BoardResultsPage` row link to it, and so does the play page's
+  "Review and export" once a board is `finished`.
+- **Export** (#71): the review page's header "Export" opens an
+  `ion-action-sheet`: Copy as text, Download .txt/.pbn/.json, Print / Save
+  as PDF (only Copy on a native platform, `Capacitor.isNativePlatform()`:
+  WebViews ignore `download` links and `window.print()`).
+  `src/utils/export.ts` is pure: `boardText(review, extras)` (matchpoints
+  in `extras` when `history.results[boardId]` holds this playing's row),
+  `boardPbn(review)` (PBN 2.1 export format: the 15 mandatory tags in
+  order, unknown ones `?`, a passed-out board's Declarer/Result empty and
+  Contract `Pass`; then Auction, Play, Score; play lines in fixed seat
+  columns from the opening leader, a claim leaves `-` and ends with `*`;
+  CRLF line ends), `boardJson`, `trickRows`, `claimNote` (the review
+  doesn't say who claimed: told from declarer's side), `exportFileName`.
+  `src/utils/download.ts`: `downloadFile`, `copyText`. Print: the page adds
+  `printing-board` to `<body>`, teleports `BoardPrintout.vue` there,
+  `window.print()`, and drops it on `afterprint`/view leave;
+  `src/theme/print.css` hides the rest and unpins Ionic's fixed body.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
   `username`, `description`, `is_robot`, never the email); `TableSeat.user` uses that type

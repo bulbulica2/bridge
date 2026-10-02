@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/49-last-trick-readable`._
+_Status as of branch `bulbulica2/50-export-board`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -37,7 +37,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance) and `echo.ts` (the websocket) |
 | `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording |
-| `src/theme/` | Ionic variables and the global toast styles |
+| `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
 `@/` is an alias for `src/` (set in both `tsconfig.json` and
@@ -351,7 +351,8 @@ rotation, vulnerability), `auction.ts` (call legality hints and labels),
 (the score from your side), `seatMove.ts` (wording for leaving or moving by
 game phase, and whether only robots would be left), `start.ts` (whether
 the next board waits for Start, and who for), `review.ts` (a replay's table after N cards: hands left, the
-trick shown, tricks won, the trick-by-trick steps). These are the
+trick shown, tricks won, the trick-by-trick steps), `export.ts` (a finished
+board as text, PBN and JSON, and the pieces the printout uses). These are the
 best-tested parts of the app. For the rules
 themselves see [`GAME-RULES.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/GAME-RULES.md).
 
@@ -370,6 +371,30 @@ refetched (a finished playing doesn't change); logout clears it with the
 rest of the store. Playings finished before the backend kept their calls
 and cards come back with an empty `auction`; the page then shows only the
 deal and the result.
+
+### Exporting a board
+
+The review page's **Export** menu (an `ion-action-sheet`, #71) turns the
+same payload into files. `src/utils/export.ts` holds pure functions of the
+review: `boardText()` (the chat-friendly summary), `boardPbn()` (Portable
+Bridge Notation 2.1 in export format: the 15 mandatory tags, then the
+auction, play and `Score`; the play lines keep fixed seat columns starting
+with the opening leader, and a claim leaves `-` for the unplayed cards and
+ends the section with `*`) and `boardJson()`. They reuse `cards.ts`,
+`auction.ts` and `result.ts` for labels. The review doesn't say who claimed,
+so a claim is told from declarer's side ("declarer took 2 of the last 5").
+Matchpoints are added when the board's results are already in the
+`history` store; the page doesn't fetch them for this. `src/utils/download.ts`
+hands over a file (a Blob behind a temporary `download` link) and copies to
+the clipboard.
+
+**Print / Save as PDF** needs no library: the page adds `printing-board` to
+`<body>`, teleports a `BoardPrintout` there and calls `window.print()`;
+`src/theme/print.css` hides everything else on paper and undoes Ionic's
+fixed, clipped `<body>` so the printout can run onto a second page. The
+printout is dropped on `afterprint` or when the page is left. The native
+shells' WebViews ignore `download` links and `window.print()`, so there
+the menu offers only Copy as text (`Capacitor.isNativePlatform()`).
 
 ## Tests
 
