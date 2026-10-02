@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/44-remember-me`._
+_Status as of branch `bulbulica2/45-account-read-only-cursor`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -104,7 +104,8 @@ profile). Reached from the header's **Account** button.
 
 Shows your name, username, email and description. **Edit profile** turns
 the page into a form for name and description (username and email are
-read-only). **Log out** ends the session, closes every channel and goes to
+read-only, with the plain arrow cursor rather than the text cursor, #66;
+their text can still be selected and copied). **Log out** ends the session, closes every channel and goes to
 `/login` with a toast.
 
 | Calls | Endpoint |

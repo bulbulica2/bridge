@@ -40,13 +40,13 @@
           </ion-list>
 
           <ion-list inset>
-            <ion-item>
+            <ion-item class="read-only">
               <ion-label>
                 <p>Username</p>
                 <h2>@{{ auth.user?.username }}</h2>
               </ion-label>
             </ion-item>
-            <ion-item>
+            <ion-item class="read-only">
               <ion-label>
                 <p>Email</p>
                 <h2>{{ auth.user?.email }}</h2>
@@ -261,6 +261,14 @@ async function logOut() {
 .field-error {
   margin: 4px 16px 8px;
   font-size: 0.85rem;
+}
+
+/* Username and email can't be edited, so no text cursor over them; still
+   no pointer either, since clicking them does nothing. The text stays
+   selectable. */
+.read-only,
+.read-only ion-label {
+  cursor: default;
 }
 
 .read-only-note {
