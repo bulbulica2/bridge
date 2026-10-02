@@ -363,9 +363,17 @@ describe('TablePlayPage between boards', () => {
     await nextBox(wrapper).get('.next-button').trigger('click')
     await flushPromises()
 
-    expect(gameService.nextBoard).toHaveBeenCalledWith(5, false)
+    expect(gameService.nextBoard).toHaveBeenCalledWith(5)
     expect(wrapper.find('.next-button').exists()).toBe(false)
     expect(nextBox(wrapper).text()).toContain("You're ready. Waiting for bob, di.")
+  })
+
+  test('a manager gets the same "Next board" as everyone, and nothing that deals for the others', async () => {
+    const wrapper = await mountPage(finished({ ready: ['N'] }), { ...makeTable(), can_manage: true })
+
+    const buttons = nextBox(wrapper).findAllComponents({ name: 'IonButton' }).map((b) => b.text())
+    expect(buttons).toEqual(['Next board', 'Leave the table'])
+    expect(nextBox(wrapper).text()).not.toContain('for everyone')
   })
 
   test('the last one to ask gets the new board, and the table resets', async () => {

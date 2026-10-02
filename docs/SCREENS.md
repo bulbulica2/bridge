@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/50-export-board`._
+_Status as of branch `bulbulica2/51-remove-next-board-for-everyone`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -163,11 +163,11 @@ The four seats as a compass (N/E/S/W), robots badged. Sit, move or
 **Leave** (confirmed; the last player leaving deletes the table and the
 page goes back to `/tables`; if only robots are left the confirmation says
 the table waits 10 minutes for somebody to take over). Managers
-(`can_manage` in the payload) also get **Remove** on each player, and on
+(`can_manage` in the payload: the moderator or an admin, bb#74) also get **Remove** on each player, and on
 an empty seat **Seat a player** (a search sheet over all users, robots
 never listed) and **Add robot**. While only robots sit there
 (`unattended_since`), a note says so and **anyone** gets **Remove** on the
-robots; the first person to sit down becomes the manager. Updates live
+robots; the first person to sit down becomes the moderator. Updates live
 over the table channel; if you are removed, a toast and back to `/tables`.
 
 **Start.** A board is dealt only once the table is full and every person
@@ -207,7 +207,7 @@ search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #53 (robots), #57 (forced cards play themselves), #56 (last trick
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
-trick); **Compare** by #30. Entered from the detail page,
+trick), #72 (no next board "for everyone"); **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
 detail page.
@@ -257,7 +257,8 @@ What it shows by phase:
   it), the running score at this
   table, all four hands face up, **Compare with other tables**, **Review
   and export** (this board's [review](#board-review--playingsid), where the
-  Export menu is, #71), and the next-board box (who's ready; a manager can deal for everyone). If one of
+  Export menu is, #71), and the next-board box (who's ready, and **Next board** to ask for
+  yourself; nobody, a manager included, asks for the others, #72). If one of
   the four has left or been replaced since, the Start box takes the
   next-board box's place: the next board waits for every person's Start.
 
@@ -282,7 +283,7 @@ Start once the table is full again).
 
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
-bb#40 (next board), bb#43 (running score, results), bb#59 (claims).
+bb#40 (next board; bb#74 dropped its `everyone`), bb#43 (running score, results), bb#59 (claims).
 
 ## My boards — `/history`
 

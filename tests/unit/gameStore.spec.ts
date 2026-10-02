@@ -425,18 +425,17 @@ describe('game store', () => {
 
       await game.next()
 
-      expect(gameService.nextBoard).toHaveBeenCalledWith(5, false)
+      expect(gameService.nextBoard).toHaveBeenCalledWith(5)
       expect(game.playing?.ready).toEqual(['N', 'S'])
     })
 
-    test('a manager asks for everyone; the answer is the new board', async () => {
-      const game = await loaded(finished([]))
+    test('the last one to ask gets the new board in the answer', async () => {
+      const game = await loaded(finished(['N', 'E', 'W']))
       const next = fullState({ playing_id: 43, board: { id: 8, number: 8, dealer: 'E', vulnerable: '' } })
       vi.mocked(gameService.nextBoard).mockResolvedValue(next)
 
-      await game.next(true)
+      await game.next()
 
-      expect(gameService.nextBoard).toHaveBeenCalledWith(5, true)
       expect(game.playing).toEqual(next)
     })
 

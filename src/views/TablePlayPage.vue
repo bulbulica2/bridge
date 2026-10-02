@@ -107,10 +107,8 @@
               :ready="playing.ready ?? []"
               :players="players"
               :my-seat="mySeat"
-              :manager="isManager"
               :busy="asking"
-              @next="askNext(false)"
-              @everyone="askNext(true)"
+              @next="askNext"
               @leave="leave"
             />
           </template>
@@ -575,9 +573,6 @@ const showStart = computed(
     startNeeded(table.value, playing.value),
 );
 
-// A hint for the "for everyone" button; a 403 corrects it.
-const isManager = computed(() => table.value?.can_manage ?? false);
-
 // The running score at this table, once the store has read it for this table.
 const session = computed(() => (game.session?.tableId === tableId.value ? game.session : null));
 
@@ -859,15 +854,15 @@ async function withdrawClaim() {
   }
 }
 
-// Ask for the next board: for ourselves, or (a manager) for all four. The
-// last one to ask deals it, and the new board replaces this one.
-async function askNext(everyone: boolean) {
-  if (asking.value || (everyone && !(await confirmEveryone()))) {
+// Ask for the next board, for ourselves only: nobody asks for anyone else.
+// The last one to ask deals it, and the new board replaces this one.
+async function askNext() {
+  if (asking.value) {
     return;
   }
   asking.value = true;
   try {
-    await game.next(everyone);
+    await game.next();
   } catch (e) {
     await refused(e, 'Could not ask for the next board. Please try again.');
   } finally {
@@ -903,20 +898,6 @@ async function cancelStart() {
   } finally {
     asking.value = false;
   }
-}
-
-async function confirmEveryone(): Promise<boolean> {
-  const alert = await alertController.create({
-    header: 'Deal the next board for everyone?',
-    message: "The players who haven't asked yet move on too.",
-    buttons: [
-      { text: 'Cancel', role: 'cancel' },
-      { text: 'Deal', role: 'confirm' },
-    ],
-  });
-  await alert.present();
-  const { role } = await alert.onDidDismiss();
-  return role === 'confirm';
 }
 
 // Leaving between boards: free, since the board is over.
