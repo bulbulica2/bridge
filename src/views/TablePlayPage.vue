@@ -90,6 +90,16 @@
             >
               Compare with other tables
             </ion-button>
+            <!-- Replay it card by card, and export it (text, PBN, print). -->
+            <ion-button
+              v-if="playing.playing_id"
+              expand="block"
+              fill="outline"
+              class="compare"
+              :router-link="`/playings/${playing.playing_id}`"
+            >
+              Review and export
+            </ion-button>
             <!-- The same four go on with Next; once one of them has been
                  replaced, it is Start again (below). -->
             <NextBoardBox

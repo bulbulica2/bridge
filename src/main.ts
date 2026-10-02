@@ -35,6 +35,7 @@ import '@ionic/vue/css/palettes/dark.system.css';
 /* Theme variables */
 import './theme/variables.css';
 import './theme/toasts.css';
+import './theme/print.css';
 
 const app = createApp(App)
   .use(IonicVue)
