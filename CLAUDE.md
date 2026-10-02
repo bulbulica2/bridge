@@ -258,7 +258,9 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `tricks`) with its winner for 2 s before clearing it, but only when seen
   live. The contract bar above the table carries `tricks_won`. Under the
   trick in progress, `LastTrickPopover.vue` (from the second trick on, not
-  while a trick is held) pops up the last of `tricks` in a `TrickArea`:
+  while a trick is held) pops up the last of `tricks` in a `TrickArea`
+  with `spread` (#70: no overlap, a seat tag per card, nudged sideways to
+  stay on screen):
   mouse hover opens it and leaving closes it (`pointerType === 'mouse'`
   only), a click toggles it, a pointerdown outside or Escape closes it.
   The centre keeps the trick in progress meanwhile. One card is in flight

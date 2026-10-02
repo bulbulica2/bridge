@@ -1,9 +1,10 @@
 <template>
   <!-- The last trick on demand, next to the trick in progress (which stays
        where it is). Hovering the button with a mouse opens a small pop-up
-       with its four cards, each at its seat and rotated like the table, the
-       winner ringed; moving away closes it. A tap or a key (touch has no
-       hover) opens it until a tap outside, the button again, or Escape. -->
+       with its four cards spread apart, each at its seat (named) and rotated
+       like the table, the winner ringed; moving away closes it. A tap or a
+       key (touch has no hover) opens it until a tap outside, the button
+       again, or Escape. It stays clear of the screen's edges. -->
   <span
     ref="root"
     class="last-trick"
@@ -27,20 +28,22 @@
     <div
       v-if="open"
       :id="popupId"
+      ref="popup"
       class="last-trick-popup"
+      :style="{ '--nudge': `${nudge}px` }"
       role="dialog"
       :aria-label="`Last trick: ${caption}`"
     >
       <div class="last-trick-box">
         <p class="last-trick-title">Trick {{ trick.round }} · {{ caption }}</p>
-        <TrickArea :cards="trick.cards" :my-seat="mySeat" :winner="trick.winner" />
+        <TrickArea :cards="trick.cards" :my-seat="mySeat" :winner="trick.winner" spread />
       </div>
     </div>
   </span>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { IonIcon } from '@ionic/vue';
 import { albumsOutline } from 'ionicons/icons';
 import TrickArea from '@/components/TrickArea.vue';
@@ -54,11 +57,16 @@ const props = defineProps<{
 
 const root = ref<HTMLElement | null>(null);
 const button = ref<HTMLButtonElement | null>(null);
+const popup = ref<HTMLElement | null>(null);
 const popupId = `last-trick-${useId()}`;
 
 const open = ref(false);
 // Opened by a mouse hovering: leaving closes it. A click pins it open.
 const byHover = ref(false);
+// How far the pop-up moves sideways from under the button's centre to stay
+// on screen.
+const nudge = ref(0);
+const EDGE = 8;
 
 const caption = computed(() =>
   props.trick.winner === props.mySeat ? 'You win' : `${props.trick.winner} wins`,
@@ -113,9 +121,27 @@ function listen(on: boolean) {
   document[method]('keydown', onKeyDown as EventListener);
 }
 
+// Centred on the button, unless that would cross an edge of the screen.
+async function keepOnScreen() {
+  nudge.value = 0;
+  await nextTick();
+  const box = popup.value?.getBoundingClientRect();
+  if (!box || box.width === 0) {
+    return;
+  }
+  const right = document.documentElement.clientWidth - EDGE;
+  if (box.left < EDGE) {
+    nudge.value = EDGE - box.left;
+  } else if (box.right > right) {
+    nudge.value = Math.max(right - box.right, EDGE - box.left);
+  }
+}
+
 watch(open, (isOpen) => {
   listen(isOpen);
-  if (!isOpen) {
+  if (isOpen) {
+    keepOnScreen();
+  } else {
     byHover.value = false;
   }
 });
@@ -163,7 +189,7 @@ onBeforeUnmount(() => listen(false));
   left: 50%;
   z-index: 20;
   padding-top: 6px;
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + var(--nudge, 0px)));
 }
 
 .last-trick-box {

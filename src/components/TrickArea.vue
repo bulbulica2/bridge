@@ -1,8 +1,9 @@
 <template>
   <!-- The trick in the middle of the table: each card in front of the hand it
        came from, rotated like the table (the viewer's card at the bottom).
-       A finished trick rings its winning card. -->
-  <div class="trick" role="group" :aria-label="label">
+       A finished trick rings its winning card. `spread` (the Last trick
+       pop-up) parts the cards and names each seat. -->
+  <div class="trick" :class="{ spread }" role="group" :aria-label="label">
     <div
       v-for="side in SIDES"
       :key="side"
@@ -12,6 +13,9 @@
       :data-seat="seatOn[side]"
     >
       <PlayingCard v-if="bySide[side]" :card="bySide[side]!" />
+      <span v-if="spread" class="seat-tag" aria-hidden="true">
+        {{ seatOn[side] === mySeat ? 'You' : seatOn[side] }}
+      </span>
     </div>
   </div>
 </template>
@@ -31,8 +35,11 @@ const props = withDefaults(
     mySeat: Seat | null;
     // Set once the trick is complete.
     winner?: Seat | null;
+    // Room between the cards, for a pop-up that isn't held to the table's
+    // centre cell.
+    spread?: boolean;
   }>(),
-  { winner: null },
+  { winner: null, spread: false },
 );
 
 const SIDES: ScreenSide[] = ['top', 'left', 'right', 'bottom'];
@@ -60,7 +67,8 @@ const label = computed(() => {
 
 <style scoped>
 /* Four card slots in a cross; the middle row overlaps the top and bottom
-   ones a little so the whole trick fits the table's centre cell. */
+   ones a little so the whole trick fits the table's centre cell. A spread
+   trick (below) drops the overlap. */
 .trick {
   position: relative;
   width: 124px;
@@ -104,11 +112,78 @@ const label = computed(() => {
   z-index: 2;
 }
 
-.slot.won {
-  z-index: 3;
-}
-
+/* The winner keeps its place in that stacking: lifting it would lay its
+   ring over a neighbour's index. Its ring goes under the cards above it. */
 .slot.won :deep(.playing-card) {
   box-shadow: 0 0 0 3px var(--ion-color-success, #2dd36f);
+}
+
+/* Spread: no overlap at all. The side cards sit halfway down, level with
+   the gap between top and bottom, and a 10px gap all round leaves the
+   winner's ring room. Each seat's tag sits on the outer side of its card. */
+.trick.spread {
+  width: 192px;
+  height: 178px;
+}
+
+.spread .slot-top {
+  top: 16px;
+  left: 72px;
+}
+
+.spread .slot-bottom {
+  bottom: 16px;
+  left: 72px;
+}
+
+.spread .slot-left {
+  top: 55px;
+  left: 14px;
+}
+
+.spread .slot-right {
+  top: 55px;
+  right: 14px;
+}
+
+.seat-tag {
+  position: absolute;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--ion-color-medium);
+}
+
+.slot.won .seat-tag {
+  color: var(--ion-color-success, #2dd36f);
+}
+
+.slot-top .seat-tag,
+.slot-bottom .seat-tag {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.slot-top .seat-tag {
+  bottom: calc(100% + 4px);
+}
+
+.slot-bottom .seat-tag {
+  top: calc(100% + 4px);
+}
+
+.slot-left .seat-tag,
+.slot-right .seat-tag {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.slot-left .seat-tag {
+  right: calc(100% + 4px);
+}
+
+.slot-right .seat-tag {
+  left: calc(100% + 4px);
 }
 </style>

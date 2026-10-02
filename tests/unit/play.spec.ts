@@ -285,6 +285,29 @@ describe('trick layout by seat', () => {
     expect(wrapper.get('.won').attributes('data-seat')).toBe('E')
     expect(wrapper.get('.trick').attributes('aria-label')).toContain('Trick won by E')
   })
+
+  test('TrickArea is compact by default: no spread class, no seat tags', () => {
+    const wrapper = mount(TrickArea, {
+      props: { cards: played('W SK, N S2, E SA, S S9'), mySeat: 'N', winner: 'E' },
+    })
+
+    expect(wrapper.get('.trick').classes()).not.toContain('spread')
+    expect(wrapper.findAll('.seat-tag')).toHaveLength(0)
+  })
+
+  test('TrickArea spread parts the cards, tags each seat and still marks the winner', () => {
+    const wrapper = mount(TrickArea, {
+      props: { cards: played('W SK, N S2, E SA, S S9'), mySeat: 'N', winner: 'E', spread: true },
+    })
+
+    expect(wrapper.get('.trick').classes()).toContain('spread')
+    const tag = (side: string) => wrapper.get(`[data-side="${side}"] .seat-tag`).text()
+    // The viewer's own seat reads "You".
+    expect([tag('bottom'), tag('left'), tag('top'), tag('right')]).toEqual(['You', 'E', 'S', 'W'])
+    expect(wrapper.findAll('.won')).toHaveLength(1)
+    expect(wrapper.get('.won').attributes('data-seat')).toBe('E')
+    expect(wrapper.get('.won .seat-tag').text()).toBe('E')
+  })
 })
 
 describe('HandView on play', () => {

@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/48-forced-play-declarer-only`._
+_Status as of branch `bulbulica2/49-last-trick-readable`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -206,7 +206,8 @@ search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
 **Logged in, seated at that table** (403 otherwise). Built by #26 (game
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #53 (robots), #57 (forced cards play themselves), #56 (last trick
-pop-up), #68 (Start), #69 (forced cards for declarer only); **Compare** by #30. Entered from the detail page,
+pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
+trick); **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
 detail page.
@@ -231,7 +232,8 @@ What it shows by phase:
   centre, dummy's cards once the opening lead is made. From the second
   trick on, a **Last trick** button sits under the trick in progress:
   hovering it with a mouse pops up the last trick's four cards (each at its
-  seat, turned like the table, the winner ringed), and moving away hides
+  seat, turned like the table and tagged N/E/S/W or **You**, spread apart
+  so every rank and suit shows, the winner ringed), and moving away hides
   it; on a phone a tap opens it and a tap outside (or Escape) closes it.
   The trick in progress stays in the centre meanwhile. The button is hidden
   for the 2 s the trick just won is still shown in the centre.
