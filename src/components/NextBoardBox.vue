@@ -1,8 +1,9 @@
 <template>
   <!-- Between boards, for the four who played the board: who has asked for
-       the next one (`ready`), the button that asks, a manager's "for
-       everyone", and leaving, which is free now that the board is over. Once
-       one of them is replaced it is Start again (StartBox) instead. -->
+       the next one (`ready`), the button that asks, and leaving, which is
+       free now that the board is over. Every player asks for themselves (a
+       manager too, bb#74; robots always are). Once one of them is replaced
+       it is Start again (StartBox) instead. -->
   <section class="next-board" aria-label="Next board">
     <p class="next-title">Next board: {{ ready.length }} of 4 ready</p>
     <ul class="next-seats">
@@ -33,17 +34,6 @@
       You're ready. Waiting for {{ waitingFor.join(', ') || 'the others' }}.
     </p>
 
-    <ion-button
-      v-if="canDealForAll"
-      expand="block"
-      fill="clear"
-      size="small"
-      :disabled="busy"
-      @click="emit('everyone')"
-    >
-      Deal the next board for everyone
-    </ion-button>
-
     <div class="next-leave">
       <ion-button fill="outline" color="medium" size="small" :disabled="busy" @click="emit('leave')">
         Leave the table
@@ -66,14 +56,12 @@ const props = withDefaults(
     ready: Seat[];
     players: Partial<Record<Seat, PublicUser | null>>;
     mySeat: Seat | null;
-    // The table's can_manage: may ask for all four at once.
-    manager?: boolean;
     busy?: boolean;
   }>(),
-  { manager: false, busy: false },
+  { busy: false },
 );
 
-const emit = defineEmits<{ next: []; everyone: []; leave: [] }>();
+const emit = defineEmits<{ next: []; leave: [] }>();
 
 const iAmReady = computed(() => !!props.mySeat && props.ready.includes(props.mySeat));
 
@@ -82,8 +70,6 @@ const waitingFor = computed(() =>
     (seat) => props.players[seat]?.username ?? seat,
   ),
 );
-
-const canDealForAll = computed(() => props.manager && props.ready.length < 4);
 </script>
 
 <style scoped>

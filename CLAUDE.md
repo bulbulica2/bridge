@@ -144,9 +144,9 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   (the response only describes the joined table), and both pages confirm a
   cross-table move first via `src/utils/seatMove.ts`; `myTable` /
   `seatedTable()` tell them where the user sits.
-  The manager controls (Remove, "Seat a player", "Add robot", the next
-  board for everyone) show from the payload's `can_manage` (`TablePolicy::manage` for
-  the caller, admins included); never re-derive it from
+  The manager controls (Remove, "Seat a player", "Add robot") show from
+  the payload's `can_manage` (`TablePolicy::manage` for the caller: the
+  moderator or an admin, never the creator as such, bb#74); never re-derive it from
   `moderated_by`/`created_by`. `TableUpdated` leaves it out, so the store's
   `withCanManage` keeps the last HTTP value and refetches the table when
   `moderated_by` changes (taking only `can_manage` from that answer). The
@@ -291,10 +291,12 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   words it and turns it round for the viewer's side (`resultSummary`,
   `viewerScore`); `BoardResultPanel.vue` shows it, `BridgeTable`'s `deal`
   prop lays each hand at its seat, and `NextBoardBox.vue` shows who is ready.
-  The game store's `next(everyone)` posts `POST /tables/{id}/playing/next`
+  The game store's `next()` posts `POST /tables/{id}/playing/next`
   through the same `isBehind` guard; the last player to ask gets the new
   board in the answer, the others through `PlayingUpdated` + `HandDealt`.
-  `everyone` is a manager's call (`canManage()` hint, 403 otherwise). Leaving
+  Each player asks only for themselves (#72: no "for everyone", a manager
+  included; the backend ignores `everyone`, bb#74), with `NextBoardBox`'s
+  one **Next board** button, then "Waiting for …". Leaving
   between boards abandons nothing and keeps `board_id`; with three seated
   the next ask 409s, and once a fourth player sits down everyone's Start
   deals the board (the play page swaps `NextBoardBox` for `StartBox`).

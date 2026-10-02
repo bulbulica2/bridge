@@ -172,17 +172,14 @@ export async function playCard(tableId: number, cardId: number): Promise<Playing
   return data.data;
 }
 
-// Once the board is finished, ask for the next one; `everyone` asks for all
-// four (a manager's call). 200 with the whole new state: still the finished
-// board with the caller's seat in `ready` while others have yet to ask, or
-// the next board's auction once the last one does. Asking twice changes
-// nothing. 409 with the reason (not finished, no board, short of a player),
-// 403 unless seated here (or for `everyone` from a non-manager).
-export async function nextBoard(tableId: number, everyone = false): Promise<Playing> {
-  const { data } = await http.post<ApiResponse<Playing>>(
-    `/tables/${tableId}/playing/next`,
-    everyone ? { everyone: true } : {},
-  );
+// Once the board is finished, ask for the next one, for the caller only
+// (nobody asks for anyone else, bb#74). 200 with the whole new state: still
+// the finished board with the caller's seat in `ready` while others have yet
+// to ask, or the next board's auction once the last one does. Asking twice
+// changes nothing. 409 with the reason (not finished, no board, short of a
+// player, the set's last board), 403 unless seated here.
+export async function nextBoard(tableId: number): Promise<Playing> {
+  const { data } = await http.post<ApiResponse<Playing>>(`/tables/${tableId}/playing/next`);
   return data.data;
 }
 

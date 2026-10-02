@@ -45,8 +45,8 @@ export interface BroadcastTable {
 }
 
 // A table as the HTTP endpoints answer it. `can_manage` is TablePolicy::manage
-// for the caller (the moderator, the creator while seated, any admin), so the
-// manager controls show from it rather than from moderated_by/created_by.
+// for the caller (the moderator or any admin, never the creator as such), so
+// the manager controls show from it rather than from moderated_by/created_by.
 export interface Table extends BroadcastTable {
   can_manage: boolean;
 }

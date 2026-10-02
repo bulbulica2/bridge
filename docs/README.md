@@ -31,8 +31,8 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/50-export-board` (after #71, a finished board exports as text, PBN, JSON
-> or a printout from its review page).
+> branch `bulbulica2/51-remove-next-board-for-everyone` (after #72, every player asks for the next board
+> themselves: there is no "for everyone" any more, a manager included).
 > They live next to the code, so a PR that changes a route, store, service,
 > env var or backend dependency updates them in the same diff; the
 > frontend's `CLAUDE.md` tells Claude to do so. If you change the frontend

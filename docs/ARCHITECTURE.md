@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/50-export-board`._
+_Status as of branch `bulbulica2/51-remove-next-board-for-everyone`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -183,16 +183,18 @@ A few backend rules the stores rely on:
 - Taking a seat while you hold one is a **move**, not an error. The pages
   ask before a move to another table, because leaving the old seat can
   abandon a board there.
-- Manager controls (Remove, Seat a player, Add robot, next board for
-  everyone) show when the table payload's `can_manage` says so. Don't work
-  it out from `moderated_by` or `created_by`; the backend decides (admins
-  can manage any table).
+- Manager controls (Remove, Seat a player, Add robot) show when the table
+  payload's `can_manage` says so: the table's moderator or an admin
+  (bb#74; the creator only while they are the moderator). Don't work it out
+  from `moderated_by` or `created_by`; the backend decides. Nothing at the
+  table moves the others on: the next board is asked for by each player
+  (#72).
 - **Nothing is dealt before Start** (bb#73). Filling a table deals no
   board: it is dealt once the table is full and every person seated there
   has pressed Start (`POST /tables/{id}/start`; `DELETE` takes it back).
   Each seat carries `ready` in the table payload and in `TableUpdated`;
   robots are always ready. Nobody presses for anybody else, a manager
-  included. A finished board is followed by **Next** for the same four
+  included. A finished board is followed by **Next board** for the same four
   players; once one of them has left or been replaced, it is Start again.
   `src/utils/start.ts` holds the hints: `startNeeded()` (does the next
   board wait for Start, given the table and the game state held),

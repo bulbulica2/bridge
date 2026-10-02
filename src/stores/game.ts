@@ -196,11 +196,11 @@ export const useGameStore = defineStore('game', () => {
     return act((id) => gameService.playCard(id, cardId));
   }
 
-  // Ask for the next board once this one is finished (`everyone`: a
-  // manager, for all four). The answer is the finished board with our seat
-  // in `ready`, or the new board itself when we were the last to ask.
-  async function next(everyone = false): Promise<Playing> {
-    return act((id) => gameService.nextBoard(id, everyone));
+  // Ask for the next board once this one is finished, for ourselves. The
+  // answer is the finished board with our seat in `ready`, or the new board
+  // itself when we were the last to ask.
+  async function next(): Promise<Playing> {
+    return act((id) => gameService.nextBoard(id));
   }
 
   // Claim `tricks` of the remaining tricks for our side (0 concedes). The
