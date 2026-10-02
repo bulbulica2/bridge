@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/46-join-opens-table`._
+_Status as of branch `bulbulica2/47-start-button`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -130,8 +130,8 @@ sends you to `/login` afterwards.
 | Store | Holds | Main actions |
 |---|---|---|
 | `auth` | `user` (own record, with email) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset |
-| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom` | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `seatedTable`; owns the table channel and the heartbeat |
-| `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `loadSessionScore`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
+| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom` | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`; owns the table channel and the heartbeat |
+| `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `adopt`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `loadSessionScore`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadReview` |
 | `users` | public profiles by id | `load` |
 
@@ -153,16 +153,21 @@ so every extra request on the way in delays the one the page needs:
   and asks for the bid list after that. The bid list is normally already
   there: the router reads it in the background a second after the first
   logged-in page shows (`prefetchBids` in `src/router/index.ts`).
-- Create with robots closes the modal and moves to `/play` as soon as
-  `POST /tables` answers, without waiting for the game page; that page
-  shows its own spinner until the board arrives.
+- Create with robots closes the modal and moves to the new table's page
+  as soon as `POST /tables` answers; that page draws the table the store
+  already holds (nothing is dealt until Start, #68).
+- The Start that deals a board answers with the caller's game state.
+  `tables.start` hands it to the game store (`adopt`) before applying the
+  table, so the `board_id` watch on the detail page moves to `/play` with
+  the board already drawn. The play page still reads
+  `GET /tables/{id}/playing` on entry.
 
 ## Services
 
 | Service | Endpoints (see [backend `API.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)) |
 |---|---|
 | `auth.ts` | `/sanctum/csrf-cookie`, `POST /login`, `/register`, `/logout`, `/forgot-password`, `/reset-password`, `GET` / `PATCH /api/user` |
-| `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST /tables/{id}/heartbeat` |
+| `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
 | `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `POST /tables/{id}/calls`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
 | `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /playings/{id}` |
 | `users.ts` | `GET /users/{id}`, `GET /users?search=` |
@@ -182,9 +187,22 @@ A few backend rules the stores rely on:
   everyone) show when the table payload's `can_manage` says so. Don't work
   it out from `moderated_by` or `created_by`; the backend decides (admins
   can manage any table).
+- **Nothing is dealt before Start** (bb#73). Filling a table deals no
+  board: it is dealt once the table is full and every person seated there
+  has pressed Start (`POST /tables/{id}/start`; `DELETE` takes it back).
+  Each seat carries `ready` in the table payload and in `TableUpdated`;
+  robots are always ready. Nobody presses for anybody else, a manager
+  included. A finished board is followed by **Next** for the same four
+  players; once one of them has left or been replaced, it is Start again.
+  `src/utils/start.ts` holds the hints: `startNeeded()` (does the next
+  board wait for Start, given the table and the game state held),
+  `isReady()` and `startWaiting()` (the "Waiting for …" line);
+  `StartBox.vue` draws it on the detail and play pages. `tables.start` and
+  `cancelStart` skip applying an answer that a `TableUpdated` overtook
+  while it was on its way, since two players pressing at once race.
 - **Robots** are users with `is_robot: true` (on every public profile). They
   fill seats nobody else takes: `POST /tables` with `robots: true` seats
-  three and deals at once, and a manager adds one with
+  three (the creator's Start then deals), and a manager adds one with
   `POST /tables/{id}/seats/robots`. They move by themselves on the backend,
   so the SPA only shows them (`RobotBadge`, "Thinking…" on their turn); each
   move arrives as a normal `PlayingUpdated`. How they bid and play:
@@ -303,6 +321,7 @@ arrives, and the app falls back to what each request returns.
 | `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest** |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw** |
 | `BoardResultPanel`, `NextBoardBox` | the score once a board is finished, and who is ready for the next |
+| `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead) |
 | `RobotBadge` | the "robot" mark next to a robot's name (also on Home, Tables, Table detail and the profile sheet) |
 
 `BridgeTable`'s `thinking` prop is set when the player acting for `turn`
@@ -327,7 +346,8 @@ rotation, vulnerability), `auction.ts` (call legality hints and labels),
 `play.ts` (follow-suit hint, the forced card, whose hand you play, trick layout), `claim.ts`
 (who may claim, who still has to answer, the claim's wording), `result.ts`
 (the score from your side), `seatMove.ts` (wording for leaving or moving by
-game phase, and whether only robots would be left), `review.ts` (a replay's table after N cards: hands left, the
+game phase, and whether only robots would be left), `start.ts` (whether
+the next board waits for Start, and who for), `review.ts` (a replay's table after N cards: hands left, the
 trick shown, tricks won, the trick-by-trick steps). These are the
 best-tested parts of the app. For the rules
 themselves see [`GAME-RULES.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/GAME-RULES.md).

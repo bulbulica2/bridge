@@ -130,6 +130,21 @@ export const useGameStore = defineStore('game', () => {
     return state;
   }
 
+  // A full state (hand included) that another request answered with, such as
+  // the Start that dealt a board: it becomes the table we hold, so the play
+  // page draws at once and this table's events apply from now on. Skipped
+  // if the channel already brought a later state of the same board.
+  function adopt(id: number, state: Playing) {
+    if (tableId.value === id && isBehind(state, playing.value)) {
+      return;
+    }
+    tableId.value = id;
+    playing.value = state;
+    if (pendingHand?.playing_id === state.playing_id) {
+      pendingHand = null;
+    }
+  }
+
   // `PlayingUpdated` never carries a hand, so it replaces only the public part
   // and the hand is carried over: the one we hold for the same board (less any
   // card played since), or the one HandDealt brought for a new board. A new
@@ -324,6 +339,7 @@ export const useGameStore = defineStore('game', () => {
     bids,
     session,
     load,
+    adopt,
     loadBids,
     call,
     play,

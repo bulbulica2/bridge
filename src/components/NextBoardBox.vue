@@ -1,55 +1,48 @@
 <template>
-  <!-- Between boards: who has asked for the next one (`ready`), the button
-       that asks, a manager's "for everyone", and leaving, which is free now
-       that the board is over. -->
+  <!-- Between boards, for the four who played the board: who has asked for
+       the next one (`ready`), the button that asks, a manager's "for
+       everyone", and leaving, which is free now that the board is over. Once
+       one of them is replaced it is Start again (StartBox) instead. -->
   <section class="next-board" aria-label="Next board">
-    <template v-if="short">
-      <p class="next-title">Waiting for a fourth player</p>
-      <p class="next-detail">
-        Somebody left after the board. The next one is dealt as soon as a fourth player sits down.
-      </p>
-    </template>
-    <template v-else>
-      <p class="next-title">Next board: {{ ready.length }} of 4 ready</p>
-      <ul class="next-seats">
-        <li
-          v-for="seat in SEATS"
-          :key="seat"
-          :class="{ 'is-ready': ready.includes(seat) }"
-          :data-seat="seat"
-        >
-          <span class="next-mark" aria-hidden="true">{{ ready.includes(seat) ? '✓' : '…' }}</span>
-          <span>{{ seat }} {{ seat === mySeat ? 'you' : (players[seat]?.username ?? '') }}</span>
-          <RobotBadge v-if="players[seat]?.is_robot" />
-          <span class="sr-only">{{ ready.includes(seat) ? 'ready' : 'not yet' }}</span>
-        </li>
-      </ul>
-
-      <ion-button
-        v-if="!iAmReady"
-        expand="block"
-        class="next-button"
-        :disabled="busy"
-        @click="emit('next')"
+    <p class="next-title">Next board: {{ ready.length }} of 4 ready</p>
+    <ul class="next-seats">
+      <li
+        v-for="seat in SEATS"
+        :key="seat"
+        :class="{ 'is-ready': ready.includes(seat) }"
+        :data-seat="seat"
       >
-        <ion-spinner v-if="busy" name="crescent" />
-        <span v-else>Next board</span>
-      </ion-button>
-      <p v-else class="next-detail">
-        You're ready. Waiting for {{ waitingFor.join(', ') || 'the others' }}.
-      </p>
+        <span class="next-mark" aria-hidden="true">{{ ready.includes(seat) ? '✓' : '…' }}</span>
+        <span>{{ seat }} {{ seat === mySeat ? 'you' : (players[seat]?.username ?? '') }}</span>
+        <RobotBadge v-if="players[seat]?.is_robot" />
+        <span class="sr-only">{{ ready.includes(seat) ? 'ready' : 'not yet' }}</span>
+      </li>
+    </ul>
 
-      <ion-button
-        v-if="canDealForAll"
-        expand="block"
-        fill="clear"
-        size="small"
-        :disabled="busy"
-        @click="emit('everyone')"
-      >
-        Deal the next board for everyone
-      </ion-button>
-    </template>
+    <ion-button
+      v-if="!iAmReady"
+      expand="block"
+      class="next-button"
+      :disabled="busy"
+      @click="emit('next')"
+    >
+      <ion-spinner v-if="busy" name="crescent" />
+      <span v-else>Next board</span>
+    </ion-button>
+    <p v-else class="next-detail">
+      You're ready. Waiting for {{ waitingFor.join(', ') || 'the others' }}.
+    </p>
+
+    <ion-button
+      v-if="canDealForAll"
+      expand="block"
+      fill="clear"
+      size="small"
+      :disabled="busy"
+      @click="emit('everyone')"
+    >
+      Deal the next board for everyone
+    </ion-button>
 
     <div class="next-leave">
       <ion-button fill="outline" color="medium" size="small" :disabled="busy" @click="emit('leave')">
@@ -73,13 +66,11 @@ const props = withDefaults(
     ready: Seat[];
     players: Partial<Record<Seat, PublicUser | null>>;
     mySeat: Seat | null;
-    // Fewer than four seated: nothing to confirm, a newcomer deals it.
-    short?: boolean;
     // The table's can_manage: may ask for all four at once.
     manager?: boolean;
     busy?: boolean;
   }>(),
-  { short: false, manager: false, busy: false },
+  { manager: false, busy: false },
 );
 
 const emit = defineEmits<{ next: []; everyone: []; leave: [] }>();

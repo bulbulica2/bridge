@@ -122,8 +122,8 @@
                   placeholder="Friday club"
                 />
               </ion-item>
-              <!-- Robots fill the other three seats and the first board is
-                   dealt at once, so one person can play straight away. -->
+              <!-- Robots fill the other three seats, so one person can play
+                   on their own: their Start deals the first board. -->
               <ion-item>
                 <ion-toggle v-model="withRobots">
                   Play with robots
@@ -290,16 +290,15 @@ async function submitCreate() {
   creating.value = true;
   try {
     // The name is optional; an empty field means an unnamed table.
-    const table = await tablesStore.create({
-      name: name.value.trim() || null,
-      robots: withRobots.value,
-    });
+    const robots = withRobots.value;
+    const table = await tablesStore.create({ name: name.value.trim() || null, robots });
     closeCreate();
-    // Robots filled the table and dealt the first board: straight to it. Not
-    // awaited: the game page shows its own loading state while it reads the
-    // board, so the form has nothing left to wait for.
-    if (table.board_id !== null) {
-      ionRouter.navigate(`/tables/${table.id}/play`, 'forward', 'push');
+    // Robots filled the table, but nothing is dealt until the creator presses
+    // Start: off to the table's page, where Start is. Not awaited: the page
+    // draws the table the store already holds, so the form has nothing left
+    // to wait for. Without robots the new table waits on top of the list.
+    if (robots) {
+      ionRouter.navigate(`/tables/${table.id}`, 'forward', 'push');
     }
   } catch (e) {
     createError.value = errorMessage(e, 'Could not create the table. Please try again.');

@@ -36,6 +36,7 @@ vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn() }))
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   getTable: vi.fn(),
+  startTable: vi.fn(),
 }))
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
@@ -395,12 +396,59 @@ describe('TablePlayPage between boards', () => {
     expect(wrapper.findAll('.my-hand .playing-card')).toHaveLength(13)
   })
 
-  test('a player short: nothing to confirm, but leaving is still free', async () => {
+  test('a player short: Start replaces Next', async () => {
     const wrapper = await mountPage(finished(), makeTable(['N', 'E', 'S']))
 
-    expect(nextBox(wrapper).text()).toContain('Waiting for a fourth player')
-    expect(wrapper.find('.next-button').exists()).toBe(false)
-    expect(nextBox(wrapper).text()).toContain('leaving now abandons nothing')
+    expect(wrapper.find('.next-board').exists()).toBe(false)
+    const box = wrapper.get('.start-box')
+    expect(box.text()).toContain('Waiting for a fourth player, and for North (ann), East (bob) and you to press Start.')
+    expect(box.get('[data-seat="W"]').text()).toContain('W empty')
+  })
+
+  test('a player replaced after the board: Start, which deals the next one here', async () => {
+    const eve = { id: 9, name: 'Eve', username: 'eve', description: null }
+    const refilled = makeTable()
+    refilled.seats[3] = { ...refilled.seats[3], user_id: 9, user: eve }
+    const wrapper = await mountPage(finished(), refilled)
+
+    expect(wrapper.find('.next-board').exists()).toBe(false)
+    expect(wrapper.get('.start-box').text()).toContain('West (eve)')
+
+    const dealt = { ...refilled, board_id: 8 }
+    vi.mocked(tablesService.startTable).mockResolvedValue({ ...dealt, playing: newBoard() })
+    await wrapper.get('.start-button').trigger('click')
+    await flushPromises()
+
+    expect(tablesService.startTable).toHaveBeenCalledWith(5)
+    expect(wrapper.find('.start-box').exists()).toBe(false)
+    expect(wrapper.findAll('.my-hand .playing-card')).toHaveLength(13)
+    // The answer was the new board: no second read of it.
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
+  })
+
+  test('the game table opened before Start shows the same Start box', async () => {
+    const waiting = {
+      ...finished(),
+      phase: 'waiting',
+      playing_id: null,
+      board: null,
+      players: null,
+      contract: null,
+      tricks: null,
+      current_trick: null,
+      tricks_won: null,
+      dummy_hand: null,
+      result: null,
+      deal: null,
+      ready: null,
+      my_seat: null,
+      hand: null,
+    } as Playing
+    const wrapper = await mountPage(waiting, { ...makeTable(), board_id: null })
+
+    expect(wrapper.text()).toContain('Waiting for Start')
+    expect(wrapper.get('.start-box').text()).toContain('Ready to play?')
+    expect(wrapper.get('.start-box').findAll('.start-seats li')).toHaveLength(4)
   })
 
   test('a refused request says why and rereads the board', async () => {

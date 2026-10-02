@@ -57,6 +57,10 @@
               </button>
               <span v-else class="seat-empty">Empty</span>
               <RobotBadge v-if="user?.is_robot" />
+              <!-- Before a board: who has pressed Start (robots always have). -->
+              <span v-if="showStart && readySeats.includes(seat)" class="seat-ready">
+                ✓ Ready
+              </span>
 
               <ion-button
                 v-if="user && user.id === me"
@@ -135,11 +139,23 @@
             deleted {{ UNATTENDED_MINUTES }} minutes after the last player left if nobody does.
           </p>
 
+          <!-- Every human presses Start; the last one deals the board, and the
+               board_id watch below takes everyone seated here to the game. -->
+          <StartBox
+            v-if="showStart"
+            :table="table"
+            :me="me"
+            :busy="starting"
+            @start="start"
+            @cancel="cancelStart"
+          />
+
           <!-- The game itself lives on its own page; a board being dealt
-               (the fourth seat taken) takes the players there by itself. -->
+               takes the players there by itself. -->
           <ion-button
             v-if="mySeat"
             expand="block"
+            :fill="showStart ? 'outline' : 'solid'"
             class="play"
             :router-link="`/tables/${tableId}/play`"
             router-direction="forward"
@@ -196,6 +212,7 @@ import AppHeader from '@/components/AppHeader.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
+import StartBox from '@/components/StartBox.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
@@ -204,6 +221,7 @@ import type { Seat } from '@/services/tables';
 import type { PublicUser, SearchedUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { confirmMove, leaveNote, leaveWarning } from '@/utils/seatMove';
+import { isReady, startNeeded } from '@/utils/start';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
@@ -222,6 +240,8 @@ const busySeat = ref<Seat | null>(null);
 const player = ref<PublicUser | null>(null);
 // The free seat a manager is finding a player for.
 const seatingAt = ref<Seat | null>(null);
+// Our Start (or taking it back) on its way.
+const starting = ref(false);
 
 // Only trust the store's current table when it is the one this route asks for,
 // otherwise moving from one table to another flashes the previous one. Coming
@@ -249,6 +269,16 @@ const isManager = computed(() => table.value?.can_manage ?? false);
 const boardPhase = computed(() =>
   table.value?.board_id != null ? game.phaseOf(tableId.value) : null,
 );
+// The next board waits for Start: no board yet (or one abandoned), or a
+// finished one whose four players aren't all still in their seats. Only for
+// a player seated here; the rest just watch the marks.
+const showStart = computed(
+  () =>
+    !!table.value &&
+    !!mySeat.value &&
+    startNeeded(table.value, game.tableId === tableId.value ? game.playing : null),
+);
+const readySeats = computed(() => table.value?.seats.filter(isReady).map((s) => s.seat) ?? []);
 const managerName = computed(() => {
   const current = table.value;
   if (!current) {
@@ -290,16 +320,19 @@ watch(
   },
 );
 
-// The fourth seat taken deals a board: whoever sits here and is looking at
-// this page moves on to the game. Only on the change, so the page stays
-// reachable (to leave, say) while a board is being played. Ionic keeps this
-// page alive underneath others, hence the check that it is the one showing.
+// The last Start deals a board: whoever sits here and is looking at this
+// page moves on to the game, the one whose Start dealt it included (the
+// store applies its answer). Only on the change, so the page stays
+// reachable (to leave, say) while a board is being played. A new board in
+// place of a finished one counts too (Start after somebody was replaced).
+// Ionic keeps this page alive underneath others, hence the check that it is
+// the one showing.
 watch(
   () => table.value?.board_id ?? null,
   (boardId, before) => {
     if (
       boardId !== null &&
-      before === null &&
+      boardId !== before &&
       mySeat.value &&
       route.path === `/tables/${tableId.value}`
     ) {
@@ -480,8 +513,9 @@ async function seatPlayer(user: SearchedUser) {
   }
 }
 
-// A manager fills a free seat with a robot. The fourth seat deals the board,
-// which takes a manager seated here to the game (the board_id watch).
+// A manager fills a free seat with a robot. Robots are always ready, so the
+// fourth seat deals the board if every human here has pressed Start, which
+// takes a manager seated here to the game (the board_id watch).
 async function addRobot(seat: Seat) {
   busySeat.value = seat;
   try {
@@ -496,6 +530,39 @@ async function addRobot(seat: Seat) {
     }
   } finally {
     busySeat.value = null;
+  }
+}
+
+// Our Start. The answer that deals brings the board, and its board_id takes
+// us to the game (the watch above); otherwise the box waits for the others.
+async function start() {
+  starting.value = true;
+  try {
+    await store.start(tableId.value);
+  } catch (e) {
+    if (!handleExpiredSession(e)) {
+      // 409: a board is already on (somebody else's Start dealt it), or we
+      // lost the seat meanwhile. Either way the page is stale.
+      await showToast(errorMessage(e, 'Could not start. Please try again.'), 'danger');
+      await load();
+    }
+  } finally {
+    starting.value = false;
+  }
+}
+
+async function cancelStart() {
+  starting.value = true;
+  try {
+    await store.cancelStart(tableId.value);
+  } catch (e) {
+    if (!handleExpiredSession(e)) {
+      // 409: the board was dealt meanwhile, which takes us to it anyway.
+      await showToast(errorMessage(e, 'Could not take your Start back. Please try again.'), 'danger');
+      await load();
+    }
+  } finally {
+    starting.value = false;
   }
 }
 
@@ -633,6 +700,12 @@ function handleExpiredSession(e: unknown): boolean {
   font-size: 0.75rem;
   text-transform: uppercase;
   color: var(--ion-color-primary);
+}
+
+.seat-ready {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ion-color-success-shade, #28ba62);
 }
 
 .seat-empty {

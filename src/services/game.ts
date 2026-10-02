@@ -10,7 +10,8 @@ interface ApiResponse<T> {
   data: T;
 }
 
-// `waiting` until four players sit down, then the auction, the play, and
+// `waiting` until four players sit down and every human presses Start
+// (bridge_backend docs/API.md, Dealing), then the auction, the play, and
 // `finished` once the 13th trick is in, a claim is accepted, or the board was
 // passed out.
 export type Phase = 'waiting' | 'auction' | 'play' | 'finished';

@@ -40,6 +40,10 @@ export const useTablesStore = defineStore('tables', () => {
   // paused while it is hidden (a closed or backgrounded app is exactly what
   // the backend should see as idle).
   let heartbeat: ReturnType<typeof setInterval> | null = null;
+  // How many updates of the watched table have come over the channel. A
+  // Start answer that a broadcast overtook is older than what we show (the
+  // other player's Start, or the board it dealt), so it is not applied.
+  let tableUpdates = 0;
   // A removal noticed while the page was hidden, told once it shows again (a
   // toast shown to nobody would be gone by then).
   let pendingNotice: string | null = null;
@@ -277,6 +281,7 @@ export const useTablesStore = defineStore('tables', () => {
     if (watchedTableId.value !== update.id) {
       return;
     }
+    tableUpdates++;
     const table = withCanManage(update);
     syncTable(table);
     useGameStore().applyTableUpdate(table);
@@ -343,8 +348,8 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   // The list is newest first (as the backend orders it), so a new table goes on
-  // top. It is also the table the next page shows (the detail page, or the game
-  // when robots dealt at once), so that page can draw it without a GET.
+  // top. It is also the table the next page shows (the detail page, after
+  // Create with robots), so that page can draw it without a GET.
   async function create(payload: CreateTablePayload) {
     const table = await ownSeatRequest(() => tablesService.createTable(payload));
     tables.value = [table, ...tables.value];
@@ -396,19 +401,47 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   // A manager seats another user (never themselves: that is a join, and may
-  // be a move). Their broadcast reaches the rest of the table; a fourth seat
-  // deals the board and the pages move the players on from board_id.
+  // be a move). Their broadcast reaches the rest of the table. It deals
+  // nothing: the newcomer presses Start like everybody else.
   async function seatUser(tableId: number, userId: number, seat: Seat) {
     const table = await tablesService.seatUser(tableId, userId, seat);
     syncTable(table);
     return table;
   }
 
-  // A manager puts a robot in a free seat. As with seatUser, a fourth seat
-  // deals the board and the pages move the players on from board_id.
+  // A manager puts a robot in a free seat. A robot is always ready, so the
+  // fourth seat taken this way deals the board if every human has pressed
+  // Start; the pages move the players on from board_id.
   async function seatRobot(tableId: number, seat: Seat) {
     const table = await tablesService.seatRobot(tableId, seat);
     syncTable(table);
+    return table;
+  }
+
+  // Our Start: the board is dealt once the table is full and every human has
+  // pressed it. The answer that deals carries our game state, which goes to
+  // the game store first, so the board_id it brings takes the page to /play
+  // with the board already there. Everyone else learns it from TableUpdated
+  // (and PlayingUpdated + HandDealt when it deals).
+  async function start(tableId: number) {
+    const seen = tableUpdates;
+    const { playing, ...table } = await tablesService.startTable(tableId);
+    if (playing) {
+      useGameStore().adopt(tableId, playing);
+    }
+    if (tableUpdates === seen) {
+      syncTable(table);
+    }
+    return table;
+  }
+
+  // Take our Start back while nothing is dealt.
+  async function cancelStart(tableId: number) {
+    const seen = tableUpdates;
+    const table = await tablesService.cancelStart(tableId);
+    if (tableUpdates === seen) {
+      syncTable(table);
+    }
     return table;
   }
 
@@ -439,6 +472,8 @@ export const useTablesStore = defineStore('tables', () => {
     removePlayer,
     seatUser,
     seatRobot,
+    start,
+    cancelStart,
     forget,
     watchTable,
     unwatchTable,

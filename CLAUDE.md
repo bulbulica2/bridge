@@ -75,8 +75,9 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `src/theme/toasts.css`: toasts render outside the pages, so the CSS is
   global and styles the toast's shadow parts through `::part()`. Create
   table and taking a seat on the Tables page are the exceptions to
-  `navigateAndSettle`: Create's modal closes and it navigates to `/play`
-  as soon as `POST /tables` answers (#55); a seat navigates as soon as
+  `navigateAndSettle`: Create's modal closes and, with robots, it
+  navigates to `/tables/:id` (where Start is, #68) as soon as
+  `POST /tables` answers (#55); a seat navigates as soon as
   `join` answers, to `/tables/:id/play` if the returned table's `board_id`
   is set, else `/tables/:id` (#67), with the seat buttons disabled until
   `onIonViewDidLeave`.
@@ -122,7 +123,8 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `POST /tables/{id}/seats/users` that seats another user: 403 for
   non-managers, 409 for a taken seat or a user seated anywhere, never a move,
   and `POST /tables/{id}/seats/robots` `{seat}` that seats a robot: 403 for
-  non-managers, 409 for a taken seat)
+  non-managers, 409 for a taken seat, and `POST`/`DELETE /tables/{id}/start`,
+  see Start below)
   and `src/stores/tables.ts` keeps both the list (`tables`) and the table the detail
   page is showing (`currentTable`), syncing a changed table into both.
   `create` seeds `currentTable`, and `openTable(id)` (the detail and play
@@ -158,8 +160,9 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
 - **Robots** (bb#65, backend `docs/ROBOTS.md`): users with `is_robot: true`
   (on every `PublicUser`; `GET /users?search=` never returns them) that
   fill seats nobody else takes. `createTable({robots: true})` (the
-  Tables page's "Play with robots" toggle, on by default) seats three and
-  deals at once, so the page goes straight to `/play`; a manager adds one
+  Tables page's "Play with robots" toggle, on by default) seats three
+  but deals nothing, so the page goes to `/tables/:id`, where the
+  creator's Start deals (robots are always ready); a manager adds one
   with the store's `seatRobot(id, seat)` ("Add robot" on the detail page).
   The backend moves them (a queued job per `PlayingUpdated`, about 1 s
   apart; `queue:work` must run) through the same rules as a human, so the
@@ -193,7 +196,24 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   red/green vulnerability, whose turn), `HandView.vue` and `PlayingCard.vue`;
   card sorting, rank labels (the backend skips 11: `12`=J … `15`=A), seat
   rotation and vulnerability live in `src/utils/cards.ts`. The detail page
-  moves a seated player to `/play` when `board_id` turns non-null.
+  moves a seated player to `/play` when `board_id` changes to a new board.
+- **Start** (#68, bb#73, backend `docs/API.md` Dealing): filling a table
+  deals nothing; a board is dealt once the table is full and every human
+  there has pressed Start (`POST /tables/{id}/start`, `DELETE` takes it
+  back while nothing is dealt). Each `TableSeat` has `ready` (public, on the
+  payload and `TableUpdated`; a robot's is always true); dealing clears it,
+  and leaving or moving drops it. No Start for everyone, a manager
+  included. The tables store's `start(id)` hands a dealing answer's
+  `playing` to the game store (`adopt`) before syncing the table, so the
+  detail page's `board_id` watch moves the presser on with the board in
+  hand; `start`/`cancelStart` skip syncing an answer if a `TableUpdated`
+  arrived while it was in flight (two Starts race). `src/utils/start.ts`:
+  `startNeeded(table, playing)` (no board, or a finished one whose four
+  aren't all still in their seats: then Start, not Next; unknown phase
+  says no), `isReady`, `startWaiting` (the "Waiting for …" line).
+  `StartBox.vue` shows it on the detail page (whose compass marks ready
+  seats) and on the play page (`showSeats`), in `waiting` and in place of
+  `NextBoardBox` for a finished board with new players.
 - **Bidding**: calls go out as a `bid_id`, and the ids aren't pinned to the
   rank, so they come from the public `GET /bids` (`getBids`, the 38 calls in
   `auction[].bid`'s shape), which the game store's `loadBids()` reads once;
@@ -272,7 +292,8 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   board in the answer, the others through `PlayingUpdated` + `HandDealt`.
   `everyone` is a manager's call (`canManage()` hint, 403 otherwise). Leaving
   between boards abandons nothing and keeps `board_id`; with three seated
-  the next ask 409s and a fourth player sitting down deals the board.
+  the next ask 409s, and once a fourth player sits down everyone's Start
+  deals the board (the play page swaps `NextBoardBox` for `StartBox`).
   `leaveWarning()` / `moveConsequences()` in `src/utils/seatMove.ts` word
   leaving by phase (`game.phaseOf(id)`). The running score at a table comes
   from `GET /api/user/playings` (`src/services/history.ts`): the store's
