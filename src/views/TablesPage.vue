@@ -170,6 +170,7 @@ import {
   IonSkeletonText,
   IonToggle,
   onIonViewWillEnter,
+  onIonViewDidLeave,
   useIonRouter,
 } from '@ionic/vue';
 import { chevronForwardOutline } from 'ionicons/icons';
@@ -214,6 +215,12 @@ onIonViewWillEnter(() => {
   load();
 });
 
+// A seat taken here navigates away with its buttons still disabled, so a
+// second tap can't land while the page changes; back on the list they work again.
+onIonViewDidLeave(() => {
+  joining.value = null;
+});
+
 async function load() {
   loading.value = true;
   loadError.value = '';
@@ -253,15 +260,22 @@ async function join(table: Table, seat: Seat) {
     return;
   }
   joining.value = `${table.id}-${seat}`;
+  let joined: Table;
   try {
     // A move reloads the list, so the old table's row updates or disappears.
-    await tablesStore.join(table.id, seat);
+    joined = await tablesStore.join(table.id, seat);
   } catch (e) {
     // 409 when the seat was taken meanwhile (or the seat name is unknown).
-    await showToast(errorMessage(e, 'Could not take that seat. Please try again.'), 'danger');
-  } finally {
     joining.value = null;
+    await showToast(errorMessage(e, 'Could not take that seat. Please try again.'), 'danger');
+    return;
   }
+  // Taking a seat takes you to the table, like Create table: to the game when
+  // it has a board (the answer says so, the list row may be stale), else to
+  // its page. Not awaited, as for Create table, and the seat buttons stay
+  // disabled until the page has gone (onIonViewDidLeave frees them).
+  const path = joined.board_id !== null ? `/tables/${joined.id}/play` : `/tables/${joined.id}`;
+  ionRouter.navigate(path, 'forward', 'push');
 }
 
 function closeCreate() {

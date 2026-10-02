@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/44-remember-me`._
+_Status as of branch `bulbulica2/46-join-opens-table`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -232,9 +232,12 @@ and policy failures. `errorMessage` handles all three.
 - **Forms that navigate on success** (login, sign up, profile) call
   `navigateAndSettle(ionRouter, path)` and stay disabled until the next
   page is up. That prevents double submits (Ionic's own `navigate()`
-  returns nothing to wait on). Create table is the exception: its modal
-  closes as soon as the table exists, and the game page shows its own
-  loading state.
+  returns nothing to wait on). Create table and taking a seat on the
+  Tables page are the exceptions: they navigate as soon as `POST /tables`
+  or the seat request (plus the list reload after a move) answers, and the
+  next page shows its own loading state. The seat buttons stay disabled
+  until the list page has left (`onIonViewDidLeave`), so a second tap
+  can't land meanwhile.
 - **Pages that load data** show a skeleton or spinner only when there's
   nothing to show yet. Data already in a store stays on screen with a small
   "Refreshing…" row.

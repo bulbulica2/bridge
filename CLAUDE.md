@@ -74,8 +74,12 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   user with `showWelcomeToast` once `/account` is up. The toasts' styles live in
   `src/theme/toasts.css`: toasts render outside the pages, so the CSS is
   global and styles the toast's shadow parts through `::part()`. Create
-  table is the exception to `navigateAndSettle`: its modal closes and it
-  navigates to `/play` as soon as `POST /tables` answers (#55).
+  table and taking a seat on the Tables page are the exceptions to
+  `navigateAndSettle`: Create's modal closes and it navigates to `/play`
+  as soon as `POST /tables` answers (#55); a seat navigates as soon as
+  `join` answers, to `/tables/:id/play` if the returned table's `board_id`
+  is set, else `/tables/:id` (#67), with the seat buttons disabled until
+  `onIonViewDidLeave`.
 - **App shell**: `App.vue` renders `<AppMenu />` (the left `ion-menu`) next to
   `<ion-router-outlet id="main-content" />`; the menu's `content-id` must match
   that outlet id. Every page wraps its content in `<ion-page>` and uses
