@@ -2,11 +2,13 @@ import { AxiosError, AxiosHeaders } from 'axios'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { HEARTBEAT_MS, IDLE_NOTICE, useTablesStore } from '@/stores/tables'
+import { HEARTBEAT_MS, IDLE_NOTICE, WELCOME_BACK, useTablesStore } from '@/stores/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
 import * as tablesService from '@/services/tables'
 import * as echo from '@/services/echo'
+import * as historyService from '@/services/history'
+import type { SetResults } from '@/services/history'
 import type { BroadcastTable, Seat, Table } from '@/services/tables'
 import { showToast } from '@/utils/toast'
 
@@ -21,6 +23,10 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   seatUser: vi.fn(),
   seatRobot: vi.fn(),
   sendHeartbeat: vi.fn(),
+}))
+
+vi.mock('@/services/history', () => ({
+  getSet: vi.fn(),
 }))
 
 vi.mock('@/services/auth', () => ({
@@ -87,6 +93,9 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>> = {}): Table
       table_id: id,
       user_id: i + 1,
       seat,
+      ready: false,
+      away_since: null,
+      forfeit_at: null,
       user: {
         id: i + 1,
         name: username,
@@ -310,7 +319,7 @@ describe('tables store', () => {
     await store.loadTable(1)
     const result = await store.leave(1)
 
-    expect(result).toEqual({ tableDeleted: false })
+    expect(result).toEqual({ tableDeleted: false, held: false })
     expect(store.tables).toEqual([after])
     expect(store.currentTable).toEqual(after)
   })
@@ -327,7 +336,7 @@ describe('tables store', () => {
     await store.loadTable(1)
     const result = await store.leave(1)
 
-    expect(result).toEqual({ tableDeleted: true })
+    expect(result).toEqual({ tableDeleted: true, held: false })
     expect(store.tables).toEqual([other])
     expect(store.currentTable).toBeNull()
   })
@@ -1118,6 +1127,177 @@ describe('tables store', () => {
       expect(tablesService.getTable).toHaveBeenCalledTimes(1)
       expect(store.watchedTableId).toBe(1)
       expect(tablesService.sendHeartbeat).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('away mid-set', () => {
+    // Table 1 in the middle of set 3, all four seated; we are bob (user 2, East).
+    function midSet(awaySeat: Seat | null = null): Table {
+      const table = makeTable(1, { N: 'ana', E: 'bob', S: 'cy', W: 'dee' })
+      table.board_id = 9
+      table.set = { id: 5, number: 3, board: 2, of: 4, finished: false, ended: null, forfeited_by: null }
+      const seat = table.seats.find((s) => s.seat === awaySeat)
+      if (seat) {
+        seat.away_since = '2026-10-03T12:00:00.000000Z'
+        seat.forfeit_at = '2026-10-03T12:03:00.000000Z'
+      }
+      return table
+    }
+
+    async function seatedMidSet() {
+      vi.useFakeTimers()
+      logInAs(2)
+      vi.mocked(tablesService.getTable).mockResolvedValue(midSet())
+      const store = useTablesStore()
+      await store.loadTable(1)
+      return store
+    }
+
+    beforeEach(() => {
+      localStorage.clear()
+    })
+
+    test('keeps beating while the page is hidden in the middle of a set', async () => {
+      await seatedMidSet()
+
+      setVisibility('hidden')
+      await vi.advanceTimersByTimeAsync(2 * HEARTBEAT_MS)
+
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledTimes(2)
+    })
+
+    test('a Leave mid-set holds the seat and stops vouching for it', async () => {
+      const store = await seatedMidSet()
+      vi.mocked(tablesService.leaveSeat).mockResolvedValue(midSet('E'))
+
+      const result = await store.leave(1)
+      expect(result).toEqual({ tableDeleted: false, held: true })
+      expect(store.heldTableId).toBe(1)
+      expect(store.watchedTableId).toBe(1)
+      expect(store.myTable?.id).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(5 * HEARTBEAT_MS)
+      setVisibility('hidden')
+      setVisibility('visible')
+      await vi.advanceTimersByTimeAsync(0)
+      // Looking again only catches up (GET /tables/{id} brings nobody back).
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+      expect(store.heldTableId).toBe(1)
+    })
+
+    test('a seat found away when we were not following the table is held, not reclaimed', async () => {
+      vi.useFakeTimers()
+      logInAs(2)
+      vi.mocked(tablesService.listTables).mockResolvedValue([midSet('E')])
+      const store = useTablesStore()
+
+      await store.load()
+      await vi.advanceTimersByTimeAsync(3 * HEARTBEAT_MS)
+
+      expect(store.heldTableId).toBe(1)
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+    })
+
+    test('coming back vouches at once, and the cleared seat is welcomed', async () => {
+      const store = await seatedMidSet()
+      vi.mocked(tablesService.leaveSeat).mockResolvedValue(midSet('E'))
+      await store.leave(1)
+      vi.mocked(tablesService.getTable).mockResolvedValue(midSet())
+
+      await store.comeBack(1)
+
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledWith(1)
+      expect(store.heldTableId).toBeNull()
+      expect(showToast).toHaveBeenCalledWith(WELCOME_BACK, 'success')
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_MS)
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledTimes(2)
+    })
+
+    test('coming back to a seat that was never away asks nothing', async () => {
+      const store = await seatedMidSet()
+
+      await store.comeBack(1)
+
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+      expect(tablesService.getTable).toHaveBeenCalledTimes(1)
+    })
+
+    test('marked away while this client still vouches: beats at once, then welcomed back', async () => {
+      await seatedMidSet()
+
+      pushUpdate(broadcastOf(midSet('E')))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(tablesService.sendHeartbeat).toHaveBeenCalledTimes(1)
+      expect(showToast).not.toHaveBeenCalled()
+
+      pushUpdate(broadcastOf(midSet()))
+      expect(showToast).toHaveBeenCalledWith(WELCOME_BACK, 'success')
+    })
+
+    test('someone else away is no news for us', async () => {
+      await seatedMidSet()
+
+      pushUpdate(broadcastOf(midSet('N')))
+      pushUpdate(broadcastOf(midSet()))
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(tablesService.sendHeartbeat).not.toHaveBeenCalled()
+      expect(showToast).not.toHaveBeenCalled()
+    })
+
+    test('freed because our side forfeited: the lost set is told, and the pages go to it', async () => {
+      const store = await seatedMidSet()
+      const after = midSet()
+      after.seats = after.seats.filter((s) => s.seat !== 'E')
+      after.board_id = null
+      after.set = { ...after.set!, finished: true, ended: 'forfeit', forfeited_by: 'EW' }
+
+      pushUpdate(broadcastOf(after))
+
+      expect(store.lostSet).toEqual({ id: 5, number: 3, side: 'ew', tableId: 1 })
+      expect(store.kickedFrom).toBe(1)
+      expect(showToast).toHaveBeenCalledWith('You were away too long: E-W lost set 3 by forfeit.', 'warning')
+    })
+
+    test('a forfeit while the tab was closed is told on the next visit', async () => {
+      await seatedMidSet()
+      // The next visit: a fresh app, no longer seated anywhere.
+      setActivePinia(createPinia())
+      logInAs(2)
+      vi.mocked(tablesService.listTables).mockResolvedValue([])
+      const set = {
+        number: 3,
+        finished: true,
+        ended: 'forfeit',
+        forfeited_by: 'EW',
+        players: { N: { id: 1 }, E: { id: 2 }, S: { id: 3 }, W: { id: 4 } },
+      } as unknown as SetResults
+      vi.mocked(historyService.getSet).mockResolvedValue(set)
+      const store = useTablesStore()
+
+      await store.load()
+      await flushPromises()
+
+      expect(historyService.getSet).toHaveBeenCalledWith(5)
+      expect(store.lostSet).toEqual({ id: 5, number: 3, side: 'ew', tableId: 1 })
+
+      // Told once: the memory is gone.
+      await store.load()
+      await flushPromises()
+      expect(historyService.getSet).toHaveBeenCalledTimes(1)
+    })
+
+    test('a set won (or lost by partner) while still seated leaves nothing to tell later', async () => {
+      await seatedMidSet()
+      pushUpdate(broadcastOf({ ...midSet(), set: { ...midSet().set!, finished: true, ended: 'completed' } }))
+      setActivePinia(createPinia())
+      logInAs(2)
+      vi.mocked(tablesService.listTables).mockResolvedValue([])
+
+      await useTablesStore().load()
+      await flushPromises()
+
+      expect(historyService.getSet).not.toHaveBeenCalled()
     })
   })
 })

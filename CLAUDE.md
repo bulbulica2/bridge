@@ -328,8 +328,37 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   below. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
   side, "by forfeit"), `forfeitedSeat` (the forfeiting side's seat whose
   player is no longer at the table) + `forfeitText`, `setTotals` and
-  `groupBySet` (history runs of one set, the owner's score summed).
-  Away countdowns and mid-set leave wording are #74.
+  `groupBySet` (history runs of one set, the owner's score summed),
+  `runningSet` (the set a table is in the middle of, else null).
+- **Away mid-set and the forfeit** (#74, bb#76, backend `docs/API.md` Away
+  mid-set): a seat has `away_since`/`forfeit_at` (`TableSeat`, on payloads
+  and `TableUpdated`); the backend's `tables:check-away` marks a quiet
+  player away after a minute and their side forfeits 3 minutes on.
+  `src/utils/away.ts`: `awaySeats`, `myAwaySeat`, `secondsLeft`/
+  `formatClock`, `awayText` ("East is away. E-W lose the set in 2:41
+  unless they come back."), `heldText` (own held seat), `setAtStake`
+  (side + `forfeits`, false for an admin or while any away seat has
+  `forfeit_at: null`), `lostSetText`, `SET_FORFEIT_MINUTES` (only quoted
+  in confirmations; countdowns read `forfeit_at`). `AwayNotice.vue`
+  (`useNow` ticks it, `held` for the own seat) on the play page above the
+  status, the detail page, Tables and Home; `BridgeTable`'s `away` prop and
+  the detail compass tag seats. The tables store: `leave()` returns
+  `held: true` on the 202 (still seated) and sets `heldTableId`, which
+  `shouldBeat()` excludes; `watchTable(id, away)` also holds a seat found
+  away when we weren't watching (`followSeat`); `comeBack(id)` (the play
+  page after every load, the detail page's Come back) beats + `catchUp`;
+  a `TableUpdated`/`loadTable` clearing our own `away_since` toasts
+  `WELCOME_BACK` and reloads the game; marked away while beating, it beats
+  at once; freed with `set.ended: forfeit` by our side sets `lostSet`
+  (`{id, number, side, tableId}`), and the table pages go to `/sets/:id`.
+  `rememberSet` keeps the running set in `localStorage`
+  (`bridge.setInProgress`), `checkLostSet` (from `load()`) reads
+  `GET /sets/{id}` for it once we no longer sit there; Home shows
+  `lostSet` until `dismissLostSet`. `stakeOf(table)` feeds
+  `confirmLeave`/`leaveMessage`/`leaveWarning`/`heldNotice` and
+  `confirmMove`/`moveConsequences` in `seatMove.ts`. The game store toasts
+  a forfeit once (`forfeitToldFor`). `User.is_admin` (own record) is read
+  only for `setAtStake`.
 - **Results and history**: `src/services/history.ts` also wraps
   `GET /users/{id}/playings` and `GET /boards/{id}/results` (every table's
   finished playing of a board, best N-S first, with `matchpoints` `{ns, ew}`
@@ -410,13 +439,16 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   **Heartbeat**: the backend frees idle seats (through the normal leave
   path), so the tables store sends `POST /tables/{id}/heartbeat` every 30 s
   for as long as it watches a table (`watchTable`/`unwatchTable` start and
-  stop it, so leave, kick, move and logout end it too). It pauses while
-  `document.visibilityState` is hidden; on return it beats at once, refetches
+  stop it, so leave, kick, move and logout end it too), never for a held
+  seat. It pauses while `document.visibilityState` is hidden, except
+  mid-set (`midSet`, bb#76: going quiet there loses the set; a beat that
+  finds the set over while hidden stops it); on return it beats at once, refetches
   the table and the game state, and a seat lost meanwhile (or a 403/404 from
   a beat) is told as `IDLE_NOTICE` and sets `kickedFrom`. A removal noticed
   while hidden keeps its toast until the page shows again.
   Running it needs `php artisan reverb:start` and `queue:work` on the backend
-  (bridge_backend `docs/RUNNING.md`, Realtime).
+  (bridge_backend `docs/RUNNING.md`, Realtime), and away/forfeit need
+  `schedule:work` (`tables:check-away` every 10 s).
 - **Error handling**: `src/utils/errors.ts` is the one axios-error reader —
   `errorMessage(e, fallback)` for the text to show, `statusOf(e)` for the
   status to branch on and `fieldErrors(e)` for a 422's first message per field

@@ -46,6 +46,17 @@ export function currentSet(
   };
 }
 
+// The set the table is in the middle of (a board of it on, or between its
+// boards), else null: no set yet, or the last one is over. Mid-set, going
+// away costs the set (bridge_backend docs/API.md, Away mid-set).
+export function runningSet(
+  table: BroadcastTable | null,
+  playing: PublicPlaying | null,
+): SetPosition | null {
+  const set = currentSet(table, playing);
+  return set && !set.finished ? set : null;
+}
+
 // "Set 3 over", or "Set 3: 2 of 4 boards played" while it goes on.
 export function setTitle(set: SetResults): string {
   if (set.finished) {

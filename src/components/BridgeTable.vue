@@ -9,7 +9,8 @@
        claimer's cards lie face up at their seat (the viewer's own are below
        the table already). Once the board is over, the whole deal lies face
        up, each hand at its seat (in a replay, what is left of it, in the
-       room the hand took as dealt). -->
+       room the hand took as dealt). A seat whose player is away mid-set is
+       dashed and tagged "away". -->
   <div class="bridge-table">
     <div
       v-for="side in SIDES"
@@ -22,6 +23,7 @@
           'seat-turn': turn === seatOn[side],
           'seat-mine': side === 'bottom' && mySeat,
           'seat-wide': side === 'top' && dummySide === 'top',
+          'seat-away': away.includes(seatOn[side]),
         },
       ]"
       :data-seat="seatOn[side]"
@@ -44,6 +46,7 @@
       <RobotBadge v-if="players[seatOn[side]]?.is_robot" />
 
       <span v-if="side === 'bottom' && mySeat" class="seat-you">you</span>
+      <span v-if="away.includes(seatOn[side])" class="seat-away-tag">away</span>
       <span v-if="dummy && dummy.seat === seatOn[side] && side !== 'bottom'" class="seat-dummy">
         dummy
       </span>
@@ -133,6 +136,9 @@ const props = withDefaults(
     // hand keeps the height it had as dealt, so the table doesn't shrink as
     // the cards go.
     reserve?: Record<Seat, Card[]> | null;
+    // Seats whose players are away mid-set (their seat held; the page's
+    // AwayNotice counts down to the forfeit).
+    away?: Seat[];
     busy?: boolean;
     sendingId?: number | null;
   }>(),
@@ -146,6 +152,7 @@ const props = withDefaults(
     deal: null,
     replay: false,
     reserve: null,
+    away: () => [],
     busy: false,
     sendingId: null,
   },
@@ -259,6 +266,18 @@ function turnLabel(side: ScreenSide): string {
 
 .seat-mine {
   background: rgba(var(--ion-color-primary-rgb, 56, 128, 255), 0.06);
+}
+
+.seat-away {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.seat-away-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ion-color-warning-shade, #e0ac08);
 }
 
 .seat-turn {

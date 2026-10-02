@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/52-board-sets`._
+_Status as of branch `bulbulica2/53-set-forfeit`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -35,7 +35,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance) and `echo.ts` (the websocket) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away countdown) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
@@ -131,7 +131,7 @@ sends you to `/login` afterwards.
 | Store | Holds | Main actions |
 |---|---|---|
 | `auth` | `user` (own record, with email) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset |
-| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom` | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`; owns the table channel and the heartbeat |
+| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `lostSet` (a set your side forfeited while you were away) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `comeBack`, `stakeOf`, `dismissLostSet`; owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `adopt`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadSet`, `loadReview` |
 | `users` | public profiles by id | `load` |
@@ -300,7 +300,10 @@ doesn't send the XSRF header Sanctum wants.
   load.
 - A `TableUpdated` that no longer seats you (and wasn't your own request)
   means a manager removed you: a toast, the channel is dropped, and the
-  detail page goes back to `/tables`.
+  detail page goes back to `/tables` (to the set's results when your side
+  forfeited it, see Away mid-set below).
+- Mid-set, `TableUpdated` also says who is away (`away_since`,
+  `forfeit_at` per seat), who is back, and a forfeit (`set.ended`).
 - After the socket reconnects, whatever was broadcast meanwhile is lost,
   so the watched table is fetched again once.
 - The Tables **list** has no channel; it refreshes on enter and on
@@ -314,10 +317,46 @@ doesn't send the XSRF header Sanctum wants.
 **Heartbeat.** The backend frees the seats of players who went quiet. While
 the `tables` store watches a table it sends `POST /tables/{id}/heartbeat`
 every 30 s, and stops when it stops watching (leave, kick, move, logout).
-It pauses while the browser tab is hidden. When the tab shows again it
-beats at once and refetches the table and the game; if the seat was lost
-in the meantime, the user sees a "removed after being inactive" toast and
-goes back to `/tables`.
+Outside a set it pauses while the browser tab is hidden. **In the middle
+of a set it keeps beating while hidden** (what bb#76 asks for): there,
+three quiet minutes cost your side the set, and switching tabs while
+partner thinks isn't leaving. When the tab shows again it beats at once
+and refetches the table and the game; if the seat was lost in the
+meantime, the user sees a "removed after being inactive" toast and goes
+back to `/tables`.
+
+**Away mid-set and the forfeit** (#74, bb#76, backend
+[`API.md`, Away mid-set](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)).
+The backend marks a player with no sign of life for a minute **away**:
+their seat gets `away_since` and `forfeit_at` (when their side loses the
+set unless they are back), sent in every table payload and `TableUpdated`.
+The SPA only shows it and never keeps a clock of its own: `AwayNotice`
+counts down from `forfeit_at` ("East is away. E-W lose the set in 2:41
+unless they come back."; `useNow` redraws it every second), `BridgeTable`
+and the detail page's compass tag the seat **away**. `forfeit_at: null`
+means no deadline (an admin away): the table just waits.
+- **Leave mid-set** answers 202 and *holds* the seat: you stay seated,
+  away. The store then sets `heldTableId` and stops beating (a beat would
+  bring you back). It also holds a seat it finds away on a fresh load (the
+  tab was closed). Opening the play page, or **Come back** on the detail
+  page, calls `comeBack(id)`: it beats at once and refetches the table.
+- **Back in time**: a `TableUpdated` (or refetch) that clears your own
+  `away_since` toasts **Welcome back. The set goes on.** and reloads the
+  board. If the backend marks you away while this client still beats (a
+  lost beat), it beats at once.
+- **Forfeit**: the set ends `forfeit` with `forfeited_by`; the game store
+  toasts it once ("bob is gone: E-W lose set 2 by forfeit.") and the play
+  page shows the set's results. If it freed *your* seat, the store sets
+  `lostSet`, toasts "You were away too long…", the table pages go to
+  `/sets/:id`, and Home shows a card until dismissed. The set you are in
+  the middle of is kept in `localStorage` (`bridge.setInProgress`), so a
+  forfeit that happened while the tab was closed is found on the next
+  visit (`GET /sets/{id}` from `load()`).
+- **Leave and move confirmations** say what is at stake (`stakeOf(table)`
+  → `setAtStake` in `utils/away.ts`): a Leave "If you don't come back
+  within 3 minutes, N-S lose the set.", a move "Your side loses the set
+  now." An admin, or anyone while an admin is away, can't forfeit: then
+  leaving or moving just ends the set with no winner.
 
 Without Reverb and a queue worker running on the backend, none of this
 arrives, and the app falls back to what each request returns.
@@ -328,7 +367,8 @@ arrives, and the app falls back to what each request returns.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; a claimer's cards; the finished deal (or, in a replay, what is left of it) |
+| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
+| `AwayNotice` | who is away mid-set with the time left before their side loses the set (also on the detail page); with `held`, your own held seat (detail page, Tables, Home) |
 | `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses |
 | `BiddingBox` | the call grid, on your turn during the auction |
 | `AuctionHistory` + `CallLabel` | the calls so far, four columns rotated like the table |
@@ -367,7 +407,9 @@ rotation, vulnerability), `auction.ts` (call legality hints and labels),
 `play.ts` (follow-suit hint, the forced card and who it plays itself for, whose hand you play, trick layout), `claim.ts`
 (who may claim, who still has to answer, the claim's wording), `result.ts`
 (the score from your side), `seatMove.ts` (wording for leaving or moving by
-game phase, and whether only robots would be left), `start.ts` (whether
+game phase and by what is at stake in the set, and whether only robots
+would be left), `away.ts` (who is away, the countdown's wording, what
+leaving would put at stake), `start.ts` (whether
 the next board waits for Start, and who for), `sets.ts` (where the table is
 in its set, the set's winner and totals from your side, a forfeit's
 wording, the history grouped by set), `review.ts` (a replay's table after N cards: hands left, the

@@ -165,6 +165,7 @@
             :dummy-forced-id="playFrom === 'dummy' ? (autoPlay.card.value?.id ?? null) : null"
             :claim="pendingClaim ? { seat: pendingClaim.claim.seat, cards: pendingClaim.claim.hand } : null"
             :deal="playing.phase === 'finished' ? playing.deal : null"
+            :away="awayMarks"
             :busy="sendingCard !== null"
             :sending-id="sendingCard"
             @select="player = $event"
@@ -194,6 +195,10 @@
               </div>
             </template>
           </BridgeTable>
+
+          <!-- Somebody away mid-set: the time left before their side loses
+               the set, from their seat's forfeit_at. -->
+          <AwayNotice :table="table" :me="me" />
 
           <p
             v-if="status"
@@ -308,13 +313,13 @@ import {
   IonRefresherContent,
   IonText,
   IonSpinner,
-  alertController,
   onIonViewWillEnter,
   onIonViewWillLeave,
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
 import AuctionHistory from '@/components/AuctionHistory.vue';
+import AwayNotice from '@/components/AwayNotice.vue';
 import BiddingBox from '@/components/BiddingBox.vue';
 import BoardResultPanel from '@/components/BoardResultPanel.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
@@ -343,7 +348,8 @@ import { canClaim, tricksLeft } from '@/utils/claim';
 import { autoPlaysForced, forcedCard, handToPlay, legalCards } from '@/utils/play';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { resultSummary } from '@/utils/result';
-import { leaveNote, leaveWarning } from '@/utils/seatMove';
+import { awaySeats } from '@/utils/away';
+import { confirmLeave, heldNotice } from '@/utils/seatMove';
 import { currentSet, forfeitedSeat, setLabel } from '@/utils/sets';
 import { startNeeded } from '@/utils/start';
 import { showToast } from '@/utils/toast';
@@ -407,6 +413,11 @@ const mySeat = computed<Seat | null>(() => {
   const entry = Object.entries(players.value).find(([, user]) => user?.id === me.value);
   return (entry?.[0] as Seat | undefined) ?? null;
 });
+
+// The others' seats marked away mid-set (ours is vouched for while we look).
+const awayMarks = computed(() =>
+  table.value ? awaySeats(table.value, me.value).map((s) => s.seat) : [],
+);
 
 const seatedCount = computed(() => Object.values(players.value).filter(Boolean).length);
 
@@ -652,12 +663,14 @@ onIonViewWillLeave(() => {
 });
 
 // Kicked (the tables store has already said so in a toast): nothing to see.
+// Freed because our side forfeited the set: its results instead.
 watch(
   () => tablesStore.kickedFrom,
   (kicked) => {
     if (kicked !== null && kicked === tableId.value) {
       tablesStore.kickedFrom = null;
-      ionRouter.navigate('/tables', 'back', 'replace');
+      const lost = tablesStore.lostSet;
+      ionRouter.navigate(lost?.tableId === kicked ? `/sets/${lost.id}` : '/tables', 'back', 'replace');
     }
   },
 );
@@ -782,6 +795,9 @@ async function load(refetchTable = true) {
     const id = tableId.value;
     const table = refetchTable ? tablesStore.loadTable(id) : tablesStore.openTable(id);
     await Promise.all([table, game.load(id)]);
+    // Opening the game is coming back: a seat held after a Leave mid-set, or
+    // marked away, is ours again (the store greets us once the backend agrees).
+    tablesStore.comeBack(id);
     loadBids();
   } catch (e) {
     const status = statusOf(e);
@@ -959,39 +975,35 @@ async function cancelStart() {
   }
 }
 
-// Leaving between boards: free, since the board is over.
+// Leaving between boards: free, since the board is over, unless the set
+// goes on: then the seat is held for a few minutes, and not coming back
+// loses the set for our side.
 async function leave() {
   if (asking.value) {
     return;
   }
-  const alert = await alertController.create({
-    header: 'Leave this table?',
-    message: [
-      leaveWarning(playing.value?.phase ?? null, playing.value?.board?.number ?? null),
-      leaveNote(table.value, me.value),
-    ]
-      .filter(Boolean)
-      .join(' '),
-    buttons: [
-      { text: 'Cancel', role: 'cancel' },
-      { text: 'Leave', role: 'destructive' },
-    ],
-  });
-  await alert.present();
-  const { role } = await alert.onDidDismiss();
-  if (role !== 'destructive') {
+  const stake = table.value ? tablesStore.stakeOf(table.value) : null;
+  const confirmed = await confirmLeave(
+    table.value,
+    me.value,
+    playing.value?.phase ?? null,
+    playing.value?.board?.number ?? null,
+    stake,
+  );
+  if (!confirmed) {
     return;
   }
   asking.value = true;
   try {
-    const { tableDeleted } = await tablesStore.leave(tableId.value);
+    const { tableDeleted, held } = await tablesStore.leave(tableId.value);
     game.clear();
-    await showToast(
-      tableDeleted
-        ? 'You left the table. Nobody was left, so it was deleted.'
-        : 'You left the table.',
-      'success',
-    );
+    let message = 'You left the table.';
+    if (held) {
+      message = heldNotice(stake);
+    } else if (tableDeleted) {
+      message = 'You left the table. Nobody was left, so it was deleted.';
+    }
+    await showToast(message, held ? 'warning' : 'success');
     ionRouter.navigate('/tables', 'back', 'replace');
   } catch (e) {
     if (statusOf(e) === 401) {

@@ -5,15 +5,55 @@ import type { BroadcastTable, CreateTablePayload, Seat, Table } from '@/services
 import { leaveTable, listenToTable, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
+import { useHistoryStore } from '@/stores/history';
+import { lostSetText, myAwaySeat, setAtStake } from '@/utils/away';
+import type { LostSet } from '@/utils/away';
 import { statusOf } from '@/utils/errors';
+import { sideOf } from '@/utils/result';
+import { runningSet, sideOfCode } from '@/utils/sets';
 import { showToast } from '@/utils/toast';
 
 // How often a seated player tells the backend they are still there. It frees
-// a seat after a few idle minutes (BRIDGE_IDLE_SEAT_MINUTES, 5 by default), so
-// a couple of lost beats never cost anybody their seat.
+// a seat after a few idle minutes (BRIDGE_IDLE_SEAT_MINUTES, 5 by default)
+// and, mid-set, marks a player away after a minute without one
+// (BRIDGE_AWAY_SECONDS), so a single lost beat never costs anybody anything.
 export const HEARTBEAT_MS = 30_000;
 
 export const IDLE_NOTICE = 'You were removed from the table after being inactive.';
+
+export const WELCOME_BACK = 'Welcome back. The set goes on.';
+
+// The set the user was last in the middle of, kept across visits: if their
+// side forfeited it while they were gone (the tab closed), the next visit
+// says so. Browser storage may be missing or refuse; then it just isn't told.
+const SET_MEMORY_KEY = 'bridge.setInProgress';
+
+interface SetMemory {
+  userId: number;
+  tableId: number;
+  setId: number;
+}
+
+function readSetMemory(): SetMemory | null {
+  try {
+    const raw = localStorage.getItem(SET_MEMORY_KEY);
+    return raw ? (JSON.parse(raw) as SetMemory) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSetMemory(memory: SetMemory | null) {
+  try {
+    if (memory) {
+      localStorage.setItem(SET_MEMORY_KEY, JSON.stringify(memory));
+    } else {
+      localStorage.removeItem(SET_MEMORY_KEY);
+    }
+  } catch {
+    // Not kept: a forfeit while away is then only told live.
+  }
+}
 
 function pageHidden() {
   return typeof document !== 'undefined' && document.visibilityState === 'hidden';
@@ -33,12 +73,23 @@ export const useTablesStore = defineStore('tables', () => {
   // Set when a live update shows the user was kicked from that table, so the
   // detail page can leave it.
   const kickedFrom = ref<number | null>(null);
+  // The watched table where our seat is *held* rather than ours: we left in
+  // the middle of a set (the backend's 202), or found the seat away when we
+  // weren't following the table (the tab was closed). No heartbeat goes out
+  // for it, since one would bring us back behind the user's back; the play
+  // page, or the detail page's "Come back", does that (comeBack).
+  const heldTableId = ref<number | null>(null);
+  // A set our side lost by forfeit while we were away from it, told on Home
+  // until dismissed (and the pages showing that table go to its results).
+  const lostSet = ref<LostSet | null>(null);
   // Our own seat requests in flight. Their broadcast can beat the HTTP
   // response, and an update that unseats us then is our own doing, not a kick.
   let ownSeatRequests = 0;
   // The heartbeat for the watched table: running while the page is visible,
   // paused while it is hidden (a closed or backgrounded app is exactly what
-  // the backend should see as idle).
+  // the backend should see as idle), except in the middle of a set, where
+  // three quiet minutes lose the set: switching tabs while partner thinks
+  // isn't leaving (bridge_backend docs/API.md, POST /tables/{table}/heartbeat).
   let heartbeat: ReturnType<typeof setInterval> | null = null;
   // How many updates of the watched table have come over the channel. A
   // Start answer that a broadcast overtook is older than what we show (the
@@ -141,14 +192,18 @@ export const useTablesStore = defineStore('tables', () => {
 
   // Subscribes to the table's channel. Only call it while the user is seated
   // there: the backend answers anyone else with a 403. Moving to another table
-  // leaves the old channel first.
-  function watchTable(tableId: number) {
+  // leaves the old channel first. `away`: our seat there is away and we
+  // weren't following the table, so it is held, not reclaimed (heldTableId).
+  function watchTable(tableId: number, away = false) {
     if (watchedTableId.value === tableId) {
       return;
     }
     unwatchTable();
     watchedTableId.value = tableId;
     kickedFrom.value = null;
+    if (away) {
+      heldTableId.value = tableId;
+    }
     // The same channel carries the game state; the game store keeps that.
     listenToTable(
       tableId,
@@ -161,15 +216,32 @@ export const useTablesStore = defineStore('tables', () => {
   // Leaving, a kick, a move and logout all end here, and so does the heartbeat.
   function unwatchTable() {
     stopHeartbeat();
+    heldTableId.value = null;
     if (watchedTableId.value !== null) {
       leaveTable(watchedTableId.value);
       watchedTableId.value = null;
     }
   }
 
+  // Whether the table is in the middle of a set, as far as the table and
+  // (for the same table) the board we hold can tell.
+  function midSet(tableId: number) {
+    const game = useGameStore();
+    return !!runningSet(heldTable(tableId), game.tableId === tableId ? game.playing : null);
+  }
+
+  // Whether we vouch for the watched table now: never for a held seat, and
+  // while the page is hidden only in the middle of a set.
+  function shouldBeat() {
+    const tableId = watchedTableId.value;
+    return (
+      tableId !== null && heldTableId.value !== tableId && (!pageHidden() || midSet(tableId))
+    );
+  }
+
   function startHeartbeat() {
     stopHeartbeat();
-    if (watchedTableId.value !== null && !pageHidden()) {
+    if (shouldBeat()) {
       heartbeat = setInterval(beat, HEARTBEAT_MS);
     }
   }
@@ -189,6 +261,11 @@ export const useTablesStore = defineStore('tables', () => {
     if (tableId === null) {
       return;
     }
+    if (!shouldBeat()) {
+      // Hidden, and the set ended meanwhile: back to pausing while hidden.
+      stopHeartbeat();
+      return;
+    }
     try {
       await tablesService.sendHeartbeat(tableId);
     } catch (e) {
@@ -200,17 +277,21 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   // Back from the background: vouch for the seat at once, then catch up with
-  // whatever happened meanwhile. A seat lost while away is told as such.
+  // whatever happened meanwhile. A seat lost while away is told as such. A
+  // held seat stays held (no beat, no game request): only catching up.
   async function resume() {
     const tableId = watchedTableId.value;
     if (tableId !== null) {
-      startHeartbeat();
-      await tablesService.sendHeartbeat(tableId).catch(() => {
-        // The refetch below tells whether we still sit there.
-      });
+      const held = heldTableId.value === tableId;
+      if (!held) {
+        startHeartbeat();
+        await tablesService.sendHeartbeat(tableId).catch(() => {
+          // The refetch below tells whether we still sit there.
+        });
+      }
       await catchUp(tableId, true);
       const game = useGameStore();
-      if (watchedTableId.value === tableId && game.tableId === tableId) {
+      if (!held && watchedTableId.value === tableId && game.tableId === tableId) {
         await game.load(tableId).catch(() => {
           // The page shows its own errors on its next load; nothing to add here.
         });
@@ -224,7 +305,9 @@ export const useTablesStore = defineStore('tables', () => {
 
   function onVisibilityChange() {
     if (pageHidden()) {
-      stopHeartbeat();
+      if (!shouldBeat()) {
+        stopHeartbeat();
+      }
     } else {
       resume();
     }
@@ -266,10 +349,128 @@ export const useTablesStore = defineStore('tables', () => {
   // drop it once we don't.
   function followSeat(table: Table) {
     if (seatsMe(table)) {
-      watchTable(table.id);
+      watchTable(table.id, !!myAwaySeat(table, auth.user?.id ?? null));
+      rememberSet(table);
     } else if (watchedTableId.value === table.id) {
       unwatchTable();
     }
+  }
+
+  // Coming back to a table whose seat is held, or that has us down as away
+  // (the play page on entry, the detail page's "Come back"): vouch at once,
+  // then refetch, so the seat cleared of `away_since` greets us
+  // (applyTableUpdate) even if its TableUpdated went by before the channel
+  // was up.
+  async function comeBack(tableId: number) {
+    if (watchedTableId.value !== tableId) {
+      return;
+    }
+    const wasHeld = heldTableId.value === tableId;
+    heldTableId.value = null;
+    startHeartbeat();
+    const table = heldTable(tableId);
+    if (!wasHeld && !(table && myAwaySeat(table, auth.user?.id ?? null))) {
+      return;
+    }
+    await tablesService.sendHeartbeat(tableId).catch(() => {
+      // The refetch below tells whether we still sit there.
+    });
+    await catchUp(tableId, false);
+  }
+
+  // Back in time: the seat is ours again and the set goes on. The board may
+  // have moved on while we were gone, so read it again.
+  function welcomeBack(tableId: number) {
+    showToast(WELCOME_BACK, 'success');
+    const game = useGameStore();
+    if (game.tableId === tableId) {
+      game.load(tableId).catch(() => {
+        // The page reads it again on its next load.
+      });
+    }
+  }
+
+  // Keep the set we are in the middle of in mind across visits (see
+  // SET_MEMORY_KEY), and forget it once that set is seen to end with us.
+  function rememberSet(table: BroadcastTable) {
+    const me = auth.user?.id;
+    if (!me) {
+      return;
+    }
+    const memory = readSetMemory();
+    const running = table.set && !table.set.finished ? table.set : null;
+    if (running && (memory?.setId !== running.id || memory.userId !== me)) {
+      writeSetMemory({ userId: me, tableId: table.id, setId: running.id });
+    } else if (!running && memory?.tableId === table.id) {
+      writeSetMemory(null);
+    }
+  }
+
+  // Our seat was freed because our side forfeited the set: we were away too
+  // long (or kicked while away). From the update that freed us, and the seat
+  // we held before it.
+  function lostSetFrom(table: BroadcastTable, seat: Seat | undefined): LostSet | null {
+    const set = table.set;
+    if (!seat || !set || set.ended !== 'forfeit' || !set.forfeited_by) {
+      return null;
+    }
+    const side = sideOf(seat);
+    return sideOfCode(set.forfeited_by) === side
+      ? { id: set.id, number: set.number, side, tableId: table.id }
+      : null;
+  }
+
+  // A later visit: the set we were in the middle of, at a table we no longer
+  // sit at. If our side forfeited it meanwhile, say so (GET /sets/{id}).
+  async function checkLostSet() {
+    const memory = readSetMemory();
+    const me = auth.user?.id;
+    if (!memory || !me) {
+      return;
+    }
+    if (memory.userId !== me) {
+      writeSetMemory(null);
+      return;
+    }
+    if (tables.value.some((t) => t.id === memory.tableId && seatsMe(t))) {
+      return;
+    }
+    let set;
+    try {
+      set = await useHistoryStore().loadSet(memory.setId);
+    } catch (e) {
+      const status = statusOf(e);
+      if (status === 403 || status === 404) {
+        writeSetMemory(null);
+      }
+      return;
+    }
+    writeSetMemory(null);
+    const seat = tablesService.SEATS.find((s) => set.players[s]?.id === me);
+    if (seat && set.ended === 'forfeit' && set.forfeited_by && sideOfCode(set.forfeited_by) === sideOf(seat)) {
+      lostSet.value = {
+        id: memory.setId,
+        number: set.number,
+        side: sideOf(seat),
+        tableId: memory.tableId,
+      };
+    }
+  }
+
+  function dismissLostSet() {
+    lostSet.value = null;
+  }
+
+  // What walking out of `table` now would put at stake (utils/away), with
+  // the board we hold of it, if any, and whether we are an admin.
+  function stakeOf(table: Table) {
+    const game = useGameStore();
+    return setAtStake(
+      table,
+      game.tableId === table.id ? game.playing : null,
+      auth.user?.id ?? null,
+      !!auth.user?.is_admin,
+    );
   }
 
   // A `TableUpdated` event (or a refetch after a reconnect or a resume). It is
@@ -282,15 +483,35 @@ export const useTablesStore = defineStore('tables', () => {
       return;
     }
     tableUpdates++;
+    const me = auth.user?.id ?? null;
+    const before = heldTable(update.id);
+    const wasAway = !!before && !!myAwaySeat(before, me);
+    const mySeat = before?.seats.find((s) => s.user_id === me)?.seat;
     const table = withCanManage(update);
     syncTable(table);
     useGameStore().applyTableUpdate(table);
     if (seatsMe(table)) {
+      rememberSet(table);
+      const away = !!myAwaySeat(table, me);
+      if (wasAway && !away) {
+        welcomeBack(table.id);
+      } else if (away && !wasAway && heldTableId.value !== table.id && heartbeat !== null) {
+        // Marked away while this client still vouches for us (a beat lost or
+        // late): vouch now, and the backend takes the mark back.
+        beat();
+      }
       return;
     }
     unwatchTable();
     if (ownSeatRequests === 0) {
       kickedFrom.value = table.id;
+      const lost = lostSetFrom(table, mySeat);
+      if (lost) {
+        lostSet.value = lost;
+        writeSetMemory(null);
+        announceRemoval(lostSetText(lost));
+        return;
+      }
       announceRemoval(
         idle ? IDLE_NOTICE : `You were removed from ${table.name || `table #${table.id}`}.`,
       );
@@ -321,17 +542,24 @@ export const useTablesStore = defineStore('tables', () => {
     loaded.value = true;
     const mine = tables.value.find(seatsMe);
     if (mine) {
-      watchTable(mine.id);
+      followSeat(mine);
     } else {
       unwatchTable();
     }
+    checkLostSet();
   }
 
   async function loadTable(tableId: number) {
+    const before = watchedTableId.value === tableId ? heldTable(tableId) : null;
     const table = await tablesService.getTable(tableId);
     currentTable.value = table;
     upsertInList(table);
     followSeat(table);
+    // A refresh can be the first to show our away mark taken back.
+    const me = auth.user?.id ?? null;
+    if (before && myAwaySeat(before, me) && seatsMe(table) && !myAwaySeat(table, me)) {
+      welcomeBack(tableId);
+    }
     return table;
   }
 
@@ -368,6 +596,11 @@ export const useTablesStore = defineStore('tables', () => {
     const movedFrom = myTable.value?.id ?? watchedTableId.value;
     const table = await ownSeatRequest(() => tablesService.joinSeat(tableId, seat));
     syncTable(table);
+    if (movedFrom !== null && movedFrom !== tableId) {
+      // Walked out on any set there (forfeited at once mid-set, as the move
+      // was confirmed): nothing to tell on a later visit.
+      writeSetMemory(null);
+    }
     followSeat(table);
     if (movedFrom !== null && movedFrom !== tableId) {
       await reloadAfterMove(movedFrom);
@@ -389,9 +622,24 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   // Giving up the last seat deletes the table, so the caller has to know which
-  // of the two happened before deciding whether to stay on the page.
+  // of the two happened before deciding whether to stay on the page. In the
+  // middle of a set the seat is held instead (`held`): we stay seated, away,
+  // and stop vouching for it, or the next beat would bring us back.
   async function leave(tableId: number) {
-    return applyRemoval(tableId, await ownSeatRequest(() => tablesService.leaveSeat(tableId)));
+    const result = await ownSeatRequest(() => tablesService.leaveSeat(tableId));
+    if (!tablesService.isTableDeleted(result) && seatsMe(result)) {
+      syncTable(result);
+      if (watchedTableId.value === tableId) {
+        heldTableId.value = tableId;
+        stopHeartbeat();
+      } else {
+        watchTable(tableId, true);
+      }
+      return { tableDeleted: false, held: true };
+    }
+    // Gone at once: no set of ours was left running there to tell about.
+    writeSetMemory(null);
+    return { ...applyRemoval(tableId, result), held: false };
   }
 
   // A manager kicking someone else (or anyone taking a robot out of an
@@ -462,6 +710,8 @@ export const useTablesStore = defineStore('tables', () => {
     myTable,
     watchedTableId,
     kickedFrom,
+    heldTableId,
+    lostSet,
     load,
     loadTable,
     openTable,
@@ -478,5 +728,8 @@ export const useTablesStore = defineStore('tables', () => {
     watchTable,
     unwatchTable,
     applyTableUpdate,
+    comeBack,
+    dismissLostSet,
+    stakeOf,
   };
 });

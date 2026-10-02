@@ -9,6 +9,19 @@
       <div class="tables-page">
         <ion-button expand="block" @click="createOpen = true">Create table</ion-button>
 
+        <!-- Left mid-set: the seat waits a few minutes, opening the game
+             comes back to it. -->
+        <div v-if="heldTable" class="held">
+          <AwayNotice :table="heldTable" :me="me" held />
+          <ion-button
+            size="small"
+            :router-link="`/tables/${heldTable.id}/play`"
+            router-direction="forward"
+          >
+            Come back to {{ heldTable.name || `table #${heldTable.id}` }}
+          </ion-button>
+        </div>
+
         <!-- First visit: skeleton rows where the list will be. -->
         <ion-list v-if="loading && !tablesStore.loaded" aria-busy="true">
           <ion-item v-for="n in 3" :key="n" lines="full">
@@ -175,6 +188,7 @@ import {
 } from '@ionic/vue';
 import { chevronForwardOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
+import AwayNotice from '@/components/AwayNotice.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import { useTablesStore } from '@/stores/tables';
@@ -195,6 +209,10 @@ const ionRouter = useIonRouter();
 const me = computed(() => auth.user?.id ?? null);
 // Where the user sits, so the list shows what a move would give up.
 const myTableId = computed(() => tablesStore.myTable?.id ?? null);
+// That table, while our seat at it is held after a Leave mid-set.
+const heldTable = computed(() =>
+  tablesStore.myTable && tablesStore.heldTableId === tablesStore.myTable.id ? tablesStore.myTable : null,
+);
 
 const loading = ref(false);
 const loadError = ref('');
@@ -255,7 +273,7 @@ async function join(table: Table, seat: Seat) {
     from &&
     me.value &&
     from.id !== table.id &&
-    !(await confirmMove(from, table, me.value, game.phaseOf(from.id)))
+    !(await confirmMove(from, table, me.value, game.phaseOf(from.id), tablesStore.stakeOf(from)))
   ) {
     return;
   }
@@ -395,6 +413,10 @@ async function submitCreate() {
   margin: 2px 0 0;
   font-size: 0.8rem;
   color: var(--ion-color-medium);
+}
+
+.held {
+  margin: 12px 0;
 }
 
 .table-mine {

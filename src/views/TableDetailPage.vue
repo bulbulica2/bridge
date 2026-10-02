@@ -57,18 +57,21 @@
               </button>
               <span v-else class="seat-empty">Empty</span>
               <RobotBadge v-if="user?.is_robot" />
+              <!-- Away mid-set: the seat is held, the notice below counts down. -->
+              <span v-if="awayMarks.includes(seat)" class="seat-away">away</span>
               <!-- Before a board: who has pressed Start (robots always have). -->
               <span v-if="showStart && readySeats.includes(seat)" class="seat-ready">
                 ✓ Ready
               </span>
 
+              <!-- A held seat has been left already: "Come back" below. -->
               <ion-button
-                v-if="user && user.id === me"
+                v-if="user && user.id === me && !held"
                 size="small"
                 fill="outline"
                 color="danger"
                 :disabled="busySeat !== null"
-                @click="confirmLeave(seat)"
+                @click="leave(seat)"
               >
                 <ion-spinner v-if="busySeat === seat" name="crescent" />
                 <span v-else>Leave</span>
@@ -77,7 +80,7 @@
               <!-- Holding a seat here makes a free one a plain seat change;
                    holding one elsewhere makes it a move, confirmed in sit(). -->
               <ion-button
-                v-else-if="!user"
+                v-else-if="!user && !held"
                 size="small"
                 fill="outline"
                 :disabled="busySeat !== null"
@@ -133,6 +136,19 @@
             </div>
           </div>
 
+          <!-- We left in the middle of the set: the seat waits for us a few
+               minutes, and coming back is one tap (or opening the game). -->
+          <div v-if="held" class="held">
+            <AwayNotice :table="table" :me="me" held />
+            <ion-button expand="block" :disabled="comingBack" @click="comeBack">
+              <ion-spinner v-if="comingBack" name="crescent" />
+              <span v-else>Come back</span>
+            </ion-button>
+          </div>
+
+          <!-- Somebody else away mid-set, with the time left. -->
+          <AwayNotice :table="table" :me="me" />
+
           <!-- Only robots sit here since the last person left: they wait for
                somebody to take over, and the backend deletes the table after
                a few minutes if nobody does. -->
@@ -155,7 +171,7 @@
           <!-- The game itself lives on its own page; a board being dealt
                takes the players there by itself. -->
           <ion-button
-            v-if="mySeat"
+            v-if="mySeat && !held"
             expand="block"
             :fill="showStart ? 'outline' : 'solid'"
             class="play"
@@ -166,8 +182,8 @@
           </ion-button>
 
           <!-- Between boards the Leave button costs the others nothing. -->
-          <p v-if="mySeat && boardPhase === 'finished'" class="between-boards">
-            {{ leaveWarning(boardPhase, game.playing?.board?.number ?? null) }}
+          <p v-if="mySeat && !held && boardPhase === 'finished'" class="between-boards">
+            {{ leaveWarning(boardPhase, game.playing?.board?.number ?? null, stake) }}
           </p>
 
           <p v-if="seatedElsewhere" class="seated-elsewhere">
@@ -211,6 +227,7 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
+import AwayNotice from '@/components/AwayNotice.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
@@ -222,7 +239,9 @@ import { UNATTENDED_MINUTES, canRemove, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { PublicUser, SearchedUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
-import { confirmMove, leaveNote, leaveWarning } from '@/utils/seatMove';
+import { awaySeats } from '@/utils/away';
+import { confirmLeave, confirmMove, heldNotice, leaveWarning } from '@/utils/seatMove';
+import { SIDE_LABELS, sideOf } from '@/utils/result';
 import { currentSet, setLabel } from '@/utils/sets';
 import { isReady, startNeeded } from '@/utils/start';
 import { showToast } from '@/utils/toast';
@@ -245,6 +264,8 @@ const player = ref<PublicUser | null>(null);
 const seatingAt = ref<Seat | null>(null);
 // Our Start (or taking it back) on its way.
 const starting = ref(false);
+// "Come back" to a held seat on its way.
+const comingBack = ref(false);
 
 // Only trust the store's current table when it is the one this route asks for,
 // otherwise moving from one table to another flashes the previous one. Coming
@@ -289,6 +310,15 @@ const runningSet = computed(() => {
     : null;
   return set && !set.finished && table.value?.board_id != null ? set : null;
 });
+// We left mid-set and our seat here is held for us (the tables store sends
+// no heartbeat for it until we come back).
+const held = computed(() => !!mySeat.value && store.heldTableId === tableId.value);
+// The others' seats marked away mid-set.
+const awayMarks = computed(() =>
+  table.value ? awaySeats(table.value, me.value).map((s) => s.seat) : [],
+);
+// What leaving would put at stake: the set going on here, if any.
+const stake = computed(() => (table.value && mySeat.value ? store.stakeOf(table.value) : null));
 const readySeats = computed(() => table.value?.seats.filter(isReady).map((s) => s.seat) ?? []);
 const managerName = computed(() => {
   const current = table.value;
@@ -326,7 +356,9 @@ watch(
   (kicked) => {
     if (kicked !== null && kicked === tableId.value) {
       store.kickedFrom = null;
-      ionRouter.navigate('/tables', 'back', 'replace');
+      // Freed because our side forfeited the set: its results instead.
+      const lost = store.lostSet;
+      ionRouter.navigate(lost?.tableId === kicked ? `/sets/${lost.id}` : '/tables', 'back', 'replace');
     }
   },
 );
@@ -378,8 +410,14 @@ async function load(refetchTable = true) {
 // Seated at a table with a board the game store doesn't hold yet (this page
 // opened by URL): read it, so Leave can say what leaving costs. Only the
 // players seated here may, and a failure only leaves the wording generic.
+// Not for a held seat: reading the board would bring us back.
 function loadBoardPhase() {
-  if (mySeat.value && table.value?.board_id != null && game.phaseOf(tableId.value) === null) {
+  if (
+    mySeat.value &&
+    !held.value &&
+    table.value?.board_id != null &&
+    game.phaseOf(tableId.value) === null
+  ) {
     game.load(tableId.value).catch(() => {});
   }
 }
@@ -401,7 +439,7 @@ async function sit(seat: Seat) {
       if (
         from &&
         from.id !== tableId.value &&
-        !(await confirmMove(from, table.value, me.value, game.phaseOf(from.id)))
+        !(await confirmMove(from, table.value, me.value, game.phaseOf(from.id), store.stakeOf(from)))
       ) {
         return;
       }
@@ -418,30 +456,29 @@ async function sit(seat: Seat) {
   }
 }
 
-async function confirmLeave(seat: Seat) {
-  const alert = await alertController.create({
-    header: 'Leave this table?',
-    message: [
-      leaveWarning(boardPhase.value, game.playing?.board?.number ?? null),
-      leaveNote(table.value, me.value),
-    ]
-      .filter(Boolean)
-      .join(' '),
-    buttons: [
-      { text: 'Cancel', role: 'cancel' },
-      { text: 'Leave', role: 'destructive' },
-    ],
-  });
-  await alert.present();
-  const { role } = await alert.onDidDismiss();
-  if (role !== 'destructive') {
+async function leave(seat: Seat) {
+  const atStake = stake.value;
+  const confirmed = await confirmLeave(
+    table.value,
+    me.value,
+    boardPhase.value,
+    game.playing?.board?.number ?? null,
+    atStake,
+  );
+  if (!confirmed) {
     return;
   }
 
   busySeat.value = seat;
   try {
-    const { tableDeleted } = await store.leave(tableId.value);
-    if (tableDeleted) {
+    const { tableDeleted, held: kept } = await store.leave(tableId.value);
+    if (kept) {
+      // Mid-set: the seat waits for us a few minutes. Off to the list, where
+      // being away is what it is (staying here would read as being back).
+      game.clear();
+      await showToast(heldNotice(atStake), 'warning');
+      ionRouter.navigate('/tables', 'back', 'replace');
+    } else if (tableDeleted) {
       // The id 404s from here on, so go back to the list instead of reloading.
       await showToast('You left the table. Nobody was left, so it was deleted.', 'success');
       ionRouter.navigate('/tables', 'back', 'replace');
@@ -456,12 +493,41 @@ async function confirmLeave(seat: Seat) {
   }
 }
 
+// What a kick costs the set going on here (bridge_backend docs/API.md, DELETE
+// /tables/{table}/seats/{user}): a player away loses it for their side, one
+// who is there only breaks it off.
+function removeCost(seat: Seat): string {
+  const current = table.value;
+  const set = current ? currentSet(current, game.tableId === tableId.value ? game.playing : null) : null;
+  if (!current || !set || set.finished) {
+    return '';
+  }
+  const theirs = current.seats.find((s) => s.seat === seat);
+  return theirs?.forfeit_at
+    ? `They are away, so ${SIDE_LABELS[sideOf(seat)]} lose set ${set.number} by forfeit.`
+    : `Set ${set.number} ends with no winner.`;
+}
+
+// Back to a held seat before the time is up: the store vouches for us, and
+// greets us once the backend has taken the away mark back.
+async function comeBack() {
+  comingBack.value = true;
+  try {
+    await store.comeBack(tableId.value);
+    loadBoardPhase();
+  } finally {
+    comingBack.value = false;
+  }
+}
+
 async function confirmRemove(seat: Seat, user: PublicUser) {
   const alert = await alertController.create({
     header: `Remove ${user.username}?`,
     message: user.is_robot
       ? `The robot leaves seat ${seat}, which becomes free.`
-      : `${user.username} loses seat ${seat}. They can sit down again afterwards.`,
+      : [`${user.username} loses seat ${seat}. They can sit down again afterwards.`, removeCost(seat)]
+          .filter(Boolean)
+          .join(' '),
     buttons: [
       { text: 'Cancel', role: 'cancel' },
       { text: 'Remove', role: 'destructive' },
@@ -711,6 +777,17 @@ function handleExpiredSession(e: unknown): boolean {
   font-size: 0.75rem;
   text-transform: uppercase;
   color: var(--ion-color-primary);
+}
+
+.seat-away {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ion-color-warning-shade, #e0ac08);
+}
+
+.held {
+  margin: 12px 0;
 }
 
 .seat-ready {
