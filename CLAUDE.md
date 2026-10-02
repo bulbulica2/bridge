@@ -241,7 +241,9 @@ Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`)
   `legalCards()` is the follow-suit hint that dims cards in `HandView`
   (given `playable` ids it turns into buttons). When the hand on play has
   exactly one legal card to follow with, `forcedCard()` (null on the lead)
-  names it and `src/composables/useForcedPlay.ts` plays it after 3 s
+  names it and, for declarer only (`autoPlaysForced()`, #69: a defender
+  taps it themselves, no countdown or pulse),
+  `src/composables/useForcedPlay.ts` plays it after 3 s
   (`HandView`'s `forcedId` pulses it, the status line counts down). The
   page keys it by playing/trick/cards/turn/card, so a new state restarts
   or drops it; it is null while a card or claim is in flight, the claim

@@ -31,6 +31,14 @@ export function forcedCard(hand: Card[], trick: PlayedCard[] | null): Card | nul
   return legal.length === 1 ? legal[0] : null;
 }
 
+// Whether a forced card may play itself for this viewer: only for declarer,
+// who plays both their own hand and dummy's. A defender always taps their
+// card: the pause before following is time to think, and a card landing at
+// once would tell the table they are out of the suit led.
+export function autoPlaysForced(state: Playing): boolean {
+  return !!state.contract && state.contract.declarer === state.my_seat;
+}
+
 // Which hand the user plays from right now: their own, dummy's (declarer on
 // dummy's turn), or none. `acting_user_id` says whose move it is; `turn`
 // says which hand the card comes from. A pending claim stops the play.

@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/47-start-button`._
+_Status as of branch `bulbulica2/48-forced-play-declarer-only`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -329,9 +329,9 @@ arrives, and the app falls back to what each request returns.
 "Thinking…" instead of "To act", and the status line under the table says
 "robot-1 is thinking…".
 
-When the hand you play from (your own, or dummy's as declarer) has exactly
-one legal card to follow with, `forcedCard()` in `play.ts` names it (never
-on the lead) and the play page's `useForcedPlay` plays it after 3 s:
+When you are declarer and the hand you play from (your own or dummy's) has
+exactly one legal card to follow with, `forcedCard()` in `play.ts` names it
+(never on the lead) and the play page's `useForcedPlay` plays it after 3 s:
 the card pulses and the status line counts down ("Playing ♥7 in 3 s…").
 Tapping it plays it at once. The countdown is tied to the state it started
 in (board, trick, cards in the trick, turn, card), so any new card restarts
@@ -339,11 +339,14 @@ or drops it; it also stops while a card or claim is in flight, the claim
 sheet is open, a claim is pending or another page is on top. A state the
 timer already sent a card for is not counted down again, so a refused card
 waits for a tap. The backend's `isBehind` guard and a 409 → reload remain
-the backstop.
+the backstop. A defender never gets this (`autoPlaysForced()` in
+`play.ts`, #69): the pause before following is time to think, and a card
+landing at once would tell the table they are out of the suit led. The
+follow-suit hint still dims the other cards, and they tap the one left.
 
 Pure logic lives in `src/utils/`: `cards.ts` (sorting, rank labels, seat
 rotation, vulnerability), `auction.ts` (call legality hints and labels),
-`play.ts` (follow-suit hint, the forced card, whose hand you play, trick layout), `claim.ts`
+`play.ts` (follow-suit hint, the forced card and who it plays itself for, whose hand you play, trick layout), `claim.ts`
 (who may claim, who still has to answer, the claim's wording), `result.ts`
 (the score from your side), `seatMove.ts` (wording for leaving or moving by
 game phase, and whether only robots would be left), `start.ts` (whether

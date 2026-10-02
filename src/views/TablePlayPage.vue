@@ -303,7 +303,7 @@ import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
 import { SUIT_NAMES, SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
 import { canClaim, tricksLeft } from '@/utils/claim';
-import { forcedCard, handToPlay, legalCards } from '@/utils/play';
+import { autoPlaysForced, forcedCard, handToPlay, legalCards } from '@/utils/play';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { resultSummary } from '@/utils/result';
 import { leaveNote, leaveWarning } from '@/utils/seatMove';
@@ -412,14 +412,16 @@ function legalIds(hand: Card[] | null): number[] {
 }
 
 // The one card the hand on play may play to this trick, if only one is legal
-// (never on the lead), keyed by the state it is forced in. Nothing while a
-// card or a claim is on its way, the claim sheet is open or the page is left.
+// (never on the lead), keyed by the state it is forced in. Only for declarer
+// (a defender taps their own card). Nothing while a card or a claim is on
+// its way, the claim sheet is open or the page is left.
 const forced = computed(() => {
   const state = playing.value;
   const from = playFrom.value;
   if (
     !state ||
     !from ||
+    !autoPlaysForced(state) ||
     !viewActive.value ||
     sendingCard.value !== null ||
     claimOpen.value ||
