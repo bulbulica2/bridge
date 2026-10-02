@@ -1,5 +1,6 @@
 <template>
-  <!-- A player's finished boards, latest first, paged in as the list scrolls
+  <!-- A player's finished boards, latest first, grouped by the set they were
+       dealt in (each set's header opens its results), paged in as the list scrolls
        (the infinite scroll finds the page's ion-content). The page calls
        load() when it enters and on pull-to-refresh. -->
   <div class="history">
@@ -23,16 +24,46 @@
 
       <template v-else>
         <p class="count">
-          {{ list.total }} board{{ list.total === 1 ? '' : 's' }} played. Tap one to compare it
-          with the other tables.
+          {{ list.total }} board{{ list.total === 1 ? '' : 's' }} played. Tap a set for its
+          results, or a board to replay it.
         </p>
         <ion-list>
-          <HistoryEntryItem
-            v-for="entry in list.entries"
-            :key="entry.playing_id"
-            :entry="entry"
-            :mine="owner === null"
-          />
+          <template v-for="group in groups" :key="group.key">
+            <ion-item
+              v-if="group.set"
+              button
+              detail
+              lines="full"
+              class="set-header"
+              :router-link="`/sets/${group.set.id}`"
+            >
+              <div class="set-head">
+                <span class="set-head-title">
+                  Set {{ group.set.number }} ·
+                  {{ group.tableId !== null ? `table ${group.tableId}` : 'table closed' }}
+                </span>
+                <span class="set-head-count">
+                  {{ group.entries.length }} of {{ group.set.of }} board{{
+                    group.set.of === 1 ? '' : 's'
+                  }}
+                </span>
+              </div>
+              <span
+                slot="end"
+                class="set-head-score"
+                :class="tone(group.score)"
+                :aria-label="`Set total ${formatScore(group.score)}`"
+              >
+                {{ formatScore(group.score) }}
+              </span>
+            </ion-item>
+            <HistoryEntryItem
+              v-for="entry in group.entries"
+              :key="entry.playing_id"
+              :entry="entry"
+              :mine="owner === null"
+            />
+          </template>
         </ion-list>
       </template>
 
@@ -52,6 +83,7 @@ import { computed, ref } from 'vue';
 import {
   IonInfiniteScroll,
   IonInfiniteScrollContent,
+  IonItem,
   IonList,
   IonSpinner,
   IonText,
@@ -61,6 +93,8 @@ import HistoryEntryItem from '@/components/HistoryEntryItem.vue';
 import { useHistoryStore } from '@/stores/history';
 import type { HistoryOwner } from '@/stores/history';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { formatScore } from '@/utils/result';
+import { groupBySet } from '@/utils/sets';
 
 const props = withDefaults(
   defineProps<{
@@ -79,6 +113,16 @@ const loadError = ref('');
 const moreError = ref('');
 
 const list = computed(() => store.listOf(props.owner));
+// Each set's boards under one header with the owner's total (of the boards
+// paged in so far).
+const groups = computed(() => groupBySet(list.value?.entries ?? []));
+
+function tone(score: number): string {
+  if (score === 0) {
+    return 'score-zero';
+  }
+  return score > 0 ? 'score-plus' : 'score-minus';
+}
 
 // The first page again; rows already shown stay up while it loads.
 async function load() {
@@ -164,5 +208,39 @@ defineExpose({ load });
 
 .error {
   margin: 16px 0;
+}
+
+.set-header {
+  --background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.08);
+  margin-top: 8px;
+}
+
+.set-head {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+}
+
+.set-head-title {
+  font-weight: 700;
+}
+
+.set-head-count {
+  font-size: 0.8rem;
+  color: var(--ion-color-medium);
+}
+
+.set-head-score {
+  font-size: 1.1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-plus {
+  color: var(--ion-color-success-shade, #2dd36f);
+}
+
+.score-minus {
+  color: var(--ion-color-danger, #eb445a);
 }
 </style>

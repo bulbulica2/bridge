@@ -160,6 +160,19 @@ describe('start helpers', () => {
     expect(startNeeded(refilled, { ...done, board: { ...done.board!, id: 3 } })).toBe(false)
   })
 
+  test("the set's last board: Start for the next set, though the same four sit there", () => {
+    const set = { id: 5, number: 1, board: 4, of: 4, finished: false, ended: null, forfeited_by: null }
+    const table = makeTable(TWO_HUMANS, [], { board_id: 8, set })
+    const over = { ...set, finished: true, ended: 'completed' as const }
+    // A board finishing sends no TableUpdated: the board's own set says it.
+    expect(startNeeded(table, stateOf(table, { phase: 'finished', set: over }))).toBe(true)
+    // A forfeit between boards comes with the table instead.
+    expect(startNeeded({ ...table, set: over }, stateOf(table, { phase: 'finished', set }))).toBe(true)
+    // Board 3 of 4: Next.
+    const third = { ...set, board: 3 }
+    expect(startNeeded(table, stateOf(table, { phase: 'finished', set: third }))).toBe(false)
+  })
+
   test('who the board waits for', () => {
     expect(startWaiting(makeTable(WITH_ROBOTS), 1)).toBe('Waiting for you to press Start.')
     expect(startWaiting(makeTable(TWO_HUMANS, ['ana']), 1)).toBe(

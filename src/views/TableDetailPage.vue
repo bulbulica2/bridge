@@ -128,6 +128,8 @@
               <p class="table-id">#{{ table.id }}</p>
               <p v-if="managerName" class="table-manager">Manager: {{ managerName }}</p>
               <p v-if="isManager" class="table-yours">You manage this table</p>
+              <!-- While a set of four boards is running: how far it has got. -->
+              <p v-if="runningSet" class="table-set">{{ setLabel(runningSet) }}</p>
             </div>
           </div>
 
@@ -221,6 +223,7 @@ import type { Seat } from '@/services/tables';
 import type { PublicUser, SearchedUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { confirmMove, leaveNote, leaveWarning } from '@/utils/seatMove';
+import { currentSet, setLabel } from '@/utils/sets';
 import { isReady, startNeeded } from '@/utils/start';
 import { showToast } from '@/utils/toast';
 
@@ -278,6 +281,14 @@ const showStart = computed(
     !!mySeat.value &&
     startNeeded(table.value, game.tableId === tableId.value ? game.playing : null),
 );
+// The set being played here, while it goes on (the board's own `set`, when
+// the game store holds it, knows the last board has finished).
+const runningSet = computed(() => {
+  const set = table.value
+    ? currentSet(table.value, game.tableId === tableId.value ? game.playing : null)
+    : null;
+  return set && !set.finished && table.value?.board_id != null ? set : null;
+});
 const readySeats = computed(() => table.value?.seats.filter(isReady).map((s) => s.seat) ?? []);
 const managerName = computed(() => {
   const current = table.value;
@@ -724,6 +735,13 @@ function handleExpiredSession(e: unknown): boolean {
 }
 
 .table-id,
+.table-set {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ion-color-primary);
+}
+
 .table-manager,
 .table-yours {
   margin: 0;

@@ -2,6 +2,7 @@ import type { PublicPlaying } from '@/services/game';
 import { SEATS } from '@/services/tables';
 import type { BroadcastTable, TableSeat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
+import { currentSet } from '@/utils/sets';
 
 // Start (bridge_backend docs/API.md, Dealing): a board is dealt once the table
 // is full and every human seated there has pressed it. These are hints for
@@ -13,17 +14,21 @@ export function isReady(seat: TableSeat): boolean {
 }
 
 // Does the next board wait for Start? Always while the table has no board
-// (none yet, or one abandoned). With a finished board on the table, the same
-// four go on with Next (playing/next), and Start takes over only once one of
-// them has been replaced or changed seats. During a board, never. `playing`
-// is the state held for this table, if any: a board we can't see the phase
-// of says no.
+// (none yet, or one abandoned), and once the set is over: Start opens the
+// next one. With a finished board of a set still going on, the same four go
+// on with Next (playing/next), and Start takes over only once one of them has
+// been replaced or changed seats. During a board, never. `playing` is the
+// state held for this table, if any: a board we can't see the phase of says
+// no.
 export function startNeeded(table: BroadcastTable, playing: PublicPlaying | null): boolean {
   if (table.board_id === null) {
     return true;
   }
   if (playing?.phase !== 'finished' || playing.board?.id !== table.board_id) {
     return false;
+  }
+  if (currentSet(table, playing)?.finished) {
+    return true;
   }
   return SEATS.some(
     (seat) => table.seats.find((s) => s.seat === seat)?.user_id !== playing.players?.[seat]?.id,

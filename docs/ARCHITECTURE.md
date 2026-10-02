@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/51-remove-next-board-for-everyone`._
+_Status as of branch `bulbulica2/52-board-sets`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -77,6 +77,7 @@ All routes are flat and lazy loaded, in `src/router/index.ts`:
 | `/tables/:id/play` | `TablePlayPage` | logged in |
 | `/history` | `HistoryPage` | logged in |
 | `/boards/:id/results` | `BoardResultsPage` | logged in |
+| `/sets/:id` | `SetResultsPage` | logged in |
 | `/playings/:id` | `PlayingReviewPage` | logged in |
 | `/users/:id` | `UserProfilePage` | logged in |
 
@@ -131,8 +132,8 @@ sends you to `/login` afterwards.
 |---|---|---|
 | `auth` | `user` (own record, with email) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset |
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom` | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`; owns the table channel and the heartbeat |
-| `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `adopt`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `loadSessionScore`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
-| `history` | finished boards per owner (`null` = you, a number = another user), results per board, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadReview` |
+| `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `adopt`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
+| `history` | finished boards per owner (`null` = you, a number = another user), results per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadSet`, `loadReview` |
 | `users` | public profiles by id | `load` |
 
 A table changed by any answer or broadcast is written into both `tables`
@@ -169,7 +170,7 @@ so every extra request on the way in delays the one the page needs:
 | `auth.ts` | `/sanctum/csrf-cookie`, `POST /login`, `/register`, `/logout`, `/forgot-password`, `/reset-password`, `GET` / `PATCH /api/user` |
 | `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
 | `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `POST /tables/{id}/calls`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
-| `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /playings/{id}` |
+| `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /playings/{id}`, `GET /sets/{id}` |
 | `users.ts` | `GET /users/{id}`, `GET /users?search=` |
 | `echo.ts` | the websocket, and `POST /broadcasting/auth` to sign private channels |
 
@@ -202,6 +203,20 @@ A few backend rules the stores rely on:
   `StartBox.vue` draws it on the detail and play pages. `tables.start` and
   `cancelStart` skip applying an answer that a `TableUpdated` overtook
   while it was on its way, since two players pressing at once race.
+- **Boards come in sets of four** (#73, bb#75). Start deals a set's first
+  board, **Next board** the other three, and after the fourth Next is
+  refused: everyone presses Start again for the next set. The game state
+  and the table payload both carry `set` (`{id, number, board, of,
+  finished, ended, forfeited_by}`, typed `SetPosition` in
+  `services/game.ts`). A board finishing sends no `TableUpdated`, while a
+  forfeit between boards comes only as one, so `currentSet()` in
+  `src/utils/sets.ts` merges the two copies; `startNeeded()` says Start
+  once it is `finished`. A set's results (each board with its
+  matchpoints, the totals, the winner) come from `GET /sets/{id}`, read by
+  `history.loadSet()` after every finished board and when the set ends;
+  they are the running score under a board's result, and the set-over
+  view (`SetResultsPanel`) once the set is done. `sets.ts` also words the
+  winner from your side, a forfeit, and groups the history by set.
 - **Robots** are users with `is_robot: true` (on every public profile). They
   fill seats nobody else takes: `POST /tables` with `robots: true` seats
   three (the creator's Start then deals), and a manager adds one with
@@ -322,7 +337,8 @@ arrives, and the app falls back to what each request returns.
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat; given `rows`, every suit column keeps room for that many cards |
 | `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest** |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw** |
-| `BoardResultPanel`, `NextBoardBox` | the score once a board is finished, and who is ready for the next |
+| `BoardResultPanel`, `NextBoardBox` | the score once a board is finished with the set's running score, and who is ready for the next |
+| `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, a forfeit's reason, each board with your side's score and matchpoints (opening its review), and the totals |
 | `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead) |
 | `RobotBadge` | the "robot" mark next to a robot's name (also on Home, Tables, Table detail and the profile sheet) |
 
@@ -352,7 +368,9 @@ rotation, vulnerability), `auction.ts` (call legality hints and labels),
 (who may claim, who still has to answer, the claim's wording), `result.ts`
 (the score from your side), `seatMove.ts` (wording for leaving or moving by
 game phase, and whether only robots would be left), `start.ts` (whether
-the next board waits for Start, and who for), `review.ts` (a replay's table after N cards: hands left, the
+the next board waits for Start, and who for), `sets.ts` (where the table is
+in its set, the set's winner and totals from your side, a forfeit's
+wording, the history grouped by set), `review.ts` (a replay's table after N cards: hands left, the
 trick shown, tricks won, the trick-by-trick steps), `export.ts` (a finished
 board as text, PBN and JSON, and the pieces the printout uses). These are the
 best-tested parts of the app. For the rules

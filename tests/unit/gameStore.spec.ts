@@ -4,7 +4,6 @@ import { useGameStore } from '@/stores/game'
 import { useAuthStore } from '@/stores/auth'
 import { useTablesStore } from '@/stores/tables'
 import * as gameService from '@/services/game'
-import * as historyService from '@/services/history'
 import * as tablesService from '@/services/tables'
 import * as echo from '@/services/echo'
 import type { AuctionCall, Bid, Card, Playing, PublicPlaying } from '@/services/game'
@@ -18,8 +17,6 @@ vi.mock('@/services/game', () => ({
   playCard: vi.fn(),
   nextBoard: vi.fn(),
 }))
-
-vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn() }))
 
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
@@ -395,30 +392,6 @@ describe('game store', () => {
       return fullState({ phase: 'finished', turn: null, acting_user_id: null, result: RESULT, ready, hand: [] })
     }
 
-    function historyPage(rows: { table_id: number | null; score_ns: number }[], next: boolean) {
-      return {
-        current_page: 1,
-        data: rows.map((row, i) => ({
-          playing_id: i + 1,
-          board: { id: 1, number: 1, dealer: 'N' as Seat, vulnerable: '' as const },
-          seat: 'S' as Seat,
-          partner: PLAYERS.N,
-          contract: null,
-          doubled: null,
-          declarer: null,
-          tricks_won: null,
-          made_by: null,
-          score: row.score_ns,
-          finished_at: '',
-          ...row,
-        })),
-        last_page: next ? 2 : 1,
-        next_page_url: next ? 'next' : null,
-        per_page: 20,
-        total: rows.length,
-      }
-    }
-
     test('asking for the next board takes the finished board with our seat ready', async () => {
       const game = await loaded(finished(['N']))
       vi.mocked(gameService.nextBoard).mockResolvedValue(finished(['N', 'S']))
@@ -454,28 +427,6 @@ describe('game store', () => {
 
       expect(game.phaseOf(5)).toBe('finished')
       expect(game.phaseOf(6)).toBeNull()
-    })
-
-    test('the session score sums the latest boards at this table, across pages', async () => {
-      const game = useGameStore()
-      vi.mocked(historyService.getMyPlayings)
-        .mockResolvedValueOnce(historyPage([{ table_id: 5, score_ns: 450 }, { table_id: 5, score_ns: -100 }], true))
-        .mockResolvedValueOnce(historyPage([{ table_id: 5, score_ns: 50 }, { table_id: 2, score_ns: 620 }], true))
-
-      await game.loadSessionScore(5)
-
-      expect(historyService.getMyPlayings).toHaveBeenCalledTimes(2)
-      expect(game.session).toEqual({ tableId: 5, boards: 3, ns: 400, mine: 400 })
-    })
-
-    test('the session score stops at the last page', async () => {
-      const game = useGameStore()
-      vi.mocked(historyService.getMyPlayings).mockResolvedValueOnce(historyPage([{ table_id: 5, score_ns: 420 }], false))
-
-      await game.loadSessionScore(5)
-
-      expect(historyService.getMyPlayings).toHaveBeenCalledTimes(1)
-      expect(game.session).toEqual({ tableId: 5, boards: 1, ns: 420, mine: 420 })
     })
   })
 })

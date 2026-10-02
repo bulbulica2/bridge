@@ -10,22 +10,17 @@ import type {
   Playing,
   PublicPlaying,
 } from '@/services/game';
-import * as historyService from '@/services/history';
 import type { BroadcastTable, Seat } from '@/services/tables';
 import { leaveUser, listenToUser, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
 import { showToast } from '@/utils/toast';
-import { sessionScore as sumSession } from '@/utils/result';
-import type { SessionScore } from '@/utils/result';
-
-// How many history pages (20 boards each) the running score reads at most.
-const SESSION_PAGES = 5;
 
 // What GET /tables/{id}/playing answers for a table without a board.
 function waitingState(): Playing {
   return {
     phase: 'waiting',
     playing_id: null,
+    set: null,
     board: null,
     players: null,
     turn: null,
@@ -106,9 +101,6 @@ export const useGameStore = defineStore('game', () => {
   // pinned, so they are read once rather than hard-coded.
   const bids = ref<Bid[]>([]);
   let bidsRequest: Promise<Bid[]> | null = null;
-  // The running score of the boards the user has just finished at one table,
-  // read from their history (so a reload doesn't lose it).
-  const session = ref<(SessionScore & { tableId: number }) | null>(null);
 
   const auth = useAuthStore();
 
@@ -240,27 +232,6 @@ export const useGameStore = defineStore('game', () => {
     return tableId.value === id ? (playing.value?.phase ?? null) : null;
   }
 
-  // Sum the user's latest finished boards for as long as they were played at
-  // table `id`, reading older history pages only while every row is still
-  // from this table.
-  async function loadSessionScore(id: number) {
-    let total = { boards: 0, ns: 0, mine: 0 };
-    for (let page = 1; page <= SESSION_PAGES; page++) {
-      const result = await historyService.getMyPlayings(page);
-      const part = sumSession(result.data, id);
-      total = {
-        boards: total.boards + part.boards,
-        ns: total.ns + part.ns,
-        mine: total.mine + part.mine,
-      };
-      if (part.complete || !result.next_page_url) {
-        break;
-      }
-    }
-    session.value = { ...total, tableId: id };
-    return session.value;
-  }
-
   // Our own cards for a board just dealt, from the user channel.
   function applyHandDealt(event: HandDealtEvent) {
     const current = playing.value;
@@ -301,7 +272,6 @@ export const useGameStore = defineStore('game', () => {
     playing.value = null;
     tableId.value = null;
     pendingHand = null;
-    session.value = null;
   }
 
   // Follow the user's own channel from login to logout: a board can be dealt
@@ -337,7 +307,6 @@ export const useGameStore = defineStore('game', () => {
     tableId,
     watchedUserId,
     bids,
-    session,
     load,
     adopt,
     loadBids,
@@ -348,7 +317,6 @@ export const useGameStore = defineStore('game', () => {
     withdrawClaim,
     next,
     phaseOf,
-    loadSessionScore,
     applyPlayingUpdate,
     applyHandDealt,
     applyTableUpdate,

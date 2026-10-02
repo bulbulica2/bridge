@@ -1,6 +1,5 @@
 import type { Seat } from '@/services/tables';
 import type { BoardResult } from '@/services/game';
-import type { PlayingHistoryEntry } from '@/services/history';
 import { callLabel, doubledSuffix, SEAT_NAMES } from '@/utils/auction';
 
 // A finished board's score, read from the backend's `result`
@@ -80,36 +79,6 @@ export function resultSummary(result: BoardResult): string {
 // scored. Null for someone without a seat, who has no side.
 export function viewerScore(result: BoardResult, seat: Seat | null): number | null {
   return seat ? scoreFor(result.score_ns, sideOf(seat)) : null;
-}
-
-export interface SessionScore {
-  boards: number;
-  // The sum of `score_ns` over those boards.
-  ns: number;
-  // The sum of the user's own side's scores (each board's `score`).
-  mine: number;
-}
-
-// The running score at one table: the user's latest finished boards (the
-// history is latest first) for as long as they were played at `tableId`. An
-// older run at the same table, before a stint elsewhere, is another session.
-// `complete` is false when every row given was at this table, so an older
-// page may hold more.
-export function sessionScore(
-  entries: PlayingHistoryEntry[],
-  tableId: number,
-): SessionScore & { complete: boolean } {
-  const total = { boards: 0, ns: 0, mine: 0, complete: false };
-  for (const entry of entries) {
-    if (entry.table_id !== tableId) {
-      total.complete = true;
-      break;
-    }
-    total.boards += 1;
-    total.ns += entry.score_ns;
-    total.mine += entry.score;
-  }
-  return total;
 }
 
 // A side's matchpoints on a board as a percentage of the top, rounded.

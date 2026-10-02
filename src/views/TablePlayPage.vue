@@ -45,6 +45,11 @@
             <span>Refreshing…</span>
           </div>
 
+          <!-- Where the table is in its set of four boards. -->
+          <p v-if="playing.set" class="set-bar" :class="{ 'set-bar-over': shownSet?.finished }">
+            {{ setLabel(playing.set) }}<template v-if="shownSet?.finished"> · set over</template>
+          </p>
+
           <!-- The end of the auction: the contract. It stays above the table
                for the whole play, with the tricks. -->
           <section
@@ -79,7 +84,20 @@
           <!-- The board is over (13 tricks, or passed out): its score, then
                moving on. The deal lies face up on the table below. -->
           <template v-else-if="playing.phase === 'finished' && playing.result">
-            <BoardResultPanel :result="playing.result" :my-seat="mySeat" :session="session" />
+            <!-- After the set's last board (or a forfeit between boards):
+                 the whole set in place of the board, then everyone's Start. -->
+            <SetResultsPanel
+              v-if="endedSet"
+              :set="endedSet"
+              :my-seat="mySeat"
+              :gone="forfeitedSeat(endedSet, table)"
+            />
+            <BoardResultPanel
+              v-else
+              :result="playing.result"
+              :my-seat="mySeat"
+              :set-so-far="setResults"
+            />
             <!-- The same board at every other table, with matchpoints. -->
             <ion-button
               v-if="playing.board"
@@ -112,6 +130,15 @@
               @leave="leave"
             />
           </template>
+
+          <!-- A set that ended mid-board (a forfeit, or a player taken out of
+               it): no board is left on the table, but its results are. -->
+          <SetResultsPanel
+            v-if="playing.phase === 'waiting' && endedSet"
+            :set="endedSet"
+            :my-seat="mySeat"
+            :gone="forfeitedSeat(endedSet, table)"
+          />
 
           <!-- No board yet (or a finished one with new players): the same
                Start as on the table's page, so opening the game table early
@@ -298,11 +325,13 @@ import HandView from '@/components/HandView.vue';
 import LastTrickPopover from '@/components/LastTrickPopover.vue';
 import NextBoardBox from '@/components/NextBoardBox.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
+import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
 import TrickArea from '@/components/TrickArea.vue';
 import { useForcedPlay } from '@/composables/useForcedPlay';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
+import { useHistoryStore } from '@/stores/history';
 import { useTablesStore } from '@/stores/tables';
 import { seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
@@ -315,6 +344,7 @@ import { autoPlaysForced, forcedCard, handToPlay, legalCards } from '@/utils/pla
 import { errorMessage, statusOf } from '@/utils/errors';
 import { resultSummary } from '@/utils/result';
 import { leaveNote, leaveWarning } from '@/utils/seatMove';
+import { currentSet, forfeitedSeat, setLabel } from '@/utils/sets';
 import { startNeeded } from '@/utils/start';
 import { showToast } from '@/utils/toast';
 
@@ -323,6 +353,7 @@ const ionRouter = useIonRouter();
 const auth = useAuthStore();
 const game = useGameStore();
 const tablesStore = useTablesStore();
+const history = useHistoryStore();
 
 const tableId = ref(0);
 const loading = ref(false);
@@ -573,8 +604,26 @@ const showStart = computed(
     startNeeded(table.value, playing.value),
 );
 
-// The running score at this table, once the store has read it for this table.
-const session = computed(() => (game.session?.tableId === tableId.value ? game.session : null));
+// The set the table is on (or ended last): the board's own `set`, updated
+// by the table's events (a forfeit comes as a TableUpdated only).
+const shownSet = computed(() => currentSet(table.value, playing.value));
+
+// Its results as far as they go (GET /sets/{id}), once read: the running
+// score under each board's result.
+const setResults = computed(() => {
+  const set = shownSet.value;
+  return set ? (history.sets[set.id] ?? null) : null;
+});
+
+// The set is over and its results are in: they replace the board's result.
+// Nothing to show for a set broken off before any board was finished.
+const endedSet = computed(() => {
+  const results = setResults.value;
+  if (!shownSet.value?.finished || !results?.finished) {
+    return null;
+  }
+  return results.boards.length > 0 || results.ended === 'forfeit' ? results : null;
+});
 
 const headerTitle = computed(() => {
   const board = playing.value?.board;
@@ -671,16 +720,26 @@ watch(mayClaim, (may) => {
   }
 });
 
-// Each finished board adds to the running score: read it once per board, on
-// a reload as well as live. A failure only hides the line.
-let sessionReadFor: number | null = null;
+// Each finished board adds to the set, and the set ending (after its last
+// board, or early) gives it a winner: read GET /sets/{id} once for each, on a
+// reload as well as live. A failure (403 for a set we didn't play in, as a
+// newcomer to the table) only hides the line or the set view.
+let setReadFor: string | null = null;
 watch(
-  () => [playing.value?.playing_id, playing.value?.phase] as const,
-  ([id, phase]) => {
-    if (phase === 'finished' && id != null && id !== sessionReadFor) {
-      sessionReadFor = id;
-      game.loadSessionScore(tableId.value).catch(() => {
-        sessionReadFor = null;
+  () => {
+    const set = shownSet.value;
+    const state = playing.value;
+    if (!set || !state || (state.phase !== 'finished' && !set.finished)) {
+      return null;
+    }
+    return `${set.id}:${set.finished}:${state.playing_id}:${state.phase}`;
+  },
+  (key) => {
+    const set = shownSet.value;
+    if (key && set && key !== setReadFor) {
+      setReadFor = key;
+      history.loadSet(set.id).catch(() => {
+        setReadFor = null;
       });
     }
   },
@@ -1058,6 +1117,18 @@ async function refresh(event: CustomEvent) {
   margin-top: 6px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.set-bar {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ion-color-primary);
+}
+
+.set-bar-over {
+  color: var(--ion-color-medium);
 }
 
 .outcome {

@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import * as historyService from '@/services/history';
-import type { BoardResults, PlayingHistoryEntry, PlayingReview } from '@/services/history';
+import type {
+  BoardResults,
+  PlayingHistoryEntry,
+  PlayingReview,
+  SetResults,
+} from '@/services/history';
 import { statusOf } from '@/utils/errors';
 
 // One player's finished boards, as far as they have been paged in.
@@ -22,13 +27,14 @@ function keyOf(owner: HistoryOwner): string {
 }
 
 // Finished boards after the fact: players' histories (paged in for an
-// infinite scroll), boards' results at every table and single playings to
-// review. All come from the playings' seat snapshots, so none loses anything
-// when a table goes.
+// infinite scroll), boards' results at every table, sets' results and single
+// playings to review. All come from the playings' seat snapshots, so none
+// loses anything when a table goes.
 export const useHistoryStore = defineStore('history', () => {
   const lists = ref<Record<string, HistoryList>>({});
   const results = ref<Record<number, BoardResults>>({});
   const reviews = ref<Record<number, PlayingReview>>({});
+  const sets = ref<Record<number, SetResults>>({});
 
   function listOf(owner: HistoryOwner): HistoryList | null {
     return lists.value[keyOf(owner)] ?? null;
@@ -98,6 +104,23 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
+  // A set's results. They grow with each board finished and their
+  // matchpoints move as other tables play the same boards, so every read
+  // replaces them. A 403 or 404 drops a cached copy, as for a board.
+  async function loadSet(setId: number): Promise<SetResults> {
+    try {
+      const set = await historyService.getSet(setId);
+      sets.value[setId] = set;
+      return set;
+    } catch (e) {
+      const status = statusOf(e);
+      if (status === 403 || status === 404) {
+        delete sets.value[setId];
+      }
+      throw e;
+    }
+  }
+
   // One finished playing, by its id. Unlike a board's results it never
   // changes once finished, so a cached copy is served without asking again.
   async function loadReview(playingId: number): Promise<PlayingReview> {
@@ -115,18 +138,21 @@ export const useHistoryStore = defineStore('history', () => {
     lists.value = {};
     results.value = {};
     reviews.value = {};
+    sets.value = {};
   }
 
   return {
     lists,
     results,
     reviews,
+    sets,
     listOf,
     hasMore,
     loadHistory,
     loadMore,
     loadResults,
     loadReview,
+    loadSet,
     clear,
   };
 });

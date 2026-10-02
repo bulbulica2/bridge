@@ -26,7 +26,7 @@ vi.mock('@/services/game', () => ({
   respondToClaim: vi.fn(),
   withdrawClaim: vi.fn(),
 }))
-vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn() }))
+vi.mock('@/services/history', () => ({ getSet: vi.fn() }))
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   getTable: vi.fn(),

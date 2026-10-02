@@ -1,5 +1,5 @@
 import http from './http';
-import type { Bid, Board, PublicPlaying } from './game';
+import type { Bid, Board, BoardResult, PublicPlaying, SetEnding, SideCode } from './game';
 import type { Seat } from './tables';
 import type { PublicUser } from './users';
 
@@ -7,8 +7,8 @@ import type { PublicUser } from './users';
 // the table they were played at: a player's history and a board's results
 // at every table, and one playing call by call and card by card. Same
 // envelope as the table endpoints. See
-// bridge_backend docs/API.md (Users, GET /users/{user}/playings, Boards, and
-// GET /playings/{playing}).
+// bridge_backend docs/API.md (Users, GET /users/{user}/playings, Boards,
+// GET /playings/{playing} and Sets).
 interface ApiResponse<T> {
   status: number;
   message: string;
@@ -22,6 +22,9 @@ export interface PlayingHistoryEntry {
   playing_id: number;
   // Null once the table has been deleted.
   table_id: number | null;
+  // The set the board was dealt in and its place in it, to group the
+  // history by set. Null only for a playing made outside the game services.
+  set: { id: number; number: number; board: number; of: number } | null;
   board: Board;
   seat: Seat;
   // Null only if the partner's account is gone.
@@ -105,7 +108,7 @@ export async function getBoardResults(boardId: number): Promise<BoardResults> {
 // `current_trick`); a passed-out one has its four passes and no play.
 // Playings finished before the backend kept them come back with an empty
 // `auction` and `tricks`.
-export interface PlayingReview extends Omit<PublicPlaying, 'ready' | 'players'> {
+export interface PlayingReview extends Omit<PublicPlaying, 'ready' | 'players' | 'set'> {
   // From the seat snapshot; null only if that player's account is gone.
   players: Record<Seat, PublicUser | null>;
 }
@@ -115,5 +118,53 @@ export interface PlayingReview extends Omit<PublicPlaying, 'ready' | 'players'> 
 // unknown or unfinished playing.
 export async function getPlayingReview(playingId: number): Promise<PlayingReview> {
   const { data } = await http.get<ApiResponse<PlayingReview>>(`/playings/${playingId}`);
+  return data.data;
+}
+
+// One finished board of a set: its place in the set, the playing to review,
+// the game state's `result` fields, and its matchpoints against every
+// finished playing of that board at any table (`top` 0 when only this table
+// has played it).
+export interface SetBoardRow extends BoardResult {
+  position: number;
+  playing_id: number;
+  board: Board;
+  top: number;
+  matchpoints: { ns: number; ew: number };
+}
+
+// A set's results: its finished boards in order, the totals per side and
+// the winner (the higher total score; null while it goes on, on a tie and
+// for an abandoned set; a forfeit gives it to the other side).
+export interface SetResults {
+  id: number;
+  number: number;
+  // Null once the table has been deleted.
+  table_id: number | null;
+  of: number;
+  // Boards dealt, an abandoned one included (it isn't in `boards`).
+  boards_dealt: number;
+  started_at: string;
+  finished_at: string | null;
+  finished: boolean;
+  ended: SetEnding | null;
+  forfeited_by: SideCode | null;
+  // The four who played it; null only if that account is gone.
+  players: Record<Seat, PublicUser | null>;
+  boards: SetBoardRow[];
+  totals: {
+    score: { ns: number; ew: number };
+    matchpoints: { ns: number; ew: number };
+    top: number;
+  };
+  winner: SideCode | null;
+}
+
+// A set's results, while it goes on (the boards finished so far) or after,
+// even once its table is gone. 403 (a bare {message}) unless the caller
+// played in it or has finished every board it finished, 404 for an unknown
+// set.
+export async function getSet(setId: number): Promise<SetResults> {
+  const { data } = await http.get<ApiResponse<SetResults>>(`/sets/${setId}`);
   return data.data;
 }
