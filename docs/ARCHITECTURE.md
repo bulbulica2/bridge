@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/53-set-forfeit`._
+_Status as of branch `bulbulica2/57-ci-tests-on-pr`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -469,6 +469,12 @@ the menu offers only Copy as text (`Capacitor.isNativePlatform()`).
   - Ionic's `disabled` and `color` are DOM properties, not attributes.
   - `onIonViewWillEnter` never fires in jsdom; page tests mock it as
     `onMounted`.
-- **E2E** (`tests/e2e/`, Cypress): only the starter spec so far (#34).
+- **E2E** (`tests/e2e/`, Cypress): one guest-only smoke spec, `home.cy.ts`
+  (`/` redirects to `/home`, the intro and its Log in / Create account
+  buttons, Log in reaches `/login`). It stubs `GET /api/user` as 401, so
+  it needs no backend; flows behind a login are #34.
+- **CI** (`.github/workflows/ci.yml`, #87): lint, unit, build and e2e as
+  four parallel jobs on every PR to `main` and every push to `main`; see
+  [`RUNNING.md`](RUNNING.md#continuous-integration).
 
 See [`RUNNING.md`](RUNNING.md#tests) for the commands.

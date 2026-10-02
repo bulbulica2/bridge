@@ -34,3 +34,7 @@ npm-debug.log*
 /platforms
 /plugins
 /www
+
+# Cypress output (a failed CI run uploads the screenshots as an artifact)
+/tests/e2e/screenshots
+/tests/e2e/videos

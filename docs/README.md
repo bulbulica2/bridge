@@ -1,5 +1,7 @@
 # Bridge Frontend Docs
 
+[![CI](https://github.com/bulbulica2/bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/bulbulica2/bridge/actions/workflows/ci.yml)
+
 Living documentation for the `bridge` single-page app (SPA): the Ionic Vue 3
 client that players use to log in, sit at a table, bid, play and compare
 their results. It talks to the `bridge_backend` API over HTTP (Sanctum
@@ -31,9 +33,9 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/53-set-forfeit` (after #74, going away mid-set shows a countdown to the
-> others and costs your side the set after 3 minutes; Leave mid-set holds
-> the seat, moving tables mid-set forfeits at once).
+> branch `bulbulica2/57-ci-tests-on-pr` (after #87, every PR to `main` runs
+> lint, unit tests, the build and a guest e2e smoke test on GitHub Actions;
+> see [`RUNNING.md`](RUNNING.md#continuous-integration)).
 > They live next to the code, so a PR that changes a route, store, service,
 > env var or backend dependency updates them in the same diff; the
 > frontend's `CLAUDE.md` tells Claude to do so. If you change the frontend

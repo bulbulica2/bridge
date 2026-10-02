@@ -16,7 +16,8 @@ npm run dev          # start Vite dev server at http://localhost:3000 (hot reloa
 npm run build         # type-check (vue-tsc) then production build to dist/
 npm run preview        # serve the production build locally
 npm run lint          # eslint .
-npm run test:unit        # run unit tests (Vitest, jsdom environment)
+npm run test:unit        # run unit tests (Vitest, jsdom environment, watch mode)
+npm run test:unit:ci      # run unit tests once (vitest run), as CI does
 npm run test:e2e        # run e2e tests headlessly (Cypress)
 ```
 
@@ -25,9 +26,17 @@ Running a single test:
 npx vitest run tests/unit/example.spec.ts   # single unit test file
 npx vitest run -t "test name"          # by test name
 npx cypress open                  # interactive Cypress runner (pick one spec)
-npx cypress run --spec "tests/e2e/specs/test.cy.ts"  # single e2e spec headlessly
+npx cypress run --spec "tests/e2e/specs/home.cy.ts"  # single e2e spec headlessly
 ```
-Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`), so `npm run dev` must be running first.
+Cypress e2e specs hit `baseUrl: http://localhost:3000` (see `cypress.config.ts`), so `npm run dev` (or `vite preview --port 3000`) must be running first.
+
+CI (`.github/workflows/ci.yml`, Node from `.nvmrc`) runs four parallel jobs on
+every PR to `main` and every push to `main`: `lint` (`npm run lint`), `unit`
+(`npm run test:unit:ci`), `build` (`npm run build`) and `e2e` (the guest-only
+smoke `tests/e2e/specs/home.cy.ts` against `vite preview` on port 3000, no
+backend: it stubs `GET /api/user` as 401). Keep all four green; the job names
+are what branch protection requires, so don't rename them. Ubuntu is
+case-sensitive: an import's case must match the file's.
 
 ## Architecture
 
