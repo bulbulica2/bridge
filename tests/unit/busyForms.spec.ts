@@ -288,4 +288,13 @@ describe('Profile edit', () => {
     expect(wrapper.text()).toContain('ana@example.com')
     expect(wrapper.text()).toContain("Username and email can't be changed yet.")
   })
+
+  // The read-only class gives them the arrow cursor (#66); the inputs keep the I-beam.
+  test('marks only the username and email items read-only', async () => {
+    const wrapper = await editPage()
+
+    const readOnly = wrapper.findAll('ion-item.read-only')
+    expect(readOnly.map((item) => item.find('p').text())).toEqual(['Username', 'Email'])
+    expect(readOnly.some((item) => item.find('ion-input, ion-textarea').exists())).toBe(false)
+  })
 })
