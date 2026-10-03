@@ -2,6 +2,7 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import type { ChannelAuthorizationCallback } from 'pusher-js';
 import http from './http';
+import { clearSubscribed, resetLiveStatus, setConnection, setSubscribed } from './liveStatus';
 import type { Ban } from './auth';
 import type { HandDealtEvent, PublicPlaying } from './game';
 import type { BroadcastTable } from './tables';
@@ -59,6 +60,7 @@ export function getEcho(): Echo<'reverb'> {
     let everConnected = false;
     let lastStatus: string | null = null;
     stopWatchingConnection = echo.connector.onConnectionChange((status) => {
+      setConnection(status);
       if (status === 'connected' && lastStatus !== 'connected') {
         if (everConnected) {
           reconnectListeners.forEach((listener) => listener());
@@ -84,6 +86,10 @@ export function listenToTable(
 ) {
   getEcho()
     .private(`table.${tableId}`)
+    // Live only once Pusher confirms the subscription (again after every
+    // reconnect); a refused one (403) leaves the page offering Refresh.
+    .subscribed(() => setSubscribed(tableId))
+    .error(() => clearSubscribed(tableId))
     .listen('TableUpdated', (event: TableUpdatedEvent) => onUpdate(event.table))
     .listen('PlayingUpdated', (event: PlayingUpdatedEvent) => onPlaying(event.playing));
 }
@@ -108,6 +114,7 @@ export function leaveUser(userId: number) {
 
 // The server never ends a subscription itself, even once the user has left.
 export function leaveTable(tableId: number) {
+  clearSubscribed(tableId);
   echo?.leave(`table.${tableId}`);
 }
 
@@ -117,4 +124,5 @@ export function disconnectEcho() {
   stopWatchingConnection = null;
   echo?.disconnect();
   echo = null;
+  resetLiveStatus();
 }

@@ -11,6 +11,8 @@ import type { Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
 import { useTablesStore } from '@/stores/tables'
+import { OFFLINE_GRACE_MS } from '@/composables/useLiveStatus'
+import { resetLiveStatus, setConnection, setSubscribed } from '@/services/liveStatus'
 import { confirmLeave, confirmMove } from '@/utils/seatMove'
 import { showToast } from '@/utils/toast'
 
@@ -449,5 +451,48 @@ describe('TableDetailPage manager controls', () => {
 
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
     expect(showToast).not.toHaveBeenCalled()
+  })
+})
+
+// Refresh shows only once live updates have been off for a few seconds (#76).
+describe('TableDetailPage live updates', () => {
+  beforeEach(() => {
+    resetLiveStatus()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    resetLiveStatus()
+  })
+
+  test('while live there is no Refresh button, only pull to refresh', async () => {
+    setConnection('connected')
+    setSubscribed(5)
+    const wrapper = await mountPage(makeTable({ N: 'ana' }))
+
+    vi.advanceTimersByTime(OFFLINE_GRACE_MS)
+    await flushPromises()
+
+    expect(wrapper.find('.offline-refresh').exists()).toBe(false)
+    expect(wrapper.findComponent(IonRefresher).exists()).toBe(true)
+  })
+
+  test('a few seconds without live updates bring the note and Refresh, which reloads', async () => {
+    setConnection('connected')
+    const wrapper = await mountPage(makeTable({ N: 'ana' }))
+    expect(wrapper.find('.offline-refresh').exists()).toBe(false)
+
+    vi.advanceTimersByTime(OFFLINE_GRACE_MS)
+    await flushPromises()
+    expect(wrapper.find('.offline-note').text()).toBe('Live updates are off. Refresh to see the latest.')
+
+    await wrapper.get('ion-button.refresh').trigger('click')
+    await flushPromises()
+    expect(tablesService.getTable).toHaveBeenCalledTimes(2)
+
+    setSubscribed(5)
+    await flushPromises()
+    expect(wrapper.find('.offline-refresh').exists()).toBe(false)
   })
 })

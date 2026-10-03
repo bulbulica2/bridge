@@ -498,6 +498,16 @@ The user's standing rule (#91): **no task may leave code coverage under
   own seat request) is a kick: toast, unsubscribe, and `kickedFrom` makes the
   detail page go back to `/tables`. After a reconnect the watched table is
   refetched once. The Tables list has no channel and stays refresh-only.
+  **Live or not** (#76): `echo.ts` writes the connection status and the
+  table whose channel Pusher confirmed (`.subscribed()`; `.error()`,
+  `leaveTable` and any non-`connected` status clear it) into
+  `src/services/liveStatus.ts` (`isLive(id)`, kept out of `echo.ts` so
+  pages read it while page tests mock `echo.ts`). `useLiveStatus(tableId)`
+  gives `offline` after `OFFLINE_GRACE_MS` (5 s) not live, and
+  `OfflineRefresh.vue` (note + Refresh, `refresh` event) is the detail and
+  play pages' only Refresh button; pull-to-refresh stays. A stopped
+  `queue:work` still reads as live (the client can't see it).
+  `BoardResultsPage` and `SetResultsPage` (no channel) keep their Refresh.
   **Heartbeat**: the backend frees idle seats (through the normal leave
   path), so the tables store sends `POST /tables/{id}/heartbeat` every 30 s
   for as long as it watches a table (`watchTable`/`unwatchTable` start and

@@ -193,15 +193,7 @@
             >. Taking a seat here moves you.
           </p>
 
-          <ion-button
-            expand="block"
-            fill="outline"
-            class="refresh"
-            :disabled="busySeat !== null || loading"
-            @click="load()"
-          >
-            Refresh
-          </ion-button>
+          <OfflineRefresh :table-id="tableId" :disabled="busySeat !== null || loading" @refresh="load()" />
         </template>
       </div>
 
@@ -228,6 +220,7 @@ import {
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
+import OfflineRefresh from '@/components/OfflineRefresh.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
@@ -847,9 +840,5 @@ function handleExpiredSession(e: unknown): boolean {
 
 .play {
   margin-bottom: 16px;
-}
-
-.refresh {
-  margin-top: 8px;
 }
 </style>

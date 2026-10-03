@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/58-code-coverage`._
+_Status as of branch `bulbulica2/55-refresh-only-when-offline`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -34,8 +34,8 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/views/` | one `*Page.vue` per route |
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
-| `src/services/` | axios calls per domain, plus `http.ts` (the axios instance) and `echo.ts` (the websocket) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away countdown) |
+| `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away countdown), `useLiveStatus` (live updates on or off, for the table pages' Refresh) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
@@ -185,7 +185,8 @@ so every extra request on the way in delays the one the page needs:
   that table's channel (the user's own table, after Create, a join or a
   `load`), since `TableUpdated` keeps it current; any other table is read
   with `loadTable`. The detail and play pages use it on entry; their
-  Refresh and pull-to-refresh still call `loadTable`.
+  Refresh (shown only while live updates are off) and pull-to-refresh
+  still call `loadTable`.
 - The play page waits only for `GET /tables/{id}/playing` (plus
   `GET /tables/{id}` when it doesn't hold the table, e.g. after a reload),
   and asks for the bid list after that. The bid list is normally already
@@ -344,7 +345,28 @@ doesn't send the XSRF header Sanctum wants.
 - After the socket reconnects, whatever was broadcast meanwhile is lost,
   so the watched table is fetched again once.
 - The Tables **list** has no channel; it refreshes on enter and on
-  pull-to-refresh.
+  pull-to-refresh. A board's and a set's results have no channel either
+  and keep their Refresh button.
+
+**Live or not** (#76). The detail and play pages show a **Refresh**
+button only while live updates are off. `echo.ts` writes what the socket
+says into `src/services/liveStatus.ts`: Echo's connection status
+(`connecting`, `connected`, `failed`, `disconnected`) and the table whose
+channel Pusher confirmed (`subscription_succeeded`; a `subscription_error`
+or leaving the channel clears it, and so does any connection status other
+than `connected`, until Pusher resubscribes and confirms it again). A
+table is **live** when the socket is connected *and* its channel is
+subscribed (`isLive(id)`). `useLiveStatus(tableId)` turns that into
+`offline`, true only after 5 s of not live (`OFFLINE_GRACE_MS`), so the
+first connection or a short reconnect doesn't flash the button.
+`OfflineRefresh.vue` is the note ("Live updates are off. Refresh to see
+the latest.") and the button, under each page's content. A table you
+don't sit at has no channel, so its detail page offers Refresh after
+those 5 s too. Pull-to-refresh stays on both pages whatever the status.
+Known limit: the client can't see the backend's queue worker. With the
+socket up but `queue:work` stopped no event arrives, yet the page counts
+as live and hides the button; pull-to-refresh or a browser reload still
+works ([RUNNING.md](RUNNING.md) says the worker must run).
 - HTTP answers and broadcasts race. The `game` store drops a state that is
   behind the one it shows for the same board (fewer calls, fewer cards,
   earlier phase, fewer accepts of the same claim). A claim appearing or
@@ -405,6 +427,7 @@ arrives, and the app falls back to what each request returns.
 | Component | Shows |
 |---|---|
 | `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
+| `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
 | `AwayNotice` | who is away mid-set with the time left before their side loses the set (also on the detail page); with `held`, your own held seat (detail page, Tables, Home) |
 | `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses |
 | `BiddingBox` | the call grid, on your turn during the auction |

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import BiddingBox from '@/components/BiddingBox.vue'
 import AuctionHistory from '@/components/AuctionHistory.vue'
+import OfflineRefresh from '@/components/OfflineRefresh.vue'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import * as gameService from '@/services/game'
 import * as tablesService from '@/services/tables'
@@ -277,8 +278,9 @@ describe('TablePlayPage bidding', () => {
     )
     expect(wrapper.find('.bidding-box').exists()).toBe(true)
 
-    // Refresh is the user asking: everything is read again.
-    await wrapper.get('ion-button.refresh').trigger('click')
+    // Refresh (offered once live updates are off) is the user asking:
+    // everything is read again.
+    await wrapper.findComponent(OfflineRefresh).vm.$emit('refresh')
     await flushPromises()
     expect(tablesService.getTable).toHaveBeenCalledWith(5)
     expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
