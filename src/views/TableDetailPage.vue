@@ -57,6 +57,7 @@
               </button>
               <span v-else class="seat-empty">Empty</span>
               <RobotBadge v-if="user?.is_robot" />
+              <AdminBadge v-if="user?.is_admin" />
               <!-- Away mid-set: the seat is held, the notice below counts down. -->
               <span v-if="awayMarks.includes(seat)" class="seat-away">away</span>
               <!-- Before a board: who has pressed Start (robots always have). -->
@@ -112,9 +113,10 @@
               </ion-button>
 
               <!-- Managers, and anyone for a robot while only robots sit here;
-                   the backend has the final say (403). -->
+                   an admin's seat only for another admin. The backend has
+                   the final say (403). -->
               <ion-button
-                v-else-if="user && canRemove(table, user)"
+                v-else-if="user && canRemove(table, user, auth.user)"
                 size="small"
                 fill="clear"
                 color="danger"
@@ -222,6 +224,7 @@ import AppHeader from '@/components/AppHeader.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
 import OfflineRefresh from '@/components/OfflineRefresh.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
+import AdminBadge from '@/components/AdminBadge.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import StartBox from '@/components/StartBox.vue';

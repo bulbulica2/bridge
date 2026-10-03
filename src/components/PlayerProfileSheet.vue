@@ -13,6 +13,7 @@
         <p class="profile-username">
           @{{ shown.username }}
           <RobotBadge v-if="shown.is_robot" />
+          <AdminBadge v-if="shown.is_admin" />
         </p>
 
         <p v-if="gone" class="profile-gone">This player's account no longer exists.</p>
@@ -54,6 +55,7 @@
 import { ref, watch } from 'vue';
 import { IonModal, IonContent, IonButton, IonSpinner, IonText, useIonRouter } from '@ionic/vue';
 import BanUserForm from '@/components/BanUserForm.vue';
+import AdminBadge from '@/components/AdminBadge.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useUsersStore } from '@/stores/users';

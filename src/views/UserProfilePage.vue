@@ -32,7 +32,10 @@
 
           <div class="card">
             <h2 class="profile-name">{{ profile.name }}</h2>
-            <p class="profile-username">@{{ profile.username }}</p>
+            <p class="profile-username">
+              @{{ profile.username }}
+              <AdminBadge v-if="profile.is_admin" />
+            </p>
             <p v-if="profile.description" class="profile-description">{{ profile.description }}</p>
             <p v-else class="profile-empty">No description yet.</p>
           </div>
@@ -100,6 +103,7 @@ import {
   onIonViewWillEnter,
   useIonRouter,
 } from '@ionic/vue';
+import AdminBadge from '@/components/AdminBadge.vue';
 import AppHeader from '@/components/AppHeader.vue';
 import BanUserForm from '@/components/BanUserForm.vue';
 import HistoryList from '@/components/HistoryList.vue';

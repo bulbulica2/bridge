@@ -1106,6 +1106,33 @@ describe('tables store', () => {
       expect(showToast).toHaveBeenCalledWith(IDLE_NOTICE, 'warning')
     })
 
+    test('an admin is never told they were freed as idle', async () => {
+      const store = await seated()
+      useAuthStore().user!.is_admin = true
+
+      setVisibility('hidden')
+      pushUpdate(makeTable(1, { N: 'ana' }))
+      setVisibility('visible')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(store.kickedFrom).toBe(1)
+      expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/^You were removed from /), 'warning')
+      expect(showToast).not.toHaveBeenCalledWith(IDLE_NOTICE, 'warning')
+    })
+
+    test("an admin's table deleted while away is told as gone", async () => {
+      await seated()
+      useAuthStore().user!.is_admin = true
+
+      setVisibility('hidden')
+      vi.mocked(tablesService.sendHeartbeat).mockRejectedValue(axiosError(404))
+      vi.mocked(tablesService.getTable).mockRejectedValue(axiosError(404))
+      setVisibility('visible')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(showToast).toHaveBeenCalledWith('The table you sat at is gone.', 'warning')
+    })
+
     test('a refused beat looks at the table to see why', async () => {
       const store = await seated()
       vi.mocked(tablesService.sendHeartbeat).mockRejectedValue(axiosError(403))

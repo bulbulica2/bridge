@@ -44,6 +44,7 @@
       </button>
       <span v-else class="seat-empty">Empty</span>
       <RobotBadge v-if="players[seatOn[side]]?.is_robot" />
+      <AdminBadge v-if="players[seatOn[side]]?.is_admin" />
 
       <span v-if="side === 'bottom' && mySeat" class="seat-you">you</span>
       <span v-if="away.includes(seatOn[side])" class="seat-away-tag">away</span>
@@ -99,6 +100,7 @@
 import { computed } from 'vue';
 import DummyColumns from '@/components/DummyColumns.vue';
 import HandView from '@/components/HandView.vue';
+import AdminBadge from '@/components/AdminBadge.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import type { Board, Card } from '@/services/game';
 import type { Seat } from '@/services/tables';

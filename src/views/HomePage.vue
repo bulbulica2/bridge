@@ -72,10 +72,13 @@
                 <ul class="players">
                   <li v-for="{ seat, user } in seatsOf(myTable)" :key="seat">
                     <span class="seat-name">{{ seat }}</span>
-                    <span v-if="user">
-                      {{ user.username }}<span v-if="user.id === auth.user?.id"> (you)</span>
-                    </span>
-                    <RobotBadge v-if="user?.is_robot" />
+                    <template v-if="user">
+                      <span>
+                        {{ user.username }}<span v-if="user.id === auth.user?.id"> (you)</span>
+                      </span>
+                      <RobotBadge v-if="user.is_robot" />
+                      <AdminBadge v-if="user.is_admin" />
+                    </template>
                     <span v-else class="empty-seat">empty</span>
                   </li>
                 </ul>
@@ -154,6 +157,7 @@ import {
 import { chevronForwardOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
+import AdminBadge from '@/components/AdminBadge.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useTablesStore } from '@/stores/tables';

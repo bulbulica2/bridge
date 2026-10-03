@@ -48,8 +48,8 @@ vi.mock('@ionic/vue', async (importOriginal) => {
 })
 
 // The user is ana (id 1). Seats are seat -> username; `robot-…` usernames
-// are robots, and `ready` lists the humans who have pressed Start.
-const IDS: Record<string, number> = { ana: 1, bob: 2, cy: 3, 'robot-1': 101, 'robot-2': 102, 'robot-3': 103 }
+// are robots, eve is an admin, and `ready` lists the humans who have pressed Start.
+const IDS: Record<string, number> = { ana: 1, bob: 2, cy: 3, eve: 7, 'robot-1': 101, 'robot-2': 102, 'robot-3': 103 }
 const idOf = (username: string) => IDS[username]
 
 function makeTable(
@@ -79,6 +79,7 @@ function makeTable(
         username,
         description: null,
         is_robot: username.startsWith('robot-'),
+        is_admin: username === 'eve',
       },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
@@ -227,6 +228,15 @@ describe('StartBox.vue', () => {
     expect(wrapper.get('[data-seat="S"]').text()).toContain('S you')
     expect(wrapper.get('[data-seat="W"]').text()).toContain('W empty')
     expect(wrapper.text()).toContain('Waiting for a fourth player, and for you to press Start.')
+  })
+
+  test('an admin is marked in the seats', () => {
+    const wrapper = mount(StartBox, {
+      props: { table: makeTable({ N: 'eve', S: 'ana' }), me: 1, showSeats: true },
+    })
+
+    expect(wrapper.get('[data-seat="N"]').find('.admin-badge').exists()).toBe(true)
+    expect(wrapper.findAll('.admin-badge')).toHaveLength(1)
   })
 })
 

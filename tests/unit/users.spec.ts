@@ -170,12 +170,23 @@ describe('PlayerProfileSheet', () => {
     expect(wrapper.text()).not.toContain('Full profile')
   })
 
+  test('an admin is marked as one', async () => {
+    const admin: PublicUser = { ...ann, is_admin: true }
+    answer(admin)
+    const wrapper = mountSheet(admin)
+    await flushPromises()
+
+    expect(wrapper.find('.admin-badge').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Full profile')
+  })
+
   test('a person carries no robot badge', async () => {
     answer(ann)
     const wrapper = mountSheet(ann)
     await flushPromises()
 
     expect(wrapper.find('.robot-badge').exists()).toBe(false)
+    expect(wrapper.find('.admin-badge').exists()).toBe(false)
     expect(wrapper.text()).toContain('Full profile')
   })
 })

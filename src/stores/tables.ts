@@ -326,6 +326,13 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
+  // Whether a removal noticed while the user wasn't looking (`idle`) is told
+  // as the idle-seat sweep. Never for an admin: no timer frees their seat,
+  // only another admin can (bridge_backend docs/API.md, idle seats).
+  function freedAsIdle(idle: boolean) {
+    return idle && !auth.user?.is_admin;
+  }
+
   // Refetch the watched table and apply it as an update. `idle`: a removal
   // found this way happened while the user wasn't looking.
   async function catchUp(tableId: number, idle: boolean) {
@@ -340,7 +347,7 @@ export const useTablesStore = defineStore('tables', () => {
       forget(tableId);
       if (ownSeatRequests === 0) {
         kickedFrom.value = tableId;
-        announceRemoval(idle ? IDLE_NOTICE : 'The table you sat at is gone.');
+        announceRemoval(freedAsIdle(idle) ? IDLE_NOTICE : 'The table you sat at is gone.');
       }
     }
   }
@@ -513,7 +520,7 @@ export const useTablesStore = defineStore('tables', () => {
         return;
       }
       announceRemoval(
-        idle ? IDLE_NOTICE : `You were removed from ${table.name || `table #${table.id}`}.`,
+        freedAsIdle(idle) ? IDLE_NOTICE : `You were removed from ${table.name || `table #${table.id}`}.`,
       );
     }
   }

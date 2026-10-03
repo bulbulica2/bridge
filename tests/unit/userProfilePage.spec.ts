@@ -72,8 +72,17 @@ describe('UserProfilePage', () => {
     expect(wrapper.find('.profile-username').text()).toBe('@ann')
     expect(wrapper.find('.profile-description').text()).toBe('Plays a strong club.')
     expect(wrapper.find('.profile-mine').exists()).toBe(false)
+    expect(wrapper.find('.admin-badge').exists()).toBe(false)
     expect(getUserPlayings).toHaveBeenCalledWith(3, 1)
     expect(wrapper.text()).toContain('No finished boards yet.')
+  })
+
+  test('an admin carries the Admin badge, a player none', async () => {
+    vi.mocked(getUser).mockResolvedValue({ ...ann, is_admin: true })
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.find('.profile-username .admin-badge').exists()).toBe(true)
   })
 
   test('your own profile points to Account and lists "My boards"', async () => {

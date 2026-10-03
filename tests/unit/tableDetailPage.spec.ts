@@ -75,7 +75,8 @@ function axiosError(status: number, message = 'Conflict'): AxiosError {
 }
 
 // The user is ana (id 1). Seats are seat -> username; `robot-…` are robots.
-const IDS: Record<string, number> = { ana: 1, bob: 2, cy: 3, 'robot-1': 101 }
+// eve is an admin.
+const IDS: Record<string, number> = { ana: 1, bob: 2, cy: 3, eve: 7, 'robot-1': 101 }
 
 function makeTable(seats: Partial<Record<Seat, string>>, extra: Partial<Table> = {}): Table {
   const taken = Object.entries(seats) as [Seat, string][]
@@ -100,6 +101,7 @@ function makeTable(seats: Partial<Record<Seat, string>>, extra: Partial<Table> =
         username,
         description: null,
         is_robot: username.startsWith('robot-'),
+        is_admin: username === 'eve',
       },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
@@ -348,6 +350,33 @@ describe('TableDetailPage manager controls', () => {
         message: 'bob loses seat E. They can sit down again afterwards. Set 2 ends with no winner.',
       }),
     )
+  })
+
+  test("an admin's seat is badged and has no Remove for the moderator", async () => {
+    const wrapper = await mountPage(managed({ N: 'ana', E: 'eve', S: 'bob' }))
+
+    expect(wrapper.find('.seat-e .admin-badge').exists()).toBe(true)
+    expect(wrapper.find('.seat-s .admin-badge').exists()).toBe(false)
+    expect(seatButton(wrapper, 'E', 'Remove')).toBeUndefined()
+    expect(seatButton(wrapper, 'S', 'Remove')).toBeDefined()
+  })
+
+  test("another admin may remove an admin's seat", async () => {
+    useAuthStore().user = { id: 1, name: 'Ana', username: 'ana', email: 'ana@example.com', is_admin: true }
+    const wrapper = await mountPage(managed({ N: 'ana', E: 'eve' }))
+    const remove = vi.spyOn(useTablesStore(), 'removePlayer').mockResolvedValue({ tableDeleted: false })
+
+    await click(wrapper, 'E', 'Remove')
+
+    expect(remove).toHaveBeenCalledWith(5, 7)
+    expect(showToast).toHaveBeenCalledWith('eve was removed from the table.', 'success')
+  })
+
+  test('a manager has no Remove on their own seat, only Leave', async () => {
+    const wrapper = await mountPage(managed({ N: 'ana', E: 'bob' }))
+
+    expect(seatButton(wrapper, 'N', 'Remove')).toBeUndefined()
+    expect(seatButton(wrapper, 'N', 'Leave')).toBeDefined()
   })
 
   test('cancelling the removal sends nothing', async () => {

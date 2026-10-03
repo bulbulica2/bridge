@@ -187,7 +187,14 @@ The user's standing rule (#91): **no task may leave code coverage under
   The manager controls (Remove, "Seat a player", "Add robot") show from
   the payload's `can_manage` (`TablePolicy::manage` for the caller: the
   moderator or an admin, never the creator as such, bb#74); never re-derive it from
-  `moderated_by`/`created_by`. `TableUpdated` leaves it out, so the store's
+  `moderated_by`/`created_by`. Remove goes through `canRemove(table,
+  user, viewer)`: never on your own seat (that is Leave), and an admin's
+  seat (`PublicUser.is_admin`) only for an admin viewer, never the
+  moderator (#77, bb#78: only an admin removes an admin, no timer frees
+  them, so the tables store's `freedAsIdle` never tells an admin
+  `IDLE_NOTICE`). `AdminBadge.vue` marks admins wherever `RobotBadge`
+  goes, plus `StartBox` and `UserProfilePage`. `TableUpdated` leaves
+  `can_manage` out, so the store's
   `withCanManage` keeps the last HTTP value and refetches the table when
   `moderated_by` changes (taking only `can_manage` from that answer). The
   channel payload is typed `BroadcastTable`, `Table` adds `can_manage`.
