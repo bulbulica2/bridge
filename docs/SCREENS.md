@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/54-user-bans`._
+_Status as of branch `bulbulica2/55-refresh-only-when-offline`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -192,6 +192,10 @@ never listed) and **Add robot**. While only robots sit there
 (`unattended_since`), a note says so and **anyone** gets **Remove** on the
 robots; the first person to sit down becomes the moderator. Updates live
 over the table channel; if you are removed, a toast and back to `/tables`.
+While live updates work there is no Refresh button, only pull to refresh;
+once they have been off for 5 s (Reverb down, the channel refused, or a
+table you don't sit at, which has no channel) a note says **Live updates
+are off. Refresh to see the latest.** above a **Refresh** button (#76).
 
 **Away mid-set** (#74, bb#76). A player quiet for a minute in the middle
 of a set is marked **away** on the compass, and a notice counts down from
@@ -223,7 +227,7 @@ is taken to `/play`, the one whose Start dealt it included.
 
 | Calls | Endpoint |
 |---|---|
-| `tables.openTable()` on entry, `tables.loadTable()` on refresh | `GET /tables/{id}`, skipped on entry for the table you sit at (it is followed live) |
+| `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh or Refresh (offline only) | `GET /tables/{id}`, skipped on entry for the table you sit at (it is followed live) |
 | `tables.join()` | `POST /tables/{id}/seats` |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` (Come back) | `POST /tables/{id}/heartbeat`, `GET /tables/{id}` |
@@ -260,6 +264,11 @@ nothing on this page drives them. On a robot's turn its seat reads
 next-board box, and are ready for the next board at once, so your **Next
 board** deals it. How they bid and play is in
 [backend `ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
+
+Like the detail page, it shows **Refresh** (under a note, **Live updates
+are off. Refresh to see the latest.**) only once live updates have been
+off for 5 s; while they work, pull to refresh is the only manual reload
+(#76).
 
 Play goes in **sets of four boards** (#73): Start deals board 1, **Next
 board** boards 2 to 4, and after the fourth the set is over. A line at the
@@ -344,7 +353,7 @@ What it shows by phase:
 | `game.next()` | `POST /tables/{id}/playing/next` |
 | `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
 | `history.loadSet()` (after each finished board, and when the set ends) | `GET /sets/{id}` |
-| `tables.openTable()` on entry, `tables.loadTable()` on Refresh or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
+| `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
 | channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a forfeit), `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt` |

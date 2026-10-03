@@ -10,6 +10,7 @@ import {
   listenToUser,
   onReconnect,
 } from '@/services/echo'
+import { isLive, liveStatus } from '@/services/liveStatus'
 
 vi.mock('@/services/http', () => ({
   default: { get: vi.fn(), post: vi.fn() },
@@ -17,7 +18,7 @@ vi.mock('@/services/http', () => ({
 
 // A stand-in for Laravel Echo: records its options, the channels asked for
 // and the connection listener, so the tests can play the socket's part.
-const channel = { listen: vi.fn() }
+const channel = { listen: vi.fn(), subscribed: vi.fn(), error: vi.fn() }
 let connectionListener: (status: string) => void = () => {}
 const stopWatching = vi.fn()
 vi.mock('laravel-echo', () => ({
@@ -50,7 +51,17 @@ beforeEach(() => {
   disconnectEcho()
   vi.clearAllMocks()
   channel.listen.mockReturnValue(channel)
+  channel.subscribed.mockReturnValue(channel)
+  channel.error.mockReturnValue(channel)
 })
+
+// Pusher's answers to the table subscription, as listenToTable registered them.
+function confirmSubscription() {
+  channel.subscribed.mock.calls.at(-1)![0]()
+}
+function refuseSubscription() {
+  channel.error.mock.calls.at(-1)![0]({ status: 403 })
+}
 
 describe('echo service', () => {
   test('creates one Reverb connection on first use and reuses it', () => {
@@ -125,6 +136,62 @@ describe('echo service', () => {
 
     expect(onUpdate).toHaveBeenCalledWith({ id: 3 })
     expect(onPlaying).toHaveBeenCalledWith({ playing_id: 5 })
+  })
+
+  test('a table is live once the socket is connected and its channel subscribed', () => {
+    listenToTable(3, vi.fn(), vi.fn())
+    connectionListener('connecting')
+    expect(liveStatus.connection).toBe('connecting')
+    expect(isLive(3)).toBe(false)
+
+    connectionListener('connected')
+    expect(isLive(3)).toBe(false)
+
+    confirmSubscription()
+    expect(isLive(3)).toBe(true)
+    expect(isLive(4)).toBe(false)
+  })
+
+  test('a dropped socket is not live until Pusher confirms the channel again', () => {
+    listenToTable(3, vi.fn(), vi.fn())
+    connectionListener('connected')
+    confirmSubscription()
+
+    connectionListener('failed')
+    expect(isLive(3)).toBe(false)
+
+    connectionListener('connected')
+    expect(isLive(3)).toBe(false)
+
+    confirmSubscription()
+    expect(isLive(3)).toBe(true)
+  })
+
+  test('a refused subscription is not live', () => {
+    listenToTable(3, vi.fn(), vi.fn())
+    connectionListener('connected')
+
+    refuseSubscription()
+
+    expect(isLive(3)).toBe(false)
+  })
+
+  test("leaving the channel or the socket ends live updates, another table's error doesn't", () => {
+    listenToTable(3, vi.fn(), vi.fn())
+    connectionListener('connected')
+    confirmSubscription()
+
+    listenToTable(4, vi.fn(), vi.fn())
+    refuseSubscription()
+    expect(isLive(3)).toBe(true)
+
+    leaveTable(3)
+    expect(isLive(3)).toBe(false)
+
+    confirmSubscription()
+    disconnectEcho()
+    expect(liveStatus.connection).toBe('initialized')
+    expect(liveStatus.subscribedTable).toBeNull()
   })
 
   test('listenToUser follows HandDealt on the user channel', () => {

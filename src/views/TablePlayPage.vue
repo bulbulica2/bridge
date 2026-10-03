@@ -278,15 +278,7 @@
             :players="players"
           />
 
-          <ion-button
-            expand="block"
-            fill="outline"
-            class="refresh"
-            :disabled="loading"
-            @click="load()"
-          >
-            Refresh
-          </ion-button>
+          <OfflineRefresh :table-id="tableId" :disabled="loading" @refresh="load()" />
         </template>
       </div>
 
@@ -329,6 +321,7 @@ import ClaimSheet from '@/components/ClaimSheet.vue';
 import HandView from '@/components/HandView.vue';
 import LastTrickPopover from '@/components/LastTrickPopover.vue';
 import NextBoardBox from '@/components/NextBoardBox.vue';
+import OfflineRefresh from '@/components/OfflineRefresh.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
@@ -1177,10 +1170,6 @@ async function refresh(event: CustomEvent) {
   align-items: center;
   justify-content: center;
   gap: 8px;
-}
-
-.refresh {
-  margin-top: 8px;
 }
 
 .claim-button {
