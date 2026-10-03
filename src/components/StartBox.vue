@@ -15,6 +15,7 @@
         <span class="start-mark" aria-hidden="true">{{ !held ? '–' : isReady(held) ? '✓' : '…' }}</span>
         <span>{{ seat }} {{ !held ? 'empty' : held.user_id === me ? 'you' : held.user.username }}</span>
         <RobotBadge v-if="held?.user.is_robot" />
+        <AdminBadge v-if="held?.user.is_admin" />
         <span class="sr-only">{{ !held ? '' : isReady(held) ? 'ready' : 'not yet' }}</span>
       </li>
     </ul>
@@ -49,6 +50,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { IonButton, IonSpinner } from '@ionic/vue';
+import AdminBadge from '@/components/AdminBadge.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import { SEATS } from '@/services/tables';
 import type { BroadcastTable } from '@/services/tables';

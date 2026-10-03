@@ -199,10 +199,22 @@ export async function cancelStart(tableId: number): Promise<Table> {
   return data.data;
 }
 
-// Whether the caller may take `user` out of their seat here: a manager may
-// take anyone, and while only robots sit here anybody may take a robot. A
-// hint; the backend's 403 has the final say.
-export function canRemove(table: Table, user: PublicUser): boolean {
+// Whether `viewer` may take `user` out of their seat here: a manager may
+// take anyone, and while only robots sit here anybody may take a robot. An
+// admin's seat is the exception: only another admin may, never the
+// moderator (bridge_backend docs/API.md, DELETE /tables/{table}/seats/{user}).
+// Never yourself: that is Leave. A hint; the backend's 403 has the final say.
+export function canRemove(
+  table: Table,
+  user: PublicUser,
+  viewer: Pick<PublicUser, 'id' | 'is_admin'> | null,
+): boolean {
+  if (user.id === viewer?.id) {
+    return false;
+  }
+  if (user.is_admin) {
+    return !!viewer?.is_admin;
+  }
   return table.can_manage || (table.unattended_since !== null && user.is_robot);
 }
 

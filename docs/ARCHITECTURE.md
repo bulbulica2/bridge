@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/55-refresh-only-when-offline`._
+_Status as of branch `bulbulica2/56-admin-seat-protected`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -265,10 +265,18 @@ A few backend rules the stores rely on:
 - When the last **person** leaves a table with robots, the table is kept
   but **unattended** (`unattended_since` set, no moderator): the robots
   wait, anyone may remove them, the first person to sit down manages it,
-  and the backend deletes it after 10 minutes. `canRemove()` in
-  `services/tables.ts` is the hint for who gets Remove (a manager, or anyone
-  for a robot at an unattended table); `whoIsLeft()` / `leaveNote()` in
-  `utils/seatMove.ts` word what leaving does.
+  and the backend deletes it after 10 minutes. `canRemove(table, user,
+  viewer)` in `services/tables.ts` is the hint for who gets Remove (a
+  manager, or anyone for a robot at an unattended table, never on your own
+  seat); `whoIsLeft()` / `leaveNote()` in `utils/seatMove.ts` word what
+  leaving does.
+- **Admins' seats** (#77, bb#78): `is_admin` is public on every seat's
+  user. Only another admin may remove an admin, never the moderator, so
+  `canRemove()` gives an admin's seat Remove only when the viewer is an
+  admin; a 403 still toasts the backend's message. No timer frees an
+  admin's seat either, so the `tables` store never words their removal as
+  the idle notice. `AdminBadge` marks admins wherever a seat is drawn, so
+  players see an admin is at the table.
 - Bid ids are not tied to the bid's rank, so the app reads the 38 calls
   from `GET /bids` once (in the background after login, see above) and
   looks a call up by its level and strain. Never
@@ -381,8 +389,8 @@ of a set it keeps beating while hidden** (what bb#76 asks for): there,
 three quiet minutes cost your side the set, and switching tabs while
 partner thinks isn't leaving. When the tab shows again it beats at once
 and refetches the table and the game; if the seat was lost in the
-meantime, the user sees a "removed after being inactive" toast and goes
-back to `/tables`.
+meantime, the user sees a "removed after being inactive" toast (an admin,
+whom no timer frees, a plain "removed" one) and goes back to `/tables`.
 
 **Away mid-set and the forfeit** (#74, bb#76, backend
 [`API.md`, Away mid-set](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)).
@@ -441,6 +449,7 @@ arrives, and the app falls back to what each request returns.
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, a forfeit's reason, each board with your side's score and matchpoints (opening its review), and the totals |
 | `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead) |
 | `RobotBadge` | the "robot" mark next to a robot's name (also on Home, Tables, Table detail and the profile sheet) |
+| `AdminBadge` | the "admin" mark next to an admin's name, wherever `RobotBadge` goes, plus `StartBox` and the User profile page |
 
 `BridgeTable`'s `thinking` prop is set when the player acting for `turn`
 (`acting_user_id`, declarer on dummy's turn) is a robot: that seat reads

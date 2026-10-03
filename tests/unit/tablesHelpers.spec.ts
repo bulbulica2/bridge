@@ -50,28 +50,66 @@ describe('seatsOf', () => {
 
 describe('canRemove', () => {
   const since = '2026-10-01T10:00:00.000000Z'
+  // The viewer: player 1 (the moderator in makeTable), or an admin.
+  const moderator = { id: 1, is_admin: false }
+  const admin = { id: 50, is_admin: true }
 
   function seated(table: Table, id: number) {
     return table.seats.find((s) => s.user_id === id)!.user
   }
 
-  test('a manager may remove anyone, robot or person', () => {
+  // Seat 7 holds an admin.
+  function withAdmin(table: Table): Table {
+    return {
+      ...table,
+      seats: table.seats.map((s) => (s.user_id === 7 ? { ...s, user: { ...s.user, is_admin: true } } : s)),
+    }
+  }
+
+  test('a manager may remove anyone else, robot or person', () => {
     const table = { ...makeTable({ N: 1, E: 2, S: 100 }), can_manage: true }
 
-    expect(canRemove(table, seated(table, 2))).toBe(true)
-    expect(canRemove(table, seated(table, 100))).toBe(true)
+    expect(canRemove(table, seated(table, 2), moderator)).toBe(true)
+    expect(canRemove(table, seated(table, 100), moderator)).toBe(true)
+  })
+
+  test('never yourself: that is Leave', () => {
+    const table = { ...makeTable({ N: 1, E: 2 }), can_manage: true }
+
+    expect(canRemove(table, seated(table, 1), moderator)).toBe(false)
   })
 
   test('anyone else may not, while a person sits there', () => {
     const table = makeTable({ N: 1, E: 100 })
 
-    expect(canRemove(table, seated(table, 1))).toBe(false)
-    expect(canRemove(table, seated(table, 100))).toBe(false)
+    expect(canRemove(table, seated(table, 1), { id: 3, is_admin: false })).toBe(false)
+    expect(canRemove(table, seated(table, 100), null)).toBe(false)
   })
 
   test('anyone may remove a robot from an unattended table', () => {
     const table = { ...makeTable({ E: 100, S: 101 }), moderated_by: null, unattended_since: since }
 
-    expect(canRemove(table, seated(table, 100))).toBe(true)
+    expect(canRemove(table, seated(table, 100), { id: 3, is_admin: false })).toBe(true)
+    expect(canRemove(table, seated(table, 100), null)).toBe(true)
+  })
+
+  test("the moderator may not remove an admin's seat", () => {
+    const table = withAdmin({ ...makeTable({ N: 1, E: 7 }), can_manage: true })
+
+    expect(canRemove(table, seated(table, 7), moderator)).toBe(false)
+    expect(canRemove(table, seated(table, 7), null)).toBe(false)
+  })
+
+  test("another admin may remove an admin's seat", () => {
+    const table = withAdmin({ ...makeTable({ N: 1, E: 7 }), can_manage: true })
+
+    expect(canRemove(table, seated(table, 7), admin)).toBe(true)
+  })
+
+  test("nor may anybody but an admin at an unattended table", () => {
+    const table = withAdmin({ ...makeTable({ E: 7, S: 100 }), moderated_by: null, unattended_since: since })
+
+    expect(canRemove(table, seated(table, 7), { id: 3, is_admin: false })).toBe(false)
+    expect(canRemove(table, seated(table, 7), admin)).toBe(true)
   })
 })

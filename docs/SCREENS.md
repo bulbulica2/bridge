@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/55-refresh-only-when-offline`._
+_Status as of branch `bulbulica2/56-admin-seat-protected`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -179,18 +179,20 @@ dealt before Start), bb#77 (bans).
 
 **Logged in.** Built by #15; manager Remove by #16; live updates by #21;
 moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
-robots by #53; Start by #68; the set line by #73; away and the forfeit by #74. Reached from a table's **Open** button, by
+robots by #53; Start by #68; the set line by #73; away and the forfeit by #74; admins' seats by #77. Reached from a table's **Open** button, by
 taking a seat, or from **Create table** with robots.
 
-The four seats as a compass (N/E/S/W), robots badged. Sit, move or
+The four seats as a compass (N/E/S/W), robots and admins badged. Sit, move or
 **Leave** (confirmed; the last player leaving deletes the table and the
 page goes back to `/tables`; if only robots are left the confirmation says
 the table waits 10 minutes for somebody to take over). Managers
-(`can_manage` in the payload: the moderator or an admin, bb#74) also get **Remove** on each player, and on
+(`can_manage` in the payload: the moderator or an admin, bb#74) also get **Remove** on each other player, and on
 an empty seat **Seat a player** (a search sheet over all users, robots
 never listed) and **Add robot**. While only robots sit there
 (`unattended_since`), a note says so and **anyone** gets **Remove** on the
-robots; the first person to sit down becomes the moderator. Updates live
+robots; the first person to sit down becomes the moderator. An **admin**'s
+seat has **Remove** only for another admin, never for the moderator
+(bb#78); a 403 still toasts the backend's reason. Updates live
 over the table channel; if you are removed, a toast and back to `/tables`.
 While live updates work there is no Refresh button, only pull to refresh;
 once they have been off for 5 s (Reverb down, the channel refused, or a
@@ -242,7 +244,8 @@ is taken to `/play`, the one whose Start dealt it included.
 Backend: bb#10 and bb#11 (seat others, kick or quit), bb#22
 (Reverb), bb#25 (moves), bb#41 (idle seats, heartbeat), bb#44 (user
 search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
-(Start), bb#76 (away mid-set, the forfeit, Leave holds the seat).
+(Start), bb#76 (away mid-set, the forfeit, Leave holds the seat), bb#78
+(only an admin removes an admin; `is_admin` public on every seat).
 
 ## Play — `/tables/:id/play`
 
@@ -484,8 +487,8 @@ Backend: bb#60.
 profile sheet (tap a seated player's name on Tables, Table detail or Play,
 then **Full profile**; a robot's sheet has no such link).
 
-A player's public profile (name, username, description, never the email)
-and their finished boards, paged and grouped by set like My boards (each
+A player's public profile (name, username with the **Admin** badge for an
+admin (#77), description, never the email) and their finished boards, paged and grouped by set like My boards (each
 opens its review).
 
 **Admins** see more. A banned player's profile shows the ban in force
@@ -517,6 +520,7 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans).
 | `AppMenu` | the app shell | none (reads the auth store) |
 | `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}`; **Ban** for admins (`BanUserForm`) |
 | `RobotBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `NextBoardBox`), profile sheet | none (`is_robot` on the user) |
+| `AdminBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `NextBoardBox`, `StartBox`), profile sheet, User profile | none (`is_admin` on the user, #77) |
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | `SetResultsPanel` | Play (set over), Set results | none (given the set from `history.loadSet`) |

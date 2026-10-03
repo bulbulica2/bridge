@@ -22,7 +22,8 @@ vi.mock('@/services/echo', () => ({
 
 const ana = { id: 1, name: 'Ana', username: 'ana', email: 'ana@example.com' }
 
-const ids: Record<string, number> = { ana: 1, bob: 2, cid: 3, dan: 4 }
+// eve is an admin.
+const ids: Record<string, number> = { ana: 1, bob: 2, cid: 3, dan: 4, eve: 5 }
 
 function makeTable(id: number, seats: Partial<Record<Seat, string>>, board_id: number | null = null): Table {
   const taken = Object.entries(seats) as [Seat, string][]
@@ -39,7 +40,7 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>>, board_id: n
       table_id: id,
       user_id: ids[username],
       seat,
-      user: { id: ids[username], name: username, username, description: null },
+      user: { id: ids[username], name: username, username, description: null, is_robot: false, is_admin: username === 'eve' },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
     can_manage: false,
@@ -94,6 +95,15 @@ describe('HomePage.vue', () => {
     expect(card.text()).toContain('bob')
     // A board in progress: straight to the game.
     expect(pageLinks(wrapper)).toEqual([{ text: 'Go to the board', to: '/tables/7/play' }])
+  })
+
+  test('marks an admin at your table, and only free seats as empty', async () => {
+    vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(7, { E: 'ana', S: 'eve' })])
+    const wrapper = await mountLoggedIn()
+
+    const card = wrapper.find('.your-table')
+    expect(card.findAll('.admin-badge')).toHaveLength(1)
+    expect(card.findAll('.empty-seat')).toHaveLength(2)
   })
 
   test('leaves out the board badge when no board is being played', async () => {

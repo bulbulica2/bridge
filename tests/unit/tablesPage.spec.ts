@@ -61,6 +61,7 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>>, extra: Part
         username,
         description: null,
         is_robot: username.startsWith('robot-'),
+        is_admin: username === 'eve',
       },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
@@ -101,6 +102,13 @@ describe('TablesPage.vue with robots', () => {
     expect(unattended.findAll('.robot-badge')).toHaveLength(2)
     expect(plain.text()).not.toContain('Robots only')
     expect(plain.find('.robot-badge').exists()).toBe(false)
+  })
+
+  test('marks an admin in the list', () => {
+    const wrapper = mountWith([makeTable(3, { N: 'eve', E: 'bob' })])
+
+    const row = wrapper.findAll('ion-list ion-item').find((r) => r.text().includes('Table 3'))!
+    expect(row.findAll('.admin-badge')).toHaveLength(1)
   })
 
   test('creating with robots (the default) goes to the table, where Start is', async () => {

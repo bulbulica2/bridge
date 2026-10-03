@@ -101,6 +101,7 @@
                       {{ user.username }}
                     </button>
                     <RobotBadge v-if="user?.is_robot" />
+                    <AdminBadge v-if="user?.is_admin" />
                     <ion-badge v-if="user && user.id === me" color="primary">You</ion-badge>
                     <ion-button
                       v-else
@@ -198,6 +199,7 @@ import { chevronForwardOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
+import AdminBadge from '@/components/AdminBadge.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';

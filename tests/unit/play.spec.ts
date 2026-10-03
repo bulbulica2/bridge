@@ -705,6 +705,15 @@ describe('TablePlayPage card play', () => {
       expect(wrapper.get('.status').classes()).toContain('status-robot')
     })
 
+    test('an admin carries the Admin badge at their seat', async () => {
+      const wrapper = await mountPage(
+        state({ players: { ...PLAYERS, E: { ...PLAYERS.E, is_admin: true } }, turn: 'N' }),
+      )
+
+      expect(wrapper.find('.side-right .admin-badge').exists()).toBe(true)
+      expect(wrapper.findAll('.admin-badge')).toHaveLength(1)
+    })
+
     test("a person's turn still reads as waiting, and people carry no robot badge", async () => {
       const wrapper = await mountPage(
         state({ turn: 'E', acting_user_id: 2, current_trick: played('W S3, N SQ') }),
