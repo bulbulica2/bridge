@@ -19,6 +19,7 @@ import { showToast } from '@/utils/toast'
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   getTable: vi.fn(),
+  listTables: vi.fn(),
   sendHeartbeat: vi.fn(),
 }))
 // Anything not stubbed below (reading a board's phase, say) never leaves the test.
@@ -150,6 +151,21 @@ afterEach(() => {
 })
 
 describe('TableDetailPage loading', () => {
+  test("on somebody else's table it finds where the user sits, for the header", async () => {
+    vi.mocked(tablesService.listTables).mockResolvedValue([otherTable])
+    const wrapper = await mountPage(makeTable({ N: 'bob' }))
+
+    expect(tablesService.listTables).toHaveBeenCalledTimes(1)
+    expect(useTablesStore().myTable?.id).toBe(9)
+    expect(wrapper.find('.table-shortcut').text()).toContain('Late night')
+  })
+
+  test("on the user's own table it asks nothing more", async () => {
+    await mountPage(makeTable({ S: 'ana', N: 'bob' }))
+
+    expect(tablesService.listTables).not.toHaveBeenCalled()
+  })
+
   test('a nonsense id is a dead table without asking the backend', async () => {
     route.params = { id: 'zero' }
     const wrapper = await mountPage(makeTable({}))

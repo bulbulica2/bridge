@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/62-auto-next-board`._
+_Status as of branch `bulbulica2/63-table-shortcut-and-side-menu`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -29,14 +29,14 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | Folder | What lives there |
 |---|---|
 | `src/main.ts` | creates the app: Ionic, Pinia, the router, Ionic's CSS, dark mode |
-| `src/App.vue` | the shell: side menu, router outlet, route progress bar, the ban notice |
+| `src/App.vue` | the shell: split pane with the side menu and the router outlet, route progress bar, the ban notice |
 | `src/router/` | `index.ts` (routes + guard + prefetch of the page chunks and the bid and card lists), `loading.ts` (the progress bar flag, `navigateAndSettle`) |
 | `src/views/` | one `*Page.vue` per route |
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a claim's or the next board's deadline passes with no update), `useLiveStatus` (live updates on or off, for the table pages' Refresh) |
-| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the backend's length limits (`limits.ts`) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a claim's or the next board's deadline passes with no update), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table) |
+| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
@@ -45,19 +45,61 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 
 ## App shell
 
-`App.vue` renders `AppMenu` (the left `ion-menu`) and
-`<ion-router-outlet id="main-content">`; the menu's `content-id` must match
-that id. Every page wraps its content in `<ion-page>` and starts with
-`<AppHeader title="…">`, which draws the menu button, the title, an `end`
-slot for page actions and, while somebody is logged in, an **Account**
-button. While the logged-in user is banned, `AppHeader` also shows
-`BanBanner` under its toolbar (**You are banned until 12 Oct 2026:
-<reason>**), so the ban is on every page. `App.vue` holds `BanNotice`,
-the dialog shown when a ban throws the user out (see [Bans](#bans)).
+`App.vue` wraps `AppMenu` (the left `ion-menu`) and
+`<ion-router-outlet id="main-content">` in an `ion-split-pane`
+(`content-id="main-content"`); the menu's `content-id` must match that id.
+Every page wraps its content in `<ion-page>` and starts with
+`<AppHeader title="…">`, which draws the menu button, the **Your table**
+button (below), the title, an `end` slot for page actions and, while
+somebody is logged in, an **Account** button. While the logged-in user is
+banned, `AppHeader` also shows `BanBanner` under its toolbar (**You are
+banned until 12 Oct 2026: <reason>**), so the ban is on every page.
+`App.vue` holds `BanNotice`, the dialog shown when a ban throws the user
+out (see [Bans](#bans)).
+
+**The menu stays open** (#99): from Ionic's `md` breakpoint (768 px) up the
+split pane shows the menu beside the page, and picking an entry leaves it
+there (`ion-menu-toggle` only closes the slide-in overlay; Ionic ignores
+it for a menu shown in a split pane). The header's menu button is not
+Ionic's `ion-menu-button` (which hides itself next to a pinned menu) but
+`toggleMenu()` from `src/utils/menu.ts`: from `md` up it collapses the
+menu and brings it back, below `md` it slides the overlay in as before.
+The choice is the split pane's `when` (`'md'`, or `false` while
+collapsed), kept in `localStorage` (`bridge.menuPinned`, read and written
+in try/catch); a browser that never chose, or whose storage refuses, gets
+it open. On a phone the menu is the overlay whatever was chosen.
 
 The menu depends on the auth state: **Home** always, **Login** for guests,
-**Tables** and **My boards** once logged in. Other pages are reached from
-buttons, not the menu.
+**Tables** and **My boards** once logged in, with the page on screen
+highlighted (`aria-current="page"`). Other pages are reached from buttons,
+not the menu.
+
+**Your table** (#99): while the user holds a seat, the header shows a
+button with the table's name next to the menu button, and the menu lists
+the same entry first. Both come from `src/composables/useYourTable.ts`,
+which reads the tables store's `myTable` and leads to `/tables/:id/play`
+when a board is dealt there (`board_id`) or the seat is away/held (as
+Home's card does), else to `/tables/:id`, the same rule as taking a seat
+on Tables (#67). Its status, most pressing first: **Away** (the seat is
+held after a Leave mid-set, or marked away), **Your turn**
+(`turnNotice()` on the board the game store holds for that table, or a
+Start the table waits for), **Board in progress**; the header draws it as
+a coloured dot (spelled out in the button's `aria-label`), the menu as a
+badge. On the page it leads to, the button is marked current and leads
+nowhere; on the table's other page it is highlighted and leads to the
+first. Nothing is shown to a guest, a banned user or somebody not seated.
+
+`myTable` has to be known on every page, not only after the Tables list
+loaded. Home and Tables load the list, and the table pages open their
+table, so those routes carry `meta.findsSeat`. On every other page the
+router's `afterEach` calls the tables store's `findSeat()`, which asks
+`GET /tables` once (nothing while a table held already says where the user
+sits, at most one request at a time, a failure asked again on the next
+page). Its `load()` also follows that table's channel and heartbeat, so
+after a reload on My boards the button keeps up with the table live. The
+detail page calls `findSeat()` too, after opening a table the user may not
+sit at. Logging out empties the store (`clear()`), so the next user starts
+from nothing.
 
 Dark mode follows the operating system
 (`@ionic/vue/css/palettes/dark.system.css` in `main.ts`).
@@ -96,8 +138,9 @@ Sanctum session cookie is still valid, the SPA just has to ask.
 A 401 that arrives *while a page is open* (the session expired after the
 guard let you in) is handled by that page, which sends you to `/login`.
 
-Adding a page = a view in `src/views/`, a route here (with its meta), and
-an `ion-item` in `AppMenu.vue` only if it belongs in the menu.
+Adding a page = a view in `src/views/`, a route here (with its meta,
+`findsSeat` if the page loads the Tables list or a table itself), and a
+link in `AppMenu.vue`'s `links` only if it belongs in the menu.
 
 ## Auth and HTTP
 
@@ -168,7 +211,7 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 | Store | Holds | Main actions |
 |---|---|---|
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
-| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `lostSet` (a set your side forfeited while you were away) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `comeBack`, `stakeOf`, `dismissLostSet`; owns the table channel and the heartbeat |
+| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `lostSet` (a set your side forfeited while you were away) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissLostSet`, `clear` (on logout); owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadSet`, `loadReview` |
 | `users` | public profiles by id (with `ban`/`bans` for an admin) | `load`, `ban`, `liftBan` |

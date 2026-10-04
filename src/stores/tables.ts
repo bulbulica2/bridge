@@ -132,6 +132,36 @@ export const useTablesStore = defineStore('tables', () => {
     return myTable.value;
   }
 
+  // The header's and menu's "Your table" need the seat on every page, also
+  // right after a reload on one that loads no table (My boards, a profile).
+  // The router asks there; GET /tables tells, and load() follows the seat's
+  // channel from then on. At most one request at a time, none once anything
+  // we hold already says where we sit, and a failure is asked again on the
+  // next page.
+  let seatLookup: Promise<void> | null = null;
+  function findSeat() {
+    if (seatLookup || loaded.value || myTable.value || watchedTableId.value !== null) {
+      return;
+    }
+    seatLookup = load()
+      .catch(() => {
+        // Only a shortcut: without it the header just shows no table.
+      })
+      .finally(() => {
+        seatLookup = null;
+      });
+  }
+
+  // Logged out: nothing we held about tables is this browser's next user's.
+  function clear() {
+    unwatchTable();
+    tables.value = [];
+    currentTable.value = null;
+    loaded.value = false;
+    kickedFrom.value = null;
+    lostSet.value = null;
+  }
+
   // A table came back from the backend: refresh every copy we hold.
   function syncTable(table: Table) {
     upsertInList(table);
@@ -723,6 +753,8 @@ export const useTablesStore = defineStore('tables', () => {
     loadTable,
     openTable,
     seatedTable,
+    findSeat,
+    clear,
     create,
     join,
     leave,

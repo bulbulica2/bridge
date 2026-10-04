@@ -315,7 +315,7 @@ describe('the banned user', () => {
     auth.user = ana
     useGameStore().watchUser(ana.id)
     const tables = useTablesStore()
-    const unwatchTable = vi.spyOn(tables, 'unwatchTable')
+    const clearTables = vi.spyOn(tables, 'clear')
 
     // The third handler listenToUser was given is the UserBanned one.
     const onBanned = vi.mocked(echo.listenToUser).mock.calls[0][2]
@@ -323,7 +323,7 @@ describe('the banned user', () => {
 
     expect(auth.user).toBeNull()
     expect(auth.banNotice).toEqual(ownBan)
-    expect(unwatchTable).toHaveBeenCalled()
+    expect(clearTables).toHaveBeenCalled()
     expect(echo.leaveUser).toHaveBeenCalledWith(ana.id)
     expect(echo.disconnectEcho).toHaveBeenCalled()
     // The session is already gone server-side: no POST /logout.

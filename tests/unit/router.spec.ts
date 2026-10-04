@@ -5,6 +5,9 @@ import { routeLoading } from '@/router/loading'
 import { fetchUser } from '@/services/auth'
 import { getBids, getCards } from '@/services/game'
 import type { Bid } from '@/services/game'
+import * as tablesService from '@/services/tables'
+import { useAuthStore } from '@/stores/auth'
+import { useTablesStore } from '@/stores/tables'
 
 // The pages themselves don't matter here, only where the guard lets you go
 // (and the prefetch a second after the first page loads every one of them).
@@ -23,6 +26,10 @@ vi.mock('@/views/TablesPage.vue', () => ({ default: {} }))
 vi.mock('@/views/UserProfilePage.vue', () => ({ default: {} }))
 vi.mock('@/services/auth', () => ({ fetchUser: vi.fn() }))
 vi.mock('@/services/game', () => ({ getBids: vi.fn(), getCards: vi.fn() }))
+vi.mock('@/services/tables', async (importOriginal) => ({
+  ...(await importOriginal<typeof tablesService>()),
+  listTables: vi.fn(),
+}))
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
   leaveTable: vi.fn(),
@@ -51,6 +58,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   vi.mocked(getBids).mockResolvedValue([pass])
   vi.mocked(getCards).mockResolvedValue([{ id: 1, suit: 'C', rank: 2, rank_name: '2' }])
+  vi.mocked(tablesService.listTables).mockResolvedValue([])
 })
 
 // One router serves the whole file, so let its background timers run out and
@@ -148,5 +156,44 @@ describe('bid and card prefetch', () => {
     await vi.advanceTimersByTimeAsync(1000)
     expect(getBids).toHaveBeenCalledTimes(2)
     expect(getCards).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('finding the seat for "Your table"', () => {
+  test('a reload on a page that loads no table asks where the user sits', async () => {
+    asAna()
+    await router.push('/history')
+
+    expect(tablesService.listTables).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(useTablesStore().loaded).toBe(true)
+
+    // Known now: no more asking on the next pages.
+    await router.push('/account')
+    expect(tablesService.listTables).toHaveBeenCalledTimes(1)
+  })
+
+  test('leaves it to a page that finds the seat itself', async () => {
+    asAna()
+    await router.push('/tables/3/play')
+    await router.push('/tables')
+    await router.push('/home')
+
+    expect(tablesService.listTables).not.toHaveBeenCalled()
+  })
+
+  test('never asks for a guest or a banned user', async () => {
+    asGuest()
+    await router.push('/reset-password')
+    expect(tablesService.listTables).not.toHaveBeenCalled()
+
+    setActivePinia(createPinia())
+    vi.mocked(fetchUser).mockResolvedValue({
+      ...ana,
+      ban: { reason: 'x', until: '2026-12-01', banned_at: '2026-10-01' },
+    })
+    await router.push('/history')
+    expect(useAuthStore().isBanned).toBe(true)
+    expect(tablesService.listTables).not.toHaveBeenCalled()
   })
 })
