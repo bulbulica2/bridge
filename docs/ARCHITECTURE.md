@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/60-claim-timeout`._
+_Status as of branch `bulbulica2/62-auto-next-board`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -35,7 +35,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away countdown), `useLiveStatus` (live updates on or off, for the table pages' Refresh) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a claim's or the next board's deadline passes with no update), `useLiveStatus` (live updates on or off, for the table pages' Refresh) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the backend's length limits (`limits.ts`) |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
@@ -227,15 +227,16 @@ A few backend rules the stores rely on:
   payload's `can_manage` says so: the table's moderator or an admin
   (bb#74; the creator only while they are the moderator). Don't work it out
   from `moderated_by` or `created_by`; the backend decides. Nothing at the
-  table moves the others on: the next board is asked for by each player
-  (#72).
+  table moves the others on: within a set the next board comes by itself,
+  and **Deal now** only asks for the player who presses it (#72, #98).
 - **Nothing is dealt before Start** (bb#73). Filling a table deals no
   board: it is dealt once the table is full and every person seated there
   has pressed Start (`POST /tables/{id}/start`; `DELETE` takes it back).
   Each seat carries `ready` in the table payload and in `TableUpdated`;
   robots are always ready. Nobody presses for anybody else, a manager
-  included. A finished board is followed by **Next board** for the same four
-  players; once one of them has left or been replaced, it is Start again.
+  included. Within a set, a finished board is followed by the next one by
+  itself for the same four players (below); once one of them has left or
+  been replaced, it is Start again.
   `src/utils/start.ts` holds the hints: `startNeeded()` (does the next
   board wait for Start, given the table and the game state held),
   `isReady()` and `startWaiting()` (the "Waiting for …" line);
@@ -243,8 +244,21 @@ A few backend rules the stores rely on:
   `cancelStart` skip applying an answer that a `TableUpdated` overtook
   while it was on its way, since two players pressing at once race.
 - **Boards come in sets of four** (#73, bb#75). Start deals a set's first
-  board, **Next board** the other three, and after the fourth Next is
-  refused: everyone presses Start again for the next set. The game state
+  board; the other three are dealt by themselves (#98, bb#97): a finished
+  board carries `next_board_at`, 10 s after it ended
+  (`BRIDGE_NEXT_BOARD_SECONDS` on the backend), and the backend's queue
+  deals the next board then, with the usual `TableUpdated`,
+  `PlayingUpdated` and `HandDealt`. The result and the deal stay on show
+  until they arrive. `NextBoardBox` counts down from `next_board_at`
+  (`useNow`, `secondsLeft`/`formatClock` from `utils/away.ts`); its
+  optional **Deal now** (`game.next()`, `POST /tables/{id}/playing/next`)
+  deals at once when every human at the table has pressed it (robots count
+  as asked), so a player alone with robots skips the wait. If nothing has
+  come 2 s after `next_board_at`, the play page rereads the game
+  (`useStaleDeadline` → `game.load()`, once per deadline), as for a
+  claim's deadline. `next_board_at` is null when no deal is coming: the
+  set is over (then **Deal now** is refused: everyone presses Start again
+  for the next set), a seat is empty or the players changed (both Start). The game state
   and the table payload both carry `set` (`{id, number, board, of,
   finished, ended, forfeited_by}`, typed `SetPosition` in
   `services/game.ts`). A board finishing sends no `TableUpdated`, while a
@@ -418,7 +432,7 @@ works ([RUNNING.md](RUNNING.md) says the worker must run).
   `expires_at`, and `PlayingUpdated` clears it when it runs out. The play
   page counts down from `expires_at` (never from when the claim arrived),
   and if the claim is still on screen 2 s after the deadline it rereads
-  the game itself (`useStaleClaim` → `game.load()`), since that update may
+  the game itself (`useStaleDeadline` → `game.load()`), since that update may
   have been lost (bb#95). One reread per deadline: a backend that still
   answers with the claim (its queue worker stopped) is left to the next
   update or a Refresh.
@@ -487,7 +501,7 @@ arrives, and the app falls back to what each request returns.
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat; given `rows`, every suit column keeps room for that many cards |
 | `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest**; says the others have 10 s to answer and that no answer counts as no; `forSeat` names a robot declarer's seat claimed for |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw**, and the countdown to its `expires_at` ("Answer within 0:07", "Waiting for East and West · 0:07", ticked by `useNow`); the buttons disable at 0, so a late tap can't earn a 409; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
-| `BoardResultPanel`, `NextBoardBox` | the score once a board is finished with the set's running score (and, in a review, its matchpoints when already read), and who is ready for the next |
+| `BoardResultPanel`, `NextBoardBox` | the score once a board is finished with the set's running score (and, in a review, its matchpoints when already read), and the countdown to the set's next board ("Next board in 0:08", then "Dealing the next board…") with the optional **Deal now** and, once pressed, the humans who haven't yet |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, a forfeit's reason, each board with your side's score and matchpoints (opening its review), and the totals |
 | `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead) |
@@ -569,7 +583,7 @@ Which boards it offers is `reviewChoices()` in `src/utils/review.ts`:
   finished here: past the first board of the first set).
 
 Each board loads through `history.loadReview()`, cached. When the game
-waits for you (a call, a card, an answer to a claim, your Next or Start:
+waits for you (a call, a card, an answer to a claim or your Start:
 `turnNotice()` in `src/utils/turn.ts`), a banner in the modal says so with
 **To the table**, which closes it; nothing closes it by force. While it is
 open the forced card doesn't play itself, and leaving the view closes it

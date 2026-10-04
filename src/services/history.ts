@@ -103,12 +103,12 @@ export async function getBoardResults(boardId: number): Promise<BoardResults> {
 
 // One finished playing after the fact: exactly the live game state once
 // `finished` (auction, contract, every trick, result and the deal as
-// dealt), less `ready` and without anybody's own `hand`. A board that ended
+// dealt), less `ready` and `next_board_at` and without anybody's own `hand`. A board that ended
 // by a claim has only the tricks up to it (the unfinished one in
 // `current_trick`); a passed-out one has its four passes and no play.
 // Playings finished before the backend kept them come back with an empty
 // `auction` and `tricks`.
-export interface PlayingReview extends Omit<PublicPlaying, 'ready' | 'players' | 'set'> {
+export interface PlayingReview extends Omit<PublicPlaying, 'ready' | 'next_board_at' | 'players' | 'set'> {
   // From the seat snapshot; null only if that player's account is gone.
   players: Record<Seat, PublicUser | null>;
 }

@@ -26,7 +26,7 @@ import {
   claimWaitingFor,
   tricksLeft,
 } from '@/utils/claim'
-import { STALE_CLAIM_GRACE_MS, useStaleClaim } from '@/composables/useStaleClaim'
+import { STALE_GRACE_MS, useStaleDeadline } from '@/composables/useStaleDeadline'
 import { handToPlay } from '@/utils/play'
 import { resultSummary } from '@/utils/result'
 import { showToast } from '@/utils/toast'
@@ -534,9 +534,9 @@ describe('claim deadline', () => {
     const deadline = ref<string | null>(inSeconds(10))
     const reload = vi.fn()
     const scope = effectScope()
-    scope.run(() => useStaleClaim(() => deadline.value, reload))
+    scope.run(() => useStaleDeadline(() => deadline.value, reload))
 
-    vi.advanceTimersByTime(10_000 + STALE_CLAIM_GRACE_MS - 1)
+    vi.advanceTimersByTime(10_000 + STALE_GRACE_MS - 1)
     expect(reload).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
     expect(reload).toHaveBeenCalledTimes(1)
@@ -809,7 +809,7 @@ describe('TablePlayPage claims', () => {
       await flushPromises()
       expect(showToast).toHaveBeenCalledWith('Nobody answered: the claim is off, play on.', 'warning')
       expect(wrapper.find('.claim').exists()).toBe(false)
-      vi.advanceTimersByTime(STALE_CLAIM_GRACE_MS)
+      vi.advanceTimersByTime(STALE_GRACE_MS)
       await flushPromises()
       expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
     })
@@ -821,7 +821,7 @@ describe('TablePlayPage claims', () => {
       const wrapper = await mountPage(asSeat('E', { claim: pending({ expires_at: inSeconds(10) }) }))
       vi.mocked(gameService.getPlaying).mockResolvedValue(asSeat('E'))
 
-      vi.advanceTimersByTime(10_000 + STALE_CLAIM_GRACE_MS - 1)
+      vi.advanceTimersByTime(10_000 + STALE_GRACE_MS - 1)
       await flushPromises()
       expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
 
@@ -839,7 +839,7 @@ describe('TablePlayPage claims', () => {
       const wrapper = await mountPage(state({ claim: pending({ expires_at: inSeconds(10) }) }))
       vi.mocked(gameService.getPlaying).mockRejectedValue(new Error('offline'))
 
-      vi.advanceTimersByTime(10_000 + STALE_CLAIM_GRACE_MS)
+      vi.advanceTimersByTime(10_000 + STALE_GRACE_MS)
       await flushPromises()
 
       expect(gameService.getPlaying).toHaveBeenCalledTimes(2)

@@ -258,12 +258,9 @@ describe('turnNotice', () => {
     ).toBeNull()
   })
 
-  test('Next after a board, until pressed', () => {
-    expect(turnNotice(state({ phase: 'finished', ready: [] }), 2, null, false)).toBe(
-      'The next board waits for your Next',
-    )
+  test('nothing after a board: the next one is dealt by itself', () => {
+    expect(turnNotice(state({ phase: 'finished', ready: [] }), 2, null, false)).toBeNull()
     expect(turnNotice(state({ phase: 'finished', ready: ['E'] }), 2, null, false)).toBeNull()
-    expect(turnNotice(state({ phase: 'finished', ready: null, my_seat: null }), 2, null, false)).toBeNull()
   })
 
   test('Start, until pressed', () => {

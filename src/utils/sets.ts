@@ -7,8 +7,8 @@ import { SIDE_LABELS, matchpointPercent, sideOf } from '@/utils/result';
 import type { Side } from '@/utils/result';
 
 // Sets of boards (bridge_backend docs/API.md, Sets): Start deals a set's
-// first board, Next the other three, and after the fourth it is everyone's
-// Start again. The backend adds up the set (GET /sets/{id}); this only words
+// first board, the other three are dealt by themselves (`next_board_at`), and
+// after the fourth it is everyone's Start again. The backend adds up the set (GET /sets/{id}); this only words
 // it and turns it round for the side looking at it.
 
 export function sideOfCode(code: SideCode): Side {

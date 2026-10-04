@@ -15,11 +15,11 @@ export function isReady(seat: TableSeat): boolean {
 
 // Does the next board wait for Start? Always while the table has no board
 // (none yet, or one abandoned), and once the set is over: Start opens the
-// next one. With a finished board of a set still going on, the same four go
-// on with Next (playing/next), and Start takes over only once one of them has
-// been replaced or changed seats. During a board, never. `playing` is the
-// state held for this table, if any: a board we can't see the phase of says
-// no.
+// next one. With a finished board of a set still going on, the same four get
+// the next board by itself (`next_board_at`, or playing/next's "deal now"),
+// and Start takes over only once one of them has been replaced or changed
+// seats. During a board, never. `playing` is the state held for this table,
+// if any: a board we can't see the phase of says no.
 export function startNeeded(table: BroadcastTable, playing: PublicPlaying | null): boolean {
   if (table.board_id === null) {
     return true;

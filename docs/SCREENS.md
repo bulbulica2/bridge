@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/60-claim-timeout`._
+_Status as of branch `bulbulica2/62-auto-next-board`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -220,9 +220,9 @@ seated player sees the Start box: **Start**, then **Waiting for the
 others…** with **Cancel**, and a line saying what is missing ("Waiting for
 a fourth player, and for East (bob) to press Start."). Each ready seat on
 the compass is marked **✓ Ready**. Everyone presses their own, the manager
-included. Between boards with the same four players nothing changes:
-**Next board** on the play page, until the set of four is over (#73): then
-it is everyone's Start again. While a set is going on, the table's info
+included. Between boards with the same four players nothing is pressed:
+the next board of the set comes by itself on the play page (#98), until
+the set of four is over (#73): then it is everyone's Start again. While a set is going on, the table's info
 says where it is: **Board 2 of 4 · Set 3**. When a board is dealt (`board_id` changes
 to a new board, from the Start answer or a `TableUpdated`) a seated player
 is taken to `/play`, the one whose Start dealt it included.
@@ -251,7 +251,7 @@ search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
 
 **Logged in, seated at that table** (403 otherwise). Built by #26 (game
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
-#47 (claims), #96 (claims expire after 10 s, needs bb#96), #53 (robots), #57 (forced cards play themselves), #56 (last trick
+#47 (claims), #96 (claims expire after 10 s, needs bb#96), #98 (the next board by itself, needs bb#97), #53 (robots), #57 (forced cards play themselves), #56 (last trick
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 and the forfeit), #95 (you play a robot partner's contract, needs bb#94);
@@ -265,8 +265,8 @@ Robots play by themselves: each of their calls, cards, claim answers and
 nothing on this page drives them. On a robot's turn its seat reads
 **Thinking…** instead of **To act** and the status line says
 "robot-1 is thinking…". Robots are badged at their seat and in the
-next-board box, and are ready for the next board at once, so your **Next
-board** deals it. When your robot partner wins the contract, it stays
+next-board box, and count as having asked for the next board, so your
+**Deal now** deals it at once instead of waiting out the countdown. When your robot partner wins the contract, it stays
 declarer and you stay dummy, but **you play the hand**: the contract bar
 says "robot-1 declares 4♠ — you play the hand", declarer's cards (yours
 alone to see) lie across the top from the end of the auction, and on its
@@ -344,8 +344,16 @@ What it shows by phase:
 - **finished**: the result from your side ("by claim" when a claim ended
   it), the set's running score so far ("Set 3 so far: 2 of 4 boards, you
   +450", read from the set), all four hands face up, **Compare with other tables**, **Review
-  and export** (the board review at the table, below), and the next-board box (who's ready, and **Next board** to ask for
-  yourself; nobody, a manager included, asks for the others, #72). If one of
+  and export** (the board review at the table, below), and the next-board
+  box: **Next board in 0:08**, counting down to the set's next board, which
+  is dealt by itself (#98; then "Dealing the next board…"). The result and
+  the deal stay on show until it arrives, then the page moves to its
+  auction; **Last board** still reviews the one just played. **Deal now**
+  is optional: it deals at once once every person at the table has pressed
+  it (robots count as pressed), and after pressing it the box says who
+  hasn't ("You asked to deal now. Waiting for bob."). Nobody, a manager
+  included, asks for the others (#72). If nothing has arrived 2 s after
+  the countdown ends, the page rereads the game. If one of
   the four has left or been replaced since, the Start box takes the
   next-board box's place: the next board waits for every person's Start.
 - **set over** (after the fourth board, or earlier when a side forfeits
@@ -369,7 +377,7 @@ opens on the latest finished board, with a switcher (**Board 5**,
 **Board 6** …) for the set's other finished boards; on a set's first board
 it offers the previous set's last. The game goes on underneath; when it
 waits for you ("Your turn to bid", "Your turn to play", "A claim waits for
-your answer", "The next board waits for your Next", "Your Start: …") a
+your answer", "Your Start: …") a
 banner in the sheet says so with **To the table**. A forced card doesn't
 play itself while it is open, and leaving the page closes it. It fits a
 360 px screen.
@@ -381,8 +389,9 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `game.call()` | `POST /tables/{id}/calls` |
 | `game.play()` | `POST /tables/{id}/cards` |
 | `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
-| `game.next()` | `POST /tables/{id}/playing/next` |
+| `game.next()` (**Deal now**, optional) | `POST /tables/{id}/playing/next` |
 | `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
+| `game.load()` 2 s after a claim's or the next board's deadline with no update | `GET /tables/{id}/playing` |
 | `history.loadSet()` (after each finished board, when the set ends, and on entry mid-set) | `GET /sets/{id}` |
 | `history.loadReview()` (the board review) | `GET /playings/{id}`, once per board per session |
 | `history.loadHistory()` (on entry, only when no board to review is known but one may have been finished here) | `GET /api/user/playings` |
@@ -392,14 +401,14 @@ play itself while it is open, and leaving the page closes it. It fits a
 | channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a forfeit), `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them) |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
-reloads (after a set's last board, Next 409s: "The set is over: press Start
+reloads (after a set's last board, Deal now 409s: "The set is over: press Start
 for a new one.", though the page shows Start instead by then). A `TableUpdated` whose `board_id` goes back to null mid-board means
 a player left and the board was abandoned: toast, back to waiting (and to
 Start once the table is full again).
 
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
-bb#40 (next board; bb#74 dropped its `everyone`), bb#43 (results), bb#59 (claims), bb#96 (claims expire),
+bb#40 (next board; bb#74 dropped its `everyone`; bb#97 deals it by itself), bb#43 (results), bb#59 (claims), bb#96 (claims expire),
 bb#75 (sets of four boards), bb#76 (away mid-set and the forfeit).
 
 ## My boards — `/history`
@@ -551,8 +560,8 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans).
 | `AppMenu` | the app shell | none (reads the auth store) |
 | `BoardReview` | Board review, Play (`BoardReviewModal`) | none (given the review from `history.loadReview`) |
 | `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}`; **Ban** for admins (`BanUserForm`) |
-| `RobotBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `NextBoardBox`), profile sheet | none (`is_robot` on the user) |
-| `AdminBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `NextBoardBox`, `StartBox`), profile sheet, User profile | none (`is_admin` on the user, #77) |
+| `RobotBadge` | Home, Tables, Table detail, Play (`BridgeTable`), profile sheet | none (`is_robot` on the user) |
+| `AdminBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `StartBox`), profile sheet, User profile | none (`is_admin` on the user, #77) |
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | `SetResultsPanel` | Play (set over), Set results | none (given the set from `history.loadSet`) |

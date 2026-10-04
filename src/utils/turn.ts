@@ -5,9 +5,10 @@ import { handToPlay } from '@/utils/play';
 import { isReady } from '@/utils/start';
 
 // What the game waits for the user to do, if anything: a call, a card (from
-// whichever hand they play), an answer to a claim, their Next after a board
-// or their Start. The play page's review modal shows it, so looking back at
-// a board never holds the table up unnoticed. `startShown` is the page's
+// whichever hand they play), an answer to a claim or their Start. The play
+// page's review modal shows it, so looking back at a board never holds the
+// table up unnoticed. A finished board waits for nobody: the set's next one
+// is dealt by itself (bb#97). `startShown` is the page's
 // StartBox in place of NextBoardBox (src/utils/start.ts startNeeded).
 export function turnNotice(
   state: Playing | null,
@@ -30,9 +31,6 @@ export function turnNotice(
       return claimAction(state, claimSeatOf(state)) === 'answer' ? 'A claim waits for your answer' : null;
     }
     return handToPlay(state, me) ? 'Your turn to play' : null;
-  }
-  if (state.phase === 'finished' && state.my_seat) {
-    return (state.ready ?? []).includes(state.my_seat) ? null : 'The next board waits for your Next';
   }
   return null;
 }

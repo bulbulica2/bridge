@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import BoardResultPanel from '@/components/BoardResultPanel.vue'
 import TablePlayPage from '@/views/TablePlayPage.vue'
@@ -24,6 +24,7 @@ import {
 } from '@/utils/result'
 import { leaveWarning, moveConsequences } from '@/utils/seatMove'
 import { showToast } from '@/utils/toast'
+import { STALE_GRACE_MS } from '@/composables/useStaleDeadline'
 
 vi.mock('@/services/game', () => ({
   getPlaying: vi.fn(),
@@ -290,6 +291,7 @@ describe('TablePlayPage between boards', () => {
       result: result(),
       deal: { N: hand('N'), E: hand('E'), S: hand('S'), W: hand('W') },
       ready: [],
+      next_board_at: null,
       my_seat: 'S',
       hand: [],
       ...overrides,
@@ -343,16 +345,17 @@ describe('TablePlayPage between boards', () => {
     vi.mocked(historyService.getSet).mockResolvedValue(setSoFar())
   })
 
-  test('shows the result, the whole deal and who is ready', async () => {
-    const wrapper = await mountPage(finished({ ready: ['N', 'W'] }))
+  test('shows the result, the whole deal and the next board coming', async () => {
+    const wrapper = await mountPage(
+      finished({ ready: ['N', 'W'], next_board_at: new Date(Date.now() + 30_000).toISOString() }),
+    )
 
     expect(wrapper.get('.result-title').text()).toBe('4♠ by North')
     expect(wrapper.get('.result-mine-value').text()).toBe('+450')
     // Every seat shows its 13 cards as dealt; our own hand section is gone.
     expect(wrapper.findAll('.dealt-hand')).toHaveLength(4)
     expect(wrapper.find('.my-hand').exists()).toBe(false)
-    expect(nextBox(wrapper).text()).toContain('2 of 4 ready')
-    expect(nextBox(wrapper).findAll('li.is-ready').map((li) => li.attributes('data-seat'))).toEqual(['N', 'W'])
+    expect(nextBox(wrapper).get('.next-title').text()).toMatch(/^Next board in 0:[23]\d$/)
     // The running score is the set's, read from GET /sets/{id}.
     expect(historyService.getSet).toHaveBeenCalledWith(5)
     expect(wrapper.get('.result-session').text()).toContain('Set 1 so far: 2 of 4 boards, you +870')
@@ -363,7 +366,7 @@ describe('TablePlayPage between boards', () => {
     expect(compare?.props('routerLink')).toMatch(/^\/boards\/\d+\/results$/)
   })
 
-  test('"Next board" asks once, then waits for the others', async () => {
+  test('"Deal now" asks once, then waits for the others', async () => {
     const wrapper = await mountPage(finished({ ready: ['N'] }))
     vi.mocked(gameService.nextBoard).mockResolvedValue(finished({ ready: ['N', 'S'] }))
 
@@ -372,14 +375,14 @@ describe('TablePlayPage between boards', () => {
 
     expect(gameService.nextBoard).toHaveBeenCalledWith(5)
     expect(wrapper.find('.next-button').exists()).toBe(false)
-    expect(nextBox(wrapper).text()).toContain("You're ready. Waiting for bob, di.")
+    expect(nextBox(wrapper).text()).toContain('You asked to deal now. Waiting for bob, di.')
   })
 
-  test('a manager gets the same "Next board" as everyone, and nothing that deals for the others', async () => {
+  test('a manager gets the same "Deal now" as everyone, and nothing that deals for the others', async () => {
     const wrapper = await mountPage(finished({ ready: ['N'] }), { ...makeTable(), can_manage: true })
 
     const buttons = nextBox(wrapper).findAllComponents({ name: 'IonButton' }).map((b) => b.text())
-    expect(buttons).toEqual(['Next board', 'Leave the table'])
+    expect(buttons).toEqual(['Deal now', 'Leave the table'])
     expect(nextBox(wrapper).text()).not.toContain('for everyone')
   })
 
@@ -409,6 +412,89 @@ describe('TablePlayPage between boards', () => {
     game.applyHandDealt({ table_id: 5, playing_id: 43, my_seat: 'S', hand: hand('S') })
     await flushPromises()
     expect(wrapper.findAll('.my-hand .playing-card')).toHaveLength(13)
+  })
+
+  describe('the next board by itself', () => {
+    const NOW = Date.parse('2026-10-04T12:00:00Z')
+    const inSeconds = (s: number) => new Date(NOW + s * 1000).toISOString()
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    test('counts down to next_board_at, and the board arriving in time means no reread', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      const wrapper = await mountPage(finished({ next_board_at: inSeconds(10) }))
+
+      expect(nextBox(wrapper).get('.next-title').text()).toBe('Next board in 0:10')
+      vi.advanceTimersByTime(2000)
+      await flushPromises()
+      expect(nextBox(wrapper).get('.next-title').text()).toBe('Next board in 0:08')
+      vi.advanceTimersByTime(8000)
+      await flushPromises()
+      expect(nextBox(wrapper).get('.next-title').text()).toBe('Dealing the next board…')
+      // The result is still there to read until the new board lands.
+      expect(wrapper.get('.result-title').text()).toBe('4♠ by North')
+      expect(wrapper.findAll('.dealt-hand')).toHaveLength(4)
+
+      const game = useGameStore()
+      game.applyPlayingUpdate(5, { ...newBoard(), my_seat: undefined, hand: undefined } as unknown as Playing)
+      game.applyHandDealt({ table_id: 5, playing_id: 43, my_seat: 'S', hand: hand('S') })
+      await flushPromises()
+      expect(wrapper.find('.next-board').exists()).toBe(false)
+      expect(wrapper.findAll('.my-hand .playing-card')).toHaveLength(13)
+
+      vi.advanceTimersByTime(STALE_GRACE_MS)
+      await flushPromises()
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
+    })
+
+    test('with nothing 2 s after next_board_at, the page rereads the game once', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      const wrapper = await mountPage(finished({ next_board_at: inSeconds(10) }))
+      vi.mocked(gameService.getPlaying).mockResolvedValue(newBoard())
+
+      vi.advanceTimersByTime(10_000 + STALE_GRACE_MS - 1)
+      await flushPromises()
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(1)
+      await flushPromises()
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+      expect(gameService.getPlaying).toHaveBeenLastCalledWith(5)
+      expect(wrapper.find('.next-board').exists()).toBe(false)
+      expect(wrapper.findAll('.my-hand .playing-card')).toHaveLength(13)
+    })
+
+    test('a reread that fails, or finds the same board, leaves it for the next update', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      const wrapper = await mountPage(finished({ next_board_at: inSeconds(10) }))
+      vi.mocked(gameService.getPlaying).mockRejectedValueOnce(new Error('offline'))
+
+      vi.advanceTimersByTime(10_000 + STALE_GRACE_MS)
+      await flushPromises()
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+      expect(nextBox(wrapper).get('.next-title').text()).toBe('Dealing the next board…')
+
+      // Nothing more for the same deadline.
+      vi.advanceTimersByTime(60_000)
+      await flushPromises()
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+    })
+
+    test('no deadline: no countdown and no reread', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      const wrapper = await mountPage(finished({ next_board_at: null }))
+
+      expect(nextBox(wrapper).get('.next-title').text()).toBe('Next board')
+      vi.advanceTimersByTime(60_000)
+      await flushPromises()
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
+    })
   })
 
   test('a player short: Start replaces Next', async () => {
