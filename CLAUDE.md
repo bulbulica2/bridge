@@ -53,16 +53,20 @@ The user's standing rule (#91): **no task may leave code coverage under
   PR: aim for every new line, branch and function covered, not just the
   95 % floor. Touching a file means it leaves the PR at ≥ 95 % even if it
   was lower before.
-- Run `npm run test:coverage` before every commit of a task and read the
-  table for the files you touched; `coverage/index.html` shows the
-  uncovered lines.
+- Don't run `npm run test:coverage` locally by default: CI's `unit` job
+  runs it on every push to a PR. Before committing, run the unit tests
+  (`npm run test:unit:ci`, or just the specs you touched); after pushing,
+  check the PR's checks (`gh pr checks`). Only when `unit` fails on
+  coverage, run `npm run test:coverage` locally, read the table for the
+  files you touched (`coverage/index.html` shows the uncovered lines), add
+  the missing tests and push again.
 - Never lower a threshold, add a file to the coverage `exclude`, or add
   `/* v8 ignore */` comments to get under the bar. Raise the branches
   threshold when the totals allow it.
 - Every new issue (card) written for this repo lists in its Acceptance:
   "`npm run test:coverage` passes; every file the task adds or touches has
   ≥ 95 % of its lines covered by unit tests". Every PR's test plan reports
-  the coverage of the files it touched.
+  the coverage of the files it touched (from the `unit` job's log).
 
 ## Architecture
 
@@ -316,7 +320,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   (`HandView`'s `forcedId` pulses it, the status line counts down). The
   page keys it by playing/trick/cards/turn/card, so a new state restarts
   or drops it; it is null while a card or claim is in flight, the claim
-  sheet is open or the view is left (`onIonViewWillLeave`), and a key it
+  sheet or review modal is open or the view is left (`onIonViewWillLeave`), and a key it
   already fired for isn't re-armed. `trickBySide()` places a
   trick's cards by seat for `TrickArea.vue`, which fills `BridgeTable`'s
   `centre` slot. `dummy_hand` is public only after the opening lead.
@@ -458,8 +462,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   that board (403 otherwise, 404 unknown or unfinished), even once the
   table is gone. The history store's `loadReview` caches it by playing id
   and never refetches it (a finished playing doesn't change); `clear()`
-  drops it. `PlayingReviewPage.vue` holds one number, `step` (cards
-  played), and `src/utils/review.ts` derives the rest: `playedCards` (the
+  drops it. The body is `src/components/BoardReview.vue` (prop `review`,
+  `extras` for matchpoints; the page and the play page's modal both use
+  it), which holds one number, `step` (cards played, back to 0 for another
+  playing), and `src/utils/review.ts` derives the rest: `playedCards` (the
   tricks, then a claim's unfinished `current_trick`), `reviewAt` (hands
   left from `deal`, the trick shown with its winner once complete, tricks
   won, who's next), `nextTrickStep`/`previousTrickStep` and `stepCaption`.
@@ -471,24 +477,44 @@ The user's standing rule (#91): **no task may leave code coverage under
   The viewer sits at the bottom if they played it (`seatOfUser`), else
   South. An empty `auction` (`isRecorded`) means a playing finished before
   bb#60: only the deal and the result, with a notice. `HistoryEntryItem`
-  and each `BoardResultsPage` row link to it, and so does the play page's
-  "Review and export" once a board is `finished`.
-- **Export** (#71): the review page's header "Export" opens an
-  `ion-action-sheet`: Copy as text, Download .txt/.pbn/.json, Print / Save
+  and each `BoardResultsPage` row link to it.
+  **At the table** (#97): the play page's header "Last board" (and
+  "Review and export" once `finished`) opens `BoardReviewModal.vue`
+  (full-height `ion-modal`, content only `v-if="open"` since page tests
+  stub `IonModal` with its slot) without navigating; `PlayingUpdated`
+  keeps applying underneath. Its boards are `reviewChoices(setResults,
+  seen, latest)` in `review.ts` (running set's `boards[].playing_id`, plus
+  the page's `seenBoard` (last `finished` playing at this table) if the set
+  read lags; else `seenBoard` (the previous set's last); else the history
+  store's latest `listOf(null)` entry with this `table_id`), segment
+  switcher, opening on the last; each via `history.loadReview`. On entry
+  `findReviewable()` reads `GET /sets/{id}` mid-set and, if still none and
+  past set 1 board 1, `loadHistory(null)`. `turnNotice()`
+  (`src/utils/turn.ts`: bid, play, answer a claim, Next, Start) shows as a
+  banner in the modal with "To the table" (closes it). `reviewOpen` nulls
+  `useForcedPlay`'s key; `onIonViewWillLeave` and entering another table
+  close it.
+- **Export** (#71): the review page's header "Export" (and the review
+  modal's) opens an `ion-action-sheet`, all of it in
+  `src/composables/useBoardExport.ts` (`open`, `buttons`, `printing`,
+  `extras`, `reset()` for view leave / modal close; it also resets on
+  scope dispose): Copy as text, Download .txt/.pbn/.json, Print / Save
   as PDF (only Copy on a native platform, `Capacitor.isNativePlatform()`:
   WebViews ignore `download` links and `window.print()`).
   `src/utils/export.ts` is pure: `boardText(review, extras)` (matchpoints
-  in `extras` when `history.results[boardId]` holds this playing's row),
+  in `extras` when `history.results[boardId]` or a cached set's `boards`
+  holds this playing's row; `BoardResultPanel`'s `extras` shows them too),
   `boardPbn(review)` (PBN 2.1 export format: the 15 mandatory tags in
   order, unknown ones `?`, a passed-out board's Declarer/Result empty and
   Contract `Pass`; then Auction, Play, Score; play lines in fixed seat
   columns from the opening leader, a claim leaves `-` and ends with `*`;
   CRLF line ends), `boardJson`, `trickRows`, `claimNote` (the review
   doesn't say who claimed: told from declarer's side), `exportFileName`.
-  `src/utils/download.ts`: `downloadFile`, `copyText`. Print: the page adds
+  `src/utils/download.ts`: `downloadFile`, `copyText`. Print: the page (or modal) adds
   `printing-board` to `<body>`, teleports `BoardPrintout.vue` there,
-  `window.print()`, and drops it on `afterprint`/view leave;
-  `src/theme/print.css` hides the rest and unpins Ionic's fixed body.
+  `window.print()`, and drops it on `afterprint`/view leave/modal close;
+  `src/theme/print.css` hides the rest (`ion-modal`, `ion-action-sheet`
+  explicitly) and unpins Ionic's fixed body.
 - **Bans** (#75, bb#77, backend `docs/API.md` Bans, `docs/AUTH.md` Bans):
   an admin bans a user for 1–365 days with a reason. `src/utils/ban.ts`:
   `canBan(viewer, target)` (viewer `is_admin`, target never themselves, an

@@ -1,7 +1,7 @@
 import { SEATS } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { Card, PlayedCard } from '@/services/game';
-import type { PlayingReview } from '@/services/history';
+import type { PlayingHistoryEntry, PlayingReview, SetResults } from '@/services/history';
 import { sideOf } from '@/utils/result';
 
 // Replaying a finished board card by card (GET /playings/{playing}). A
@@ -88,4 +88,42 @@ export function stepCaption(at: ReviewStep): string {
     return `${at.winner} wins`;
   }
   return at.next ? `${at.next} to play` : 'Claimed';
+}
+
+// A finished board of a table that the play page offers to review, and its
+// number at the table (null if unknown).
+export interface ReviewChoice {
+  playingId: number;
+  number: number | null;
+}
+
+// The last board the play page saw finish at a table, and its set.
+export interface SeenBoard extends ReviewChoice {
+  setId: number | null;
+}
+
+// The boards the play page's review modal switches between, oldest first;
+// the last is the one it opens on. The running set's finished boards
+// (GET /sets/{id}, read after each board), plus the board just seen to
+// finish in that set if the read hasn't caught up with it yet. With none
+// finished in the set (the first board of the next one), the last board the
+// page saw finish, else, after a reload, the user's latest history entry at
+// this table.
+export function reviewChoices(
+  set: SetResults | null,
+  seen: SeenBoard | null,
+  latest: PlayingHistoryEntry | null,
+): ReviewChoice[] {
+  const choices: ReviewChoice[] = (set?.boards ?? []).map((row) => ({
+    playingId: row.playing_id,
+    number: row.board.number,
+  }));
+  const inSet = choices.length === 0 || seen?.setId === set?.id;
+  if (seen && inSet && !choices.some((c) => c.playingId === seen.playingId)) {
+    choices.push({ playingId: seen.playingId, number: seen.number });
+  }
+  if (choices.length === 0 && latest) {
+    choices.push({ playingId: latest.playing_id, number: latest.board.number });
+  }
+  return choices;
 }

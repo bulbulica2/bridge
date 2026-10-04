@@ -2,6 +2,10 @@
   <ion-page>
     <AppHeader :title="headerTitle">
       <template #end>
+        <!-- Look back at the finished boards without leaving the table. -->
+        <ion-button v-if="reviewable.length > 0" class="review-boards" @click="reviewOpen = true">
+          Last board
+        </ion-button>
         <ion-button
           v-if="tableId"
           :router-link="`/tables/${tableId}`"
@@ -115,13 +119,14 @@
             >
               Compare with other tables
             </ion-button>
-            <!-- Replay it card by card, and export it (text, PBN, print). -->
+            <!-- Replay it card by card, and export it (text, PBN, print),
+                 in the review modal: we stay at the table. -->
             <ion-button
-              v-if="playing.playing_id"
+              v-if="reviewable.length > 0"
               expand="block"
               fill="outline"
-              class="compare"
-              :router-link="`/playings/${playing.playing_id}`"
+              class="compare review-and-export"
+              @click="reviewOpen = true"
             >
               Review and export
             </ion-button>
@@ -301,6 +306,12 @@
         @claim="sendClaim"
         @close="claimOpen = false"
       />
+      <BoardReviewModal
+        :open="reviewOpen"
+        :choices="reviewable"
+        :notice="notice"
+        @close="reviewOpen = false"
+      />
     </ion-content>
   </ion-page>
 </template>
@@ -325,6 +336,7 @@ import AuctionHistory from '@/components/AuctionHistory.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
 import BiddingBox from '@/components/BiddingBox.vue';
 import BoardResultPanel from '@/components/BoardResultPanel.vue';
+import BoardReviewModal from '@/components/BoardReviewModal.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
 import ClaimPanel from '@/components/ClaimPanel.vue';
@@ -362,7 +374,10 @@ import { resultSummary } from '@/utils/result';
 import { awaySeats } from '@/utils/away';
 import { confirmLeave, heldNotice } from '@/utils/seatMove';
 import { currentSet, forfeitedSeat, setLabel } from '@/utils/sets';
+import { reviewChoices } from '@/utils/review';
+import type { SeenBoard } from '@/utils/review';
 import { startNeeded } from '@/utils/start';
+import { turnNotice } from '@/utils/turn';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
@@ -393,6 +408,10 @@ const claimOpen = ref(false);
 const claiming = ref(false);
 // The page is on screen: a forced card only plays itself while it is.
 const viewActive = ref(false);
+// The review modal is open over the table (the game goes on underneath).
+const reviewOpen = ref(false);
+// The last board seen to finish here, to review once the next is dealt.
+const seenBoard = ref<(SeenBoard & { tableId: number }) | null>(null);
 
 const me = computed(() => auth.user?.id ?? null);
 
@@ -493,7 +512,7 @@ function legalIds(hand: Card[] | null): number[] {
 // The one card the hand on play may play to this trick, if only one is legal
 // (never on the lead), keyed by the state it is forced in. Only for
 // declarer's game (a defender taps their own card). Nothing while a card or a claim is on
-// its way, the claim sheet is open or the page is left.
+// its way, the claim sheet or the review is open or the page is left.
 const forced = computed(() => {
   const state = playing.value;
   const from = playFrom.value;
@@ -504,6 +523,7 @@ const forced = computed(() => {
     !viewActive.value ||
     sendingCard.value !== null ||
     claimOpen.value ||
+    reviewOpen.value ||
     claiming.value
   ) {
     return null;
@@ -669,6 +689,20 @@ const endedSet = computed(() => {
   return results.boards.length > 0 || results.ended === 'forfeit' ? results : null;
 });
 
+// The finished boards the review modal offers: the running set's, else the
+// last one seen here, else (after a reload) the latest in our history.
+const reviewable = computed(() => {
+  const set = shownSet.value;
+  const seen = seenBoard.value?.tableId === tableId.value ? seenBoard.value : null;
+  const latest = history.listOf(null)?.entries.find((e) => e.table_id === tableId.value) ?? null;
+  return reviewChoices(set ? (history.sets[set.id] ?? null) : null, seen, latest);
+});
+
+// What the game waits for us to do, told inside the review modal.
+const notice = computed(() =>
+  turnNotice(playing.value, me.value, table.value, showStart.value),
+);
+
 const headerTitle = computed(() => {
   const board = playing.value?.board;
   const name = table.value?.name || (tableId.value ? `Table #${tableId.value}` : 'Table');
@@ -683,6 +717,9 @@ onIonViewWillEnter(() => {
     notFound.value = true;
     return;
   }
+  if (id !== tableId.value) {
+    reviewOpen.value = false;
+  }
   tableId.value = id;
   notFound.value = false;
   notSeated.value = false;
@@ -690,9 +727,11 @@ onIonViewWillEnter(() => {
   load(false);
 });
 
-// Off screen (another page pushed on top): no card plays itself meanwhile.
+// Off screen (another page pushed on top): no card plays itself meanwhile,
+// and the review closes (with its export sheet and any printout).
 onIonViewWillLeave(() => {
   viewActive.value = false;
+  reviewOpen.value = false;
 });
 
 // Kicked (the tables store has already said so in a toast): nothing to see.
@@ -792,6 +831,23 @@ watch(
   { immediate: true },
 );
 
+// A board finished here (live or on a reload): the one to review once the
+// next board replaces it.
+watch(
+  () => (playing.value?.phase === 'finished' ? playing.value.playing_id : null),
+  (playingId) => {
+    if (playingId) {
+      seenBoard.value = {
+        tableId: tableId.value,
+        playingId,
+        number: playing.value!.board?.number ?? null,
+        setId: playing.value!.set?.id ?? null,
+      };
+    }
+  },
+  { immediate: true },
+);
+
 // The fourth card of a trick, seen live: hold the trick up with its winner
 // for a moment before the table clears it (a reload shows the next lead).
 const TRICK_PAUSE_MS = 2000;
@@ -832,6 +888,7 @@ async function load(refetchTable = true) {
     // marked away, is ours again (the store greets us once the backend agrees).
     tablesStore.comeBack(id);
     loadBids();
+    findReviewable();
   } catch (e) {
     const status = statusOf(e);
     if (status === 401) {
@@ -846,6 +903,26 @@ async function load(refetchTable = true) {
     }
   } finally {
     loading.value = false;
+  }
+}
+
+// Boards finished here before the page saw them (a reload mid-set, or the
+// next set's first board): the running set's results, then, if still none,
+// our history's latest entry. Only once a board may have been finished
+// here, and after the game state, so the board shows first. A failure (403
+// for a newcomer's set) only leaves the review out.
+async function findReviewable() {
+  const set = shownSet.value;
+  if (!set || (set.number === 1 && set.board === 1)) {
+    return;
+  }
+  // A finished board or set is read by the watch above already.
+  const read = playing.value?.phase === 'finished' || set.finished;
+  if (!read && set.board > 1 && !history.sets[set.id]) {
+    await history.loadSet(set.id).catch(() => null);
+  }
+  if (reviewable.value.length === 0) {
+    await history.loadHistory(null).catch(() => null);
   }
 }
 

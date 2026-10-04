@@ -33,7 +33,10 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/playingupdated-is-now-compact-expand-it-before-a` (after
+> branch `bulbulica2/61-review-board-at-table` (after
+> #97, the play page reviews and exports the table's finished boards in a
+> sheet while the game goes on; see
+> [`SCREENS.md`](SCREENS.md#play--tablesidplay); after
 > #104, live game updates arrive compact, cards and calls as ids, and the
 > app expands them; see
 > [`ARCHITECTURE.md`](ARCHITECTURE.md#realtime); after #95, when your robot

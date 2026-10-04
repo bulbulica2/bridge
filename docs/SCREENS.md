@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/playingupdated-is-now-compact-expand-it-before-a`._
+_Status as of branch `bulbulica2/61-review-board-at-table`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -322,7 +322,7 @@ What it shows by phase:
   single card in the suit led), it pulses and plays itself after 3 s, with
   the status line counting down ("Playing ♥7 in 3 s…"); tapping it plays
   it at once. Never on a lead, and never for a defender: their other cards
-  are dimmed, but they tap the one left themselves. Opening the claim sheet, a claim or any new card on the
+  are dimmed, but they tap the one left themselves. Opening the claim sheet or the board review, a claim or any new card on the
   table stops the countdown.
   Anyone but dummy can **Claim** some of the tricks left (or **Concede**
   them): the claim sheet has one button per number, 1 up to the tricks
@@ -336,8 +336,7 @@ What it shows by phase:
 - **finished**: the result from your side ("by claim" when a claim ended
   it), the set's running score so far ("Set 3 so far: 2 of 4 boards, you
   +450", read from the set), all four hands face up, **Compare with other tables**, **Review
-  and export** (this board's [review](#board-review--playingsid), where the
-  Export menu is, #71), and the next-board box (who's ready, and **Next board** to ask for
+  and export** (the board review at the table, below), and the next-board box (who's ready, and **Next board** to ask for
   yourself; nobody, a manager included, asks for the others, #72). If one of
   the four has left or been replaced since, the Start box takes the
   next-board box's place: the next board waits for every person's Start.
@@ -354,6 +353,19 @@ What it shows by phase:
   last card's `PlayingUpdated` (or a forfeit's `TableUpdated`), and the
   page then reads the set again.
 
+**Board review at the table** (#97): once a board of this table has been
+finished, **Last board** (header) opens the board review in a full-height
+sheet over the game, at any phase: the same replay and Export as
+[Board review](#board-review--playingsid), without leaving the table. It
+opens on the latest finished board, with a switcher (**Board 5**,
+**Board 6** …) for the set's other finished boards; on a set's first board
+it offers the previous set's last. The game goes on underneath; when it
+waits for you ("Your turn to bid", "Your turn to play", "A claim waits for
+your answer", "The next board waits for your Next", "Your Start: …") a
+banner in the sheet says so with **To the table**. A forced card doesn't
+play itself while it is open, and leaving the page closes it. It fits a
+360 px screen.
+
 | Calls | Endpoint |
 |---|---|
 | `game.load()` | `GET /tables/{id}/playing`, the only request the page waits for on entry |
@@ -363,7 +375,9 @@ What it shows by phase:
 | `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
 | `game.next()` | `POST /tables/{id}/playing/next` |
 | `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
-| `history.loadSet()` (after each finished board, and when the set ends) | `GET /sets/{id}` |
+| `history.loadSet()` (after each finished board, when the set ends, and on entry mid-set) | `GET /sets/{id}` |
+| `history.loadReview()` (the board review) | `GET /playings/{id}`, once per board per session |
+| `history.loadHistory()` (on entry, only when no board to review is known but one may have been finished here) | `GET /api/user/playings` |
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
@@ -441,7 +455,8 @@ Backend: bb#43.
 **Logged in, and only after you finished that board** (403 otherwise; 404
 for an unknown or unfinished playing). Built by #48. Reached from a history
 entry (yours or another player's) or a row of Board results; not in the
-menu. It works the same after the table is gone.
+menu. The play page shows the same review in a sheet (#97: `BoardReview`
+and `useBoardExport` serve both). It works the same after the table is gone.
 
 One table's playing of a board, replayed: the contract and the tricks each
 side has won so far, the four hands face up (you at the bottom if you
@@ -526,6 +541,7 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans).
 | `BanNotice` | the app shell | none (shows `auth.banNotice` after `UserBanned`, goes to Login) |
 | `BanUserForm` | User profile, profile sheet (admins) | `users.ban()` → `POST /users/{id}/ban` |
 | `AppMenu` | the app shell | none (reads the auth store) |
+| `BoardReview` | Board review, Play (`BoardReviewModal`) | none (given the review from `history.loadReview`) |
 | `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}`; **Ban** for admins (`BanUserForm`) |
 | `RobotBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `NextBoardBox`), profile sheet | none (`is_robot` on the user) |
 | `AdminBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `NextBoardBox`, `StartBox`), profile sheet, User profile | none (`is_admin` on the user, #77) |

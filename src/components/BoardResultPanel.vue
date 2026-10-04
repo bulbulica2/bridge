@@ -1,7 +1,8 @@
 <template>
   <!-- A finished board's score, as the backend worked it out (`result`):
        the contract and how it went (by claim, when one ended the play), the score from the viewer's side, both
-       sides' figures, and the set's running score (GET /sets/{id}). -->
+       sides' figures, the matchpoints when already read (a review), and the
+       set's running score (GET /sets/{id}). -->
   <section class="result" aria-live="polite">
     <p class="result-title">
       <template v-if="contract">
@@ -31,6 +32,7 @@
       </span>
     </p>
     <p class="result-summary">{{ resultSummary(result) }}</p>
+    <p v-if="matchpoints" class="result-matchpoints">Matchpoints: {{ matchpoints }}</p>
 
     <p v-if="setSoFar && setSoFar.boards.length > 0" class="result-session">
       Set {{ setSoFar.number }} so far: {{ setSoFar.boards.length }} of {{ setSoFar.of }}
@@ -48,6 +50,8 @@ import type { BoardResult } from '@/services/game';
 import type { SetResults } from '@/services/history';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES, doubledSuffix } from '@/utils/auction';
+import { matchpointsText } from '@/utils/export';
+import type { ExportExtras } from '@/utils/export';
 import {
   formatScore,
   madeText,
@@ -64,13 +68,16 @@ const props = withDefaults(
     mySeat: Seat | null;
     // The set this board belongs to, as far as it has got: its running score.
     setSoFar?: SetResults | null;
+    // Its matchpoints against the other tables, when known.
+    extras?: ExportExtras;
   }>(),
-  { setSoFar: null },
+  { setSoFar: null, extras: () => ({}) },
 );
 
 const contract = computed(() => (props.result.declarer ? props.result.contract : null));
 const mine = computed(() => viewerScore(props.result, props.mySeat));
 const mySide = computed(() => (props.mySeat ? sideOf(props.mySeat) : null));
+const matchpoints = computed(() => matchpointsText(props.extras));
 const setMine = computed(() => (props.setSoFar ? setTotals(props.setSoFar, props.mySeat).score : 0));
 
 function tone(score: number): string {
@@ -137,6 +144,12 @@ function tone(score: number): string {
 .side-mine {
   font-weight: 700;
   color: var(--ion-text-color, #000);
+}
+
+.result .result-matchpoints {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .result .result-summary {
