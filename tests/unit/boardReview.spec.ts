@@ -312,6 +312,13 @@ describe('BoardReview', () => {
     expect(wrapper.find('.result-matchpoints').exists()).toBe(false)
   })
 
+  test('names the viewer as declarer, and a seat whose account is gone plainly', () => {
+    useAuthStore().user = { ...ann, email: 'ann@example.com' } as never
+    const wrapper = mount(BoardReview, { props: { review: { ...review(), players: { ...PLAYERS, S: null } } } })
+
+    expect(wrapper.find('.outcome-detail').text()).toBe('Declarer North (you) · Dummy South')
+  })
+
   test("a player's name is handed up", async () => {
     const wrapper = mount(BoardReview, { props: { review: review() } })
 
