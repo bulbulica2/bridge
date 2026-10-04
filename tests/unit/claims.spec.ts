@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { effectScope, nextTick, ref } from 'vue'
 import { AxiosError, AxiosHeaders } from 'axios'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import BoardResultPanel from '@/components/BoardResultPanel.vue'
@@ -12,7 +13,20 @@ import type { Bid, BoardResult, Card, Claim, Playing, Suit, Trick } from '@/serv
 import type { Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
-import { canClaim, claimAction, claimSeatOf, claimText, claimWaitingFor, tricksLeft } from '@/utils/claim'
+import {
+  CLAIM_SECONDS,
+  canClaim,
+  claimAction,
+  claimClockText,
+  claimExpired,
+  claimOffText,
+  claimSecondsLeft,
+  claimSeatOf,
+  claimText,
+  claimWaitingFor,
+  tricksLeft,
+} from '@/utils/claim'
+import { STALE_CLAIM_GRACE_MS, useStaleClaim } from '@/composables/useStaleClaim'
 import { handToPlay } from '@/utils/play'
 import { resultSummary } from '@/utils/result'
 import { showToast } from '@/utils/toast'
@@ -115,9 +129,15 @@ function state(overrides: Partial<Playing> = {}): Playing {
   }
 }
 
+// Fixtures without a deadline (`expires_at: ''`) read as before bb#96: no
+// countdown. The deadline tests below pass one from `inSeconds`.
 function pending(overrides: Partial<Claim> = {}): Claim {
-  return { seat: 'S', tricks: 4, hand: SOUTH, accepted: [], ...overrides }
+  return { seat: 'S', tricks: 4, hand: SOUTH, accepted: [], expires_at: '', ...overrides }
 }
+
+// The time the deadline tests run at, and a deadline `s` seconds after it.
+const NOW = Date.parse('2026-10-04T12:00:00Z')
+const inSeconds = (s: number) => new Date(NOW + s * 1000).toISOString()
 
 // South (3) is dummy to a robot North, who declares 4♠: South plays both
 // hands and claims for North.
@@ -445,6 +465,165 @@ describe('ClaimPanel for a robot declarer', () => {
   })
 })
 
+describe('claim deadline', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test('the seconds left count down to expires_at, and stop at 0', () => {
+    const claim = pending({ expires_at: inSeconds(7) })
+
+    expect(claimSecondsLeft(claim, NOW)).toBe(7)
+    expect(claimSecondsLeft(claim, NOW + 6500)).toBe(1)
+    expect(claimSecondsLeft(claim, NOW + 7000)).toBe(0)
+    expect(claimSecondsLeft(claim, NOW + 9000)).toBe(0)
+    expect(claimExpired(claim, NOW + 6999)).toBe(false)
+    expect(claimExpired(claim, NOW + 7000)).toBe(true)
+    // No deadline: no countdown, and never expired.
+    expect(claimSecondsLeft(pending(), NOW)).toBeNull()
+    expect(claimExpired(pending(), NOW)).toBe(false)
+  })
+
+  test("those to answer see their time, everyone else whom they're waiting for", () => {
+    const s = state({ claim: pending({ expires_at: inSeconds(7) }) })
+
+    expect(claimClockText(s, 'E', NOW)).toBe('Answer within 0:07')
+    expect(claimClockText(s, 'W', NOW + 2000)).toBe('Answer within 0:05')
+    expect(claimClockText(s, 'S', NOW)).toBe('Waiting for East and West · 0:07')
+    expect(claimClockText(s, 'N', NOW)).toBe('Waiting for East and West · 0:07')
+    expect(claimClockText(s, null, NOW)).toBe('Waiting for East and West · 0:07')
+
+    // West has accepted: West waits for East like the rest.
+    const half = state({ claim: pending({ accepted: ['W'], expires_at: inSeconds(7) }) })
+    expect(claimClockText(half, 'W', NOW)).toBe('Waiting for East · 0:07')
+    expect(claimClockText(half, 'E', NOW)).toBe('Answer within 0:07')
+  })
+
+  test('at 0 the time is up for everyone', () => {
+    const s = state({ claim: pending({ expires_at: inSeconds(7) }) })
+
+    expect(claimClockText(s, 'E', NOW + 7000)).toBe('Time is up: no answer counts as no.')
+    expect(claimClockText(s, 'S', NOW + 8000)).toBe('Time is up: no answer counts as no.')
+  })
+
+  test('no clock without a claim, a deadline, or anybody left to answer', () => {
+    expect(claimClockText(state(), 'S', NOW)).toBeNull()
+    expect(claimClockText(state({ claim: pending() }), 'E', NOW)).toBeNull()
+    expect(
+      claimClockText(state({ claim: pending({ accepted: ['E', 'W'], expires_at: inSeconds(7) }) }), 'S', NOW),
+    ).toBeNull()
+  })
+
+  test("a robot declarer's dummy answers on declarer's clock", () => {
+    const s = forRobot({ claim: pending({ seat: 'E', tricks: 0, expires_at: inSeconds(9) }) })
+
+    expect(claimClockText(s, claimSeatOf(s), NOW)).toBe('Answer within 0:09')
+  })
+
+  test('a claim gone after its deadline was silence; before it, a reject or a withdrawal', () => {
+    const claim = pending({ expires_at: inSeconds(7) })
+
+    expect(claimOffText(claim, NOW + 3000)).toBe("South's claim is off: play goes on.")
+    expect(claimOffText(claim, NOW + 7000)).toBe('Nobody answered: the claim is off, play on.')
+    expect(claimOffText(pending({ seat: 'E' }), NOW)).toBe("East's claim is off: play goes on.")
+  })
+
+  test('the stale-claim timer fires the grace after the deadline, once per deadline', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const deadline = ref<string | null>(inSeconds(10))
+    const reload = vi.fn()
+    const scope = effectScope()
+    scope.run(() => useStaleClaim(() => deadline.value, reload))
+
+    vi.advanceTimersByTime(10_000 + STALE_CLAIM_GRACE_MS - 1)
+    expect(reload).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(reload).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(60_000)
+    expect(reload).toHaveBeenCalledTimes(1)
+
+    // A deadline already behind us (a reload long after it) fires at once.
+    deadline.value = inSeconds(-30)
+    await nextTick()
+    vi.advanceTimersByTime(0)
+    expect(reload).toHaveBeenCalledTimes(2)
+
+    // The claim going away, an unreadable deadline or the scope ending drops it.
+    deadline.value = inSeconds(100)
+    await nextTick()
+    deadline.value = null
+    await nextTick()
+    deadline.value = 'not a date'
+    await nextTick()
+    deadline.value = inSeconds(200)
+    await nextTick()
+    scope.stop()
+    vi.advanceTimersByTime(1_000_000)
+    expect(reload).toHaveBeenCalledTimes(2)
+  })
+
+  test('the claim sheet says how long the others have, and what silence means', () => {
+    const modalStub = { template: '<div><slot /></div>' }
+    const wrapper = mount(ClaimSheet, {
+      props: { open: true, remaining: 5 },
+      global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } },
+    })
+
+    expect(CLAIM_SECONDS).toBe(10)
+    expect(wrapper.get('.claim-deadline').text()).toBe(
+      'The others have 10 seconds to answer: no answer counts as no.',
+    )
+  })
+
+  describe('ClaimPanel', () => {
+    const isDisabled = (el: { element: Element }) => (el.element as HTMLButtonElement).disabled
+    const panel = (s: Playing, mySeat: Seat) =>
+      mount(ClaimPanel, { props: { state: s as Playing & { claim: Claim }, mySeat, players: PLAYERS } })
+
+    test('the countdown ticks for those to answer, and their buttons go at 0', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      const wrapper = panel(asSeat('E', { claim: pending({ expires_at: inSeconds(7) }) }), 'E')
+
+      expect(wrapper.get('.claim-clock').text()).toBe('Answer within 0:07')
+      expect(isDisabled(wrapper.get('.accept'))).toBe(false)
+      expect(isDisabled(wrapper.get('.reject'))).toBe(false)
+
+      vi.advanceTimersByTime(2000)
+      await nextTick()
+      expect(wrapper.get('.claim-clock').text()).toBe('Answer within 0:05')
+
+      vi.advanceTimersByTime(5000)
+      await nextTick()
+      expect(wrapper.get('.claim-clock').text()).toBe('Time is up: no answer counts as no.')
+      expect(isDisabled(wrapper.get('.accept'))).toBe(true)
+      expect(isDisabled(wrapper.get('.reject'))).toBe(true)
+    })
+
+    test('the claimer sees whom they wait for, and Withdraw goes at 0', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      const wrapper = panel(state({ claim: pending({ expires_at: inSeconds(7) }) }), 'S')
+
+      expect(wrapper.get('.claim-clock').text()).toBe('Waiting for East and West · 0:07')
+      expect(isDisabled(wrapper.get('.withdraw'))).toBe(false)
+
+      vi.advanceTimersByTime(7000)
+      await nextTick()
+      expect(isDisabled(wrapper.get('.withdraw'))).toBe(true)
+    })
+
+    test('without a deadline it reads as before, and the buttons stay', () => {
+      const wrapper = panel(asSeat('E', { claim: pending() }), 'E')
+
+      expect(wrapper.find('.claim-clock').exists()).toBe(false)
+      expect(wrapper.get('.claim-detail').text()).toBe('Play stops until you and W answer.')
+      expect(isDisabled(wrapper.get('.accept'))).toBe(false)
+    })
+  })
+})
+
 describe('TablePlayPage claims', () => {
   const table: Table = {
     id: 5,
@@ -606,5 +785,84 @@ describe('TablePlayPage claims', () => {
 
     expect(showToast).toHaveBeenCalledWith('A claim is already pending: E claims 0.', 'danger')
     expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+  })
+
+  describe('the deadline', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    test('runs on the page, and a claim cleared after it is told as nobody answering', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      logIn(2)
+      const wrapper = await mountPage(asSeat('E', { claim: pending({ expires_at: inSeconds(10) }) }))
+
+      expect(wrapper.get('.claim-clock').text()).toBe('Answer within 0:10')
+      vi.advanceTimersByTime(10_000)
+      await flushPromises()
+      expect(wrapper.get('.claim-clock').text()).toBe('Time is up: no answer counts as no.')
+      expect((wrapper.get('.accept').element as HTMLButtonElement).disabled).toBe(true)
+
+      // The backend's update arrives in time: no reread.
+      useGameStore().applyPlayingUpdate(5, { ...asSeat('E') })
+      await flushPromises()
+      expect(showToast).toHaveBeenCalledWith('Nobody answered: the claim is off, play on.', 'warning')
+      expect(wrapper.find('.claim').exists()).toBe(false)
+      vi.advanceTimersByTime(STALE_CLAIM_GRACE_MS)
+      await flushPromises()
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
+    })
+
+    test('with no update 2 s after the deadline, the page rereads the game', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      logIn(2)
+      const wrapper = await mountPage(asSeat('E', { claim: pending({ expires_at: inSeconds(10) }) }))
+      vi.mocked(gameService.getPlaying).mockResolvedValue(asSeat('E'))
+
+      vi.advanceTimersByTime(10_000 + STALE_CLAIM_GRACE_MS - 1)
+      await flushPromises()
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(1)
+      await flushPromises()
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+      expect(gameService.getPlaying).toHaveBeenLastCalledWith(5)
+      expect(wrapper.find('.claim').exists()).toBe(false)
+      expect(showToast).toHaveBeenCalledWith('Nobody answered: the claim is off, play on.', 'warning')
+    })
+
+    test('a reread that fails leaves the claim for the next update', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      const wrapper = await mountPage(state({ claim: pending({ expires_at: inSeconds(10) }) }))
+      vi.mocked(gameService.getPlaying).mockRejectedValue(new Error('offline'))
+
+      vi.advanceTimersByTime(10_000 + STALE_CLAIM_GRACE_MS)
+      await flushPromises()
+
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+      expect(wrapper.get('.claim-clock').text()).toBe('Time is up: no answer counts as no.')
+    })
+
+    test('a claim rejected in time keeps the reject wording and drops the reread', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(NOW)
+      logIn(4)
+      const wrapper = await mountPage(
+        asSeat('W', { turn: 'W', acting_user_id: 4, claim: pending({ expires_at: inSeconds(10) }) }),
+      )
+      vi.mocked(gameService.respondToClaim).mockResolvedValue(asSeat('W', { turn: 'W', acting_user_id: 4 }))
+
+      vi.advanceTimersByTime(3000)
+      await wrapper.get('.reject').trigger('click')
+      await flushPromises()
+      expect(showToast).toHaveBeenCalledWith("South's claim is off: play goes on.", 'warning')
+
+      vi.advanceTimersByTime(15_000)
+      await flushPromises()
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
+    })
   })
 })

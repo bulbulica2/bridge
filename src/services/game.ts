@@ -92,11 +92,15 @@ export interface BoardResult {
 // A pending claim: `seat` claims `tricks` of the tricks still to play for
 // their side (0 concedes them all). `hand` is the claimer's remaining cards,
 // face up to everyone; `accepted` the seats that have agreed so far.
+// `expires_at` (ISO 8601) is when silence rejects it, BRIDGE_CLAIM_SECONDS
+// after it was made (bb#96): count down from it, never from when the claim
+// arrived (bridge_backend docs/API.md, Claims).
 export interface Claim {
   seat: Seat;
   tricks: number;
   hand: Card[];
   accepted: Seat[];
+  expires_at: string;
 }
 
 // The side that forfeited a set, in the backend's spelling.

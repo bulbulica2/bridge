@@ -350,6 +350,7 @@ import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
 import TrickArea from '@/components/TrickArea.vue';
 import { useForcedPlay } from '@/composables/useForcedPlay';
+import { useStaleClaim } from '@/composables/useStaleClaim';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
 import { useHistoryStore } from '@/stores/history';
@@ -360,7 +361,7 @@ import type { Bid, Card, Claim, PlayedCard, Playing, Trick } from '@/services/ga
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
 import { SUIT_NAMES, SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
-import { canClaim, claimSeatOf, tricksLeft } from '@/utils/claim';
+import { canClaim, claimOffText, claimSeatOf, tricksLeft } from '@/utils/claim';
 import {
   autoPlaysForced,
   cardsToPlay,
@@ -787,14 +788,27 @@ watch(
   },
 );
 
-// A claim rejected or withdrawn, seen live: play goes on where it stopped.
-// (Accepted, the board is finished and the toast above tells its score.)
+// A claim rejected, withdrawn or expired, seen live: play goes on where it
+// stopped. (Accepted, the board is finished and the toast above tells its
+// score.)
 watch(
   () => [playing.value?.playing_id, playing.value?.claim ?? null] as const,
   ([id, claim], [oldId, oldClaim]) => {
     if (id != null && id === oldId && oldClaim && !claim && playing.value?.phase === 'play') {
-      showToast(`${SEAT_NAMES[oldClaim.seat]}'s claim is off: play goes on.`, 'warning');
+      showToast(claimOffText(oldClaim, Date.now()), 'warning');
     }
+  },
+);
+
+// Still showing a claim 2 s after its deadline: the backend has settled it
+// but its update hasn't come (it may have been lost), so reread the game.
+// Only while the page is on screen; coming back loads it anyway.
+useStaleClaim(
+  () => (viewActive.value ? (pendingClaim.value?.claim.expires_at ?? null) : null),
+  () => {
+    game.load(tableId.value).catch(() => {
+      // The next update, or the offline note's Refresh, tells the rest.
+    });
   },
 );
 

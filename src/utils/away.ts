@@ -31,9 +31,10 @@ export function myAwaySeat(table: BroadcastTable, userId: number | null): TableS
   return seat && isAway(seat) ? seat : null;
 }
 
-// Whole seconds until `forfeitAt`, never below 0.
-export function secondsLeft(forfeitAt: string, now: number): number {
-  const ms = Date.parse(forfeitAt) - now;
+// Whole seconds until `deadline` (a seat's `forfeit_at`, a claim's
+// `expires_at`), never below 0.
+export function secondsLeft(deadline: string, now: number): number {
+  const ms = Date.parse(deadline) - now;
   return Number.isNaN(ms) ? 0 : Math.max(0, Math.ceil(ms / 1000));
 }
 

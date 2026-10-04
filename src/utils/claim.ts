@@ -1,6 +1,7 @@
 import type { Seat } from '@/services/tables';
 import type { Claim, Playing, PublicPlaying } from '@/services/game';
 import { SEAT_NAMES } from '@/utils/auction';
+import { formatClock, secondsLeft } from '@/utils/away';
 import { playsForDeclarer } from '@/utils/play';
 
 // Claims (bridge_backend docs/API.md, Claims; GAME-RULES.md §5), mirrored as
@@ -8,6 +9,11 @@ import { playsForDeclarer } from '@/utils/play';
 // word: anything that slips past these answers 409 with its reason.
 
 const SEATS: Seat[] = ['N', 'E', 'S', 'W'];
+
+// BRIDGE_CLAIM_SECONDS' default: how long the others have to answer before
+// silence rejects a claim (bb#96). Only the claim sheet quotes it; a
+// countdown always reads the claim's `expires_at`.
+export const CLAIM_SECONDS = 10;
 
 // The tricks still to play: 13 less the complete ones, so a trick in
 // progress still counts. What a claim may take at most.
@@ -89,4 +95,43 @@ export function claimText(
     return `${who} ${verb('claim')} all ${remaining} remaining tricks${forSeat}`;
   }
   return `${who} ${verb('claim')} ${claim.tricks} of the remaining ${remaining} tricks${forSeat}`;
+}
+
+// Whole seconds before silence rejects the pending claim, never below 0;
+// null for a claim without a deadline.
+export function claimSecondsLeft(claim: Claim, now: number): number | null {
+  return claim.expires_at ? secondsLeft(claim.expires_at, now) : null;
+}
+
+// The claim's deadline has passed: no answer counts any more, even before
+// the backend's PlayingUpdated clears it.
+export function claimExpired(claim: Claim, now: number): boolean {
+  return claimSecondsLeft(claim, now) === 0;
+}
+
+// The pending claim's clock as `seat` (claimSeatOf) sees it: "Answer within
+// 0:07" for a player who still has to answer, "Waiting for East and West ·
+// 0:07" for everyone else, "Time is up: no answer counts as no." once it has
+// run out. Null without a deadline, or with nobody left to answer.
+export function claimClockText(state: PublicPlaying, seat: Seat | null, now: number): string | null {
+  const left = state.claim ? claimSecondsLeft(state.claim, now) : null;
+  const waiting = claimWaitingFor(state);
+  if (left === null || waiting.length === 0) {
+    return null;
+  }
+  if (left === 0) {
+    return 'Time is up: no answer counts as no.';
+  }
+  if (claimAction(state, seat) === 'answer') {
+    return `Answer within ${formatClock(left)}`;
+  }
+  return `Waiting for ${waiting.map((s) => SEAT_NAMES[s]).join(' and ')} · ${formatClock(left)}`;
+}
+
+// The toast for a claim going away mid-play. Gone at or after its deadline,
+// silence rejected it; before, somebody rejected or withdrew it.
+export function claimOffText(claim: Claim, now: number): string {
+  return claimExpired(claim, now)
+    ? 'Nobody answered: the claim is off, play on.'
+    : `${SEAT_NAMES[claim.seat]}'s claim is off: play goes on.`;
 }
