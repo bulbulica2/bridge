@@ -237,7 +237,14 @@ The user's standing rule (#91): **no task may leave code coverage under
   the caller's own cards only). The Pinia store `src/stores/game.ts` holds the
   state of one table (`tableId`, `playing`): `load()` replaces it all (also how
   a reload or reconnect rebuilds it); `PlayingUpdated` replaces the public part
-  and carries the hand over (less any card played); `HandDealt` on the user's
+  and carries the hand over (less any card played). It arrives **compact**
+  (`CompactPlaying`: cards and calls as ids, bb#95), so the tables store
+  hands it to `receivePlayingUpdate`, which expands it with
+  `expandPlaying()` (`src/utils/compact.ts`) from `GET /cards` (`loadCards`)
+  and `GET /bids`, then calls `applyPlayingUpdate` (which tests feed the
+  HTTP shape directly; `tests/unit/compactPlaying.ts` compacts one). Events
+  wait in order while the lists load; no lists, or an unknown id, reloads
+  over HTTP; `HandDealt` on the user's
   own channel `private-App.Models.User.{id}` brings a new board's hand, kept
   as pending if it beats that board's `PlayingUpdated` (the same channel's
   `UserBanned` goes to the auth store, see Bans). A `TableUpdated` whose
@@ -275,8 +282,8 @@ The user's standing rule (#91): **no task may leave code coverage under
 - **Bidding**: calls go out as a `bid_id`, and the ids aren't pinned to the
   rank, so they come from the public `GET /bids` (`getBids`, the 38 calls in
   `auction[].bid`'s shape), which the game store's `loadBids()` reads once;
-  `prefetchBids` in `src/router/index.ts` reads it in the background a
-  second after a logged-in page shows.
+  `prefetchGameLists` in `src/router/index.ts` reads it (and `GET /cards`)
+  in the background a second after a logged-in page shows.
   Never hard-code or compare bid ids; look a call up by `call` or
   `level`/`strain`. `call(bidId)` posts `POST /tables/{id}/calls` and takes
   the full state it answers with. Both it and `PlayingUpdated` skip a state
@@ -507,7 +514,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   message, which `errorMessage` already shows.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
-  `username`, `description`, `is_robot`, `is_admin`, never the email); `TableSeat.user` uses that type
+  `username`, `description`, `is_robot`, `is_admin`, never the email;
+  `description` only from `GET /users/{id}`: seats and `players` leave it
+  out to keep broadcasts under 10 KB, so it is optional); `TableSeat.user` uses that type
   too, since table payloads embed the same profile per seat. The Pinia store
   `src/stores/users.ts` caches profiles by id (a 404 drops the cached one).
   Tapping a seated player's name on either table page opens
@@ -528,6 +537,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   own seat request) is a kick: toast, unsubscribe, and `kickedFrom` makes the
   detail page go back to `/tables`. After a reconnect the watched table is
   refetched once. The Tables list has no channel and stays refresh-only.
+  Every broadcast fits in 10 KB (backend `docs/API.md`, Message size):
+  hence the compact `PlayingUpdated` (see Game) and the length caps the
+  forms mirror, `NAME_MAX` 50 / `USERNAME_MAX` 30 / `TABLE_NAME_MAX` 50 in
+  `src/utils/limits.ts` and `MAX_BAN_REASON` 500 in `src/utils/ban.ts`.
   **Live or not** (#76): `echo.ts` writes the connection status and the
   table whose channel Pusher confirmed (`.subscribed()`; `.error()`,
   `leaveTable` and any non-`connected` status clear it) into

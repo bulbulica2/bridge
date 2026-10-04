@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/59-play-robot-partners-hand`._
+_Status as of branch `bulbulica2/playingupdated-is-now-compact-expand-it-before-a`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -30,13 +30,13 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 |---|---|
 | `src/main.ts` | creates the app: Ionic, Pinia, the router, Ionic's CSS, dark mode |
 | `src/App.vue` | the shell: side menu, router outlet, route progress bar, the ban notice |
-| `src/router/` | `index.ts` (routes + guard + chunk and bid-list prefetch), `loading.ts` (the progress bar flag, `navigateAndSettle`) |
+| `src/router/` | `index.ts` (routes + guard + prefetch of the page chunks and the bid and card lists), `loading.ts` (the progress bar flag, `navigateAndSettle`) |
 | `src/views/` | one `*Page.vue` per route |
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
 | `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away countdown), `useLiveStatus` (live updates on or off, for the table pages' Refresh) |
-| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans |
+| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the backend's length limits (`limits.ts`) |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
@@ -169,7 +169,7 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 |---|---|---|
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `lostSet` (a set your side forfeited while you were away) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `comeBack`, `stakeOf`, `dismissLostSet`; owns the table channel and the heartbeat |
-| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid list | `load`, `adopt`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` / `DeclarerHandShown` |
+| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadSet`, `loadReview` |
 | `users` | public profiles by id (with `ban`/`bans` for an admin) | `load`, `ban`, `liftBan` |
 
@@ -190,8 +190,9 @@ so every extra request on the way in delays the one the page needs:
 - The play page waits only for `GET /tables/{id}/playing` (plus
   `GET /tables/{id}` when it doesn't hold the table, e.g. after a reload),
   and asks for the bid list after that. The bid list is normally already
-  there: the router reads it in the background a second after the first
-  logged-in page shows (`prefetchBids` in `src/router/index.ts`).
+  there: the router reads it, and the card list `PlayingUpdated` needs, in
+  the background a second after the first logged-in page shows
+  (`prefetchGameLists` in `src/router/index.ts`).
 - Create with robots closes the modal and moves to the new table's page
   as soon as `POST /tables` answers; that page draws the table the store
   already holds (nothing is dealt until Start, #68).
@@ -207,7 +208,7 @@ so every extra request on the way in delays the one the page needs:
 |---|---|
 | `auth.ts` | `/sanctum/csrf-cookie`, `POST /login`, `/register`, `/logout`, `/forgot-password`, `/reset-password`, `GET` / `PATCH /api/user` |
 | `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
-| `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `POST /tables/{id}/calls`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
+| `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `GET /cards`, `POST /tables/{id}/calls`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
 | `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /playings/{id}`, `GET /sets/{id}` |
 | `users.ts` | `GET /users/{id}`, `GET /users?search=`, `POST` / `DELETE /users/{id}/ban` |
 | `echo.ts` | the websocket, and `POST /broadcasting/auth` to sign private channels |
@@ -352,7 +353,7 @@ doesn't send the XSRF header Sanctum wants.
 
 | Channel | Who owns it | Events |
 |---|---|---|
-| `private-table.{id}` | `tables` store, following your seat | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state, handed to the `game` store) |
+| `private-table.{id}` | `tables` store, following your seat | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state in its compact shape, expanded by the `game` store) |
 | `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
 
 - The table channel only admits players seated there, and the server never
@@ -365,6 +366,23 @@ doesn't send the XSRF header Sanctum wants.
   forfeited it, see Away mid-set below).
 - Mid-set, `TableUpdated` also says who is away (`away_since`,
   `forfeit_at` per seat), who is back, and a forfeit (`set.ended`).
+- `PlayingUpdated` comes **compact**: every card and call is an id, so a
+  whole finished board fits in a broadcast's 10 KB
+  ([`API.md`, Event `PlayingUpdated`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md#event-playingupdated)).
+  The `game` store's `receivePlayingUpdate` expands it with
+  `expandPlaying()` (`src/utils/compact.ts`) from the `GET /cards` and
+  `GET /bids` lists, back into the shape `GET /tables/{id}/playing`
+  answers, and applies that as before. If the lists aren't loaded yet,
+  events wait for them in arrival order; if they can't be loaded, or an
+  event names an id they lack, the store reloads the state over HTTP
+  instead (and the lists, for a stale id). HTTP answers, `HandDealt` and
+  `DeclarerHandShown` are not compact.
+- For the same 10 KB, a seat's `user` and the state's `players` carry no
+  `description` (`PublicUser.description` is optional; the profile sheet
+  shows it once `GET /users/{id}` is in), and the free text that gets
+  broadcast is capped: `name` 50 and `username` 30 characters, a table's
+  name 50 (`src/utils/limits.ts`), a ban's reason 500 (`MAX_BAN_REASON`).
+  The forms cap their inputs at those lengths.
 - After the socket reconnects, whatever was broadcast meanwhile is lost,
   so the watched table is fetched again once.
 - The Tables **list** has no channel; it refreshes on enter and on

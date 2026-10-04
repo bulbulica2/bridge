@@ -148,6 +148,29 @@ export interface PublicPlaying {
   ready: Seat[] | null;
 }
 
+// `PlayingUpdated` as it comes over the table channel: the same keys as
+// `PublicPlaying`, but every card and call written as its id so a whole board
+// fits in a broadcast's 10 KB (bridge_backend docs/API.md, Event
+// PlayingUpdated). `expandPlaying` (src/utils/compact.ts) turns it back into
+// `PublicPlaying` from GET /cards and GET /bids. `auction` runs clockwise
+// from `board.dealer`, each trick's `cards` clockwise from its `leader`, and
+// a trick's `round` is its place in `tricks`.
+export interface CompactPlaying
+  extends Omit<
+    PublicPlaying,
+    'auction' | 'contract' | 'tricks' | 'current_trick' | 'dummy_hand' | 'claim' | 'result' | 'deal'
+  > {
+  auction: number[] | null;
+  contract: (Omit<Contract, 'bid'> & { bid: number }) | null;
+  tricks: { leader: Seat; cards: number[]; winner: Seat }[] | null;
+  // `leader` is null until the trick's first card.
+  current_trick: { leader: Seat | null; cards: number[] } | null;
+  dummy_hand: number[] | null;
+  claim: (Omit<Claim, 'hand'> & { hand: number[] }) | null;
+  result: (Omit<BoardResult, 'contract'> & { contract: number | null }) | null;
+  deal: Record<Seat, number[]> | null;
+}
+
 // GET /tables/{id}/playing adds the caller's own seat and remaining cards.
 export interface Playing extends PublicPlaying {
   my_seat: Seat | null;
@@ -188,6 +211,13 @@ export async function getPlaying(tableId: number): Promise<Playing> {
 // 1C … 7NT by rank. Public, static reference data.
 export async function getBids(): Promise<Bid[]> {
   const { data } = await http.get<ApiResponse<Bid[]>>('/bids');
+  return data.data;
+}
+
+// The 52 cards, to read the card ids a `PlayingUpdated` carries. Public,
+// static reference data, like the bids.
+export async function getCards(): Promise<Card[]> {
+  const { data } = await http.get<ApiResponse<Card[]>>('/cards');
   return data.data;
 }
 

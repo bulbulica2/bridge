@@ -141,7 +141,7 @@ router.beforeEach(async (to) => {
 router.afterEach((to) => {
   navigationEnded(to.fullPath);
   prefetchPages();
-  prefetchBids();
+  prefetchGameLists();
 })
 router.onError(() => {
   navigationEnded();
@@ -167,23 +167,26 @@ function prefetchPages() {
   }, 1000);
 }
 
-// The bid list (GET /bids) is the same for every table and only needed on the
-// user's turn to call, so it is read once in the background a moment after a
-// logged-in page is up (after login, or the first page of a reload) instead of
-// on the way into a table, where it would queue ahead of the board itself.
-let bidsTimer: ReturnType<typeof setTimeout> | null = null;
-function prefetchBids() {
+// The bid list (GET /bids) and the card list (GET /cards) are the same for
+// every table: the bids are needed on the user's turn to call, and both to
+// read a `PlayingUpdated` (cards and calls come as ids). So they are read
+// once in the background a moment after a logged-in page is up (after login,
+// or the first page of a reload) instead of on the way into a table, where
+// they would queue ahead of the board itself.
+let prefetchTimer: ReturnType<typeof setTimeout> | null = null;
+function prefetchGameLists() {
   const auth = useAuthStore();
   const game = useGameStore();
-  if (!auth.isAuthenticated || game.bids.length > 0 || bidsTimer !== null) {
+  const held = game.bids.length > 0 && game.cards.length > 0;
+  if (!auth.isAuthenticated || held || prefetchTimer !== null) {
     return;
   }
-  bidsTimer = setTimeout(() => {
-    bidsTimer = null;
+  prefetchTimer = setTimeout(() => {
+    prefetchTimer = null;
     if (auth.isAuthenticated) {
-      game.loadBids().catch(() => {
-        // Only a head start; the game page asks again and shows its own error.
-      });
+      // Only a head start; the game page and the game store ask again.
+      game.loadBids().catch(() => {});
+      game.loadCards().catch(() => {});
     }
   }, 1000);
 }

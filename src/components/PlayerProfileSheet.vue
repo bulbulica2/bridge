@@ -18,8 +18,10 @@
 
         <p v-if="gone" class="profile-gone">This player's account no longer exists.</p>
         <template v-else>
+          <!-- The embedded copy has no description (bridge_backend
+               docs/API.md, Message size): it shows once GET /users/{id} is in. -->
           <p v-if="shown.description" class="profile-description">{{ shown.description }}</p>
-          <p v-else class="profile-empty">No description yet.</p>
+          <p v-else-if="shown.description === null" class="profile-empty">No description yet.</p>
         </template>
 
         <div v-if="refreshing" class="refreshing">

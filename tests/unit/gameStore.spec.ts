@@ -9,10 +9,12 @@ import * as echo from '@/services/echo'
 import type { AuctionCall, Bid, Card, Playing, PublicPlaying } from '@/services/game'
 import type { Seat, Table } from '@/services/tables'
 import { showToast } from '@/utils/toast'
+import { compactOf } from './compactPlaying'
 
 vi.mock('@/services/game', () => ({
   getPlaying: vi.fn(),
   getBids: vi.fn(),
+  getCards: vi.fn(),
   makeCall: vi.fn(),
   playCard: vi.fn(),
   nextBoard: vi.fn(),
@@ -243,9 +245,12 @@ describe('game store', () => {
     vi.mocked(tablesService.getTable).mockResolvedValue(makeTable(['N', 'E', 'S', 'W'], 7))
     await useTablesStore().loadTable(5)
 
+    game.cards = HAND
+    game.bids = BIDS
+
     const [id, onTable, onPlaying] = vi.mocked(echo.listenToTable).mock.calls[0]
     expect(id).toBe(5)
-    onPlaying(publicState({ turn: 'W' }))
+    onPlaying(compactOf(publicState({ turn: 'W' })))
     expect(game.playing?.turn).toBe('W')
 
     onTable(makeTable(['N', 'S', 'W'], null))
@@ -304,6 +309,116 @@ describe('game store', () => {
 
     expect(gameService.getBids).toHaveBeenCalledTimes(3)
     expect(game.bids).toEqual(BIDS)
+  })
+
+  describe('PlayingUpdated over the channel, compact', () => {
+    const LEAD = { seat: 'W' as Seat, card: HAND[1] }
+    const opened = publicState({ auction: auction(ONE_HEART, PASS), turn: 'N' })
+
+    test('is expanded and applied at once while both lists are held', async () => {
+      const game = await loaded()
+      game.cards = HAND
+      game.bids = BIDS
+
+      game.receivePlayingUpdate(5, compactOf(opened))
+
+      expect(game.playing).toEqual({ ...opened, my_seat: 'S', hand: HAND, declarer_hand: null })
+      expect(gameService.getCards).not.toHaveBeenCalled()
+    })
+
+    test('waits for the lists, and applies what came meanwhile in order', async () => {
+      const game = await loaded()
+      vi.mocked(gameService.getCards).mockResolvedValue(HAND)
+      vi.mocked(gameService.getBids).mockResolvedValue(BIDS)
+      const inPlay = publicState({
+        phase: 'play',
+        auction: auction(ONE_HEART, PASS, PASS, PASS),
+        turn: 'N',
+        current_trick: [LEAD],
+      })
+
+      game.receivePlayingUpdate(5, compactOf(opened))
+      game.receivePlayingUpdate(5, compactOf(inPlay))
+      expect(game.playing?.auction).toEqual([])
+
+      await vi.waitFor(() => expect(game.playing?.phase).toBe('play'))
+      expect(game.playing?.current_trick).toEqual([LEAD])
+      expect(game.playing?.hand).toEqual([HAND[0], HAND[2]])
+      expect(gameService.getCards).toHaveBeenCalledTimes(1)
+      expect(gameService.getBids).toHaveBeenCalledTimes(1)
+
+      // Once held, the next one goes straight in.
+      game.receivePlayingUpdate(5, compactOf({ ...inPlay, turn: 'E' }))
+      expect(game.playing?.turn).toBe('E')
+    })
+
+    test('without the lists, reads the state over HTTP instead', async () => {
+      const game = await loaded()
+      vi.mocked(gameService.getCards).mockRejectedValue(new Error('down'))
+      vi.mocked(gameService.getBids).mockResolvedValue(BIDS)
+      vi.mocked(gameService.getPlaying).mockResolvedValue(fullState({ turn: 'W' }))
+
+      game.receivePlayingUpdate(5, compactOf(opened))
+
+      await vi.waitFor(() => expect(game.playing?.turn).toBe('W'))
+      expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+    })
+
+    test('an id the lists lack rereads them and the state', async () => {
+      const game = await loaded()
+      game.cards = HAND
+      game.bids = [PASS]
+      vi.mocked(gameService.getCards).mockResolvedValue(HAND)
+      vi.mocked(gameService.getBids).mockResolvedValue(BIDS)
+      vi.mocked(gameService.getPlaying).mockResolvedValue(fullState({ turn: 'W' }))
+
+      game.receivePlayingUpdate(5, compactOf(opened))
+
+      await vi.waitFor(() => expect(game.playing?.turn).toBe('W'))
+      expect(gameService.getBids).toHaveBeenCalledTimes(1)
+      expect(gameService.getCards).toHaveBeenCalledTimes(1)
+      await vi.waitFor(() => expect(game.bids).toEqual(BIDS))
+    })
+
+    test('a failed reread is left for the next event', async () => {
+      const game = await loaded()
+      game.cards = HAND
+      game.bids = [PASS]
+      vi.mocked(gameService.getCards).mockRejectedValue(new Error('down'))
+      vi.mocked(gameService.getBids).mockRejectedValue(new Error('down'))
+      vi.mocked(gameService.getPlaying).mockRejectedValue(new Error('down'))
+
+      game.receivePlayingUpdate(5, compactOf(opened))
+
+      await vi.waitFor(() => expect(gameService.getPlaying).toHaveBeenCalledTimes(2))
+      expect(game.playing?.auction).toEqual([])
+    })
+
+    test('an event for a table we no longer hold is dropped', async () => {
+      const game = useGameStore()
+      vi.mocked(gameService.getCards).mockRejectedValue(new Error('down'))
+      vi.mocked(gameService.getBids).mockResolvedValue(BIDS)
+
+      game.receivePlayingUpdate(5, compactOf(opened))
+      await vi.waitFor(() => expect(gameService.getCards).toHaveBeenCalled())
+      await Promise.resolve()
+
+      expect(gameService.getPlaying).not.toHaveBeenCalled()
+      expect(game.playing).toBeNull()
+    })
+
+    test('reads the card list once and shares a request in flight', async () => {
+      vi.mocked(gameService.getCards).mockResolvedValue(HAND)
+      const game = useGameStore()
+
+      const [first, second] = await Promise.all([game.loadCards(), game.loadCards()])
+      await game.loadCards()
+
+      expect(gameService.getCards).toHaveBeenCalledTimes(1)
+      expect(first).toEqual(HAND)
+      expect(second).toEqual(HAND)
+      expect(game.cards).toEqual(HAND)
+    })
   })
 
   test('a call sends the bid id and takes the new state it answers with', async () => {

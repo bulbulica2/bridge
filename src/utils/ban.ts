@@ -5,7 +5,8 @@ import type { BanRequest, PublicUser } from '@/services/users';
 // the game for 1–365 days with a reason the user is shown.
 
 export const MAX_BAN_DAYS = 365;
-export const MAX_BAN_REASON = 1000;
+// The backend's limit (UserBan::REASON_MAX): the reason is broadcast.
+export const MAX_BAN_REASON = 500;
 // The ban form's quick picks.
 export const BAN_QUICK_DAYS = [1, 7, 30];
 
@@ -37,7 +38,7 @@ export function canBan(viewer: User | null, target: PublicUser | null): boolean 
 }
 
 // The ban form's own check, the backend's rules (BanUserRequest): whole days
-// from 1 to 365 and a reason of at most 1000 characters. Empty when it may
+// from 1 to 365 and a reason of at most 500 characters. Empty when it may
 // be sent.
 export function banFormErrors(request: BanRequest): Partial<Record<keyof BanRequest, string>> {
   const errors: Partial<Record<keyof BanRequest, string>> = {};

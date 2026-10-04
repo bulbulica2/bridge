@@ -90,6 +90,7 @@ const wrappers: [string, () => Promise<unknown>, Method, string, unknown, boolea
   ['cancelStart', () => tables.cancelStart(3), 'delete', '/tables/3/start', undefined, true],
   ['getPlaying', () => game.getPlaying(3), 'get', '/tables/3/playing', undefined, false],
   ['getBids', () => game.getBids(), 'get', '/bids', undefined, false],
+  ['getCards', () => game.getCards(), 'get', '/cards', undefined, false],
   ['makeCall', () => game.makeCall(3, 12), 'post', '/tables/3/calls', { bid_id: 12 }, false],
   ['playCard', () => game.playCard(3, 40), 'post', '/tables/3/cards', { card_id: 40 }, false],
   ['nextBoard', () => game.nextBoard(3), 'post', '/tables/3/playing/next', undefined, false],

@@ -12,6 +12,7 @@
                 label="Name"
                 label-placement="stacked"
                 autocomplete="name"
+                :maxlength="NAME_MAX"
                 required
                 :disabled="submitting"
               />
@@ -23,6 +24,7 @@
                 label="Username"
                 label-placement="stacked"
                 autocomplete="username"
+                :maxlength="USERNAME_MAX"
                 required
                 :disabled="submitting"
               />
@@ -96,6 +98,7 @@ import {
 import AppHeader from '@/components/AppHeader.vue';
 import { navigateAndSettle } from '@/router/loading';
 import { errorMessage } from '@/utils/errors';
+import { NAME_MAX, USERNAME_MAX } from '@/utils/limits';
 import { showWelcomeToast } from '@/utils/toast';
 import { useAuthStore } from '@/stores/auth';
 

@@ -4,7 +4,7 @@ import type { ChannelAuthorizationCallback } from 'pusher-js';
 import http from './http';
 import { clearSubscribed, resetLiveStatus, setConnection, setSubscribed } from './liveStatus';
 import type { Ban } from './auth';
-import type { DeclarerHandShownEvent, HandDealtEvent, PublicPlaying } from './game';
+import type { CompactPlaying, DeclarerHandShownEvent, HandDealtEvent } from './game';
 import type { BroadcastTable } from './tables';
 
 // Live updates come over Laravel Reverb, which speaks the Pusher protocol.
@@ -17,9 +17,10 @@ export interface TableUpdatedEvent {
 }
 
 // What `PlayingUpdated` carries on the same channel: the public part of the
-// game state, never anybody's hand.
+// game state, never anybody's hand, in its compact shape (cards and calls as
+// ids), which the game store expands.
 export interface PlayingUpdatedEvent {
-  playing: PublicPlaying;
+  playing: CompactPlaying;
 }
 
 let echo: Echo<'reverb'> | null = null;
@@ -82,7 +83,7 @@ export function onReconnect(listener: () => void): () => void {
 export function listenToTable(
   tableId: number,
   onUpdate: (table: BroadcastTable) => void,
-  onPlaying: (playing: PublicPlaying) => void,
+  onPlaying: (playing: CompactPlaying) => void,
 ) {
   getEcho()
     .private(`table.${tableId}`)

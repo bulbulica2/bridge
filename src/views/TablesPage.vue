@@ -141,6 +141,7 @@
                   type="text"
                   label="Table name"
                   label-placement="stacked"
+                  :maxlength="TABLE_NAME_MAX"
                   placeholder="Friday club"
                 />
               </ion-item>
@@ -209,6 +210,7 @@ import type { Seat, Table } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { banText } from '@/utils/ban';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { TABLE_NAME_MAX } from '@/utils/limits';
 import { confirmMove } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
