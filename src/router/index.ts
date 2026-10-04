@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from '@ionic/vue-router';
-import { RouteRecordRaw } from 'vue-router';
+import { RouteLocationNormalized, RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
+import { useTablesStore } from '@/stores/tables';
 import { navigationEnded, navigationStarted } from './loading';
 
 declare module 'vue-router' {
@@ -12,6 +13,11 @@ declare module 'vue-router' {
     guestOnly?: boolean;
     /** Closed to a banned user (the game itself); they are sent to /tables. */
     notBanned?: boolean;
+    /**
+     * The page finds the user's seat itself (it loads the Tables list or its
+     * own table), so the router doesn't ask for it on the way in.
+     */
+    findsSeat?: boolean;
   }
 }
 
@@ -22,7 +28,8 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: '/home',
-    component: () => import('@/views/HomePage.vue')
+    component: () => import('@/views/HomePage.vue'),
+    meta: { findsSeat: true }
   },
   {
     path: '/login',
@@ -32,21 +39,21 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/tables',
     component: () => import('@/views/TablesPage.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, findsSeat: true }
   },
   {
     // One table: its four seats and the actions on them. Reached from the
     // Tables list, not from the menu.
     path: '/tables/:id',
     component: () => import('@/views/TableDetailPage.vue'),
-    meta: { requiresAuth: true, notBanned: true }
+    meta: { requiresAuth: true, notBanned: true, findsSeat: true }
   },
   {
     // The game at one table: the board, the four players and your own hand.
     // Entered from the detail page (automatically when a board is dealt).
     path: '/tables/:id/play',
     component: () => import('@/views/TablePlayPage.vue'),
-    meta: { requiresAuth: true, notBanned: true }
+    meta: { requiresAuth: true, notBanned: true, findsSeat: true }
   },
   {
     // The user's finished boards (the menu's "My boards"), paged in as it scrolls.
@@ -142,6 +149,7 @@ router.afterEach((to) => {
   navigationEnded(to.fullPath);
   prefetchPages();
   prefetchGameLists();
+  findSeat(to);
 })
 router.onError(() => {
   navigationEnded();
@@ -189,6 +197,19 @@ function prefetchGameLists() {
       game.loadCards().catch(() => {});
     }
   }, 1000);
+}
+
+// The header's and menu's "Your table" (useYourTable) need the user's seat
+// on every page, not only once the Tables list has loaded: after a reload on
+// My boards, say, nothing else asks. A page that finds it itself
+// (`findsSeat`) is left to it, so its own requests don't queue behind this
+// one (the local backend answers one at a time). Banned users get no
+// shortcut, so they aren't asked for.
+function findSeat(to: RouteLocationNormalized) {
+  const auth = useAuthStore();
+  if (auth.isAuthenticated && !auth.isBanned && !to.meta.findsSeat) {
+    useTablesStore().findSeat();
+  }
 }
 
 export default router

@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/62-auto-next-board`._
+_Status as of branch `bulbulica2/63-table-shortcut-and-side-menu`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -33,8 +33,20 @@ logged in:  Home ── Your table / Find a table
                                  └── player ──┴──▶ profile sheet ─▶ User profile ─▶ Board review
             Menu: My boards ─┬▶ Board review ⇄ Board results
                              └▶ Set results ─▶ Board review
+            Header: Your table (while seated: Play, or Table detail before a board)
             Header: Account (view / edit profile, log out)
 ```
+
+**Menu and Your table** (#99): from 768 px up the side menu stays open
+beside every page; the header's menu button collapses it and brings it
+back, and the browser remembers which. On a phone it slides in as before.
+While the user holds a seat, every page's header has a **Your table**
+button (the table's name and a dot: green for a board in progress, blue
+for your turn, amber for an away seat) and the menu lists **Your table**
+first with the same status. One tap goes to Play once a board is dealt,
+else to Table detail. On pages that load no table (My boards, a profile,
+a review…) the router asks `GET /tables` once to find the seat. See
+[`ARCHITECTURE.md`](ARCHITECTURE.md#app-shell).
 
 ## Home — `/home`
 
@@ -554,10 +566,10 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans).
 
 | Piece | Where | Calls |
 |---|---|---|
-| `AppHeader` | every page | none (reads the auth store; `BanBanner` under it while you are banned) |
+| `AppHeader` | every page | none (reads the auth store; **Your table** from the tables store's `myTable` via `useYourTable`; the menu button collapses the pinned menu; `BanBanner` under it while you are banned) |
 | `BanNotice` | the app shell | none (shows `auth.banNotice` after `UserBanned`, goes to Login) |
 | `BanUserForm` | User profile, profile sheet (admins) | `users.ban()` → `POST /users/{id}/ban` |
-| `AppMenu` | the app shell | none (reads the auth store) |
+| `AppMenu` | the app shell | none (reads the auth store; **Your table** first while seated, via `useYourTable`) |
 | `BoardReview` | Board review, Play (`BoardReviewModal`) | none (given the review from `history.loadReview`) |
 | `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}`; **Ban** for admins (`BanUserForm`) |
 | `RobotBadge` | Home, Tables, Table detail, Play (`BridgeTable`), profile sheet | none (`is_robot` on the user) |

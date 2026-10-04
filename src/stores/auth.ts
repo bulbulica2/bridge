@@ -58,8 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
   // This client is done with the session, and with the table and user
   // channels it could only hold while logged in.
   function endSession() {
-    useTablesStore().unwatchTable();
-    useTablesStore().dismissLostSet();
+    useTablesStore().clear();
     useGameStore().unwatchUser();
     useHistoryStore().clear();
     disconnectEcho();

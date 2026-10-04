@@ -16,6 +16,8 @@ import { isReady, startNeeded, startWaiting } from '@/utils/start'
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   getTable: vi.fn(),
+  // The detail page asks where the user sits when it isn't their table.
+  listTables: vi.fn(),
   startTable: vi.fn(),
   cancelStart: vi.fn(),
   sendHeartbeat: vi.fn(),
@@ -246,6 +248,7 @@ describe('tables store start', () => {
     vi.resetAllMocks()
     logIn()
     vi.mocked(tablesService.sendHeartbeat).mockResolvedValue(undefined)
+    vi.mocked(tablesService.listTables).mockResolvedValue([])
   })
 
   afterEach(() => useTablesStore().unwatchTable())
@@ -327,6 +330,7 @@ describe('TableDetailPage.vue Start', () => {
     vi.resetAllMocks()
     logIn()
     vi.mocked(tablesService.sendHeartbeat).mockResolvedValue(undefined)
+    vi.mocked(tablesService.listTables).mockResolvedValue([])
   })
 
   afterEach(() => useTablesStore().unwatchTable())

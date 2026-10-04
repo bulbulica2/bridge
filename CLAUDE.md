@@ -98,8 +98,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   row) and
   `/users/:id` (`UserProfilePage.vue`, `meta.requiresAuth`, a player's public
   profile, reached from the profile sheet, not from the menu). Adding a
-  new top-level section means adding both a view and a route entry here, plus an `ion-item` in
-  `src/components/AppMenu.vue` if it belongs in the menu.
+  new top-level section means adding both a view and a route entry here
+  (with `meta.findsSeat` if the page loads the Tables list or a table
+  itself), plus an entry in `links` in `src/components/AppMenu.vue` if it
+  belongs in the menu.
 - **Route guard**: a single `router.beforeEach` in `src/router/index.ts` enforces
   the route meta declared in the same file (`RouteMeta` is augmented there):
   `requiresAuth` sends guests to `/login`, `guestOnly` sends logged-in users to
@@ -127,17 +129,41 @@ The user's standing rule (#91): **no task may leave code coverage under
   `join` answers, to `/tables/:id/play` if the returned table's `board_id`
   is set, else `/tables/:id` (#67), with the seat buttons disabled until
   `onIonViewDidLeave`.
-- **App shell**: `App.vue` renders `<AppMenu />` (the left `ion-menu`) next to
-  `<ion-router-outlet id="main-content" />`; the menu's `content-id` must match
-  that outlet id. Every page wraps its content in `<ion-page>` and uses
-  `src/components/AppHeader.vue` (menu button + `title` prop, an `end` slot for
-  per-page header actions, and an "Account" button linking to `/account` that
-  the header itself renders whenever the auth store says somebody is logged in,
-  and `BanBanner.vue` under the toolbar while the user is banned).
-  `App.vue` also holds `BanNotice.vue` (see Bans).
-  `AppMenu.vue` is auth-aware too: "Login" while logged out, "Tables" and
-  "My boards" once logged in. Because both read the auth store, mounting any page in a unit test
-  needs an active Pinia.
+- **App shell**: `App.vue` wraps `<AppMenu />` (the left `ion-menu`) and
+  `<ion-router-outlet id="main-content" />` in an `ion-split-pane`
+  (`content-id="main-content"`, the menu's `content-id` must match). From
+  `md` (768 px) up the menu stays beside the page (#99); the split pane's
+  `when` is `PINNED_FROM` or `false` from `menuPinned` in
+  `src/utils/menu.ts` (`localStorage` `bridge.menuPinned`, try/catch,
+  default open). `AppHeader`'s menu button is `toggleMenu()`, not
+  `ion-menu-button` (which hides beside a pinned menu): from `md` up it
+  flips `menuPinned`, below it `menuController.toggle()` (the overlay, as
+  before). `ion-menu-toggle` stays: Ionic ignores it for a menu shown in a
+  split pane. Every page wraps its content in `<ion-page>` and uses
+  `src/components/AppHeader.vue` (menu button, the **Your table** button,
+  `title` prop, an `end` slot for per-page header actions, and an
+  "Account" button linking to `/account` that the header itself renders
+  whenever the auth store says somebody is logged in (icon only below
+  576 px while Your table shows), and `BanBanner.vue` under the toolbar
+  while the user is banned). `App.vue` also holds `BanNotice.vue` (see
+  Bans). `AppMenu.vue` is auth-aware too: "Login" while logged out,
+  "Tables" and "My boards" once logged in, the current page marked
+  `aria-current`. **Your table** (#99): `src/composables/useYourTable.ts`
+  (header button + the menu's first entry) reads the tables store's
+  `myTable` (nothing for a guest, a banned user or nobody seated): target
+  `/tables/:id/play` if `board_id` or the seat is held/away, else
+  `/tables/:id`; status `away` > `turn` (`turnNotice` on the game store's
+  board for that table, `startNeeded` for a Start) > `board`; `current`
+  when the route is the target, `atTable` on either table page. `myTable`
+  on every page: the router's `afterEach` calls the store's `findSeat()`
+  (one `GET /tables`, deduped, skipped once anything held says where we
+  sit) except on routes with `meta.findsSeat` (`/home`, `/tables`,
+  `/tables/:id`, `/tables/:id/play`, which load it themselves; the detail
+  page calls `findSeat()` after opening a table). `load()` then follows
+  the seat's channel and heartbeat. Logout calls the store's `clear()`.
+  Because the header and menu read the auth store, mounting any page in a
+  unit test needs an active Pinia; they read the route through
+  `inject(routeLocationKey, null)`, so tests without a router still mount.
 - **Auth / HTTP**: `src/services/http.ts` is the shared axios instance
   (`baseURL` from `VITE_API_BASE_URL` in `.env`, `withCredentials` +
   `withXSRFToken` for Sanctum's cookie flow). `src/services/auth.ts` wraps the

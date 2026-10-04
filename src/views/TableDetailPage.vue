@@ -388,6 +388,9 @@ async function load(refetchTable = true) {
   try {
     await (refetchTable ? store.loadTable(tableId.value) : store.openTable(tableId.value));
     loadBoardPhase();
+    // Somebody else's table: where we sit, if anywhere, is still to find
+    // for the header's "Your table" (a no-op once anything says).
+    store.findSeat();
   } catch (e) {
     if (handleExpiredSession(e)) {
       return;
