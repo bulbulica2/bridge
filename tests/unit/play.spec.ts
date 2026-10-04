@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { effectScope, nextTick, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
+import BridgeTable from '@/components/BridgeTable.vue'
 import HandView from '@/components/HandView.vue'
 import TrickArea from '@/components/TrickArea.vue'
 import TablePlayPage from '@/views/TablePlayPage.vue'
@@ -12,7 +13,15 @@ import type { Bid, Card, PlayedCard, Playing, Suit, Trick } from '@/services/gam
 import type { Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
-import { autoPlaysForced, forcedCard, handToPlay, legalCards, trickBySide } from '@/utils/play'
+import {
+  autoPlaysForced,
+  cardsToPlay,
+  forcedCard,
+  handToPlay,
+  legalCards,
+  playsForDeclarer,
+  trickBySide,
+} from '@/utils/play'
 import { FORCED_PLAY_SECONDS, useForcedPlay } from '@/composables/useForcedPlay'
 import { showToast } from '@/utils/toast'
 
@@ -207,11 +216,13 @@ describe('whose hand is on play', () => {
       current_trick: [],
       tricks_won: { ns: 0, ew: 0 },
       dummy_hand: null,
+      claim: null,
       result: null,
       deal: null,
       ready: null,
       my_seat: 'S',
       hand: [],
+      declarer_hand: null,
       ...overrides,
     }
   }
@@ -231,6 +242,8 @@ describe('whose hand is on play', () => {
   test("nothing while it is someone else's move, or outside the play", () => {
     expect(handToPlay(state({ turn: 'W', acting_user_id: 4 }), 3)).toBeNull()
     expect(handToPlay(state({ phase: 'auction' }), 3)).toBeNull()
+    // Declarer named to act for a defender's hand: none of theirs to play.
+    expect(handToPlay(state({ turn: 'E', acting_user_id: 3 }), 3)).toBeNull()
   })
 
   // 4♠ by South: a forced card plays itself for declarer alone.
@@ -243,6 +256,103 @@ describe('whose hand is on play', () => {
     expect(autoPlaysForced(state({ my_seat: 'E', turn: 'E', acting_user_id: 2 }))).toBe(false)
     expect(autoPlaysForced(state({ my_seat: 'W', turn: 'W', acting_user_id: 4 }))).toBe(false)
     expect(autoPlaysForced(state({ contract: null }))).toBe(false)
+  })
+
+  // 4♠ by North, a robot; South (user 3) is dummy and plays both hands.
+  describe('for a robot declarer', () => {
+    const players = {
+      N: { id: 1, name: 'R', username: 'robot-1', description: null, is_robot: true },
+      E: { id: 2, name: 'R', username: 'robot-2', description: null, is_robot: true },
+      S: { id: 3, name: 'Cy', username: 'cy', description: null },
+      W: { id: 4, name: 'R', username: 'robot-3', description: null, is_robot: true },
+    }
+    const robot = (overrides: Partial<Playing> = {}) =>
+      state({
+        players,
+        contract: { bid: {} as Bid, doubled: 0, declarer: 'N', dummy: 'S' },
+        declarer_hand: cards('SA', 'HK'),
+        ...overrides,
+      })
+
+    test("dummy plays declarer's hand on declarer's turn, and their own on theirs", () => {
+      expect(handToPlay(robot({ turn: 'N', acting_user_id: 3 }), 3)).toBe('declarer')
+      expect(handToPlay(robot({ turn: 'S', acting_user_id: 3 }), 3)).toBe('own')
+    })
+
+    test("nothing on a defender's turn, nor for a defender on declarer's", () => {
+      expect(handToPlay(robot({ turn: 'E', acting_user_id: 2 }), 3)).toBeNull()
+      expect(handToPlay(robot({ turn: 'N', acting_user_id: 3, my_seat: 'E' }), 2)).toBeNull()
+    })
+
+    test('acting_user_id alone says whose move it is', () => {
+      // A robot declarer that acted (it never does here) leaves dummy idle.
+      expect(handToPlay(robot({ turn: 'N', acting_user_id: 1 }), 3)).toBeNull()
+    })
+
+    test("dummy plays declarer's game: forced cards play themselves", () => {
+      expect(playsForDeclarer(robot())).toBe(true)
+      expect(autoPlaysForced(robot({ turn: 'N' }))).toBe(true)
+      expect(autoPlaysForced(robot({ turn: 'S' }))).toBe(true)
+    })
+
+    test("a human declarer's dummy, and the defenders, don't", () => {
+      expect(playsForDeclarer(state({ my_seat: 'N' }))).toBe(false)
+      expect(playsForDeclarer(robot({ my_seat: 'E' }))).toBe(false)
+      expect(playsForDeclarer(robot({ my_seat: null }))).toBe(false)
+      expect(playsForDeclarer(robot({ contract: null }))).toBe(false)
+      expect(autoPlaysForced(robot({ my_seat: 'E' }))).toBe(false)
+    })
+
+    test('the cards of each hand on play', () => {
+      const s = robot({ hand: cards('D2'), dummy_hand: cards('C3') })
+      expect(cardsToPlay(s, 'own')).toEqual(cards('D2'))
+      expect(cardsToPlay(s, 'dummy')).toEqual(cards('C3'))
+      expect(cardsToPlay(s, 'declarer')).toEqual(cards('SA', 'HK'))
+    })
+  })
+})
+
+describe("BridgeTable with a robot declarer's hand", () => {
+  const PLAYERS = {
+    N: { id: 1, name: 'R', username: 'robot-1', description: null, is_robot: true },
+    S: { id: 3, name: 'Cy', username: 'cy', description: null },
+  }
+  const NORTH = cards('SQ', 'S4', 'H3')
+
+  test('lies across the top for its dummy, tappable when told so', async () => {
+    const wrapper = mount(BridgeTable, {
+      props: {
+        players: PLAYERS,
+        mySeat: 'S',
+        board: null,
+        turn: 'N',
+        myTurn: true,
+        declarer: { seat: 'N', cards: NORTH },
+        declarerPlayable: [c('SQ').id],
+        declarerForcedId: c('SQ').id,
+      },
+    })
+
+    const top = wrapper.get('.side-top')
+    expect(top.classes()).toContain('seat-wide')
+    expect(top.get('.declarer-hand').attributes('aria-label')).toBe("Declarer's hand, North")
+    expect(top.text()).toContain('declarer')
+    expect(top.get('.forced').attributes('data-card')).toBe(String(c('SQ').id))
+    await top.get(`button[data-card="${c('SQ').id}"]`).trigger('click')
+    expect(wrapper.emitted('play')).toEqual([[c('SQ')]])
+  })
+
+  test('nothing is drawn without it, nor at the bottom seat', () => {
+    const without = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: null },
+    })
+    expect(without.find('.declarer-hand').exists()).toBe(false)
+    expect(without.get('.side-top').classes()).not.toContain('seat-wide')
+
+    const own = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'N', board: null, turn: null, declarer: { seat: 'N', cards: NORTH } },
+    })
+    expect(own.find('.declarer-hand').exists()).toBe(false)
   })
 })
 
@@ -395,6 +505,7 @@ describe('TablePlayPage card play', () => {
       ready: null,
       my_seat: 'S',
       hand: SOUTH,
+      declarer_hand: null,
       ...overrides,
     }
   }
@@ -685,6 +796,118 @@ describe('TablePlayPage card play', () => {
       vi.advanceTimersByTime(10_000)
       await flushPromises()
       expect(gameService.playCard).not.toHaveBeenCalled()
+    })
+  })
+
+  // 4♠ by North, a robot, with robots in the East and West seats too: South
+  // (the user) is dummy and plays both hands. East led.
+  describe("a robot declarer's dummy", () => {
+    const robot = (seat: 'N' | 'E' | 'W', n: number) => ({ ...PLAYERS[seat], username: `robot-${n}`, is_robot: true })
+    const ROBOTS = { ...PLAYERS, N: robot('N', 1), E: robot('E', 2), W: robot('W', 3) }
+    const DECLARER = cards('SQ', 'S4', 'H3')
+    const MINE = cards('S7', 'HK', 'D2')
+
+    function robotState(overrides: Partial<Playing> = {}): Playing {
+      return state({
+        players: ROBOTS,
+        contract: { bid: FOUR_SPADES, doubled: 0, declarer: 'N', dummy: 'S' },
+        turn: 'N',
+        acting_user_id: 3,
+        current_trick: played('E S3, S SA, W S5'),
+        dummy_hand: MINE,
+        hand: MINE,
+        declarer_hand: DECLARER,
+        ...overrides,
+      })
+    }
+
+    test("plays declarer's cards from the top of the table on its turn", async () => {
+      const wrapper = await mountPage(robotState())
+
+      const top = wrapper.get('.side-top')
+      expect(top.classes()).toContain('seat-wide')
+      expect(top.text()).toContain('declarer')
+      expect(top.get('.turn').text()).toBe('Your turn')
+      expect(enabledCards(wrapper, '.side-top')).toEqual([c('SQ').id, c('S4').id])
+      expect(wrapper.findAll('.my-hand button')).toHaveLength(0)
+      expect(wrapper.get('.status').text()).toBe("Play: your turn from North's hand. Follow suit: spades.")
+      expect(wrapper.get('.status').classes()).not.toContain('status-robot')
+      expect(wrapper.get('.outcome-you').text()).toBe('robot-1 declares 4♠ — you play the hand')
+    })
+
+    test("a tapped card from declarer's hand goes out", async () => {
+      const wrapper = await mountPage(robotState())
+      vi.mocked(gameService.playCard).mockReturnValue(new Promise(() => {}))
+
+      await wrapper.get(`.side-top button[data-card="${c('S4').id}"]`).trigger('click')
+
+      expect(gameService.playCard).toHaveBeenCalledWith(5, c('S4').id)
+    })
+
+    test('plays their own hand on their own turn', async () => {
+      const wrapper = await mountPage(
+        robotState({ turn: 'S', current_trick: played('E S3'), hand: cards('SA', 'S7', 'HK') }),
+      )
+
+      expect(enabledCards(wrapper, '.my-hand')).toEqual([c('SA').id, c('S7').id])
+      expect(enabledCards(wrapper, '.side-top')).toEqual([])
+      expect(wrapper.get('.status').text()).toBe('Play: your turn from your own hand. Follow suit: spades.')
+    })
+
+    test('a robot defender thinks; nobody plays our cards for us', async () => {
+      const wrapper = await mountPage(robotState({ turn: 'W', acting_user_id: 4, current_trick: played('E S3, S SA') }))
+
+      expect(wrapper.get('.status').text()).toBe('Play: robot-3 is thinking…')
+      expect(wrapper.text()).not.toContain('Declarer is playing your cards.')
+      // Declarer's cards lie face up for us, but wait their turn.
+      expect(wrapper.find('.side-top .declarer-hand').exists()).toBe(true)
+      expect(enabledCards(wrapper, '.side-top')).toEqual([])
+    })
+
+    test("declarer's hand shows from the end of the auction, before the lead", async () => {
+      const wrapper = await mountPage(
+        robotState({ turn: 'E', acting_user_id: 2, current_trick: [], dummy_hand: null }),
+      )
+
+      expect(wrapper.get('.side-top .declarer-hand').findAll('.card')).toHaveLength(3)
+      expect(wrapper.get('.status').text()).toBe('Play: robot-2 is thinking…')
+    })
+
+    test("declarer's only legal card plays itself after 3 s", async () => {
+      vi.useFakeTimers()
+      vi.mocked(gameService.playCard).mockReturnValue(new Promise(() => {}))
+      const wrapper = await mountPage(robotState({ declarer_hand: cards('SQ', 'H3', 'C9') }))
+
+      expect(wrapper.get('.side-top .forced').attributes('data-card')).toBe(String(c('SQ').id))
+      expect(wrapper.get('.status').text()).toBe("Play: your turn from North's hand. Playing ♠Q in 3 s…")
+      vi.advanceTimersByTime(3000)
+      await flushPromises()
+      expect(gameService.playCard).toHaveBeenCalledWith(5, c('SQ').id)
+    })
+
+    test('our own forced card plays itself too', async () => {
+      vi.useFakeTimers()
+      vi.mocked(gameService.playCard).mockReturnValue(new Promise(() => {}))
+      const wrapper = await mountPage(
+        robotState({ turn: 'S', current_trick: played('E D9'), hand: cards('S7', 'HK', 'D2') }),
+      )
+
+      expect(wrapper.get('.my-hand .forced').attributes('data-card')).toBe(String(c('D2').id))
+      vi.advanceTimersByTime(3000)
+      await flushPromises()
+      expect(gameService.playCard).toHaveBeenCalledWith(5, c('D2').id)
+    })
+
+    test("a defender at the same table sees only dummy's cards", async () => {
+      logIn(2, 'Bob')
+      const wrapper = await mountPage(
+        robotState({ players: { ...ROBOTS, E: PLAYERS.E }, my_seat: 'E', hand: cards('SK', 'S5'), declarer_hand: null }),
+      )
+
+      expect(wrapper.find('.declarer-hand').exists()).toBe(false)
+      expect(wrapper.find('.outcome-you').exists()).toBe(false)
+      // East sees South, dummy, on the left.
+      expect(wrapper.find('.side-left .dummy-columns').exists()).toBe(true)
     })
   })
 

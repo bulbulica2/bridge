@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import BoardResultPanel from '@/components/BoardResultPanel.vue'
+import ClaimPanel from '@/components/ClaimPanel.vue'
 import ClaimSheet from '@/components/ClaimSheet.vue'
 import * as gameService from '@/services/game'
 import * as tablesService from '@/services/tables'
@@ -11,7 +12,7 @@ import type { Bid, BoardResult, Card, Claim, Playing, Suit, Trick } from '@/serv
 import type { Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
-import { canClaim, claimAction, claimText, claimWaitingFor, tricksLeft } from '@/utils/claim'
+import { canClaim, claimAction, claimSeatOf, claimText, claimWaitingFor, tricksLeft } from '@/utils/claim'
 import { handToPlay } from '@/utils/play'
 import { resultSummary } from '@/utils/result'
 import { showToast } from '@/utils/toast'
@@ -118,6 +119,19 @@ function pending(overrides: Partial<Claim> = {}): Claim {
   return { seat: 'S', tricks: 4, hand: SOUTH, accepted: [], ...overrides }
 }
 
+// South (3) is dummy to a robot North, who declares 4♠: South plays both
+// hands and claims for North.
+const ROBOT_NORTH = { ...PLAYERS, N: { ...PLAYERS.N, username: 'robot-1', is_robot: true } }
+function forRobot(overrides: Partial<Playing> = {}): Playing {
+  return state({
+    players: ROBOT_NORTH,
+    contract: { bid: FOUR_SPADES, doubled: 0, declarer: 'N', dummy: 'S' },
+    dummy_hand: SOUTH,
+    declarer_hand: NORTH,
+    ...overrides,
+  })
+}
+
 // The same board as East or West sees it.
 function asSeat(seat: Seat, overrides: Partial<Playing> = {}): Playing {
   return state({ my_seat: seat, hand: cards('HA', 'HQ', 'D9', 'D8', 'D7'), ...overrides })
@@ -196,6 +210,40 @@ describe('claim hints', () => {
     expect(claimText(pending({ seat: 'E', tricks: 0 }), 5)).toBe('East concedes the remaining 5 tricks')
     expect(claimText(pending({ tricks: 1 }), 1)).toBe('South claims the last trick')
     expect(claimText(pending(), 5, 'S')).toBe('You claim 4 of the remaining 5 tricks')
+  })
+
+  test("a robot declarer's dummy claims and answers for declarer's seat", () => {
+    expect(claimSeatOf(forRobot())).toBe('N')
+    expect(canClaim(forRobot(), claimSeatOf(forRobot()))).toBe(true)
+    // Anyone else claims for their own seat, dummy of a human for none.
+    expect(claimSeatOf(state())).toBe('S')
+    expect(claimSeatOf(state({ my_seat: 'N' }))).toBe('N')
+    expect(canClaim(state({ my_seat: 'N' }), claimSeatOf(state({ my_seat: 'N' })))).toBe(false)
+    expect(claimSeatOf(forRobot({ my_seat: 'E' }))).toBe('E')
+
+    const theirs = forRobot({ claim: pending({ seat: 'E', tricks: 0 }) })
+    expect(claimAction(theirs, claimSeatOf(theirs))).toBe('answer')
+    const ours = forRobot({ claim: pending({ seat: 'N' }) })
+    expect(claimAction(ours, claimSeatOf(ours))).toBe('withdraw')
+  })
+
+  test("the banner words a claim made for declarer's seat", () => {
+    expect(claimText(pending({ seat: 'N', tricks: 3 }), 5, 'S', 'N')).toBe(
+      'You claim 3 of the remaining 5 tricks for North',
+    )
+    expect(claimText(pending({ seat: 'N', tricks: 5 }), 5, 'S', 'N')).toBe(
+      'You claim all 5 remaining tricks for North',
+    )
+    expect(claimText(pending({ seat: 'N', tricks: 0 }), 5, 'S', 'N')).toBe(
+      'You concede the remaining 5 tricks for North',
+    )
+    expect(claimText(pending({ seat: 'N', tricks: 1 }), 1, 'S', 'N')).toBe(
+      'You claim the last trick for North',
+    )
+    // A defender's claim reads as before.
+    expect(claimText(pending({ seat: 'E', tricks: 0 }), 5, 'S', 'N')).toBe(
+      'East concedes the remaining 5 tricks',
+    )
   })
 
   test('no hand is on play while a claim is pending', () => {
@@ -345,6 +393,17 @@ describe('ClaimSheet', () => {
     expect(wrapper.emitted('claim')).toEqual([[0]])
   })
 
+  test("claiming for a robot declarer names its seat, whose hand goes face up", () => {
+    const wrapper = mount(ClaimSheet, {
+      props: { open: true, remaining: 5, forSeat: 'N' },
+      global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } },
+    })
+
+    expect(wrapper.get('.claim-title').text()).toBe('Claim tricks for North')
+    expect(wrapper.get('.claim-help').text()).toContain("North's hand is shown to everyone")
+    expect(mountSheet({ remaining: 5 }).get('.claim-help').text()).toContain('Your hand is shown to everyone')
+  })
+
   test('busy disables every button', () => {
     const wrapper = mountSheet({ remaining: 3, busy: true })
 
@@ -362,6 +421,27 @@ describe('ClaimSheet', () => {
 
     expect(wrapper.findAll('.picked')).toHaveLength(0)
     expect(wrapper.get('.send-claim').text()).toBe('Pick a number')
+  })
+})
+
+describe('ClaimPanel for a robot declarer', () => {
+  test("the claim made for declarer's seat is ours to withdraw", () => {
+    const wrapper = mount(ClaimPanel, {
+      props: { state: forRobot({ claim: pending({ seat: 'N', hand: NORTH }) }) as Playing & { claim: Claim }, mySeat: 'S', actsFor: 'N', players: ROBOT_NORTH },
+    })
+
+    expect(wrapper.get('.claim-text').text()).toBe('You claim 4 of the remaining 5 tricks for North')
+    expect(wrapper.find('.withdraw').exists()).toBe(true)
+  })
+
+  test("a defender's claim is ours to answer, on declarer's behalf", () => {
+    const wrapper = mount(ClaimPanel, {
+      props: { state: forRobot({ claim: pending({ seat: 'E', tricks: 0 }) }) as Playing & { claim: Claim }, mySeat: 'S', actsFor: 'N', players: ROBOT_NORTH },
+    })
+
+    expect(wrapper.find('.accept').exists()).toBe(true)
+    expect(wrapper.get('[data-seat="N"]').text()).toContain('you')
+    expect(wrapper.get('.claim-detail').text()).toBe('Play stops until you and W answer.')
   })
 })
 
@@ -496,6 +576,23 @@ describe('TablePlayPage claims', () => {
 
     expect(wrapper.get('.result-detail').text()).toContain('by claim')
     expect(showToast).toHaveBeenCalledWith('Board over: 4♠ by S, +2 by claim: N-S +480.', 'success')
+  })
+
+  test("a robot declarer's dummy claims for declarer from the sheet", async () => {
+    const wrapper = await mountPage(forRobot())
+    vi.mocked(gameService.makeClaim).mockResolvedValue(forRobot({ claim: pending({ seat: 'N', hand: NORTH }) }))
+
+    await wrapper.get('.claim-button').trigger('click')
+    expect(wrapper.get('.claim-title').text()).toBe('Claim tricks for North')
+    await wrapper.get('[data-tricks="4"]').trigger('click')
+    await wrapper.get('.send-claim').trigger('click')
+    await flushPromises()
+
+    expect(gameService.makeClaim).toHaveBeenCalledWith(5, 4)
+    expect(wrapper.get('.claim-text').text()).toBe('You claim 4 of the remaining 5 tricks for North')
+    expect(buttonTexts(wrapper, '.claim-buttons')).toEqual(['Withdraw'])
+    // North's cards stay across the top, where we play them from.
+    expect(wrapper.find('.side-top .declarer-hand').exists()).toBe(true)
   })
 
   test("a refused claim shows the backend's reason and rereads the board", async () => {

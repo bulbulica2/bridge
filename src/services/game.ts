@@ -152,6 +152,10 @@ export interface PublicPlaying {
 export interface Playing extends PublicPlaying {
   my_seat: Seat | null;
   hand: Card[] | null;
+  // Declarer's remaining cards, only for a human dummy whose declarer is a
+  // robot: that dummy plays both hands (see `acting_user_id`). Set from the
+  // end of the auction to the end of the play, null for everyone else.
+  declarer_hand: Card[] | null;
 }
 
 // `HandDealt` on the user's own channel, once per board dealt.
@@ -160,6 +164,16 @@ export interface HandDealtEvent {
   playing_id: number;
   my_seat: Seat;
   hand: Card[];
+}
+
+// `DeclarerHandShown` on the user's own channel: an auction just ended with a
+// robot declarer and the user, dummy, plays its cards (`declarer_hand`).
+export interface DeclarerHandShownEvent {
+  table_id: number;
+  playing_id: number;
+  my_seat: Seat;
+  declarer: Seat;
+  declarer_hand: Card[];
 }
 
 // The table's current board with the caller's own hand: enough to render the
@@ -188,7 +202,8 @@ export async function makeCall(tableId: number, bidId: number): Promise<Playing>
 }
 
 // Play the next card of the current trick: from the caller's own hand, or
-// from dummy's when the caller is declarer and it is dummy's turn. 201 with
+// from dummy's when the caller is declarer and it is dummy's turn, or from
+// declarer's when the caller is a robot declarer's dummy. 201 with
 // the whole new state (hand included); 409 with the reason in `message` (not
 // your turn, must follow suit, not in that hand, dummy doesn't play), 403
 // unless seated here, 422 for an unknown card id.
@@ -212,7 +227,8 @@ export async function nextBoard(tableId: number): Promise<Playing> {
 }
 
 // Claim `tricks` of the tricks still to play for the caller's side (0
-// concedes them). Any player but dummy, during the play. 201 with the whole
+// concedes them). Any player but dummy (unless dummy plays for a robot
+// declarer: then the claim is declarer's), during the play. 201 with the whole
 // new state; 409 with the reason (a claim already pending, too many tricks,
 // dummy, not the play), 403 unless seated here.
 export async function makeClaim(tableId: number, tricks: number): Promise<Playing> {

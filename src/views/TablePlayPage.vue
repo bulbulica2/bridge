@@ -64,6 +64,12 @@
             <p class="outcome-detail">
               Declarer {{ who(playing.contract.declarer) }} · Dummy {{ who(playing.contract.dummy) }}
             </p>
+            <!-- A robot declarer hands its game to us, its dummy. -->
+            <p v-if="forDeclarer" class="outcome-you">
+              {{ players[playing.contract.declarer]?.username }} declares
+              <CallLabel :bid="playing.contract.bid" />{{ doubledSuffix(playing.contract.doubled) }}
+              — you play the hand
+            </p>
             <p v-if="playing.tricks_won" class="tricks-won">
               <span>NS {{ playing.tricks_won.ns }}</span>
               <span aria-hidden="true">·</span>
@@ -75,6 +81,7 @@
             v-if="pendingClaim"
             :state="pendingClaim"
             :my-seat="mySeat"
+            :acts-for="claimSeat"
             :players="players"
             :busy="claiming"
             @accept="answerClaim(true)"
@@ -163,6 +170,9 @@
             :dummy="dummy"
             :dummy-playable="playFrom === 'dummy' ? legalIds(playing.dummy_hand) : null"
             :dummy-forced-id="playFrom === 'dummy' ? (autoPlay.card.value?.id ?? null) : null"
+            :declarer="declarerHand"
+            :declarer-playable="playFrom === 'declarer' ? legalIds(playing.declarer_hand) : null"
+            :declarer-forced-id="playFrom === 'declarer' ? (autoPlay.card.value?.id ?? null) : null"
             :claim="pendingClaim ? { seat: pendingClaim.claim.seat, cards: pendingClaim.claim.hand } : null"
             :deal="playing.phase === 'finished' ? playing.deal : null"
             :away="awayMarks"
@@ -286,6 +296,7 @@
       <ClaimSheet
         :open="claimOpen"
         :remaining="playing ? tricksLeft(playing) : 0"
+        :for-seat="forDeclarer ? claimSeat : null"
         :busy="claiming"
         @claim="sendClaim"
         @close="claimOpen = false"
@@ -337,8 +348,15 @@ import type { Bid, Card, Claim, PlayedCard, Playing, Trick } from '@/services/ga
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
 import { SUIT_NAMES, SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
-import { canClaim, tricksLeft } from '@/utils/claim';
-import { autoPlaysForced, forcedCard, handToPlay, legalCards } from '@/utils/play';
+import { canClaim, claimSeatOf, tricksLeft } from '@/utils/claim';
+import {
+  autoPlaysForced,
+  cardsToPlay,
+  forcedCard,
+  handToPlay,
+  legalCards,
+  playsForDeclarer,
+} from '@/utils/play';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { resultSummary } from '@/utils/result';
 import { awaySeats } from '@/utils/away';
@@ -424,12 +442,19 @@ const canBid = computed(
   () => playing.value?.phase === 'auction' && myTurn.value && mySeat.value !== null,
 );
 
-// The hand we play from now, if any: ours, or dummy's as declarer.
+// The hand we play from now, if any: ours, dummy's as declarer, or a robot
+// declarer's as its dummy.
 const playFrom = computed(() => (playing.value ? handToPlay(playing.value, me.value) : null));
 
 const iAmDummy = computed(
   () => !!playing.value?.contract && playing.value.contract.dummy === mySeat.value,
 );
+
+// We are dummy to a robot declarer, so we play both hands and claim for it.
+const forDeclarer = computed(() => !!playing.value && playsForDeclarer(playing.value));
+
+// The seat we claim (and answer claims) for: declarer's when we play its game.
+const claimSeat = computed(() => (playing.value ? claimSeatOf(playing.value) : null));
 
 // The claim waiting for its answers, if any (only ever during the play).
 const pendingClaim = computed(() => {
@@ -437,8 +462,9 @@ const pendingClaim = computed(() => {
   return state?.phase === 'play' && state.claim ? (state as Playing & { claim: Claim }) : null;
 });
 
-// The Claim button: any player but dummy, while no claim is pending.
-const mayClaim = computed(() => !!playing.value && canClaim(playing.value, mySeat.value));
+// The Claim button: any player but dummy (unless dummy plays for a robot
+// declarer), while no claim is pending.
+const mayClaim = computed(() => !!playing.value && canClaim(playing.value, claimSeat.value));
 
 // Dummy's cards lie face up from the opening lead to the last trick.
 const dummy = computed(() => {
@@ -449,14 +475,24 @@ const dummy = computed(() => {
   return { seat: state.contract.dummy, cards: state.dummy_hand };
 });
 
+// A robot declarer's cards, ours alone to see and play, from the end of the
+// auction to the end of the play.
+const declarerHand = computed(() => {
+  const state = playing.value;
+  if (state?.phase !== 'play' || !state.contract || !state.declarer_hand) {
+    return null;
+  }
+  return { seat: state.contract.declarer, cards: state.declarer_hand };
+});
+
 // The ids of the cards `hand` may follow with (a hint; the backend decides).
 function legalIds(hand: Card[] | null): number[] {
   return legalCards(hand ?? [], playing.value?.current_trick ?? null).map((card) => card.id);
 }
 
 // The one card the hand on play may play to this trick, if only one is legal
-// (never on the lead), keyed by the state it is forced in. Only for declarer
-// (a defender taps their own card). Nothing while a card or a claim is on
+// (never on the lead), keyed by the state it is forced in. Only for
+// declarer's game (a defender taps their own card). Nothing while a card or a claim is on
 // its way, the claim sheet is open or the page is left.
 const forced = computed(() => {
   const state = playing.value;
@@ -472,7 +508,7 @@ const forced = computed(() => {
   ) {
     return null;
   }
-  const card = forcedCard((from === 'dummy' ? state.dummy_hand : state.hand) ?? [], state.current_trick);
+  const card = forcedCard(cardsToPlay(state, from) ?? [], state.current_trick);
   if (!card) {
     return null;
   }
@@ -493,7 +529,7 @@ function cardLabel(card: Card): string {
 const mustFollow = computed(() => {
   const state = playing.value;
   const led = state?.current_trick?.[0]?.card.suit;
-  const hand = playFrom.value === 'dummy' ? state?.dummy_hand : state?.hand;
+  const hand = state && playFrom.value ? cardsToPlay(state, playFrom.value) : null;
   return led && hand?.some((card) => card.suit === led) ? led : null;
 });
 
@@ -575,7 +611,11 @@ function playStatus(turn: Seat | null): string {
   }
   const leading = (playing.value?.current_trick ?? []).length === 0;
   if (playFrom.value) {
-    const from = playFrom.value === 'dummy' ? ` from dummy (${turn})` : '';
+    const from = {
+      own: forDeclarer.value ? ' from your own hand' : '',
+      dummy: ` from dummy (${turn})`,
+      declarer: ` from ${SEAT_NAMES[turn!]}'s hand`,
+    }[playFrom.value];
     const auto = autoPlay.card.value;
     if (auto) {
       return `Play: your turn${from}. Playing ${cardLabel(auto)} in ${autoPlay.secondsLeft.value} s…`;
@@ -585,7 +625,7 @@ function playStatus(turn: Seat | null): string {
     }
     return leading ? `Play: your lead${from}.` : `Play: your turn${from}.`;
   }
-  if (iAmDummy.value) {
+  if (iAmDummy.value && !forDeclarer.value) {
     return 'Declarer is playing your cards.';
   }
   const actor = actorName();
@@ -1157,6 +1197,13 @@ async function refresh(event: CustomEvent) {
   margin-top: 4px;
   font-size: 0.85rem;
   color: var(--ion-color-medium);
+}
+
+.outcome .outcome-you {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ion-color-primary);
 }
 
 .bids-missing {

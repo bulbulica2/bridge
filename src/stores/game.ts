@@ -5,6 +5,7 @@ import type {
   Bid,
   Card,
   Claim,
+  DeclarerHandShownEvent,
   HandDealtEvent,
   Phase,
   Playing,
@@ -37,6 +38,7 @@ function waitingState(): Playing {
     ready: null,
     my_seat: null,
     hand: null,
+    declarer_hand: null,
   };
 }
 
@@ -143,21 +145,29 @@ export const useGameStore = defineStore('game', () => {
   // `PlayingUpdated` never carries a hand, so it replaces only the public part
   // and the hand is carried over: the one we hold for the same board (less any
   // card played since), or the one HandDealt brought for a new board. A new
-  // board whose HandDealt hasn't come yet shows no hand until it does.
+  // board whose HandDealt hasn't come yet shows no hand until it does. A
+  // robot declarer's hand we play (`declarer_hand`) is carried over the same
+  // way, until the play is over.
   function applyPlayingUpdate(id: number, update: PublicPlaying) {
     if (tableId.value !== id || isBehind(update, playing.value)) {
       return;
     }
     const current = playing.value;
+    const sameBoard = !!current && current.playing_id === update.playing_id;
+    const played = playedCardIds(update);
+    const unplayed = (cards: Card[]) => cards.filter((card) => !played.has(card.id));
     let hand: Card[] | null = null;
-    if (current && current.playing_id === update.playing_id && current.hand) {
-      const played = playedCardIds(update);
-      hand = current.hand.filter((card) => !played.has(card.id));
+    if (sameBoard && current.hand) {
+      hand = unplayed(current.hand);
     } else if (pendingHand && pendingHand.playing_id === update.playing_id) {
       hand = pendingHand.hand;
       pendingHand = null;
     }
-    playing.value = { ...update, my_seat: mySeatIn(update), hand };
+    const declarerHand =
+      sameBoard && current.declarer_hand && update.phase === 'play'
+        ? unplayed(current.declarer_hand)
+        : null;
+    playing.value = { ...update, my_seat: mySeatIn(update), hand, declarer_hand: declarerHand };
   }
 
   // The bid list, fetched once and shared (a second caller waits for the same
@@ -185,7 +195,8 @@ export const useGameStore = defineStore('game', () => {
     return act((id) => gameService.makeCall(id, bidId));
   }
 
-  // Our card (or dummy's, as declarer): same race as a call, since the next
+  // Our card (or dummy's, as declarer, or a robot declarer's, as its dummy):
+  // same race as a call, since the next
   // player may already have played by the time our answer lands.
   async function play(cardId: number): Promise<Playing> {
     return act((id) => gameService.playCard(id, cardId));
@@ -245,6 +256,21 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  // A robot declarer's cards, for us, its dummy, to play: the auction ended
+  // (usually on a robot's call, so no answer of ours carried them). Only for
+  // the board we hold; any other gets them from GET /playing when loaded.
+  function applyDeclarerHand(event: DeclarerHandShownEvent) {
+    const current = playing.value;
+    if (tableId.value !== event.table_id || current?.playing_id !== event.playing_id) {
+      return;
+    }
+    const played = playedCardIds(current);
+    playing.value = {
+      ...current,
+      declarer_hand: event.declarer_hand.filter((card) => !played.has(card.id)),
+    };
+  }
+
   // A `TableUpdated` for the table we show. A player leaving mid-board
   // abandons it: `board_id` goes back to null and no PlayingUpdated follows,
   // so this is where the table goes back to waiting.
@@ -302,14 +328,15 @@ export const useGameStore = defineStore('game', () => {
 
   // Follow the user's own channel from login to logout: a board can be dealt
   // while they look at any page, and its HandDealt is sent only once. The
-  // channel also brings UserBanned, which the auth store handles.
+  // channel also brings DeclarerHandShown, and UserBanned, which the auth
+  // store handles.
   function watchUser(userId: number) {
     if (watchedUserId.value === userId) {
       return;
     }
     unwatchUser();
     watchedUserId.value = userId;
-    listenToUser(userId, applyHandDealt, (ban) => auth.applyBan(ban));
+    listenToUser(userId, applyHandDealt, (ban) => auth.applyBan(ban), applyDeclarerHand);
   }
 
   function unwatchUser() {
@@ -346,6 +373,7 @@ export const useGameStore = defineStore('game', () => {
     phaseOf,
     applyPlayingUpdate,
     applyHandDealt,
+    applyDeclarerHand,
     applyTableUpdate,
     clear,
     watchUser,

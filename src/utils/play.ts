@@ -31,18 +31,38 @@ export function forcedCard(hand: Card[], trick: PlayedCard[] | null): Card | nul
   return legal.length === 1 ? legal[0] : null;
 }
 
-// Whether a forced card may play itself for this viewer: only for declarer,
-// who plays both their own hand and dummy's. A defender always taps their
-// card: the pause before following is time to think, and a card landing at
-// once would tell the table they are out of the suit led.
-export function autoPlaysForced(state: Playing): boolean {
-  return !!state.contract && state.contract.declarer === state.my_seat;
+// Whether the viewer, dummy, plays declarer's game: a robot declarer hands
+// the play of both hands to its human dummy (bridge_backend docs/API.md,
+// `acting_user_id`). Declarer and dummy stay who they are; the viewer then
+// claims for declarer's seat. Whose move it is still comes from
+// `acting_user_id` alone (handToPlay).
+export function playsForDeclarer(state: Pick<Playing, 'contract' | 'players' | 'my_seat'>): boolean {
+  const contract = state.contract;
+  return (
+    !!contract &&
+    state.my_seat !== null &&
+    contract.dummy === state.my_seat &&
+    !!state.players?.[contract.declarer]?.is_robot
+  );
 }
 
-// Which hand the user plays from right now: their own, dummy's (declarer on
-// dummy's turn), or none. `acting_user_id` says whose move it is; `turn`
-// says which hand the card comes from. A pending claim stops the play.
-export function handToPlay(state: Playing, userId: number | null): 'own' | 'dummy' | null {
+// Whether a forced card may play itself for this viewer: only for whoever
+// plays declarer's game (declarer, or a robot declarer's dummy), who plays
+// both declarer's hand and dummy's. A defender always taps their card: the
+// pause before following is time to think, and a card landing at once would
+// tell the table they are out of the suit led.
+export function autoPlaysForced(state: Playing): boolean {
+  return (!!state.contract && state.contract.declarer === state.my_seat) || playsForDeclarer(state);
+}
+
+// The hand the user plays from: their own, dummy's (declarer on dummy's
+// turn) or declarer's (a robot declarer's dummy on declarer's turn).
+export type PlayFrom = 'own' | 'dummy' | 'declarer';
+
+// Which hand the user plays from right now, or none. `acting_user_id` says
+// whose move it is; `turn` says which hand the card comes from. A pending
+// claim stops the play.
+export function handToPlay(state: Playing, userId: number | null): PlayFrom | null {
   if (
     state.phase !== 'play' ||
     state.claim ||
@@ -55,7 +75,20 @@ export function handToPlay(state: Playing, userId: number | null): 'own' | 'dumm
   if (state.turn === state.my_seat) {
     return 'own';
   }
-  return state.turn === state.contract?.dummy ? 'dummy' : null;
+  if (state.turn === state.contract?.dummy) {
+    return 'dummy';
+  }
+  return state.turn === state.contract?.declarer && state.my_seat === state.contract.dummy
+    ? 'declarer'
+    : null;
+}
+
+// The cards of the hand `from`, as the state holds them (null if unknown).
+export function cardsToPlay(state: Playing, from: PlayFrom): Card[] | null {
+  if (from === 'dummy') {
+    return state.dummy_hand;
+  }
+  return from === 'declarer' ? state.declarer_hand : state.hand;
 }
 
 // A trick's cards placed by the side of the screen their hand sits on, for a

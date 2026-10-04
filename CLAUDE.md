@@ -218,7 +218,12 @@ The user's standing rule (#91): **no task may leave code coverage under
   "Full profile" link for a robot), and `BridgeTable`'s `thinking` prop +
   "robot-1 is thinking…" status when `acting_user_id` is a robot. Robots
   mark themselves ready after a board, so the human's Next deals the next
-  one. When the last human leaves, the table stays **unattended**
+  one. A robot declarer hands the play to its human dummy (#95, bb#94):
+  `acting_user_id` is that dummy on declarer's turn and on dummy's, the
+  play page reads it as `handToPlay() === 'declarer'`, and
+  `playsForDeclarer()` (`src/utils/play.ts`) words it, auto-plays forced
+  cards and makes `claimSeatOf()` declarer's seat (see Card play, Claims).
+  When the last human leaves, the table stays **unattended**
   (`unattended_since` on `BroadcastTable`, `moderated_by: null`): robots
   wait, **anyone** may `DELETE /tables/{id}/seats/{robot}` (`canRemove()`
   in `src/services/tables.ts` is the hint), the first human to sit down
@@ -245,6 +250,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   card sorting, rank labels (the backend skips 11: `12`=J … `15`=A), seat
   rotation and vulnerability live in `src/utils/cards.ts`. The detail page
   moves a seated player to `/play` when `board_id` changes to a new board.
+  `Playing.declarer_hand` is a robot declarer's remaining cards, only for
+  its human dummy (null otherwise, and once `finished`); the same channel's
+  `DeclarerHandShown` (`listenToUser`'s fourth handler) brings it when the
+  auction ends, `applyDeclarerHand` sets it on the board held, and
+  `PlayingUpdated` carries it over less any card played, like `hand`.
 - **Start** (#68, bb#73, backend `docs/API.md` Dealing): filling a table
   deals nothing; a board is dealt once the table is full and every human
   there has pressed Start (`POST /tables/{id}/start`, `DELETE` takes it
@@ -285,12 +295,16 @@ The user's standing rule (#91): **no task may leave code coverage under
   its answer through the same `isBehind` guard as `call`. `turn` is the
   hand the card comes from and `acting_user_id` who sends it (declarer on
   dummy's turn), so `handToPlay()` in `src/utils/play.ts` says whether the
-  user plays their own hand, dummy's, or nothing (dummy never plays).
+  user plays their own hand, dummy's, declarer's (`'declarer'`: a robot
+  declarer's human dummy on declarer's turn, #95), or nothing (a human
+  declarer's dummy never plays); `cardsToPlay(state, from)` gives that
+  hand's cards. Never re-derive whose move it is from the robot flags.
   `legalCards()` is the follow-suit hint that dims cards in `HandView`
   (given `playable` ids it turns into buttons). When the hand on play has
   exactly one legal card to follow with, `forcedCard()` (null on the lead)
-  names it and, for declarer only (`autoPlaysForced()`, #69: a defender
-  taps it themselves, no countdown or pulse),
+  names it and, for declarer's game only (`autoPlaysForced()`, #69:
+  declarer, or a robot declarer's dummy; a defender taps it themselves, no
+  countdown or pulse),
   `src/composables/useForcedPlay.ts` plays it after 3 s
   (`HandView`'s `forcedId` pulses it, the status line counts down). The
   page keys it by playing/trick/cards/turn/card, so a new state restarts
@@ -301,7 +315,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   `centre` slot. `dummy_hand` is public only after the opening lead.
   `BridgeTable` lays it across the top for declarer, where it can be tapped,
   or as `DummyColumns.vue` on a defender's side seat, and not at all for
-  dummy, whose own hand is the same cards. `current_trick` empties as soon
+  dummy, whose own hand is the same cards. For a robot declarer's dummy,
+  `BridgeTable`'s `declarer` prop (+ `declarerPlayable`,
+  `declarerForcedId`) lays `declarer_hand` across the top the same way,
+  from the end of the auction; the contract bar adds "robot-1 declares 4♠
+  — you play the hand". `current_trick` empties as soon
   as a trick's fourth card lands, so the page holds that trick (the last of
   `tricks`) with its winner for 2 s before clearing it, but only when seen
   live. The contract bar above the table carries `tricks_won`. Under the
@@ -313,7 +331,12 @@ The user's standing rule (#91): **no task may leave code coverage under
   only), a click toggles it, a pointerdown outside or Escape closes it.
   The centre keeps the trick in progress meanwhile. One card is in flight
   at a time; a 409 toasts and reloads, as for calls.
-- **Claims**: during `play` any player but dummy may claim `tricks` of the
+- **Claims**: during `play` any player but dummy (except a robot
+  declarer's human dummy, who claims, answers and withdraws for
+  declarer's seat: `claimSeatOf(state)` in `src/utils/claim.ts`, passed to
+  `canClaim`/`claimAction`, `ClaimPanel`'s `actsFor`, `ClaimSheet`'s
+  `forSeat`, and `claimText`'s fourth argument: "You claim … for North")
+  may claim `tricks` of the
   tricks left (`13 - tricks.length`; 0 concedes) with `POST
   /tables/{id}/claim`; the other non-dummy players answer through
   `POST /tables/{id}/claim/response` `{accept}` (one reject cancels it) and

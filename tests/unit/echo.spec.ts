@@ -194,12 +194,16 @@ describe('echo service', () => {
     expect(liveStatus.subscribedTable).toBeNull()
   })
 
-  test('listenToUser follows HandDealt on the user channel', () => {
+  test('listenToUser follows HandDealt, DeclarerHandShown and UserBanned on the user channel', () => {
     const onHandDealt = vi.fn()
-    listenToUser(1, onHandDealt)
+    const onBanned = vi.fn()
+    const onDeclarerHand = vi.fn()
+    listenToUser(1, onHandDealt, onBanned, onDeclarerHand)
 
     expect(getEcho().private).toHaveBeenCalledWith('App.Models.User.1')
     expect(channel.listen).toHaveBeenCalledWith('HandDealt', onHandDealt)
+    expect(channel.listen).toHaveBeenCalledWith('DeclarerHandShown', onDeclarerHand)
+    expect(channel.listen).toHaveBeenCalledWith('UserBanned', onBanned)
   })
 
   test('leaves channels, and leaving before any connection is a no-op', () => {
