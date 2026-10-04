@@ -1,7 +1,8 @@
 <template>
   <!-- The auction as players write it down: one column per seat, in the
        table's rotation (the viewer's column last, so South sees W N E S),
-       rows of four starting in the dealer's column. -->
+       rows of four starting in the dealer's column. Alerted calls stand
+       out, with their explanation a hover or a tap away (AuctionCallCell). -->
   <section class="auction" aria-label="Auction">
     <table>
       <thead>
@@ -20,7 +21,16 @@
       <tbody>
         <tr v-for="(row, r) in rows" :key="r">
           <td v-for="(cell, c) in row" :key="c" :data-seat="columns[c]">
-            <CallLabel v-if="cell.kind === 'call'" :bid="cell.bid" />
+            <AuctionCallCell
+              v-if="cell.kind === 'call'"
+              :call="cell.call"
+              :index="cell.index"
+              :my-seat="mySeat"
+              :live="live"
+              :busy="busy"
+              @ask="emit('ask', $event)"
+              @explain="emit('explain', $event)"
+            />
             <span v-else-if="cell.kind === 'next'" class="next" aria-label="To call">?</span>
           </td>
         </tr>
@@ -32,7 +42,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import CallLabel from '@/components/CallLabel.vue';
+import AuctionCallCell from '@/components/AuctionCallCell.vue';
 import type { AuctionCall, Board } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
@@ -47,9 +57,16 @@ const props = withDefaults(
     // Whose call is awaited: a "?" marks their cell. Null once it is over.
     turn?: Seat | null;
     players?: Partial<Record<Seat, PublicUser | null>>;
+    // The board is still on: opponents' calls may be asked about, and our
+    // own answered (`ask`/`explain` with the call's index).
+    live?: boolean;
+    // A question or an answer is on its way.
+    busy?: boolean;
   }>(),
-  { turn: null, players: () => ({}) },
+  { turn: null, players: () => ({}), live: false, busy: false },
 );
+
+const emit = defineEmits<{ ask: [index: number]; explain: [index: number] }>();
 
 const columns = computed(() => auctionColumns(props.mySeat));
 

@@ -1,8 +1,37 @@
 <template>
   <!-- The 35 bids, one row per level, clubs to no trump, then Pass, X and XX.
        A call the rules wouldn't allow is disabled (a hint: the backend has
-       the final word), and everything is while a call is on its way. -->
+       the final word), and everything is while a call is on its way. Above
+       them, the alert for the next call: its explanation and an Alert
+       toggle, so a call can be alerted with nothing written (the page owns
+       both, and clears them once a call is taken). -->
   <section class="bidding-box" aria-label="Bidding box" :aria-busy="busy">
+    <div class="alert-field">
+      <div class="alert-row">
+        <input
+          class="alert-input"
+          type="text"
+          :value="explanation"
+          :maxlength="ALERT_MAX"
+          placeholder="Explain to the opponents (optional)"
+          aria-label="Explain your next call to the opponents"
+          :disabled="busy"
+          @input="type(($event.target as HTMLInputElement).value)"
+        />
+        <button
+          type="button"
+          class="alert-toggle"
+          :class="{ on: alert }"
+          :aria-pressed="alert"
+          :disabled="busy"
+          @click="flip"
+        >
+          <span class="alert-mark" aria-hidden="true">!</span> Alert
+        </button>
+      </div>
+      <p class="alert-hint">Only the opponents see this. Your partner doesn't.</p>
+    </div>
+
     <div class="bids">
       <div v-for="row in grid" :key="row.level" class="level">
         <button
@@ -49,6 +78,7 @@ import { computed } from 'vue';
 import { IonSpinner } from '@ionic/vue';
 import type { AuctionCall, Bid } from '@/services/game';
 import type { Seat } from '@/services/tables';
+import { ALERT_MAX } from '@/utils/limits';
 import {
   DOUBLE,
   LEVELS,
@@ -73,6 +103,26 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ call: [bid: Bid] }>();
+
+// The next call's alert: whether it is alerted, and what it means.
+const alert = defineModel<boolean>('alert', { default: false });
+const explanation = defineModel<string>('explanation', { default: '' });
+
+// Writing an explanation alerts the call.
+function type(text: string) {
+  explanation.value = text;
+  if (text.trim() !== '') {
+    alert.value = true;
+  }
+}
+
+// Turned off, nothing is said either: an explanation alone would alert.
+function flip() {
+  alert.value = !alert.value;
+  if (!alert.value) {
+    explanation.value = '';
+  }
+}
 
 // Laid out by level and strain rather than by list order or id.
 const grid = computed(() =>
@@ -172,6 +222,66 @@ button:disabled {
 .special-xx {
   border-color: #1565c0;
   background: #1565c0;
+}
+
+.alert-field {
+  margin-bottom: 10px;
+}
+
+.alert-row {
+  display: flex;
+  gap: 6px;
+}
+
+.alert-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid #b8b8b8;
+  border-radius: 6px;
+  background: var(--ion-background-color, #fff);
+  color: var(--ion-text-color, #1a1a1a);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.alert-input:focus-visible {
+  border-color: var(--ion-color-primary, #0054e9);
+  outline: none;
+}
+
+/* Amber like an alerted call in the auction. */
+.alert-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  font-size: 0.9rem;
+}
+
+.alert-toggle.on {
+  border-color: #e0a800;
+  background: #ffd54f;
+}
+
+.alert-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e0a800;
+  color: #1a1a1a;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.alert-hint {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  color: var(--ion-color-medium);
 }
 
 .sending {

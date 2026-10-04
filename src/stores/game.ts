@@ -2,7 +2,10 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as gameService from '@/services/game';
 import type {
+  AlertDraft,
   Bid,
+  CallAlertedEvent,
+  CallQuestionedEvent,
   Card,
   Claim,
   CompactPlaying,
@@ -15,6 +18,16 @@ import type {
 import type { BroadcastTable, Seat } from '@/services/tables';
 import { leaveUser, listenToUser, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
+import {
+  answerText,
+  emptyBook,
+  noteAlert,
+  noteQuestion,
+  questionText,
+  takeNotes,
+  withNotes,
+} from '@/utils/alerts';
+import type { AlertBook } from '@/utils/alerts';
 import { expandPlaying } from '@/utils/compact';
 import { showToast } from '@/utils/toast';
 
@@ -117,6 +130,11 @@ export const useGameStore = defineStore('game', () => {
   const bidsById = computed(() => new Map(bids.value.map((bid) => [bid.id, bid])));
   // The `PlayingUpdated`s waiting for those lists, in the order they came.
   let updateQueue: Promise<void> | null = null;
+  // The alerts and open questions we know of on the board we hold, by call
+  // index: `PlayingUpdated` carries none, so they are kept here and laid
+  // back on every state we show. Our HTTP answers and the user channel's
+  // `CallAlerted`/`CallQuestioned` fill it; a new board starts it again.
+  let alerts: AlertBook = emptyBook();
 
   const auth = useAuthStore();
 
@@ -126,15 +144,22 @@ export const useGameStore = defineStore('game', () => {
     return (entry?.[0] as Seat | undefined) ?? null;
   }
 
+  // A full state answered over HTTP, with the alerts we may see: they go in
+  // the book, and the state is shown with every alert known.
+  function hold(state: Playing) {
+    alerts = takeNotes(alerts, state);
+    playing.value = withNotes(state, alerts);
+    if (pendingHand?.playing_id === state.playing_id) {
+      pendingHand = null;
+    }
+  }
+
   // The HTTP snapshot is the whole truth (hand included), so it replaces
   // everything: this is also how a reload or a reconnect catches up.
   async function load(id: number) {
     const state = await gameService.getPlaying(id);
     tableId.value = id;
-    playing.value = state;
-    if (pendingHand?.playing_id === state.playing_id) {
-      pendingHand = null;
-    }
+    hold(state);
     return state;
   }
 
@@ -147,10 +172,7 @@ export const useGameStore = defineStore('game', () => {
       return;
     }
     tableId.value = id;
-    playing.value = state;
-    if (pendingHand?.playing_id === state.playing_id) {
-      pendingHand = null;
-    }
+    hold(state);
   }
 
   // `PlayingUpdated` never carries a hand, so it replaces only the public part
@@ -178,7 +200,10 @@ export const useGameStore = defineStore('game', () => {
       sameBoard && current.declarer_hand && update.phase === 'play'
         ? unplayed(current.declarer_hand)
         : null;
-    playing.value = { ...update, my_seat: mySeatIn(update), hand, declarer_hand: declarerHand };
+    playing.value = withNotes(
+      { ...update, my_seat: mySeatIn(update), hand, declarer_hand: declarerHand },
+      alerts,
+    );
   }
 
   // A `PlayingUpdated` as the table channel brings it: compact, every card
@@ -264,11 +289,24 @@ export const useGameStore = defineStore('game', () => {
     return bidsRequest;
   }
 
-  // Our call in the auction. The answer is the whole new state, hand
-  // included, so it replaces ours, unless the table channel has already
-  // brought a later one (the next player may have called by then).
-  async function call(bidId: number): Promise<Playing> {
-    return act((id) => gameService.makeCall(id, bidId));
+  // Our call in the auction, alerted to the opponents if `alert` says so.
+  // The answer is the whole new state, hand included, so it replaces ours,
+  // unless the table channel has already brought a later one (the next
+  // player may have called by then).
+  async function call(bidId: number, alert: AlertDraft | null = null): Promise<Playing> {
+    return act((id) => gameService.makeCall(id, bidId, alert));
+  }
+
+  // Ask what the opponents' call at `index` of the auction means. A robot's
+  // answer is in the state we get back; a human's comes as `CallAlerted`.
+  async function askAboutCall(index: number): Promise<Playing> {
+    return act((id) => gameService.askAboutCall(id, index));
+  }
+
+  // Explain our own call at `index` to the opponents: an answer to their
+  // question, or a late or fixed alert.
+  async function explainCall(index: number, explanation: string): Promise<Playing> {
+    return act((id) => gameService.explainCall(id, index, explanation));
   }
 
   // Our card (or dummy's, as declarer, or a robot declarer's, as its dummy):
@@ -309,10 +347,7 @@ export const useGameStore = defineStore('game', () => {
     }
     const state = await send(id);
     if (tableId.value === id && !isBehind(state, playing.value)) {
-      playing.value = state;
-      if (pendingHand?.playing_id === state.playing_id) {
-        pendingHand = null;
-      }
+      hold(state);
     }
     return state;
   }
@@ -345,6 +380,41 @@ export const useGameStore = defineStore('game', () => {
       ...current,
       declarer_hand: event.declarer_hand.filter((card) => !played.has(card.id)),
     };
+  }
+
+  // An opponent alerted or explained one of their calls (`CallAlerted`, on
+  // our own channel): into the book, and onto the table if it is the board
+  // we hold. The answer to a question we (or partner) asked is also told.
+  function applyCallAlerted(event: CallAlertedEvent) {
+    if (tableId.value !== event.table_id) {
+      return;
+    }
+    const current = playing.value;
+    const call =
+      current?.playing_id === event.playing_id ? current.auction?.[event.index] : undefined;
+    alerts = noteAlert(alerts, event.playing_id, event.index, event.explanation);
+    if (current) {
+      playing.value = withNotes(current, alerts);
+    }
+    if (call?.question) {
+      showToast(answerText(call, { explanation: event.explanation }), 'success');
+    }
+  }
+
+  // An opponent asks what one of our calls means (`CallQuestioned`): said
+  // wherever we are, and the play page offers the answer.
+  function applyCallQuestioned(event: CallQuestionedEvent) {
+    const current = playing.value;
+    const held = tableId.value === event.table_id;
+    const call =
+      held && current?.playing_id === event.playing_id ? current.auction?.[event.index] : null;
+    if (held) {
+      alerts = noteQuestion(alerts, event.playing_id, event.index, event.asked_by);
+      if (current) {
+        playing.value = withNotes(current, alerts);
+      }
+    }
+    showToast(questionText(event.asked_by, call), 'warning');
   }
 
   // A `TableUpdated` for the table we show. A player leaving mid-board
@@ -400,19 +470,27 @@ export const useGameStore = defineStore('game', () => {
     playing.value = null;
     tableId.value = null;
     pendingHand = null;
+    alerts = emptyBook();
   }
 
   // Follow the user's own channel from login to logout: a board can be dealt
   // while they look at any page, and its HandDealt is sent only once. The
   // channel also brings DeclarerHandShown, and UserBanned, which the auth
-  // store handles.
+  // store handles, and the opponents' alerts and questions.
   function watchUser(userId: number) {
     if (watchedUserId.value === userId) {
       return;
     }
     unwatchUser();
     watchedUserId.value = userId;
-    listenToUser(userId, applyHandDealt, (ban) => auth.applyBan(ban), applyDeclarerHand);
+    listenToUser(
+      userId,
+      applyHandDealt,
+      (ban) => auth.applyBan(ban),
+      applyDeclarerHand,
+      applyCallAlerted,
+      applyCallQuestioned,
+    );
   }
 
   function unwatchUser() {
@@ -443,6 +521,8 @@ export const useGameStore = defineStore('game', () => {
     loadBids,
     loadCards,
     call,
+    askAboutCall,
+    explainCall,
     play,
     claim,
     respondToClaim,
@@ -453,6 +533,8 @@ export const useGameStore = defineStore('game', () => {
     receivePlayingUpdate,
     applyHandDealt,
     applyDeclarerHand,
+    applyCallAlerted,
+    applyCallQuestioned,
     applyTableUpdate,
     clear,
     watchUser,

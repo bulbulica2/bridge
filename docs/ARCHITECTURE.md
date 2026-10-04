@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/64-board-result-at-a-glance`._
+_Status as of branch `bulbulica2/65-bid-alerts`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -35,7 +35,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a claim's or the next board's deadline passes with no update), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a claim's or the next board's deadline passes with no update), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
@@ -212,7 +212,7 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 |---|---|---|
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `lostSet` (a set your side forfeited while you were away) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissLostSet`, `clear` (on logout); owns the table channel and the heartbeat |
-| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` |
+| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned`; keeps the board's known alerts by call index (see [Alerts](#alerts)) |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadSet`, `loadReview` |
 | `users` | public profiles by id (with `ban`/`bans` for an admin) | `load`, `ban`, `liftBan` |
 
@@ -251,7 +251,7 @@ so every extra request on the way in delays the one the page needs:
 |---|---|
 | `auth.ts` | `/sanctum/csrf-cookie`, `POST /login`, `/register`, `/logout`, `/forgot-password`, `/reset-password`, `GET` / `PATCH /api/user` |
 | `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
-| `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `GET /cards`, `POST /tables/{id}/calls`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
+| `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `GET /cards`, `POST /tables/{id}/calls`, `POST /tables/{id}/calls/{index}/question`, `PUT /tables/{id}/calls/{index}/explanation`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
 | `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /playings/{id}`, `GET /sets/{id}` |
 | `users.ts` | `GET /users/{id}`, `GET /users?search=`, `POST` / `DELETE /users/{id}/ban` |
 | `echo.ts` | the websocket, and `POST /broadcasting/auth` to sign private channels |
@@ -417,7 +417,7 @@ doesn't send the XSRF header Sanctum wants.
 | Channel | Who owns it | Events |
 |---|---|---|
 | `private-table.{id}` | `tables` store, following your seat | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state in its compact shape, expanded by the `game` store) |
-| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
+| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call), `CallQuestioned` (an opponent asks what your call means), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
 
 - The table channel only admits players seated there, and the server never
   ends a subscription. So the `tables` store subscribes and unsubscribes
@@ -440,6 +440,9 @@ doesn't send the XSRF header Sanctum wants.
   event names an id they lack, the store reloads the state over HTTP
   instead (and the lists, for a stale id). HTTP answers, `HandDealt` and
   `DeclarerHandShown` are not compact.
+- Alerts never come over the table channel: the bidder's partner mustn't
+  see them, so `PlayingUpdated` carries none and each opponent gets
+  `CallAlerted` on their own channel (see [Alerts](#alerts)).
 - For the same 10 KB, a seat's `user` and the state's `players` carry no
   `description` (`PublicUser.description` is optional; the profile sheet
   shows it once `GET /users/{id}` is in), and the free text that gets
@@ -543,10 +546,11 @@ arrives, and the app falls back to what each request returns.
 | `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
 | `AwayNotice` | who is away mid-set with the time left before their side loses the set (also on the detail page); with `held`, your own held seat (detail page, Tables, Home) |
 | `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses |
-| `BiddingBox` | the call grid, on your turn during the auction |
-| `AuctionHistory` + `CallLabel` | the calls so far, four columns rotated like the table |
+| `BiddingBox` | the call grid, on your turn during the auction, under the **Alert** field for the next call (an explanation for the opponents and an Alert toggle, both owned by the page) |
+| `AuctionHistory` + `AuctionCallCell` + `CallLabel` | the calls so far, four columns rotated like the table; an alerted call in amber with a "!", its explanation in a pop-up (`usePopover`), and with `live` an **Ask** on the opponents' calls and an **Answer** on yours when asked |
+| `ExplainCallSheet` | the bottom sheet for explaining one of your calls to the opponents (the answer to their question), up to 200 characters |
 | `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s); the winner is ringed but never drawn over a neighbour's rank and suit. `spread` (the pop-up) parts the four cards and tags each with its seat or **You** |
-| `LastTrickPopover` | the **Last trick** button under the trick in progress and its pop-up with the last trick's cards (a spread `TrickArea`, shifted sideways if centring it on the button would cross the screen's edge); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it |
+| `LastTrickPopover` | the **Last trick** button under the trick in progress and its pop-up with the last trick's cards (a spread `TrickArea`, shifted sideways if centring it on the button would cross the screen's edge); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it (all of that is `usePopover`, shared with the auction's calls) |
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat; given `rows`, every suit column keeps room for that many cards |
 | `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest**; says the others have 10 s to answer and that no answer counts as no; `forSeat` names a robot declarer's seat claimed for |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw**, and the countdown to its `expires_at` ("Answer within 0:07", "Waiting for East and West · 0:07", ticked by `useNow`); the buttons disable at 0, so a late tap can't earn a 409; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
@@ -580,6 +584,7 @@ follow-suit hint still dims the other cards, and they tap the one left.
 
 Pure logic lives in `src/utils/`: `cards.ts` (sorting, rank labels, seat
 rotation, vulnerability), `auction.ts` (call legality hints and labels),
+`alerts.ts` (the alert book the `game` store keeps, and the alerts' wording),
 `play.ts` (follow-suit hint, the forced card and who it plays itself for, whose hand you play, trick layout), `claim.ts`
 (who may claim, who still has to answer, the claim's wording, its countdown
 and how it ended: `claimClockText`, `claimExpired`, `claimOffText`), `result.ts`
@@ -597,6 +602,44 @@ trick shown, tricks won, the trick-by-trick steps; which boards the play page's 
 board as text, PBN and JSON, and the pieces the printout uses). These are the
 best-tested parts of the app. For the rules
 themselves see [`GAME-RULES.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/GAME-RULES.md).
+
+## Alerts
+
+A player may **alert** their own call for the opponents (#101, bb#100;
+[`API.md`, Alerts](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md#alerts)): the bidding box's
+**Alert** field (an explanation, up to `ALERT_MAX` = 200 characters in
+`utils/limits.ts`, and an Alert toggle, which typing turns on) goes out
+with the next call (`game.call(bidId, alert)`), is cleared once the call is
+taken, and stays if it is refused. The opponents see it; **partner never
+does** (that would be unauthorised information), so:
+
+- Your own state (`GET /tables/{id}/playing` and the action answers) has
+  `alert` (`{explanation}` or null) and `question` (`{asked_by}`, an open
+  question) on the opponents' calls and your own, null on partner's.
+- `PlayingUpdated` carries neither. The `game` store keeps an **alert
+  book** (`AlertBook` in `utils/alerts.ts`): the board's notes by call
+  index, filled from every HTTP state (`takeNotes`) and from the user
+  channel's `CallAlerted` / `CallQuestioned`, and laid back on every state
+  it shows (`withNotes`), so a known alert is never dropped. A new board
+  starts a new book; news of an older board is ignored.
+- An opponent's call can be **asked** about until the board is over
+  (`game.askAboutCall(index)`). A robot answers at once, in the answer; a
+  human bidder gets `CallQuestioned` (a toast wherever they are, and on the
+  play page the `ExplainCallSheet` opens by itself, once per question) and
+  answers with `game.explainCall(index, text)`, which reaches both
+  opponents as `CallAlerted` (the asker's side is told the answer in a
+  toast).
+- Robots alert their conventional calls themselves (Stayman, transfers,
+  the strong 2♣ …), with their explanation.
+- Once the board is finished every alert is public: the review
+  (`GET /playings/{id}`) has every call's `alert`, so the review and the
+  exports show them all.
+
+`AuctionCallCell` draws each call: an alerted one in amber (translucent,
+so it reads in light and dark mode, never the red and green of
+vulnerability) with a "!"; hovering it with a mouse, or a tap, pops up
+the explanation as plain text, or "Alerted, no explanation given."; your
+own reads "You alerted: …".
 
 ## The board review
 
@@ -650,7 +693,9 @@ review: `boardText()` (the chat-friendly summary), `boardPbn()` (Portable
 Bridge Notation 2.1 in export format: the 15 mandatory tags, then the
 auction, play and `Score`; the play lines keep fixed seat columns starting
 with the opening leader, and a claim leaves `-` for the unplayed cards and
-ends the section with `*`) and `boardJson()`. They reuse `cards.ts`,
+ends the section with `*`; an alerted call carries a note reference, `2C =1=`,
+with `[Note "1:Stayman"]` after the auction) and `boardJson()`. The text lists
+the alerts under the auction, and the printout marks them. They reuse `cards.ts`,
 `auction.ts` and `result.ts` for labels. The review doesn't say who claimed,
 so a claim is told from declarer's side ("declarer took 2 of the last 5").
 Matchpoints are added (and shown under the review's result) when the

@@ -293,7 +293,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   moves a seated player to `/play` when `board_id` changes to a new board.
   `Playing.declarer_hand` is a robot declarer's remaining cards, only for
   its human dummy (null otherwise, and once `finished`); the same channel's
-  `DeclarerHandShown` (`listenToUser`'s fourth handler) brings it when the
+  `DeclarerHandShown` (`listenToUser`'s fourth handler; the fifth and
+  sixth are `CallAlerted` / `CallQuestioned`, see Alerts) brings it when the
   auction ends, `applyDeclarerHand` sets it on the board held, and
   `PlayingUpdated` carries it over less any card played, like `hand`.
 - **Start** (#68, bb#73, backend `docs/API.md` Dealing): filling a table
@@ -332,6 +333,34 @@ The user's standing rule (#91): **no task may leave code coverage under
   table (the viewer's column last, so South reads W N E S), starting in the
   dealer's column. `CallLabel.vue` draws one call. The page announces the
   contract (or "Passed out") and toasts it when the last call arrives live.
+- **Alerts** (#101, bb#100, backend `docs/API.md` Alerts): a self-alert
+  for the **opponents only**, never partner. `BiddingBox`'s Alert field
+  (`v-model:alert` / `v-model:explanation`, owned by the play page's
+  `alertDraft`; typing turns the toggle on, turning it off drops the text;
+  `ALERT_MAX` 200 in `src/utils/limits.ts`) goes out with the next call
+  as `game.call(bidId, {alert, explanation})` (`makeCall` sends the two
+  fields only when alerting), cleared once the call is taken, kept on a
+  409, reset on a new board. The caller's own state has `alert`
+  (`{explanation}`|null) and `question` (`{asked_by}`|null) on each
+  `auction[]` entry for the opponents' calls and their own (null on
+  partner's); `PlayingUpdated` has neither, so the game store keeps an
+  `AlertBook` (`src/utils/alerts.ts`: `takeNotes` from every HTTP state via
+  `hold()`, `noteAlert`/`noteQuestion` from `CallAlerted`/`CallQuestioned`,
+  `withNotes` laid on every state shown; by `playing_id` + call index, a
+  newer board starts a new book, an older one's news is dropped).
+  `AuctionHistory` draws each call with `AuctionCallCell.vue`: alerted =
+  amber + "!", the pop-up (`src/composables/usePopover.ts`, shared with
+  `LastTrickPopover`: mouse hover, tap toggles, Escape / tap outside)
+  shows `alertText()` ("Alerted, no explanation given." when empty, plain
+  text), "You alerted: …" for your own; with `live` (auction and play) an
+  opponent's call offers **Ask** (`game.askAboutCall(index)`, `POST
+  /tables/{id}/calls/{index}/question`; a robot's answer is in the
+  response) and your own questioned call **Answer**, which opens
+  `ExplainCallSheet.vue` (`game.explainCall(index, text)`, `PUT
+  /tables/{id}/calls/{index}/explanation`; a 422 keeps it open). The play
+  page opens the sheet by itself once per question (`openQuestion`, only
+  while the view is active). A review's `auction` has every `alert`
+  (public once finished), shown the same way.
 - **Card play**: `play(cardId)` posts `POST /tables/{id}/cards` and takes
   its answer through the same `isBehind` guard as `call`. `turn` is the
   hand the card comes from and `acting_user_id` who sends it (declarer on
@@ -572,12 +601,14 @@ The user's standing rule (#91): **no task may leave code coverage under
   scope dispose): Copy as text, Download .txt/.pbn/.json, Print / Save
   as PDF (only Copy on a native platform, `Capacitor.isNativePlatform()`:
   WebViews ignore `download` links and `window.print()`).
-  `src/utils/export.ts` is pure: `boardText(review, extras)` (matchpoints
+  `src/utils/export.ts` is pure: `boardText(review, extras)` (the alerts
+  listed under the auction via `alertLines`; matchpoints
   in `extras` when `history.results[boardId]` or a cached set's `boards`
   holds this playing's row; `BoardResultPanel`'s `extras` shows them too),
   `boardPbn(review)` (PBN 2.1 export format: the 15 mandatory tags in
   order, unknown ones `?`, a passed-out board's Declarer/Result empty and
-  Contract `Pass`; then Auction, Play, Score; play lines in fixed seat
+  Contract `Pass`; then Auction (an alerted call `2C =1=`, then a
+  `[Note "1:…"]` per alert), Play, Score; play lines in fixed seat
   columns from the opening leader, a claim leaves `-` and ends with `*`;
   CRLF line ends), `boardJson`, `trickRows`, `claimNote` (the review
   doesn't say who claimed: told from declarer's side), `exportFileName`.
@@ -629,7 +660,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   store owns it: `watchTable(id)` / `unwatchTable()` follow the user's seat
   after create, join, a move, a leave and every load, and logout disconnects
   the socket. The same channel carries `PlayingUpdated`, which the tables
-  store hands to the game store. Each `TableUpdated` carries the whole table and **replaces** it
+  store hands to the game store. Alerts never use it (partner would see
+  them): `CallAlerted` `{table_id, playing_id, index, explanation}` goes to
+  each human opponent's user channel, `CallQuestioned` `{…, asked_by}` to
+  the bidder's (see Alerts). Each `TableUpdated` carries the whole table and **replaces** it
   via the store's sync path; one that no longer seats the user (outside their
   own seat request) is a kick: toast, unsubscribe, and `kickedFrom` makes the
   detail page go back to `/tables`. After a reconnect the watched table is

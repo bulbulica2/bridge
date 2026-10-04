@@ -43,10 +43,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+import { computed, useId } from 'vue';
 import { IonIcon } from '@ionic/vue';
 import { albumsOutline } from 'ionicons/icons';
 import TrickArea from '@/components/TrickArea.vue';
+import { usePopover } from '@/composables/usePopover';
 import type { Trick } from '@/services/game';
 import type { Seat } from '@/services/tables';
 
@@ -55,98 +56,12 @@ const props = defineProps<{
   mySeat: Seat | null;
 }>();
 
-const root = ref<HTMLElement | null>(null);
-const button = ref<HTMLButtonElement | null>(null);
-const popup = ref<HTMLElement | null>(null);
+const { root, button, popup, open, nudge, hover, toggle } = usePopover();
 const popupId = `last-trick-${useId()}`;
-
-const open = ref(false);
-// Opened by a mouse hovering: leaving closes it. A click pins it open.
-const byHover = ref(false);
-// How far the pop-up moves sideways from under the button's centre to stay
-// on screen.
-const nudge = ref(0);
-const EDGE = 8;
 
 const caption = computed(() =>
   props.trick.winner === props.mySeat ? 'You win' : `${props.trick.winner} wins`,
 );
-
-// Only a mouse hovers: a touch also sends pointerenter/leave around its tap,
-// which the click that follows handles instead.
-function hover(entering: boolean, event: PointerEvent) {
-  if (event.pointerType !== 'mouse') {
-    return;
-  }
-  if (entering && !open.value) {
-    open.value = true;
-    byHover.value = true;
-  } else if (!entering && byHover.value) {
-    open.value = false;
-  }
-}
-
-function toggle() {
-  if (open.value && byHover.value) {
-    byHover.value = false;
-    return;
-  }
-  open.value = !open.value;
-  byHover.value = false;
-}
-
-function close() {
-  open.value = false;
-}
-
-function onPointerDown(event: PointerEvent) {
-  if (!root.value?.contains(event.target as Node)) {
-    close();
-  }
-}
-
-function onKeyDown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
-    const inside = root.value?.contains(document.activeElement);
-    close();
-    if (inside) {
-      button.value?.focus();
-    }
-  }
-}
-
-function listen(on: boolean) {
-  const method = on ? 'addEventListener' : 'removeEventListener';
-  document[method]('pointerdown', onPointerDown as EventListener);
-  document[method]('keydown', onKeyDown as EventListener);
-}
-
-// Centred on the button, unless that would cross an edge of the screen.
-async function keepOnScreen() {
-  nudge.value = 0;
-  await nextTick();
-  const box = popup.value?.getBoundingClientRect();
-  if (!box || box.width === 0) {
-    return;
-  }
-  const right = document.documentElement.clientWidth - EDGE;
-  if (box.left < EDGE) {
-    nudge.value = EDGE - box.left;
-  } else if (box.right > right) {
-    nudge.value = Math.max(right - box.right, EDGE - box.left);
-  }
-}
-
-watch(open, (isOpen) => {
-  listen(isOpen);
-  if (isOpen) {
-    keepOnScreen();
-  } else {
-    byHover.value = false;
-  }
-});
-
-onBeforeUnmount(() => listen(false));
 </script>
 
 <style scoped>

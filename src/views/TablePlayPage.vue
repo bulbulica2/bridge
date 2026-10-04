@@ -226,6 +226,8 @@
             {{ status }}
           </p>
 
+          <!-- Alerted calls stand out; until the board is over, an
+               opponent's call may be asked about and ours answered. -->
           <AuctionHistory
             v-if="playing.phase === 'auction' && playing.auction"
             :auction="playing.auction"
@@ -233,6 +235,10 @@
             :my-seat="mySeat"
             :turn="playing.turn"
             :players="players"
+            live
+            :busy="noting"
+            @ask="askAbout"
+            @explain="explainIndex = $event"
           />
 
           <!-- A finished board shows every hand on the table instead. -->
@@ -271,6 +277,8 @@
           <template v-if="canBid">
             <BiddingBox
               v-if="game.bids.length > 0"
+              v-model:alert="alertDraft.alert"
+              v-model:explanation="alertDraft.explanation"
               :bids="game.bids"
               :auction="playing.auction ?? []"
               :seat="mySeat!"
@@ -294,6 +302,10 @@
             :my-seat="mySeat"
             :turn="null"
             :players="players"
+            :live="playing.phase === 'play'"
+            :busy="noting"
+            @ask="askAbout"
+            @explain="explainIndex = $event"
           />
 
           <OfflineRefresh :table-id="tableId" :disabled="loading" @refresh="load()" />
@@ -308,6 +320,13 @@
         :busy="claiming"
         @claim="sendClaim"
         @close="claimOpen = false"
+      />
+      <ExplainCallSheet
+        :open="explaining !== null"
+        :call="explaining"
+        :busy="noting"
+        @explain="sendExplanation"
+        @close="explainIndex = null"
       />
       <BoardReviewModal
         :open="reviewOpen"
@@ -344,6 +363,7 @@ import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
 import ClaimPanel from '@/components/ClaimPanel.vue';
 import ClaimSheet from '@/components/ClaimSheet.vue';
+import ExplainCallSheet from '@/components/ExplainCallSheet.vue';
 import HandView from '@/components/HandView.vue';
 import LastTrickPopover from '@/components/LastTrickPopover.vue';
 import NextBoardBox from '@/components/NextBoardBox.vue';
@@ -360,8 +380,9 @@ import { useHistoryStore } from '@/stores/history';
 import { useTablesStore } from '@/stores/tables';
 import { seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
-import type { Bid, Card, Claim, PlayedCard, Playing, Trick } from '@/services/game';
+import type { AlertDraft, Bid, Card, Claim, PlayedCard, Playing, Trick } from '@/services/game';
 import type { PublicUser } from '@/services/users';
+import { openQuestion } from '@/utils/alerts';
 import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
 import { SUIT_NAMES, SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
 import { canClaim, claimOffText, claimSeatOf, tricksLeft } from '@/utils/claim';
@@ -400,6 +421,15 @@ const notSeated = ref(false);
 const player = ref<PublicUser | null>(null);
 // A call on its way: the bidding box stays disabled until it lands.
 const calling = ref(false);
+// The next call's alert, typed in the bidding box: it goes with the call
+// and is cleared once the call is taken (a refused one keeps it), and when
+// the board changes.
+const alertDraft = ref({ alert: false, explanation: '' });
+// A question about an opponent's call, or our explanation of one of ours,
+// on its way.
+const noting = ref(false);
+// The call of ours being explained in the sheet (its index in the auction).
+const explainIndex = ref<number | null>(null);
 const bidsError = ref('');
 // The card on its way, if any: both hands stay disabled until it lands.
 const sendingCard = ref<number | null>(null);
@@ -509,6 +539,22 @@ const declarerHand = computed(() => {
   return { seat: state.contract.declarer, cards: state.declarer_hand };
 });
 
+// The call of ours the explanation sheet is open for.
+const explaining = computed(() => {
+  const index = explainIndex.value;
+  return index === null ? null : (playing.value?.auction?.[index] ?? null);
+});
+
+// An opponent's question about one of our calls, still unanswered, while
+// the board is on.
+const question = computed(() => {
+  const state = playing.value;
+  if (state?.phase !== 'auction' && state?.phase !== 'play') {
+    return null;
+  }
+  return openQuestion(state.auction, mySeat.value);
+});
+
 // The ids of the cards `hand` may follow with (a hint; the backend decides).
 function legalIds(hand: Card[] | null): number[] {
   return legalCards(hand ?? [], playing.value?.current_trick ?? null).map((card) => card.id);
@@ -529,6 +575,7 @@ const forced = computed(() => {
     sendingCard.value !== null ||
     claimOpen.value ||
     reviewOpen.value ||
+    explaining.value !== null ||
     claiming.value
   ) {
     return null;
@@ -748,7 +795,42 @@ onIonViewWillEnter(() => {
 onIonViewWillLeave(() => {
   viewActive.value = false;
   reviewOpen.value = false;
+  explainIndex.value = null;
 });
+
+// A new board: nothing typed for the last one's calls carries over. Set
+// up before the question's watch below, which may open the sheet for it.
+watch(
+  () => playing.value?.playing_id,
+  (id, oldId) => {
+    if (id !== oldId) {
+      alertDraft.value = { alert: false, explanation: '' };
+      explainIndex.value = null;
+    }
+  },
+);
+
+// An opponent asks about one of our calls: the sheet to answer opens by
+// itself, once per question and only while the page is on screen (closed,
+// the call's pop-up in the auction still offers Answer).
+let promptedFor: string | null = null;
+watch(
+  () => {
+    const open = question.value;
+    if (!open || !viewActive.value) {
+      return null;
+    }
+    const key = `${playing.value!.playing_id}:${open.index}:${open.call.question!.asked_by}`;
+    return { key, index: open.index };
+  },
+  (asked) => {
+    if (asked && asked.key !== promptedFor) {
+      promptedFor = asked.key;
+      explainIndex.value = asked.index;
+    }
+  },
+  { immediate: true },
+);
 
 // Kicked (the tables store has already said so in a toast): nothing to see.
 // Freed because our side forfeited the set: its results instead.
@@ -981,14 +1063,57 @@ async function makeCall(bid: Bid) {
     return;
   }
   calling.value = true;
+  const { alert, explanation } = alertDraft.value;
+  const text = explanation.trim();
+  const draft: AlertDraft | null =
+    alert || text ? { alert: true, explanation: text || null } : null;
   try {
-    await game.call(bid.id);
+    await game.call(bid.id, draft);
+    alertDraft.value = { alert: false, explanation: '' };
   } catch (e) {
     // A 422 means the bid list no longer matches the server's (a reseeded
     // database).
     await refused(e, 'Your call could not be made. Please try again.', () => loadBids(true));
   } finally {
     calling.value = false;
+  }
+}
+
+// Ask the opponents what their call at `index` means. A robot's answer is
+// in the state we get back (the call's pop-up shows it at once); a human's
+// comes later, over our own channel.
+async function askAbout(index: number) {
+  if (noting.value) {
+    return;
+  }
+  noting.value = true;
+  try {
+    await game.askAboutCall(index);
+  } catch (e) {
+    await refused(e, 'Your question could not be sent. Please try again.');
+  } finally {
+    noting.value = false;
+  }
+}
+
+// Our explanation of the call in the sheet, for both opponents. A 422 (too
+// long, or empty) keeps the sheet open to fix it; anything else closes it.
+async function sendExplanation(explanation: string) {
+  const index = explainIndex.value;
+  if (index === null || noting.value) {
+    return;
+  }
+  noting.value = true;
+  try {
+    await game.explainCall(index, explanation);
+    explainIndex.value = null;
+  } catch (e) {
+    if (statusOf(e) !== 422) {
+      explainIndex.value = null;
+    }
+    await refused(e, 'Your explanation could not be sent. Please try again.');
+  } finally {
+    noting.value = false;
   }
 }
 
