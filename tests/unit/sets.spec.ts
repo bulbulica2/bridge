@@ -19,6 +19,7 @@ import {
   groupBySet,
   setLabel,
   setTitle,
+  setPercent,
   setTotals,
   setWinnerText,
 } from '@/utils/sets'
@@ -211,11 +212,16 @@ describe('set helpers', () => {
   })
 
   test("the totals turned to the viewer's side", () => {
-    expect(setTotals(results(), 'E')).toEqual({ side: 'ew', score: -1160, matchpoints: 1, top: 6, percent: 17 })
-    expect(setTotals(results(), null)).toMatchObject({ side: 'ns', score: 1160, percent: 83 })
+    // Matchpoints only: no score is added up over a set.
+    expect(setTotals(results(), 'E')).toEqual({ side: 'ew', matchpoints: 1, top: 6, percent: 17 })
+    expect(setTotals(results(), null)).toMatchObject({ side: 'ns', percent: 83 })
+    expect(setPercent(results(), 'N')).toBe(83)
+    expect(setPercent(results(), 'W')).toBe(17)
+    expect(setPercent(undefined, 'N')).toBeNull()
+    expect(setPercent(results({ totals: { score: { ns: 0, ew: 0 }, matchpoints: { ns: 0, ew: 0 }, top: 0 } }), 'N')).toBeNull()
   })
 
-  test('the history in runs of one set, each with its total', () => {
+  test("the history in runs of one set, with the owner's seat, no summed score", () => {
     const one = { id: 5, number: 3, board: 0, of: 4 }
     const two = { id: 4, number: 2, board: 0, of: 4 }
     const groups = groupBySet([
@@ -224,17 +230,18 @@ describe('set helpers', () => {
       entry(46, { ...two, board: 4 }, 50),
       entry(45, null, 620),
     ])
-    expect(groups.map((g) => [g.set?.id ?? null, g.entries.map((e) => e.playing_id), g.score])).toEqual([
-      [5, [48, 47], 320],
-      [4, [46], 50],
-      [null, [45], 620],
+    expect(groups.map((g) => [g.set?.id ?? null, g.entries.map((e) => e.playing_id), g.seat])).toEqual([
+      [5, [48, 47], 'E'],
+      [4, [46], 'E'],
+      [null, [45], 'E'],
     ])
+    expect(groups[0]).not.toHaveProperty('score')
     expect(new Set(groups.map((g) => g.key)).size).toBe(3)
   })
 })
 
 describe('SetResultsPanel', () => {
-  test("an E-W player's view: each board and the totals from their side", () => {
+  test("an E-W player's view: each board and the matchpoints from their side", () => {
     const wrapper = mount(SetResultsPanel, { props: { set: results(), mySeat: 'E' } })
 
     expect(wrapper.get('.set-title').text()).toBe('Set 3 over')
@@ -244,16 +251,19 @@ describe('SetResultsPanel', () => {
     expect(rows).toHaveLength(4)
     expect(rows[0].props('routerLink')).toBe('/playings/41')
     expect(rows[0].text()).toContain('1. Board 11')
-    expect(rows[0].text()).toContain('4♠ by N, made')
+    expect(rows[0].text()).toContain('4♠ by N =')
     expect(rows[0].get('.set-row-score').text()).toBe('−420')
-    expect(rows[0].get('.set-row-mp').text()).toBe('MP 0%')
+    expect(rows[0].get('.set-row-mp').text()).toBe('MP 0 %')
     expect(rows[2].get('.set-row-score').text()).toBe('+100')
     // Only this table has played board 4: nothing to compare with.
     expect(rows[3].get('.set-row-mp').text()).toBe('MP —')
-    expect(wrapper.get('.set-total-value').text()).toBe('−1160')
-    expect(wrapper.get('.set-total-sides').text()).toContain('N-S +1160')
-    expect(wrapper.get('.side-mine').text()).toContain('E-W −1160')
-    expect(wrapper.get('.set-total-mp').text()).toBe('Matchpoints: 1 of 6 (17%)')
+    // The set's total is its matchpoints, never a summed score.
+    expect(wrapper.get('.set-total-label').text()).toBe('Your matchpoints')
+    expect(wrapper.get('.set-total-value').text()).toBe('17 %')
+    expect(wrapper.get('.set-total-mp').text()).toBe('1 of 6')
+    expect(wrapper.text()).not.toContain('1160')
+    expect(wrapper.text()).not.toContain('Your total')
+    expect(wrapper.find('.set-total-none').exists()).toBe(false)
     expect(wrapper.find('.set-forfeit').exists()).toBe(false)
   })
 
@@ -263,6 +273,41 @@ describe('SetResultsPanel', () => {
 
     expect(wrapper.get('.set-winner').text()).toBe('You won the set by forfeit.')
     expect(wrapper.get('.set-forfeit').text()).toBe("N-S forfeited, North didn't come back in time.")
+  })
+
+  test("someone who didn't play it sees N-S's matchpoints", () => {
+    const wrapper = mount(SetResultsPanel, { props: { set: results(), mySeat: null } })
+
+    expect(wrapper.get('.set-total-label').text()).toBe('N-S matchpoints')
+    expect(wrapper.get('.set-total-value').text()).toBe('83 %')
+  })
+
+  test('nothing to compare with: says so, and no score total', () => {
+    const alone = results({
+      boards: [boardRow(1, 420)].map((row) => ({ ...row, top: 0, matchpoints: { ns: 0, ew: 0 } })),
+      totals: { score: { ns: 420, ew: -420 }, matchpoints: { ns: 0, ew: 0 }, top: 0 },
+    })
+    const wrapper = mount(SetResultsPanel, { props: { set: alone, mySeat: 'N' } })
+
+    expect(wrapper.get('.set-total-none').text()).toBe('No other table has played these boards yet.')
+    expect(wrapper.find('.set-total-value').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('+420 ')
+  })
+
+  test('a set broken off before any board: no totals at all', () => {
+    const wrapper = mount(SetResultsPanel, {
+      props: { set: results({ ended: 'forfeit', forfeited_by: 'NS', winner: 'EW', boards: [] }), mySeat: 'N' },
+    })
+
+    expect(wrapper.get('.set-empty').text()).toBe('No board of this set was finished.')
+    expect(wrapper.find('.set-totals').exists()).toBe(false)
+  })
+
+  test('a claimed, doubled board reads in table notation', () => {
+    const row = { ...boardRow(1, -200), doubled: 1 as const, made_by: -1, claimed: true }
+    const wrapper = mount(SetResultsPanel, { props: { set: results({ boards: [row] }), mySeat: 'N' } })
+
+    expect(wrapper.get('.set-row-contract').text()).toBe('4♠X by N −1 · by claim')
   })
 })
 
@@ -294,7 +339,7 @@ describe('sets in the history store', () => {
 })
 
 describe('My boards, by set', () => {
-  test("each set's boards under a header with the set's total, opening its results", async () => {
+  test("each set's boards under a header, no summed score, opening its results", async () => {
     useAuthStore().user = { id: 2, name: 'Bo', username: 'bo', email: 'bo@example.com' }
     const set = { id: 5, number: 3, board: 0, of: 4 }
     answer({
@@ -312,7 +357,9 @@ describe('My boards, by set', () => {
     const header = wrapper.get('.set-header')
     expect(header.text()).toContain('Set 3 · table 9')
     expect(header.text()).toContain('2 of 4 boards')
-    expect(header.get('.set-head-score').text()).toBe('+320')
+    // No score is added up over the set, and its matchpoints aren't known yet.
+    expect(header.text()).not.toContain('320')
+    expect(header.find('.set-head-mp').exists()).toBe(false)
     const items = wrapper.findAllComponents({ name: 'IonItem' })
     expect(items.map((item) => item.props('routerLink'))).toEqual([
       '/sets/5',
@@ -320,6 +367,31 @@ describe('My boards, by set', () => {
       '/playings/47',
       '/playings/45',
     ])
+  })
+})
+
+describe('My boards, by set, once a set has been read', () => {
+  test("the header shows the owner's matchpoints over the set", async () => {
+    useAuthStore().user = { id: 2, name: 'Bo', username: 'bo', email: 'bo@example.com' }
+    // Its results were read already (its page, or the play page).
+    useHistoryStore().sets[5] = results()
+    const set = { id: 5, number: 3, board: 0, of: 4 }
+    answer({
+      current_page: 1,
+      data: [entry(48, { ...set, board: 2 }, 420), entry(45, null, 620)],
+      last_page: 1,
+      next_page_url: null,
+      per_page: 20,
+      total: 2,
+    })
+
+    const wrapper = mount(HistoryPage)
+    await flushPromises()
+
+    // Bo sat East: E-W's 1 of 6.
+    const mp = wrapper.get('.set-header').get('.set-head-mp')
+    expect(mp.text()).toBe('17 %')
+    expect(mp.attributes('aria-label')).toBe('Set matchpoints 17 %')
   })
 })
 

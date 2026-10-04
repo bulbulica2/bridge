@@ -2,8 +2,9 @@
   <!-- A set's results as the backend adds them up (GET /sets/{id}): who won,
        turned to the viewer's side, a forfeit's reason, each finished board
        (opening its review) with the viewer's side's score and matchpoints,
-       and the totals. The play page shows it once a set is over, the set's
-       own page at any time. -->
+       and the matchpoints over the set. Scores aren't summed: each board is
+       compared with the other tables that played it. The play page shows it
+       once a set is over, the set's own page at any time. -->
   <section class="set-results" aria-live="polite">
     <p class="set-title">{{ setTitle(set) }}</p>
     <p v-if="winner" class="set-winner" :class="wonClass">{{ winner }}</p>
@@ -26,10 +27,9 @@
             </p>
             <p class="set-row-contract">
               <template v-if="row.contract && row.declarer">
-                <CallLabel :bid="row.contract" />{{ doubledSuffix(row.doubled ?? 0) }}
-                by {{ row.declarer }}<template v-if="row.made_by !== null"
-                  >, {{ madeBy(row.made_by) }}</template
-                ><template v-if="row.claimed"> by claim</template>
+                <CallLabel :bid="row.contract" />{{ doubledMark(row.doubled) }}
+                by {{ row.declarer }} {{ madeSuffix(row.made_by)
+                }}<template v-if="row.claimed"> · by claim</template>
               </template>
               <template v-else>Passed out</template>
             </p>
@@ -44,24 +44,15 @@
       </ion-item>
     </ion-list>
 
-    <div class="set-totals">
-      <p class="set-total-mine">
-        <span class="set-total-label">{{ mySeat ? 'Your total' : `${SIDE_LABELS[totals.side]} total` }}</span>
-        <span class="set-total-value" :class="tone(totals.score)">{{ formatScore(totals.score) }}</span>
-      </p>
-      <p class="set-total-sides">
-        <span :class="{ 'side-mine': mySeat && totals.side === 'ns' }">
-          N-S {{ formatScore(set.totals.score.ns) }}
+    <div v-if="set.boards.length > 0" class="set-totals">
+      <p v-if="totals.percent !== null" class="set-total-mine">
+        <span class="set-total-label">
+          {{ mySeat ? 'Your matchpoints' : `${SIDE_LABELS[totals.side]} matchpoints` }}
         </span>
-        <span aria-hidden="true">·</span>
-        <span :class="{ 'side-mine': mySeat && totals.side === 'ew' }">
-          E-W {{ formatScore(set.totals.score.ew) }}
-        </span>
+        <span class="set-total-value">{{ percentText(totals.percent) }}</span>
+        <span class="set-total-mp">{{ totals.matchpoints }} of {{ totals.top }}</span>
       </p>
-      <p v-if="totals.top > 0" class="set-total-mp">
-        Matchpoints: {{ totals.matchpoints }} of {{ totals.top }}
-        <template v-if="totals.percent !== null">({{ totals.percent }}%)</template>
-      </p>
+      <p v-else class="set-total-none">No other table has played these boards yet.</p>
     </div>
   </section>
 </template>
@@ -72,8 +63,15 @@ import { IonItem, IonList } from '@ionic/vue';
 import CallLabel from '@/components/CallLabel.vue';
 import type { SetResults } from '@/services/history';
 import type { Seat } from '@/services/tables';
-import { doubledSuffix } from '@/utils/auction';
-import { SIDE_LABELS, formatScore, madeBy, matchpointPercent, scoreFor } from '@/utils/result';
+import {
+  SIDE_LABELS,
+  doubledMark,
+  formatScore,
+  madeSuffix,
+  matchpointPercent,
+  percentText,
+  scoreFor,
+} from '@/utils/result';
 import { forfeitText, setTitle, setTotals, setWinnerText, setWon } from '@/utils/sets';
 
 const props = withDefaults(
@@ -96,10 +94,10 @@ const wonClass = computed(() => {
   return won === null ? '' : won ? 'score-plus' : 'score-minus';
 });
 
-// "MP 50%", or "MP —" when no other table has played the board.
+// "MP 50 %", or "MP —" when no other table has played the board.
 function mpText(matchpoints: number, top: number): string {
   const percent = matchpointPercent(matchpoints, top);
-  return `MP ${percent === null ? '—' : `${percent}%`}`;
+  return `MP ${percent === null ? '—' : percentText(percent)}`;
 }
 
 function tone(score: number): string {
@@ -211,24 +209,10 @@ function tone(score: number): string {
   line-height: 1.1;
 }
 
-.set-results .set-total-sides {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 4px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ion-color-medium);
-}
-
-.set-results .set-total-mp {
-  margin-top: 4px;
+.set-results .set-total-mp,
+.set-results .set-total-none {
   font-size: 0.85rem;
   color: var(--ion-color-medium);
-}
-
-.side-mine {
-  font-weight: 700;
-  color: var(--ion-text-color, #000);
 }
 
 .score-plus {

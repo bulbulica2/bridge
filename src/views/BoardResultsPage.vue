@@ -77,9 +77,10 @@
                   </p>
                   <p class="result-contract">
                     <template v-if="result.contract && result.declarer">
-                      <CallLabel :bid="result.contract" />{{ doubledSuffix(result.doubled ?? 0) }}
-                      by {{ result.declarer }}<template v-if="result.made_by !== null"
-                        >, {{ madeBy(result.made_by) }} · {{ result.tricks_won }} tricks</template
+                      <CallLabel :bid="result.contract" />{{ doubledMark(result.doubled) }}
+                      by {{ result.declarer }} {{ madeSuffix(result.made_by)
+                      }}<template v-if="result.made_by !== null">
+                        · {{ result.tricks_won }} tricks</template
                       >
                     </template>
                     <template v-else>Passed out</template>
@@ -137,13 +138,14 @@ import { useAuthStore } from '@/stores/auth';
 import { useHistoryStore } from '@/stores/history';
 import type { BoardResultRow } from '@/services/history';
 import type { Seat } from '@/services/tables';
-import { SEAT_NAMES, doubledSuffix } from '@/utils/auction';
+import { SEAT_NAMES } from '@/utils/auction';
 import { vulnerabilityLabel } from '@/utils/cards';
 import { errorMessage, statusOf } from '@/utils/errors';
 import {
   SIDE_LABELS,
+  doubledMark,
   formatScore,
-  madeBy,
+  madeSuffix,
   matchpointPercent,
   scoreFor,
   seatOfUser,

@@ -336,8 +336,8 @@ describe('TablePlayPage bidding', () => {
       }),
     )
 
-    expect(wrapper.get('.result-title').text()).toBe('Passed out')
-    expect(wrapper.get('.result-detail').text()).toContain('Nobody bid, so the board scores 0.')
+    expect(wrapper.get('.result-contract').text()).toBe('Passed out')
+    expect(wrapper.get('.result-score').text()).toBe('0')
     expect(wrapper.find('.next-button').exists()).toBe(true)
     expect(wrapper.find('.bidding-box').exists()).toBe(false)
   })

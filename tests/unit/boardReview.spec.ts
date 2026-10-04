@@ -296,9 +296,8 @@ describe('BoardReview', () => {
     })
 
     await control(wrapper, 'End of the play').trigger('click')
-    expect(wrapper.find('.result-matchpoints').text()).toBe(
-      'Matchpoints: N-S 3 of 4 (75%), E-W 1 of 4 (25%)',
-    )
+    // For the viewer's side: bo sat E-W.
+    expect(wrapper.find('.result-set').text()).toBe('Matchpoints 25 %')
   })
 
   test('no matchpoints line without them', async () => {
@@ -306,7 +305,7 @@ describe('BoardReview', () => {
 
     await control(wrapper, 'End of the play').trigger('click')
     expect(wrapper.find('.result').exists()).toBe(true)
-    expect(wrapper.find('.result-matchpoints').exists()).toBe(false)
+    expect(wrapper.find('.result-set').exists()).toBe(false)
   })
 
   test('names the viewer as declarer, and a seat whose account is gone plainly', () => {

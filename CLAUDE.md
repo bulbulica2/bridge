@@ -412,8 +412,17 @@ The user's standing rule (#91): **no task may leave code coverage under
   (`score_ns` is from N-S's side whichever side declared; a passed-out board
   has `score_ns: 0` and the rest null), `deal` (all four hands as dealt),
   `ready` (the seats that asked to deal now) and `next_board_at`.
-  `src/utils/result.ts` words it and turns it round for the viewer's side
-  (`resultSummary`, `viewerScore`); `BoardResultPanel.vue` shows it,
+  `src/utils/result.ts` words it in table notation and turns it round for
+  the viewer's side (#100: `madeSuffix` "+2"/"="/"−1", `doubledMark`
+  X/XX, `resultSummary(result, seat)` "2♣ W +2 · −130", N-S's tagged
+  without a seat, `viewerScore`, `percentText` "75 %");
+  `BoardResultPanel.vue` shows it at a glance: one big row ("2♣ by West
+  +2" left, the viewer's score right, N-S's tagged "N-S" for someone not
+  seated), "10 tricks · by claim" under it, no N-S/E-W line or summary,
+  then the set's position ("Set 2 · 3 of 4 boards played") and this
+  board's matchpoints for the viewer's side when known (`extras`, from
+  `playingExtras()` in `export.ts`: the board's results or a cached set's
+  row by `playing_id`; `useBoardExport` uses it too),
   `BridgeTable`'s `deal` prop lays each hand at its seat. **The next board comes by itself**
   (#98, bb#97): `next_board_at` (ISO 8601, `BRIDGE_NEXT_BOARD_SECONDS` =
   10 after the board ended; null when no deal is coming: set over, a seat
@@ -437,8 +446,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   the next ask 409s, and once a fourth player sits down everyone's Start
   deals the board (the play page swaps `NextBoardBox` for `StartBox`).
   `leaveWarning()` / `moveConsequences()` in `src/utils/seatMove.ts` word
-  leaving by phase (`game.phaseOf(id)`). The running score under a board's
-  result is its set's (`BoardResultPanel`'s `setSoFar`, below).
+  leaving by phase (`game.phaseOf(id)`). Under a board's result goes its
+  set's position (`BoardResultPanel`'s `setSoFar`, below), never a
+  running score.
 - **Sets of four boards** (#73, bb#75, backend `docs/API.md` Sets): Start
   deals a set's first board, the other three come by themselves
   (`next_board_at`, above); after the fourth `next_board_at` is null,
@@ -458,13 +468,18 @@ The user's standing rule (#91): **no task may leave code coverage under
   boards) is cached by the history store's `loadSet` (replaced on every
   read, 403/404 drop it). The play page reads it once per finished board
   and when the set ends (keyed, failures ignored: a newcomer gets 403),
-  feeds `BoardResultPanel`'s "Set N so far" line and, once the set is
+  feeds `BoardResultPanel`'s set line and matchpoints and, once the set is
   over (`endedSet`), shows `SetResultsPanel.vue` instead of the board
   result (also in `waiting` for a set ended mid-board), with `StartBox`
   below. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
   side, "by forfeit"), `forfeitedSeat` (the forfeiting side's seat whose
-  player is no longer at the table) + `forfeitText`, `setTotals` and
-  `groupBySet` (history runs of one set, the owner's score summed),
+  player is no longer at the table) + `forfeitText`, `setTotals`
+  (the viewer's side's matchpoints and percent: **no summed score**
+  anywhere, #100; we play matchpoints, not rubber, so `SetResultsPanel`'s
+  total is the matchpoints % or "No other table has played these boards
+  yet.", and `HistoryList`'s set header shows `setPercent` from a set in
+  `history.sets`, else nothing) and
+  `groupBySet` (history runs of one set, with the owner's `seat`),
   `runningSet` (the set a table is in the middle of, else null).
 - **Away mid-set and the forfeit** (#74, bb#76, backend `docs/API.md` Away
   mid-set): a seat has `away_since`/`forfeit_at` (`TableSeat`, on payloads

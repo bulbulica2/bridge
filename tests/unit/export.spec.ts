@@ -18,6 +18,7 @@ import {
   handText,
   pbnHand,
   playerLabel,
+  playingExtras,
 } from '@/utils/export'
 import PlayingReviewPage from '@/views/PlayingReviewPage.vue'
 
@@ -206,6 +207,26 @@ describe('export pieces', () => {
   })
 })
 
+describe('playingExtras', () => {
+  const board = (playingId: number, ns: number) => ({
+    board: { id: 7, number: 7, dealer: 'N' as const, vulnerable: '' as const },
+    top: 4,
+    results: [{ playing_id: playingId, matchpoints: { ns, ew: 4 - ns } }],
+  })
+  const set = (playingId: number) => ({ boards: [{ playing_id: playingId, top: 2, matchpoints: { ns: 2, ew: 0 } }] })
+
+  test("a board's results first, else any cached set holding the playing, else nothing", () => {
+    const results = { 7: board(42, 3) } as never
+    const sets = { 5: set(43) } as never
+
+    expect(playingExtras(results, sets, 7, 42)).toEqual({ matchpoints: { ns: 3, ew: 1 }, top: 4 })
+    expect(playingExtras(results, sets, 7, 43)).toEqual({ matchpoints: { ns: 2, ew: 0 }, top: 2 })
+    expect(playingExtras(results, sets, null, 43)).toEqual({ matchpoints: { ns: 2, ew: 0 }, top: 2 })
+    expect(playingExtras(results, sets, 8, 44)).toEqual({})
+    expect(playingExtras(results, sets, 7, null)).toEqual({})
+  })
+})
+
 describe('boardText', () => {
   test('a played board: hands, every call, every trick, the result', () => {
     const text = boardText(played(), { matchpoints: { ns: 3, ew: 1 }, top: 4 })
@@ -227,7 +248,7 @@ describe('boardText', () => {
     expect(text).toContain(' 2. North leads: N ♠K, E ♠J, S ♠6, W ♥7; won by North')
     expect(text).toContain('13. East leads:')
     expect(lines.filter((line) => /^ ?\d+\. /.test(line))).toHaveLength(13)
-    expect(text).toContain('Result: 4♠ by N, made: N-S +420')
+    expect(text).toContain('Result: 4♠ N = · N-S +420')
     expect(text).toContain('Declarer took 10 tricks.')
     expect(text).toContain('Matchpoints: N-S 3 of 4 (75%), E-W 1 of 4 (25%)')
     expect(text).not.toContain('claim')
@@ -239,7 +260,8 @@ describe('boardText', () => {
 
     expect(text).toContain(' 9. North leads: N ♦9, E ♦7 (not finished)')
     expect(text).toContain('Ended by an accepted claim during trick 9: declarer took 2 of the last 5.')
-    expect(text).toContain('Result: 4♠ by N, made by claim: N-S +420')
+    expect(text).toContain('Result: 4♠ N = · N-S +420')
+    expect(text).toContain('Declarer took 10 tricks, by claim.')
     expect(text).not.toContain('10. ')
   })
 
@@ -260,7 +282,7 @@ describe('boardText', () => {
     expect(text).toContain('       Pass   Pass   Pass\nPass')
     expect(text).toContain('Contract: Passed out')
     expect(text).not.toContain('\nPlay\n')
-    expect(text).toContain('Result: Passed out: 0')
+    expect(text).toContain('Result: Passed out · 0')
     expect(text).not.toContain('Declarer took')
   })
 
@@ -271,7 +293,7 @@ describe('boardText', () => {
     expect(text).toContain('Contract: 4♠ by North')
     expect(text).toContain('North  ♠ A K 7 3')
     expect(text).not.toContain('Auction')
-    expect(text).toContain('Result: 4♠ by N, made: N-S +420')
+    expect(text).toContain('Result: 4♠ N = · N-S +420')
   })
 })
 

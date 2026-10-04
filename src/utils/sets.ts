@@ -9,7 +9,8 @@ import type { Side } from '@/utils/result';
 // Sets of boards (bridge_backend docs/API.md, Sets): Start deals a set's
 // first board, the other three are dealt by themselves (`next_board_at`), and
 // after the fourth it is everyone's Start again. The backend adds up the set (GET /sets/{id}); this only words
-// it and turns it round for the side looking at it.
+// it and turns it round for the side looking at it. Scores are never added
+// up over a set: each board is compared with the other tables (matchpoints).
 
 export function sideOfCode(code: SideCode): Side {
   return code === 'NS' ? 'ns' : 'ew';
@@ -124,47 +125,54 @@ export function forfeitText(set: SetResults, gone: Seat | null = null): string |
 }
 
 // The viewer's side of the totals (N-S for someone who didn't play it):
-// the score, the matchpoints out of the top and as a percentage.
+// the matchpoints out of the top and as a percentage (null while no other
+// table has played any of its boards).
 export function setTotals(set: SetResults, seat: Seat | null) {
   const side: Side = seat ? sideOf(seat) : 'ns';
   const matchpoints = set.totals.matchpoints[side];
   return {
     side,
-    score: set.totals.score[side],
     matchpoints,
     top: set.totals.top,
     percent: matchpointPercent(matchpoints, set.totals.top),
   };
 }
 
-// A run of history entries from one set, with its score from the owner's
-// side. `set` is null for entries made outside any set.
+// The owner's side's matchpoints over a set as a percentage, from its
+// results if they have been read; null when they haven't, or no other table
+// has played its boards yet.
+export function setPercent(set: SetResults | undefined, seat: Seat): number | null {
+  return set ? setTotals(set, seat).percent : null;
+}
+
+// A run of history entries from one set, with the owner's seat in it (to
+// turn the set's matchpoints to their side). `set` is null for entries made
+// outside any set.
 export interface HistorySetGroup {
   key: string;
   set: PlayingHistoryEntry['set'];
   tableId: number | null;
+  seat: Seat;
   entries: PlayingHistoryEntry[];
-  score: number;
 }
 
-// The history (latest first) cut into runs of the same set, each with the
-// owner's score added up over the boards it holds so far (an older page can
-// add more). Entries without a set stand in runs of their own.
+// The history (latest first) cut into runs of the same set (an older page
+// can add more boards to the last). Entries without a set stand in runs of
+// their own. No score is added up: a set is told by its matchpoints.
 export function groupBySet(entries: PlayingHistoryEntry[]): HistorySetGroup[] {
   const groups: HistorySetGroup[] = [];
   for (const entry of entries) {
     const last = groups[groups.length - 1];
     if (last && entry.set && last.set?.id === entry.set.id) {
       last.entries.push(entry);
-      last.score += entry.score;
       continue;
     }
     groups.push({
       key: `${entry.set ? `set-${entry.set.id}` : 'board'}:${entry.playing_id}`,
       set: entry.set,
       tableId: entry.table_id,
+      seat: entry.seat,
       entries: [entry],
-      score: entry.score,
     });
   }
   return groups;

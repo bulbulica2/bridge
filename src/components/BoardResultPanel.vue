@@ -1,44 +1,32 @@
 <template>
-  <!-- A finished board's score, as the backend worked it out (`result`):
-       the contract and how it went (by claim, when one ended the play), the score from the viewer's side, both
-       sides' figures, the matchpoints when already read (a review), and the
-       set's running score (GET /sets/{id}). -->
+  <!-- A finished board's score, as the backend worked it out (`result`),
+       written the way it is at the table: one big row with the contract and
+       how it went ("2♣ by West +2") and the score from the viewer's side
+       (N-S's, tagged, for someone who didn't play it), the tricks under it,
+       then where the board stands in its set and, once other tables have
+       played it, its matchpoints. Scores aren't added up over a set: each
+       board is compared with the other tables. -->
   <section class="result" aria-live="polite">
-    <p class="result-title">
-      <template v-if="contract">
-        <CallLabel :bid="contract" />{{ doubledSuffix(result.doubled ?? 0) }}
-        by {{ SEAT_NAMES[result.declarer!] }}
-      </template>
-      <template v-else>Passed out</template>
-    </p>
-    <p class="result-detail">
-      <template v-if="contract && result.made_by !== null">
-        {{ madeText(result.made_by) }} · {{ result.tricks_won }} tricks<template
-          v-if="result.claimed"
-        >, by claim</template>
-      </template>
-      <template v-else>Nobody bid, so the board scores 0.</template>
-    </p>
+    <div class="result-head">
+      <p class="result-contract">
+        <template v-if="contract">
+          <CallLabel :bid="contract" />{{ doubledMark(result.doubled) }}
+          by {{ SEAT_NAMES[result.declarer!] }}
+          <span class="result-made">{{ madeSuffix(result.made_by) }}</span>
+        </template>
+        <template v-else>Passed out</template>
+      </p>
+      <p class="result-score" :class="tone(score)">
+        <span v-if="!mySeat" class="result-side">N-S</span>
+        <span class="result-score-value">{{ formatScore(score) }}</span>
+      </p>
+    </div>
+    <p v-if="detail" class="result-detail">{{ detail }}</p>
 
-    <p v-if="mine !== null" class="result-mine" :class="tone(mine)">
-      <span class="result-mine-label">Your score</span>
-      <span class="result-mine-value">{{ formatScore(mine) }}</span>
-    </p>
-    <p class="result-sides">
-      <span :class="{ 'side-mine': mySide === 'ns' }">N-S {{ formatScore(result.score_ns) }}</span>
-      <span aria-hidden="true">·</span>
-      <span :class="{ 'side-mine': mySide === 'ew' }">
-        E-W {{ formatScore(scoreFor(result.score_ns, 'ew')) }}
-      </span>
-    </p>
-    <p class="result-summary">{{ resultSummary(result) }}</p>
-    <p v-if="matchpoints" class="result-matchpoints">Matchpoints: {{ matchpoints }}</p>
-
-    <p v-if="setSoFar && setSoFar.boards.length > 0" class="result-session">
-      Set {{ setSoFar.number }} so far: {{ setSoFar.boards.length }} of {{ setSoFar.of }}
-      boards,
-      <strong :class="tone(setMine)">{{ mySeat ? 'you' : 'N-S' }} {{ formatScore(setMine) }}</strong>
-      (N-S {{ formatScore(setSoFar.totals.score.ns) }})
+    <p v-if="setLine || percent !== null" class="result-set">
+      <span v-if="setLine">{{ setLine }}</span>
+      <span v-if="setLine && percent !== null" aria-hidden="true"> · </span>
+      <span v-if="percent !== null">Matchpoints {{ percentText(percent) }}</span>
     </p>
   </section>
 </template>
@@ -49,24 +37,23 @@ import CallLabel from '@/components/CallLabel.vue';
 import type { BoardResult } from '@/services/game';
 import type { SetResults } from '@/services/history';
 import type { Seat } from '@/services/tables';
-import { SEAT_NAMES, doubledSuffix } from '@/utils/auction';
-import { matchpointsText } from '@/utils/export';
+import { SEAT_NAMES } from '@/utils/auction';
 import type { ExportExtras } from '@/utils/export';
 import {
+  doubledMark,
   formatScore,
-  madeText,
-  resultSummary,
+  madeSuffix,
+  matchpointPercent,
+  percentText,
   scoreFor,
   sideOf,
-  viewerScore,
 } from '@/utils/result';
-import { setTotals } from '@/utils/sets';
 
 const props = withDefaults(
   defineProps<{
     result: BoardResult;
     mySeat: Seat | null;
-    // The set this board belongs to, as far as it has got: its running score.
+    // The set this board belongs to, as far as it has got: its position.
     setSoFar?: SetResults | null;
     // Its matchpoints against the other tables, when known.
     extras?: ExportExtras;
@@ -75,16 +62,36 @@ const props = withDefaults(
 );
 
 const contract = computed(() => (props.result.declarer ? props.result.contract : null));
-const mine = computed(() => viewerScore(props.result, props.mySeat));
-const mySide = computed(() => (props.mySeat ? sideOf(props.mySeat) : null));
-const matchpoints = computed(() => matchpointsText(props.extras));
-const setMine = computed(() => (props.setSoFar ? setTotals(props.setSoFar, props.mySeat).score : 0));
+// The viewer's side, or N-S for someone who didn't play the board.
+const side = computed(() => (props.mySeat ? sideOf(props.mySeat) : 'ns'));
+const score = computed(() => scoreFor(props.result.score_ns, side.value));
+// "10 tricks · by claim" under a contract; nothing for a passed-out board.
+const detail = computed(() => {
+  const tricks = props.result.tricks_won;
+  if (!contract.value || tricks === null) {
+    return null;
+  }
+  return `${tricks} trick${tricks === 1 ? '' : 's'}${props.result.claimed ? ' · by claim' : ''}`;
+});
+// "Set 2 · 3 of 4 boards played".
+const setLine = computed(() => {
+  const set = props.setSoFar;
+  if (!set || set.boards.length === 0) {
+    return null;
+  }
+  return `Set ${set.number} · ${set.boards.length} of ${set.of} board${set.of === 1 ? '' : 's'} played`;
+});
+// This board's matchpoints for the same side, once another table played it.
+const percent = computed(() => {
+  const { matchpoints, top } = props.extras;
+  return matchpoints && top ? matchpointPercent(matchpoints[side.value], top) : null;
+});
 
-function tone(score: number): string {
-  if (score === 0) {
+function tone(value: number): string {
+  if (value === 0) {
     return 'score-zero';
   }
-  return score > 0 ? 'score-plus' : 'score-minus';
+  return value > 0 ? 'score-plus' : 'score-minus';
 }
 </script>
 
@@ -94,75 +101,65 @@ function tone(score: number): string {
   padding: 12px;
   border-radius: 8px;
   background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.08);
-  text-align: center;
 }
 
 .result p {
   margin: 0;
 }
 
-.result-title {
-  font-size: 1.2rem;
-  font-weight: 700;
-}
-
-.result .result-detail {
-  margin-top: 2px;
-  font-size: 0.9rem;
-  color: var(--ion-color-medium);
-}
-
-.result .result-mine {
+/* One row: the contract on the left, the score on the right; on a narrow
+   phone the score wraps under the contract, still large. */
+.result-head {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 8px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 16px;
+  row-gap: 4px;
 }
 
-.result-mine-label {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  color: var(--ion-color-medium);
+.result-contract {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
-.result-mine-value {
+.result-made {
+  font-variant-numeric: tabular-nums;
+}
+
+.result-score {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.result-score-value {
   font-size: 1.8rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 
-.result .result-sides {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 4px;
-  font-variant-numeric: tabular-nums;
+.result-side {
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--ion-color-medium);
 }
 
-.side-mine {
-  font-weight: 700;
-  color: var(--ion-text-color, #000);
-}
-
-.result .result-matchpoints {
+.result .result-detail {
   margin-top: 4px;
   font-size: 0.9rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.result .result-summary {
-  margin-top: 4px;
-  font-size: 0.8rem;
   color: var(--ion-color-medium);
 }
 
-.result .result-session {
+.result .result-set {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--ion-color-step-150, #e0e0e0);
   font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .score-plus {

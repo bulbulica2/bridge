@@ -49,12 +49,12 @@
                 </span>
               </div>
               <span
+                v-if="percentOf(group) !== null"
                 slot="end"
-                class="set-head-score"
-                :class="tone(group.score)"
-                :aria-label="`Set total ${formatScore(group.score)}`"
+                class="set-head-mp"
+                :aria-label="`Set matchpoints ${percentText(percentOf(group)!)}`"
               >
-                {{ formatScore(group.score) }}
+                {{ percentText(percentOf(group)!) }}
               </span>
             </ion-item>
             <HistoryEntryItem
@@ -93,8 +93,9 @@ import HistoryEntryItem from '@/components/HistoryEntryItem.vue';
 import { useHistoryStore } from '@/stores/history';
 import type { HistoryOwner } from '@/stores/history';
 import { errorMessage, statusOf } from '@/utils/errors';
-import { formatScore } from '@/utils/result';
-import { groupBySet } from '@/utils/sets';
+import { percentText } from '@/utils/result';
+import { groupBySet, setPercent } from '@/utils/sets';
+import type { HistorySetGroup } from '@/utils/sets';
 
 const props = withDefaults(
   defineProps<{
@@ -113,15 +114,14 @@ const loadError = ref('');
 const moreError = ref('');
 
 const list = computed(() => store.listOf(props.owner));
-// Each set's boards under one header with the owner's total (of the boards
-// paged in so far).
+// Each set's boards under one header.
 const groups = computed(() => groupBySet(list.value?.entries ?? []));
 
-function tone(score: number): string {
-  if (score === 0) {
-    return 'score-zero';
-  }
-  return score > 0 ? 'score-plus' : 'score-minus';
+// The owner's matchpoints over a set, when its results have been read (its
+// page, or the play page after each board) and another table has played its
+// boards. Nothing is fetched for them here; scores aren't added up.
+function percentOf(group: HistorySetGroup): number | null {
+  return group.set ? setPercent(store.sets[group.set.id], group.seat) : null;
 }
 
 // The first page again; rows already shown stay up while it loads.
@@ -230,17 +230,9 @@ defineExpose({ load });
   color: var(--ion-color-medium);
 }
 
-.set-head-score {
+.set-head-mp {
   font-size: 1.1rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-}
-
-.score-plus {
-  color: var(--ion-color-success-shade, #2dd36f);
-}
-
-.score-minus {
-  color: var(--ion-color-danger, #eb445a);
 }
 </style>

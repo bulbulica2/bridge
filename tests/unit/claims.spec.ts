@@ -272,14 +272,15 @@ describe('claim hints', () => {
   })
 
   test('a claimed result says so', () => {
-    expect(resultSummary(RESULT)).toBe('4♠ by S, +2 by claim: N-S +480')
-    expect(resultSummary({ ...RESULT, claimed: false })).toBe('4♠ by S, +2: N-S +480')
+    // The summary is the table notation; the panel's tricks line says "by claim".
+    expect(resultSummary(RESULT, 'S')).toBe('4♠ S +2 · +480')
+    expect(resultSummary({ ...RESULT, claimed: false }, 'S')).toBe('4♠ S +2 · +480')
   })
 
   test('the result panel says "by claim"', () => {
     const wrapper = mount(BoardResultPanel, { props: { result: RESULT, mySeat: 'S' } })
 
-    expect(wrapper.get('.result-detail').text()).toBe('Made with 2 overtricks · 12 tricks, by claim')
+    expect(wrapper.get('.result-detail').text()).toBe('12 tricks · by claim')
   })
 })
 
@@ -754,7 +755,7 @@ describe('TablePlayPage claims', () => {
     await flushPromises()
 
     expect(wrapper.get('.result-detail').text()).toContain('by claim')
-    expect(showToast).toHaveBeenCalledWith('Board over: 4♠ by S, +2 by claim: N-S +480.', 'success')
+    expect(showToast).toHaveBeenCalledWith('Board over: 4♠ S +2 · +480.', 'success')
   })
 
   test("a robot declarer's dummy claims for declarer from the sheet", async () => {

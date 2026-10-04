@@ -273,6 +273,9 @@ describe('BoardResultsPage', () => {
     expect(items[0].classes()).toContain('mine')
     expect(items[1].classes()).not.toContain('mine')
     expect(items[1].text()).toContain('Table closed')
+    // Each contract in table notation: just made, one down.
+    expect(items[0].get('.result-contract').text()).toBe('4♠ by N = · 10 tricks')
+    expect(items[1].get('.result-contract').text()).toBe('4♠ by N −1 · 9 tricks')
     // bo sat E-W, which scored 0 of 2 matchpoints on that table.
     expect(wrapper.find('.summary-value').text()).toBe('0%')
     expect(wrapper.find('.summary-detail').text()).toContain('0 of 2 matchpoints')
@@ -316,18 +319,30 @@ describe('BoardResultsPage', () => {
 describe('HistoryPage', () => {
   test('lists the finished boards, each opening its replay', async () => {
     loginAs(bo)
-    answer(page([entry(42), entry(41, { contract: null, declarer: null, made_by: null, score_ns: 0, score: 0, tricks_won: null, doubled: null })], 1, 1))
+    answer(
+      page(
+        [
+          entry(42),
+          entry(41, { contract: null, declarer: null, made_by: null, score_ns: 0, score: 0, tricks_won: null, doubled: null }),
+          entry(40, { doubled: 1, made_by: 2, tricks_won: 12, score_ns: 990, score: -990 }),
+        ],
+        1,
+        1,
+      ),
+    )
 
     const wrapper = mount(HistoryPage)
     await flushPromises()
 
     expect(http.get).toHaveBeenCalledWith('/api/user/playings', { params: { page: 1 } })
     const items = wrapper.findAllComponents({ name: 'IonItem' })
-    expect(items).toHaveLength(2)
+    expect(items).toHaveLength(3)
     expect(items[0].props('routerLink')).toBe('/playings/42')
     expect(items[0].text()).toContain('You sat East with di')
+    expect(items[0].get('.entry-contract').text()).toBe('4♠ by N =')
     expect(items[0].text()).toContain('−620')
-    expect(items[1].text()).toContain('Passed out')
+    expect(items[1].get('.entry-contract').text()).toBe('Passed out')
+    expect(items[2].get('.entry-contract').text()).toBe('4♠X by N +2')
   })
 
   test('shows the empty state', async () => {

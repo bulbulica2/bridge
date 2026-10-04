@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { useHistoryStore } from '@/stores/history';
 import type { PlayingReview } from '@/services/history';
 import { copyText, downloadFile } from '@/utils/download';
-import { boardJson, boardPbn, boardText, exportFileName } from '@/utils/export';
+import { boardJson, boardPbn, boardText, exportFileName, playingExtras } from '@/utils/export';
 import type { ExportExtras } from '@/utils/export';
 import { showToast } from '@/utils/toast';
 
@@ -25,21 +25,9 @@ export function useBoardExport(review: () => PlayingReview | null) {
   // every board). Nothing is asked for them here.
   const extras = computed<ExportExtras>(() => {
     const board = review();
-    if (!board) {
-      return {};
-    }
-    const results = board.board ? history.results[board.board.id] : undefined;
-    const row = results?.results.find((r) => r.playing_id === board.playing_id);
-    if (row) {
-      return { matchpoints: row.matchpoints, top: results!.top };
-    }
-    for (const set of Object.values(history.sets)) {
-      const inSet = set.boards.find((b) => b.playing_id === board.playing_id);
-      if (inSet) {
-        return { matchpoints: inSet.matchpoints, top: inSet.top };
-      }
-    }
-    return {};
+    return board
+      ? playingExtras(history.results, history.sets, board.board?.id ?? null, board.playing_id)
+      : {};
   });
 
   const FORMATS = {

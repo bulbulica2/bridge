@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/63-table-shortcut-and-side-menu`._
+_Status as of branch `bulbulica2/64-board-result-at-a-glance`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -353,9 +353,16 @@ What it shows by phase:
   answered: the claim is off, play on."). If the backend's update hasn't
   come 2 s after the deadline, the page rereads the game. The last accept
   finishes the board.
-- **finished**: the result from your side ("by claim" when a claim ended
-  it), the set's running score so far ("Set 3 so far: 2 of 4 boards, you
-  +450", read from the set), all four hands face up, **Compare with other tables**, **Review
+- **finished**: the result at a glance (#100), written the way it is at
+  the table: one big row with the contract and how it went on the left
+  (**2♣ by West +2**, **4♠X by South −1**, **3NT by North =**, or
+  **Passed out**) and your score on the right in green or red (**−130**;
+  N-S's, tagged "N-S", if you didn't play it), then a small line
+  ("10 tricks · by claim"). Below it, where the set stands ("Set 2 · 3 of
+  4 boards played", read from the set) and, once another table has played
+  the board, its matchpoints for your side ("Matchpoints 75 %"). Scores
+  are never added up over a set: each board is compared with the other
+  tables. All four hands lie face up, **Compare with other tables**, **Review
   and export** (the board review at the table, below), and the next-board
   box: **Next board in 0:08**, counting down to the set's next board, which
   is dealt by itself (#98; then "Dealing the next board…"). The result and
@@ -429,9 +436,12 @@ bb#75 (sets of four boards), bb#76 (away mid-set and the forfeit).
 
 Your finished boards, newest first (20 a page, paged in as you scroll),
 grouped by the set they were dealt in. Each set's header reads **Set 3 ·
-table 5**, how many of its boards are listed ("2 of 4 boards") and your
-total over them, and opens the [set's results](#set-results--setsid). Under
-it, each board: board number, contract and result, the seat you sat and
+table 5**, how many of its boards are listed ("2 of 4 boards") and, if the
+set's results have been read (its page, or the play page) and another
+table has played its boards, your matchpoints over it ("62 %"); never a
+summed score (#100). It opens the [set's results](#set-results--setsid). Under
+it, each board: board number, contract and result in table notation
+("4♠X by N −1"), the seat you sat and
 your partner, the table, and the score from your side. Tapping one opens
 its [review](#board-review--playingsid). Boards played before sets existed
 have no header.
@@ -453,8 +463,11 @@ still going on (with the boards finished so far).
 
 The table and when the set finished (or started), the two pairs, and the
 same set view as on the play page: who won (from your side if you played
-it, else N-S's), a forfeit, each board opening its review, and the totals. A
-403 or 404 shows as a reason on the page.
+it, else N-S's), a forfeit, each board opening its review (contract in
+table notation, your side's score and matchpoints), and the set's
+matchpoints for your side ("62 %", with "5 of 8") instead of a summed
+score, or "No other table has played these boards yet." (#100). A 403 or
+404 shows as a reason on the page.
 
 | Calls | Endpoint |
 |---|---|
