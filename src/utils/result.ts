@@ -34,23 +34,22 @@ export function formatScore(score: number): string {
   return score > 0 ? `+${score}` : `−${-score}`;
 }
 
-// How the contract went, short: "+1", "made" (exactly), "−2".
-export function madeBy(made: number): string {
+// How the contract went, the way it is written at the table: "+2"
+// (overtricks), "=" (just made), "−1" (down, a real minus sign); "" for a
+// passed-out board (no contract, `made_by` null).
+export function madeSuffix(made: number | null): string {
+  if (made === null) {
+    return '';
+  }
   if (made === 0) {
-    return 'made';
+    return '=';
   }
   return made > 0 ? `+${made}` : `−${-made}`;
 }
 
-// The same, spelled out: "Made with 1 overtrick", "Made exactly", "Down 2".
-export function madeText(made: number): string {
-  if (made === 0) {
-    return 'Made exactly';
-  }
-  if (made > 0) {
-    return `Made with ${made} overtrick${made === 1 ? '' : 's'}`;
-  }
-  return `Down ${-made}`;
+// A doubled contract's mark: "", "X" or "XX".
+export function doubledMark(doubled: 0 | 1 | 2 | null): string {
+  return ['', 'X', 'XX'][doubled ?? 0];
 }
 
 // "4♠ doubled by North", or null for a passed-out board.
@@ -61,24 +60,28 @@ export function resultContract(result: BoardResult): string | null {
   return `${callLabel(result.contract)}${doubledSuffix(result.doubled ?? 0)} by ${SEAT_NAMES[result.declarer]}`;
 }
 
-// One line for the whole board: "4♠ by N, +1: N-S +450", naming the side
-// that scored (an E-W plus when N-S lost points), "4♠ by N, +1 by claim: …"
-// when the play ended by a claim, or "Passed out: 0".
-export function resultSummary(result: BoardResult): string {
+// One line for the whole board, in table notation: "2♣ W +2 · −130", the
+// score from the side of whoever sits at `seat`, or "2♣ W +2 · N-S −130"
+// for someone without a seat. "Passed out · 0" when nobody bid.
+export function resultSummary(result: BoardResult, seat: Seat | null = null): string {
   if (isPassedOut(result) || !result.declarer || result.made_by === null) {
-    return 'Passed out: 0';
+    return 'Passed out · 0';
   }
-  const call = `${callLabel(result.contract!)}${['', 'X', 'XX'][result.doubled ?? 0]}`;
-  const side: Side = result.score_ns >= 0 ? 'ns' : 'ew';
-  const score = formatScore(scoreFor(result.score_ns, side));
-  const how = `${madeBy(result.made_by)}${result.claimed ? ' by claim' : ''}`;
-  return `${call} by ${result.declarer}, ${how}: ${SIDE_LABELS[side]} ${score}`;
+  const score = viewerScore(result, seat);
+  const shown = score === null ? `N-S ${formatScore(result.score_ns)}` : formatScore(score);
+  const call = `${callLabel(result.contract!)}${doubledMark(result.doubled)}`;
+  return `${call} ${result.declarer} ${madeSuffix(result.made_by)} · ${shown}`;
 }
 
 // The board's score for whoever sits at `seat`: positive when their side
 // scored. Null for someone without a seat, who has no side.
 export function viewerScore(result: BoardResult, seat: Seat | null): number | null {
   return seat ? scoreFor(result.score_ns, sideOf(seat)) : null;
+}
+
+// "75 %".
+export function percentText(percent: number): string {
+  return `${percent} %`;
 }
 
 // A side's matchpoints on a board as a percentage of the top, rounded.

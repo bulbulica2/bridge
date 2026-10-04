@@ -108,6 +108,7 @@
               :result="playing.result"
               :my-seat="mySeat"
               :set-so-far="setResults"
+              :extras="boardExtras"
             />
             <!-- The same board at every other table, with matchpoints. -->
             <ion-button
@@ -373,6 +374,7 @@ import {
   playsForDeclarer,
 } from '@/utils/play';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { playingExtras } from '@/utils/export';
 import { resultSummary } from '@/utils/result';
 import { awaySeats } from '@/utils/away';
 import { confirmLeave, heldNotice } from '@/utils/seatMove';
@@ -682,6 +684,17 @@ const setResults = computed(() => {
   return set ? (history.sets[set.id] ?? null) : null;
 });
 
+// This board's matchpoints, once read (its set's results, or its results at
+// every table if those were opened): shown under its result.
+const boardExtras = computed(() =>
+  playingExtras(
+    history.results,
+    history.sets,
+    playing.value?.board?.id ?? null,
+    playing.value?.playing_id ?? null,
+  ),
+);
+
 // The set is over and its results are in: they replace the board's result.
 // Nothing to show for a set broken off before any board was finished.
 const endedSet = computed(() => {
@@ -785,7 +798,7 @@ watch(
   ([id, phase], [oldId, oldPhase]) => {
     const result = playing.value?.result;
     if (id != null && id === oldId && oldPhase === 'play' && phase === 'finished' && result) {
-      showToast(`Board over: ${resultSummary(result)}.`, 'success');
+      showToast(`Board over: ${resultSummary(result, mySeat.value)}.`, 'success');
     }
   },
 );

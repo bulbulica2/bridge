@@ -1,7 +1,7 @@
 import { SEATS } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { Bid, Card, PlayedCard, Suit, Vulnerability } from '@/services/game';
-import type { PlayingReview } from '@/services/history';
+import type { BoardResults, PlayingReview, SetResults } from '@/services/history';
 import type { PublicUser } from '@/services/users';
 import { auctionRows, callLabel, contractLabel, SEAT_NAMES } from '@/utils/auction';
 import { rankLabel, sortHand, SUIT_SYMBOLS, SUITS, vulnerabilityLabel } from '@/utils/cards';
@@ -25,6 +25,32 @@ import { isRecorded, playedCards } from '@/utils/review';
 export interface ExportExtras {
   matchpoints?: { ns: number; ew: number } | null;
   top?: number | null;
+}
+
+// A playing's matchpoints from what is already read: its board's results at
+// every table (GET /boards/{id}/results), else any cached set holding it
+// (GET /sets/{id}). Empty when neither has it.
+export function playingExtras(
+  results: Record<number, BoardResults>,
+  sets: Record<number, SetResults>,
+  boardId: number | null,
+  playingId: number | null,
+): ExportExtras {
+  if (playingId === null) {
+    return {};
+  }
+  const board = boardId !== null ? results[boardId] : undefined;
+  const row = board?.results.find((r) => r.playing_id === playingId);
+  if (row) {
+    return { matchpoints: row.matchpoints, top: board!.top };
+  }
+  for (const set of Object.values(sets)) {
+    const inSet = set.boards.find((b) => b.playing_id === playingId);
+    if (inSet) {
+      return { matchpoints: inSet.matchpoints, top: inSet.top };
+    }
+  }
+  return {};
 }
 
 // The auction and play are written the way players do, West first.
@@ -194,7 +220,7 @@ export function boardText(review: PlayingReview, extras: ExportExtras = {}): str
   if (review.result) {
     lines.push(`Result: ${resultSummary(review.result)}`);
     if (review.result.declarer && review.result.tricks_won !== null) {
-      lines.push(`Declarer took ${review.result.tricks_won} tricks.`);
+      lines.push(`Declarer took ${review.result.tricks_won} tricks${review.result.claimed ? ', by claim' : ''}.`);
     }
   }
   const matchpoints = matchpointsText(extras);

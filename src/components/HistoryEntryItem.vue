@@ -12,10 +12,8 @@
         </p>
         <p class="entry-contract">
           <template v-if="entry.contract && entry.declarer">
-            <CallLabel :bid="entry.contract" />{{ doubledSuffix(entry.doubled ?? 0) }}
-            by {{ entry.declarer }}<template v-if="entry.made_by !== null"
-              >, {{ madeBy(entry.made_by) }}</template
-            >
+            <CallLabel :bid="entry.contract" />{{ doubledMark(entry.doubled) }}
+            by {{ entry.declarer }} {{ madeSuffix(entry.made_by) }}
           </template>
           <template v-else>Passed out</template>
         </p>
@@ -37,8 +35,8 @@ import { computed } from 'vue';
 import { IonItem } from '@ionic/vue';
 import CallLabel from '@/components/CallLabel.vue';
 import type { PlayingHistoryEntry } from '@/services/history';
-import { SEAT_NAMES, doubledSuffix } from '@/utils/auction';
-import { formatScore, madeBy } from '@/utils/result';
+import { SEAT_NAMES } from '@/utils/auction';
+import { doubledMark, formatScore, madeSuffix } from '@/utils/result';
 
 const props = withDefaults(
   defineProps<{

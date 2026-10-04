@@ -14,9 +14,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
 import { useTablesStore } from '@/stores/tables'
 import {
+  doubledMark,
   formatScore,
-  madeBy,
-  madeText,
+  madeSuffix,
+  percentText,
   resultContract,
   resultSummary,
   scoreFor,
@@ -125,39 +126,56 @@ describe('result formatting', () => {
     expect(formatScore(0)).toBe('0')
   })
 
-  test('made, over and under', () => {
-    expect(madeBy(1)).toBe('+1')
-    expect(madeBy(0)).toBe('made')
-    expect(madeBy(-2)).toBe('−2')
-    expect(madeText(1)).toBe('Made with 1 overtrick')
-    expect(madeText(2)).toBe('Made with 2 overtricks')
-    expect(madeText(0)).toBe('Made exactly')
-    expect(madeText(-3)).toBe('Down 3')
+  test('how it went, as written at the table: =, +1…+6, −1…−13', () => {
+    expect(madeSuffix(0)).toBe('=')
+    for (let n = 1; n <= 6; n++) {
+      expect(madeSuffix(n)).toBe(`+${n}`)
+    }
+    for (let n = 1; n <= 13; n++) {
+      expect(madeSuffix(-n)).toBe(`−${n}`)
+    }
+    // A passed-out board has no contract to make or go down in.
+    expect(madeSuffix(null)).toBe('')
   })
 
-  test('a made contract names the side that scored', () => {
-    expect(resultSummary(result())).toBe('4♠ by N, +1: N-S +450')
+  test('doubled and redoubled contracts carry X and XX', () => {
+    expect(doubledMark(0)).toBe('')
+    expect(doubledMark(null)).toBe('')
+    expect(doubledMark(1)).toBe('X')
+    expect(doubledMark(2)).toBe('XX')
+    expect(resultSummary(result({ doubled: 2, made_by: 0, score_ns: 880 }), 'S')).toBe('4♠XX N = · +880')
+  })
+
+  test('percentages', () => {
+    expect(percentText(75)).toBe('75 %')
+  })
+
+  test("a made contract, from the viewer's side", () => {
+    expect(resultSummary(result(), 'N')).toBe('4♠ N +1 · +450')
+    expect(resultSummary(result(), 'W')).toBe('4♠ N +1 · −450')
     expect(resultContract(result())).toBe('4♠ by North')
   })
 
-  test('an E-W contract made scores for E-W, though score_ns is negative', () => {
+  test("without a seat, the score is N-S's and says so", () => {
     const r = result({ declarer: 'E', score_ns: -650 })
-    expect(resultSummary(r)).toBe('4♠ by E, +1: E-W +650')
+    expect(resultSummary(r)).toBe('4♠ E +1 · N-S −650')
+    expect(resultSummary(r, 'E')).toBe('4♠ E +1 · +650')
   })
 
   test('a defeated contract scores for the defenders', () => {
     const r = result({ contract: bid('3NT'), doubled: 1, declarer: 'S', tricks_won: 7, made_by: -2, score_ns: -500 })
-    expect(resultSummary(r)).toBe('3NTX by S, −2: E-W +500')
+    expect(resultSummary(r, 'E')).toBe('3NTX S −2 · +500')
     expect(resultContract(r)).toBe('3NT doubled by South')
   })
 
   test('a contract just made', () => {
     const r = result({ contract: bid('2H'), declarer: 'W', tricks_won: 8, made_by: 0, score_ns: -110 })
-    expect(resultSummary(r)).toBe('2♥ by W, made: E-W +110')
+    expect(resultSummary(r, 'N')).toBe('2♥ W = · −110')
   })
 
   test('a passed-out board scores 0', () => {
-    expect(resultSummary(PASSED_OUT)).toBe('Passed out: 0')
+    expect(resultSummary(PASSED_OUT)).toBe('Passed out · 0')
+    expect(resultSummary(PASSED_OUT, 'N')).toBe('Passed out · 0')
     expect(resultContract(PASSED_OUT)).toBeNull()
     expect(viewerScore(PASSED_OUT, 'E')).toBe(0)
   })
@@ -175,30 +193,109 @@ describe('result formatting', () => {
 })
 
 describe('BoardResultPanel', () => {
-  test('shows the score from an E-W viewer, and both sides', () => {
+  // The issue's own example: 2♣ by West, two overtricks, ended by a claim.
+  const twoClubs = result({
+    contract: bid('2C'),
+    declarer: 'W',
+    tricks_won: 10,
+    made_by: 2,
+    score_ns: -130,
+    claimed: true,
+  })
+
+  test("one headline row: the contract and how it went, and the viewer's score", () => {
+    const wrapper = mount(BoardResultPanel, { props: { result: twoClubs, mySeat: 'N' } })
+
+    expect(wrapper.get('.result-contract').text()).toBe('2♣ by West +2')
+    expect(wrapper.get('.result-score').text()).toBe('−130')
+    expect(wrapper.get('.result-score').classes()).toContain('score-minus')
+    expect(wrapper.find('.result-side').exists()).toBe(false)
+    expect(wrapper.get('.result-detail').text()).toBe('10 tricks · by claim')
+    // No repeats: no N-S/E-W line, no summary line, nothing about the set.
+    expect(wrapper.text()).not.toContain('E-W')
+    expect(wrapper.text()).not.toContain('Made with')
+    expect(wrapper.find('.result-set').exists()).toBe(false)
+  })
+
+  test('from the other side the same board is a plus', () => {
+    const wrapper = mount(BoardResultPanel, { props: { result: twoClubs, mySeat: 'E' } })
+
+    expect(wrapper.get('.result-score').text()).toBe('+130')
+    expect(wrapper.get('.result-score').classes()).toContain('score-plus')
+  })
+
+  test("someone who didn't play it sees N-S's score, tagged", () => {
+    const wrapper = mount(BoardResultPanel, { props: { result: twoClubs, mySeat: null } })
+
+    expect(wrapper.get('.result-side').text()).toBe('N-S')
+    expect(wrapper.get('.result-score-value').text()).toBe('−130')
+  })
+
+  test('played out, down doubled: no "by claim"', () => {
+    const r = result({ doubled: 1, declarer: 'S', tricks_won: 9, made_by: -1, score_ns: -100 })
+    const wrapper = mount(BoardResultPanel, { props: { result: r, mySeat: 'S' } })
+
+    expect(wrapper.get('.result-contract').text()).toBe('4♠X by South −1')
+    expect(wrapper.get('.result-detail').text()).toBe('9 tricks')
+  })
+
+  test('a contract just made, one trick taken', () => {
+    const r = result({ contract: bid('3NT'), declarer: 'N', tricks_won: 1, made_by: 0, score_ns: 400 })
+    const wrapper = mount(BoardResultPanel, { props: { result: r, mySeat: 'S' } })
+
+    expect(wrapper.get('.result-contract').text()).toBe('3NT by North =')
+    expect(wrapper.get('.result-detail').text()).toBe('1 trick')
+  })
+
+  test('the set line is its position only, no summed score', () => {
     const wrapper = mount(BoardResultPanel, {
       props: { result: result(), mySeat: 'E', setSoFar: setSoFar() },
     })
 
-    expect(wrapper.get('.result-title').text()).toBe('4♠ by North')
-    expect(wrapper.get('.result-detail').text()).toBe('Made with 1 overtrick · 11 tricks')
-    expect(wrapper.get('.result-mine-value').text()).toBe('−450')
-    expect(wrapper.get('.result-mine').classes()).toContain('score-minus')
-    expect(wrapper.get('.result-sides').text()).toContain('N-S +450')
-    expect(wrapper.get('.result-sides').text()).toContain('E-W −450')
-    expect(wrapper.get('.side-mine').text()).toContain('E-W')
-    expect(wrapper.get('.result-session').text()).toContain('Set 1 so far: 2 of 4 boards')
-    expect(wrapper.get('.result-session').text()).toContain('you −870')
-    expect(wrapper.get('.result-session').text()).toContain('(N-S +870)')
+    expect(wrapper.get('.result-set').text()).toBe('Set 1 · 2 of 4 boards played')
+    expect(wrapper.text()).not.toContain('870')
+  })
+
+  test("with matchpoints, this board's for the viewer's side", () => {
+    const extras = { matchpoints: { ns: 3, ew: 1 }, top: 4 }
+    const east = mount(BoardResultPanel, {
+      props: { result: result(), mySeat: 'E', setSoFar: setSoFar(), extras },
+    })
+    expect(east.get('.result-set').text()).toBe('Set 1 · 2 of 4 boards played · Matchpoints 25 %')
+
+    // N-S's for someone who didn't play it, and no set line in a review.
+    const watcher = mount(BoardResultPanel, { props: { result: result(), mySeat: null, extras } })
+    expect(watcher.get('.result-set').text()).toBe('Matchpoints 75 %')
+  })
+
+  test('a board only this table has played (top 0) says nothing about points', () => {
+    const wrapper = mount(BoardResultPanel, {
+      props: {
+        result: result(),
+        mySeat: 'N',
+        setSoFar: setSoFar({ boards: [], of: 1 }),
+        extras: { matchpoints: { ns: 0, ew: 0 }, top: 0 },
+      },
+    })
+
+    expect(wrapper.find('.result-set').exists()).toBe(false)
+  })
+
+  test('a one-board set', () => {
+    const one = setSoFar({ of: 1, boards: [setSoFar().boards[0]] })
+    const wrapper = mount(BoardResultPanel, { props: { result: result(), mySeat: 'N', setSoFar: one } })
+
+    expect(wrapper.get('.result-set').text()).toBe('Set 1 · 1 of 1 board played')
   })
 
   test('a passed-out board', () => {
     const wrapper = mount(BoardResultPanel, { props: { result: PASSED_OUT, mySeat: 'S' } })
 
-    expect(wrapper.get('.result-title').text()).toBe('Passed out')
-    expect(wrapper.get('.result-mine-value').text()).toBe('0')
-    expect(wrapper.get('.result-summary').text()).toBe('Passed out: 0')
-    expect(wrapper.find('.result-session').exists()).toBe(false)
+    expect(wrapper.get('.result-contract').text()).toBe('Passed out')
+    expect(wrapper.get('.result-score').text()).toBe('0')
+    expect(wrapper.get('.result-score').classes()).toContain('score-zero')
+    expect(wrapper.find('.result-detail').exists()).toBe(false)
+    expect(wrapper.find('.result-set').exists()).toBe(false)
   })
 })
 
@@ -350,15 +447,16 @@ describe('TablePlayPage between boards', () => {
       finished({ ready: ['N', 'W'], next_board_at: new Date(Date.now() + 30_000).toISOString() }),
     )
 
-    expect(wrapper.get('.result-title').text()).toBe('4♠ by North')
-    expect(wrapper.get('.result-mine-value').text()).toBe('+450')
+    expect(wrapper.get('.result-contract').text()).toBe('4♠ by North +1')
+    expect(wrapper.get('.result-score').text()).toBe('+450')
     // Every seat shows its 13 cards as dealt; our own hand section is gone.
     expect(wrapper.findAll('.dealt-hand')).toHaveLength(4)
     expect(wrapper.find('.my-hand').exists()).toBe(false)
     expect(nextBox(wrapper).get('.next-title').text()).toMatch(/^Next board in 0:[23]\d$/)
-    // The running score is the set's, read from GET /sets/{id}.
+    // Where the set stands and this board's matchpoints, read from GET
+    // /sets/{id}; no score summed over the set.
     expect(historyService.getSet).toHaveBeenCalledWith(5)
-    expect(wrapper.get('.result-session').text()).toContain('Set 1 so far: 2 of 4 boards, you +870')
+    expect(wrapper.get('.result-set').text()).toBe('Set 1 · 2 of 4 boards played · Matchpoints 50 %')
     // Where the table is in its set.
     expect(wrapper.get('.set-bar').text()).toBe('Board 2 of 4 · Set 1')
     // And the same board at the other tables is one tap away.
@@ -435,7 +533,7 @@ describe('TablePlayPage between boards', () => {
       await flushPromises()
       expect(nextBox(wrapper).get('.next-title').text()).toBe('Dealing the next board…')
       // The result is still there to read until the new board lands.
-      expect(wrapper.get('.result-title').text()).toBe('4♠ by North')
+      expect(wrapper.get('.result-contract').text()).toBe('4♠ by North +1')
       expect(wrapper.findAll('.dealt-hand')).toHaveLength(4)
 
       const game = useGameStore()
@@ -576,7 +674,9 @@ describe('TablePlayPage between boards', () => {
     expect(panel.get('.set-title').text()).toBe('Set 1 over')
     expect(panel.get('.set-winner').text()).toBe('You won the set.')
     expect(panel.findAll('.set-board')).toHaveLength(4)
-    expect(panel.get('.set-total-value').text()).toBe('+1160')
+    // The set's matchpoints for our side, not a summed score.
+    expect(panel.get('.set-total-value').text()).toBe('63 %')
+    expect(panel.text()).not.toContain('1160')
     // The board's own result panel and Next give way to the set and Start.
     expect(wrapper.find('.result').exists()).toBe(false)
     expect(wrapper.find('.next-board').exists()).toBe(false)
@@ -641,6 +741,6 @@ describe('TablePlayPage between boards', () => {
     useGameStore().applyPlayingUpdate(5, finished())
     await flushPromises()
 
-    expect(showToast).toHaveBeenCalledWith('Board over: 4♠ by N, +1: N-S +450.', 'success')
+    expect(showToast).toHaveBeenCalledWith('Board over: 4♠ N +1 · +450.', 'success')
   })
 })
