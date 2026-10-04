@@ -38,6 +38,7 @@ function waitingState(): Playing {
     result: null,
     deal: null,
     ready: null,
+    next_board_at: null,
     my_seat: null,
     hand: null,
     declarer_hand: null,
@@ -277,9 +278,9 @@ export const useGameStore = defineStore('game', () => {
     return act((id) => gameService.playCard(id, cardId));
   }
 
-  // Ask for the next board once this one is finished, for ourselves. The
-  // answer is the finished board with our seat in `ready`, or the new board
-  // itself when we were the last to ask.
+  // Ask for the next board now, before its `next_board_at`, for ourselves.
+  // The answer is the finished board with our seat in `ready`, or the new
+  // board itself when we were the last human to ask.
   async function next(): Promise<Playing> {
     return act((id) => gameService.nextBoard(id));
   }

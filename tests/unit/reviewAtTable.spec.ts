@@ -245,11 +245,8 @@ describe('the review modal at the table', () => {
     expect(modal(wrapper).props('choices')).toEqual([{ playingId: 42, number: 7 }])
     expect(historyService.getPlayingReview).toHaveBeenCalledWith(42)
     expect(wrapper.find('.board-review').exists()).toBe(true)
-    // Nobody has asked for the next board yet: that is ours to do.
-    expect(wrapper.get('.turn-text').text()).toBe('The next board waits for your Next')
-
-    await wrapper.get('.back-to-table').trigger('click')
-    expect(modal(wrapper).props('open')).toBe(false)
+    // The next board comes by itself: nothing waits for us meanwhile.
+    expect(wrapper.find('.turn-text').exists()).toBe(false)
   })
 
   test('while the next board is bid, the last one is still there, and our turn shows', async () => {

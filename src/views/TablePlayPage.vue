@@ -130,13 +130,15 @@
             >
               Review and export
             </ion-button>
-            <!-- The same four go on with Next; once one of them has been
-                 replaced, it is Start again (below). -->
+            <!-- The same four get the set's next board by itself, counted
+                 down here (Deal now skips the wait); once one of them has
+                 been replaced, it is Start again (below). -->
             <NextBoardBox
               v-if="!showStart"
               :ready="playing.ready ?? []"
               :players="players"
               :my-seat="mySeat"
+              :next-board-at="playing.next_board_at ?? null"
               :busy="asking"
               @next="askNext"
               @leave="leave"
@@ -350,7 +352,7 @@ import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
 import TrickArea from '@/components/TrickArea.vue';
 import { useForcedPlay } from '@/composables/useForcedPlay';
-import { useStaleClaim } from '@/composables/useStaleClaim';
+import { useStaleDeadline } from '@/composables/useStaleDeadline';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
 import { useHistoryStore } from '@/stores/history';
@@ -803,14 +805,23 @@ watch(
 // Still showing a claim 2 s after its deadline: the backend has settled it
 // but its update hasn't come (it may have been lost), so reread the game.
 // Only while the page is on screen; coming back loads it anyway.
-useStaleClaim(
+useStaleDeadline(
   () => (viewActive.value ? (pendingClaim.value?.claim.expires_at ?? null) : null),
-  () => {
-    game.load(tableId.value).catch(() => {
-      // The next update, or the offline note's Refresh, tells the rest.
-    });
-  },
+  reloadQuietly,
 );
+
+// The same for the set's next board: still on the finished one 2 s after
+// its `next_board_at`, the deal (or its HandDealt) may have been lost.
+useStaleDeadline(
+  () => (viewActive.value && playing.value?.phase === 'finished' ? (playing.value.next_board_at ?? null) : null),
+  reloadQuietly,
+);
+
+function reloadQuietly() {
+  game.load(tableId.value).catch(() => {
+    // The next update, or the offline note's Refresh, tells the rest.
+  });
+}
 
 // Somebody else's claim (or the board moving on) takes the sheet away.
 watch(mayClaim, (may) => {
@@ -1053,8 +1064,9 @@ async function withdrawClaim() {
   }
 }
 
-// Ask for the next board, for ourselves only: nobody asks for anyone else.
-// The last one to ask deals it, and the new board replaces this one.
+// Deal now: ask for the next board before its time, for ourselves only
+// (nobody asks for anyone else). The last human to ask deals it, and the new
+// board replaces this one.
 async function askNext() {
   if (asking.value) {
     return;

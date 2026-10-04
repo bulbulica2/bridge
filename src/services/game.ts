@@ -150,6 +150,12 @@ export interface PublicPlaying {
   result: BoardResult | null;
   deal: Record<Seat, Card[]> | null;
   ready: Seat[] | null;
+  // When the set's next board is dealt by itself (ISO 8601),
+  // BRIDGE_NEXT_BOARD_SECONDS after this board finished (bb#97): count down
+  // from it, never from when the state arrived. Null until `finished`, and
+  // whenever no deal is coming: the set is over, a seat is empty or the four
+  // seated aren't the four who played (everyone's Start deals then).
+  next_board_at: string | null;
 }
 
 // `PlayingUpdated` as it comes over the table channel: the same keys as
@@ -248,10 +254,12 @@ export async function playCard(tableId: number, cardId: number): Promise<Playing
   return data.data;
 }
 
-// Once the board is finished, ask for the next one, for the caller only
-// (nobody asks for anyone else, bb#74). 200 with the whole new state: still
-// the finished board with the caller's seat in `ready` while others have yet
-// to ask, or the next board's auction once the last one does. Asking twice
+// Once the board is finished, ask for the next one now, for the caller only
+// (nobody asks for anyone else, bb#74). Optional: the set's next board comes
+// by itself at `next_board_at` (bb#97); this "deal now" deals it earlier,
+// once every human has asked (robots count as asked). 200 with the whole new
+// state: still the finished board with the caller's seat in `ready` while a
+// human has yet to ask, or the next board's auction once the last one does. Asking twice
 // changes nothing. 409 with the reason (not finished, no board, short of a
 // player, and after the set's last board "The set is over: press Start for
 // a new one."), 403 unless seated here.

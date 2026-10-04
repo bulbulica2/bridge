@@ -55,18 +55,22 @@ The user's standing rule (#91): **no task may leave code coverage under
   was lower before.
 - Don't run `npm run test:coverage` locally by default: CI's `unit` job
   runs it on every push to a PR. Before committing, run the unit tests
-  (`npm run test:unit:ci`, or just the specs you touched); after pushing,
-  check the PR's checks (`gh pr checks`). Only when `unit` fails on
-  coverage, run `npm run test:coverage` locally, read the table for the
-  files you touched (`coverage/index.html` shows the uncovered lines), add
-  the missing tests and push again.
+  (`npm run test:unit:ci`, or just the specs you touched), `npm run lint`
+  and `npm run build`.
+- **Don't watch CI after pushing.** The user watches the PR's checks and
+  says when one fails; until then, stop at the PR link: no `gh pr checks`,
+  `gh run watch` or polling. When told a check failed, fix it: for a
+  coverage failure in `unit`, run `npm run test:coverage` locally, read
+  the table for the files you touched (`coverage/index.html` shows the
+  uncovered lines), add the missing tests and push again.
 - Never lower a threshold, add a file to the coverage `exclude`, or add
   `/* v8 ignore */` comments to get under the bar. Raise the branches
   threshold when the totals allow it.
 - Every new issue (card) written for this repo lists in its Acceptance:
   "`npm run test:coverage` passes; every file the task adds or touches has
-  ≥ 95 % of its lines covered by unit tests". Every PR's test plan reports
-  the coverage of the files it touched (from the `unit` job's log).
+  ≥ 95 % of its lines covered by unit tests". Every PR's test plan lists
+  the tests added for the files it touched (CI's `unit` job reports their
+  coverage; don't wait for it to fill the PR in).
 
 ## Architecture
 
@@ -218,11 +222,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   The backend moves them (a queued job per `PlayingUpdated`, about 1 s
   apart; `queue:work` must run) through the same rules as a human, so the
   SPA only shows them: `RobotBadge.vue` next to their name (Home, Tables,
-  detail, `BridgeTable`, `NextBoardBox`, the profile sheet, which has no
-  "Full profile" link for a robot), and `BridgeTable`'s `thinking` prop +
-  "robot-1 is thinking…" status when `acting_user_id` is a robot. Robots
-  mark themselves ready after a board, so the human's Next deals the next
-  one. A robot declarer hands the play to its human dummy (#95, bb#94):
+  detail, `BridgeTable`, the profile sheet, which has no "Full profile"
+  link for a robot), and `BridgeTable`'s `thinking` prop + "robot-1 is
+  thinking…" status when `acting_user_id` is a robot. Robots count as
+  having asked for the next board, so a lone human's **Deal now** deals
+  it at once. A robot declarer hands the play to its human dummy (#95, bb#94):
   `acting_user_id` is that dummy on declarer's turn and on dummy's, the
   play page reads it as `handToPlay() === 'declarer'`, and
   `playsForDeclarer()` (`src/utils/play.ts`) words it, auto-plays forced
@@ -373,23 +377,36 @@ The user's standing rule (#91): **no task may leave code coverage under
   0:07" / "Time is up…", reusing `secondsLeft`/`formatClock` from
   `away.ts`) and disables its buttons at 0 (`claimExpired`); a claim gone
   at or after its deadline toasts "Nobody answered: the claim is off, play
-  on.". `src/composables/useStaleClaim.ts` rereads the game
+  on.". `src/composables/useStaleDeadline.ts` rereads the game
   (`game.load()`, errors ignored) if the claim is still shown 2 s after
   `expires_at` (a lost update, bb#95), once per deadline and only while
-  the view is active. A claim with an empty `expires_at` gets no countdown.
+  the view is active (the play page uses it for `next_board_at` too). A
+  claim with an empty `expires_at` gets no countdown.
 - **Board result and next board**: in `finished` the state carries `result`
   (`score_ns` is from N-S's side whichever side declared; a passed-out board
-  has `score_ns: 0` and the rest null), `deal` (all four hands as dealt) and
-  `ready` (the seats that asked for the next board). `src/utils/result.ts`
-  words it and turns it round for the viewer's side (`resultSummary`,
-  `viewerScore`); `BoardResultPanel.vue` shows it, `BridgeTable`'s `deal`
-  prop lays each hand at its seat, and `NextBoardBox.vue` shows who is ready.
-  The game store's `next()` posts `POST /tables/{id}/playing/next`
-  through the same `isBehind` guard; the last player to ask gets the new
-  board in the answer, the others through `PlayingUpdated` + `HandDealt`.
-  Each player asks only for themselves (#72: no "for everyone", a manager
-  included; the backend ignores `everyone`, bb#74), with `NextBoardBox`'s
-  one **Next board** button, then "Waiting for …". Leaving
+  has `score_ns: 0` and the rest null), `deal` (all four hands as dealt),
+  `ready` (the seats that asked to deal now) and `next_board_at`.
+  `src/utils/result.ts` words it and turns it round for the viewer's side
+  (`resultSummary`, `viewerScore`); `BoardResultPanel.vue` shows it,
+  `BridgeTable`'s `deal` prop lays each hand at its seat. **The next board comes by itself**
+  (#98, bb#97): `next_board_at` (ISO 8601, `BRIDGE_NEXT_BOARD_SECONDS` =
+  10 after the board ended; null when no deal is coming: set over, a seat
+  empty, players changed) is when the backend's queued `DealNextBoard`
+  deals it, with the usual `TableUpdated` + `PlayingUpdated` +
+  `HandDealt`; the result stays on show until then. `NextBoardBox.vue`
+  (prop `nextBoardAt`) counts down from it ("Next board in 0:08", then
+  "Dealing the next board…"; `useNow`, `secondsLeft`/`formatClock` from
+  `away.ts`; no seat chips or badges). Its optional **Deal now** is the
+  game store's `next()`: `POST /tables/{id}/playing/next` through the
+  same `isBehind` guard; once every human has asked (robots count as
+  asked) the last one gets the new board in the answer, the others
+  through `PlayingUpdated` + `HandDealt`. Each player asks only for
+  themselves (#72: no "for everyone", a manager included; the backend
+  ignores `everyone`, bb#74); after asking the box says "You asked to
+  deal now. Waiting for …" (humans only). The play page's
+  `useStaleDeadline` rereads the game if the finished board is still
+  shown 2 s after `next_board_at`. `turnNotice()` says nothing in
+  `finished` (nothing waits for the user). Leaving
   between boards abandons nothing and keeps `board_id`; with three seated
   the next ask 409s, and once a fourth player sits down everyone's Start
   deals the board (the play page swaps `NextBoardBox` for `StartBox`).
@@ -397,8 +414,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   leaving by phase (`game.phaseOf(id)`). The running score under a board's
   result is its set's (`BoardResultPanel`'s `setSoFar`, below).
 - **Sets of four boards** (#73, bb#75, backend `docs/API.md` Sets): Start
-  deals a set's first board, Next the other three, after the fourth Next
-  409s ("The set is over…") and everyone's Start opens the next set. `set`
+  deals a set's first board, the other three come by themselves
+  (`next_board_at`, above); after the fourth `next_board_at` is null,
+  Deal now 409s ("The set is over…") and everyone's Start opens the next
+  set. `set`
   (`SetPosition` in `src/services/game.ts`: `id`, `number` at the table,
   `board` (this board's place / boards dealt), `of`, `finished`, `ended`
   `completed|forfeit|abandoned`, `forfeited_by` `NS|EW`) is on
@@ -640,7 +659,9 @@ without asking again:
    --body-file <file>` (a long inline `--body` breaks in Windows PowerShell 5.1).
    Body: `Closes #N`, a summary per file, anything deferred to other issues,
    and a test plan. If a PR is already open, the push updates it; don't create another.
-4. Reply with the PR link.
+4. Reply with the PR link and stop there. Don't watch the PR's CI
+   (`gh pr checks`, `gh run watch`, polling): the user watches it and says
+   when something needs fixing; until then, wait.
 
 ## Backend API
 
