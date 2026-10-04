@@ -1,5 +1,6 @@
 /*
- * Printing a board (Print / Save as PDF on the review page). The page adds
+ * Printing a board (Print / Save as PDF on the review page, or in the play
+ * page's review modal). The page or the modal adds
  * `printing-board` to <body> and teleports a BoardPrintout there for as long
  * as the print dialog is up; on paper only that printout shows, without the
  * app's menu, header or overlays. Ionic pins <body> to the viewport
@@ -21,6 +22,13 @@
   }
 
   body.printing-board > :not(.board-printout) {
+    display: none !important;
+  }
+
+  /* The play page's review modal and its export sheet, wherever Ionic puts
+     them: only the printout goes on paper. */
+  body.printing-board ion-modal,
+  body.printing-board ion-action-sheet {
     display: none !important;
   }
 

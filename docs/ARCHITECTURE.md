@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/playingupdated-is-now-compact-expand-it-before-a`._
+_Status as of branch `bulbulica2/61-review-board-at-table`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -478,7 +478,8 @@ arrives, and the app falls back to what each request returns.
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat; given `rows`, every suit column keeps room for that many cards |
 | `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest**; `forSeat` names a robot declarer's seat claimed for |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw**; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
-| `BoardResultPanel`, `NextBoardBox` | the score once a board is finished with the set's running score, and who is ready for the next |
+| `BoardResultPanel`, `NextBoardBox` | the score once a board is finished with the set's running score (and, in a review, its matchpoints when already read), and who is ready for the next |
+| `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, a forfeit's reason, each board with your side's score and matchpoints (opening its review), and the totals |
 | `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead) |
 | `RobotBadge` | the "robot" mark next to a robot's name (also on Home, Tables, Table detail and the profile sheet) |
@@ -497,7 +498,7 @@ the card pulses and the status line counts down ("Playing ♥7 in 3 s…").
 Tapping it plays it at once. The countdown is tied to the state it started
 in (board, trick, cards in the trick, turn, card), so any new card restarts
 or drops it; it also stops while a card or claim is in flight, the claim
-sheet is open, a claim is pending or another page is on top. A state the
+sheet or the board review is open, a claim is pending or another page is on top. A state the
 timer already sent a card for is not counted down again, so a refused card
 waits for a tap. The backend's `isBehind` guard and a 409 → reload remain
 the backstop. A defender never gets this (`autoPlaysForced()` in
@@ -516,7 +517,8 @@ leaving would put at stake), `start.ts` (whether
 the next board waits for Start, and who for), `sets.ts` (where the table is
 in its set, the set's winner and totals from your side, a forfeit's
 wording, the history grouped by set), `review.ts` (a replay's table after N cards: hands left, the
-trick shown, tricks won, the trick-by-trick steps), `export.ts` (a finished
+trick shown, tricks won, the trick-by-trick steps; which boards the play page's review offers),
+`turn.ts` (what the game waits for you to do, told in that review), `export.ts` (a finished
 board as text, PBN and JSON, and the pieces the printout uses). These are the
 best-tested parts of the app. For the rules
 themselves see [`GAME-RULES.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/GAME-RULES.md).
@@ -524,7 +526,8 @@ themselves see [`GAME-RULES.md`](https://github.com/bulbulica2/bridge_backend/bl
 ## The board review
 
 `PlayingReviewPage` (`/playings/:id`) replays one finished playing from
-`GET /playings/{id}` with the same components: `BridgeTable` (with the
+`GET /playings/{id}`. Its body is `src/components/BoardReview.vue`, which
+the play page's review modal shows too, built from the same components: `BridgeTable` (with the
 hands left at the current step, `replay` set so they aren't labelled "as
 dealt", and `reserve` = the deal, so each hand keeps the height it had as
 dealt and the replay buttons below the table don't move as cards go),
@@ -537,10 +540,37 @@ rest of the store. Playings finished before the backend kept their calls
 and cards come back with an empty `auction`; the page then shows only the
 deal and the result.
 
+### Reviewing at the table
+
+The play page reviews the table's finished boards without leaving it
+(#97): **Last board** in its header (and **Review and export** under a
+finished board's result) opens `BoardReviewModal`, a full-height
+`ion-modal` with the same `BoardReview` and Export. The game goes on
+underneath: `PlayingUpdated` keeps arriving and the page keeps drawing it.
+Which boards it offers is `reviewChoices()` in `src/utils/review.ts`:
+
+- the running set's finished boards, from `GET /sets/{id}` (the page reads
+  it after each finished board, and on entry mid-set), switched with a
+  segment; it opens on the latest;
+- plus the board the page just saw finish, until the set's read has it;
+- on the next set's first board, the last board the page saw finish;
+- after a reload with none of these, your latest history entry at this
+  table (`GET /api/user/playings`, read only when a board may have been
+  finished here: past the first board of the first set).
+
+Each board loads through `history.loadReview()`, cached. When the game
+waits for you (a call, a card, an answer to a claim, your Next or Start:
+`turnNotice()` in `src/utils/turn.ts`), a banner in the modal says so with
+**To the table**, which closes it; nothing closes it by force. While it is
+open the forced card doesn't play itself, and leaving the view closes it
+with its export sheet and any printout.
+
 ### Exporting a board
 
-The review page's **Export** menu (an `ion-action-sheet`, #71) turns the
-same payload into files. `src/utils/export.ts` holds pure functions of the
+The review's **Export** menu (an `ion-action-sheet`, #71, on the review
+page and in the play page's review modal) turns the same payload into
+files. `src/composables/useBoardExport.ts` holds the menu's buttons, the
+copy, the downloads and printing for both. `src/utils/export.ts` holds pure functions of the
 review: `boardText()` (the chat-friendly summary), `boardPbn()` (Portable
 Bridge Notation 2.1 in export format: the 15 mandatory tags, then the
 auction, play and `Score`; the play lines keep fixed seat columns starting
@@ -548,16 +578,18 @@ with the opening leader, and a claim leaves `-` for the unplayed cards and
 ends the section with `*`) and `boardJson()`. They reuse `cards.ts`,
 `auction.ts` and `result.ts` for labels. The review doesn't say who claimed,
 so a claim is told from declarer's side ("declarer took 2 of the last 5").
-Matchpoints are added when the board's results are already in the
-`history` store; the page doesn't fetch them for this. `src/utils/download.ts`
+Matchpoints are added (and shown under the review's result) when the
+board's results or its set's are already in the `history` store; nothing
+fetches them for this. `src/utils/download.ts`
 hands over a file (a Blob behind a temporary `download` link) and copies to
 the clipboard.
 
-**Print / Save as PDF** needs no library: the page adds `printing-board` to
+**Print / Save as PDF** needs no library: the page (or modal) adds `printing-board` to
 `<body>`, teleports a `BoardPrintout` there and calls `window.print()`;
 `src/theme/print.css` hides everything else on paper and undoes Ionic's
 fixed, clipped `<body>` so the printout can run onto a second page. The
-printout is dropped on `afterprint` or when the page is left. The native
+printout is dropped on `afterprint`, when the page is left or the modal
+closed; the modal and its sheet are hidden on paper too. The native
 shells' WebViews ignore `download` links and `window.print()`, so there
 the menu offers only Copy as text (`Capacitor.isNativePlatform()`).
 
