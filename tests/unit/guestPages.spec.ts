@@ -8,6 +8,7 @@ import ResetPasswordPage from '@/views/ResetPasswordPage.vue'
 import * as authService from '@/services/auth'
 import { navigateAndSettle } from '@/router/loading'
 import { showWelcomeToast } from '@/utils/toast'
+import { NAME_MAX, USERNAME_MAX } from '@/utils/limits'
 
 vi.mock('@/services/auth', () => ({
   register: vi.fn(),
@@ -92,6 +93,14 @@ describe('CreateAccountPage', () => {
     })
     expect(navigateAndSettle).toHaveBeenCalledWith(expect.anything(), '/account')
     expect(showWelcomeToast).toHaveBeenCalledWith('Welcome, Ana! Your account is ready.')
+  })
+
+  test("caps the name and username at the backend's limits", () => {
+    const inputs = mount(CreateAccountPage).findAllComponents(IonInput)
+
+    expect(inputs[0].props('maxlength')).toBe(NAME_MAX)
+    expect(inputs[1].props('maxlength')).toBe(USERNAME_MAX)
+    expect([NAME_MAX, USERNAME_MAX]).toEqual([50, 30])
   })
 
   test('stops at mismatched passwords without asking the backend', async () => {

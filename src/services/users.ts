@@ -17,7 +17,10 @@ export interface PublicUser {
   id: number;
   name: string;
   username: string;
-  description: string | null;
+  // Only GET /users/{id} carries it: a seat's `user` and the game state's
+  // `players` leave it out to keep broadcasts small (bridge_backend
+  // docs/API.md, Message size).
+  description?: string | null;
   is_robot: boolean;
   // An admin: their seat has no Remove for anyone but another admin, and they
   // can't be banned (bridge_backend docs/API.md, Users).

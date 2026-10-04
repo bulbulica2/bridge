@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/59-play-robot-partners-hand`._
+_Status as of branch `bulbulica2/playingupdated-is-now-compact-expand-it-before-a`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -82,8 +82,8 @@ first backend commit), described in [backend `AUTH.md`](https://github.com/bulbu
 
 **Guests only.** Built by #5. Linked from Login and guest Home.
 
-Name, username, email, password and confirmation; each 422 error shows
-under its field. On success the user is logged in, lands on `/account`
+Name (at most 50 characters), username (at most 30), email, password and
+confirmation; each 422 error shows under its field. On success the user is logged in, lands on `/account`
 and gets a welcome toast. There is no Remember me here: a new account is
 logged in for the session only, and Remember me is on the Login page.
 
@@ -119,7 +119,7 @@ Locally `MAIL_MAILER=log`, so the link lands in the backend's
 profile). Reached from the header's **Account** button.
 
 Shows your name, username, email and description. **Edit profile** turns
-the page into a form for name and description (username and email are
+the page into a form for name (at most 50 characters) and description (username and email are
 read-only, with the plain arrow cursor rather than the text cursor, #66;
 their text can still be selected and copied). **Log out** ends the session, closes every channel and goes to
 `/login` with a toast.
@@ -503,8 +503,8 @@ opens its review).
 (until when, the reason, since when and by which admin) with **Lift ban**.
 Any player but themselves, another admin or a robot has **Ban** (**Ban
 again** while banned, which replaces the ban): a form with the number of
-days (1–365, quick picks 1, 7 and 30) and a required reason, which the
-player is shown. Sending it toasts the backend's **User banned until …**;
+days (1–365, quick picks 1, 7 and 30) and a required reason (at most 500
+characters), which the player is shown. Sending it toasts the backend's **User banned until …**;
 the player is taken off their table (mid-set their side loses the set)
 and logged out at once. The profile sheet has the same **Ban** form and
 shows the ban, but lifting it is only here.

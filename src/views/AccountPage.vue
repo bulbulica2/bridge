@@ -129,10 +129,11 @@ import { navigateAndSettle } from '@/router/loading';
 import { useAuthStore } from '@/stores/auth';
 import type { ProfileUpdate } from '@/services/auth';
 import { errorMessage, fieldErrors } from '@/utils/errors';
+import { NAME_MAX } from '@/utils/limits';
 import { showToast } from '@/utils/toast';
 
-// The backend's limits (UpdateProfileRequest in bridge_backend).
-const NAME_MAX = 255;
+// The backend's limit on the description (UpdateProfileRequest in
+// bridge_backend); the name's is shared with registration.
 const DESCRIPTION_MAX = 1000;
 
 const auth = useAuthStore();

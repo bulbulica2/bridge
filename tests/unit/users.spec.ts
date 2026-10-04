@@ -124,6 +124,23 @@ describe('PlayerProfileSheet', () => {
     expect(wrapper.text()).not.toContain('@example.com')
   })
 
+  test("a seat's copy has no description: nothing is said of it until the refresh", async () => {
+    let resolve!: (value: unknown) => void
+    vi.mocked(http.get).mockReturnValue(new Promise((r) => (resolve = r)))
+    const seated: PublicUser = { ...ann }
+    delete seated.description
+    const wrapper = mountSheet(seated)
+    await flushPromises()
+
+    expect(wrapper.find('.profile-description').exists()).toBe(false)
+    expect(wrapper.find('.profile-empty').exists()).toBe(false)
+
+    resolve({ data: { status: 200, message: '', data: { ...ann, description: null } } })
+    await flushPromises()
+
+    expect(wrapper.find('.profile-empty').text()).toBe('No description yet.')
+  })
+
   test('says so when the player no longer exists', async () => {
     notFound()
     const wrapper = mountSheet(ann)

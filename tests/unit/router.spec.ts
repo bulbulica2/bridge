@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import router from '@/router'
 import { routeLoading } from '@/router/loading'
 import { fetchUser } from '@/services/auth'
-import { getBids } from '@/services/game'
+import { getBids, getCards } from '@/services/game'
 import type { Bid } from '@/services/game'
 
 // The pages themselves don't matter here, only where the guard lets you go
@@ -22,7 +22,7 @@ vi.mock('@/views/TablePlayPage.vue', () => ({ default: {} }))
 vi.mock('@/views/TablesPage.vue', () => ({ default: {} }))
 vi.mock('@/views/UserProfilePage.vue', () => ({ default: {} }))
 vi.mock('@/services/auth', () => ({ fetchUser: vi.fn() }))
-vi.mock('@/services/game', () => ({ getBids: vi.fn() }))
+vi.mock('@/services/game', () => ({ getBids: vi.fn(), getCards: vi.fn() }))
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
   leaveTable: vi.fn(),
@@ -50,6 +50,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   setActivePinia(createPinia())
   vi.mocked(getBids).mockResolvedValue([pass])
+  vi.mocked(getCards).mockResolvedValue([{ id: 1, suit: 'C', rank: 2, rank_name: '2' }])
 })
 
 // One router serves the whole file, so let its background timers run out and
@@ -108,18 +109,21 @@ describe('router guard', () => {
   })
 })
 
-describe('bid prefetch', () => {
-  test('reads the bid list a second after a logged-in page shows, once', async () => {
+describe('bid and card prefetch', () => {
+  test('reads both lists a second after a logged-in page shows, once', async () => {
     asAna()
     await router.push('/tables')
     expect(getBids).not.toHaveBeenCalled()
+    expect(getCards).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1000)
     expect(getBids).toHaveBeenCalledTimes(1)
+    expect(getCards).toHaveBeenCalledTimes(1)
 
     await router.push('/account')
     await vi.advanceTimersByTimeAsync(1000)
     expect(getBids).toHaveBeenCalledTimes(1)
+    expect(getCards).toHaveBeenCalledTimes(1)
   })
 
   test('never reads it for a guest', async () => {
@@ -128,17 +132,21 @@ describe('bid prefetch', () => {
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(getBids).not.toHaveBeenCalled()
+    expect(getCards).not.toHaveBeenCalled()
   })
 
   test('a failed prefetch is swallowed and tried again on a later page', async () => {
     asAna()
     vi.mocked(getBids).mockRejectedValueOnce(new Error('offline'))
+    vi.mocked(getCards).mockRejectedValueOnce(new Error('offline'))
     await router.push('/tables')
     await vi.advanceTimersByTimeAsync(1000)
     expect(getBids).toHaveBeenCalledTimes(1)
+    expect(getCards).toHaveBeenCalledTimes(1)
 
     await router.push('/history')
     await vi.advanceTimersByTimeAsync(1000)
     expect(getBids).toHaveBeenCalledTimes(2)
+    expect(getCards).toHaveBeenCalledTimes(2)
   })
 })

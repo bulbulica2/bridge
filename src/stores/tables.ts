@@ -208,7 +208,7 @@ export const useTablesStore = defineStore('tables', () => {
     listenToTable(
       tableId,
       (table) => applyTableUpdate(table),
-      (playing) => useGameStore().applyPlayingUpdate(tableId, playing),
+      (playing) => useGameStore().receivePlayingUpdate(tableId, playing),
     );
     startHeartbeat();
   }

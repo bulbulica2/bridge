@@ -112,7 +112,7 @@ describe('ban helpers', () => {
     expect(Object.keys(banFormErrors({ days: 2.5, reason: 'x' }))).toEqual(['days'])
     expect(Object.keys(banFormErrors({ days: NaN, reason: 'x' }))).toEqual(['days'])
     expect(Object.keys(banFormErrors({ days: 7, reason: '   ' }))).toEqual(['reason'])
-    expect(Object.keys(banFormErrors({ days: 7, reason: 'x'.repeat(1001) }))).toEqual(['reason'])
+    expect(Object.keys(banFormErrors({ days: 7, reason: 'x'.repeat(501) }))).toEqual(['reason'])
   })
 })
 

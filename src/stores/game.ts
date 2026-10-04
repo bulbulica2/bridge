@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import * as gameService from '@/services/game';
 import type {
   Bid,
   Card,
   Claim,
+  CompactPlaying,
   DeclarerHandShownEvent,
   HandDealtEvent,
   Phase,
@@ -14,6 +15,7 @@ import type {
 import type { BroadcastTable, Seat } from '@/services/tables';
 import { leaveUser, listenToUser, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
+import { expandPlaying } from '@/utils/compact';
 import { showToast } from '@/utils/toast';
 
 // What GET /tables/{id}/playing answers for a table without a board.
@@ -106,6 +108,14 @@ export const useGameStore = defineStore('game', () => {
   // pinned, so they are read once rather than hard-coded.
   const bids = ref<Bid[]>([]);
   let bidsRequest: Promise<Bid[]> | null = null;
+  // The 52 cards from GET /cards: `PlayingUpdated` sends cards (and calls) as
+  // ids, which these two lists turn back into what the page draws.
+  const cards = ref<Card[]>([]);
+  let cardsRequest: Promise<Card[]> | null = null;
+  const cardsById = computed(() => new Map(cards.value.map((card) => [card.id, card])));
+  const bidsById = computed(() => new Map(bids.value.map((bid) => [bid.id, bid])));
+  // The `PlayingUpdated`s waiting for those lists, in the order they came.
+  let updateQueue: Promise<void> | null = null;
 
   const auth = useAuthStore();
 
@@ -168,6 +178,71 @@ export const useGameStore = defineStore('game', () => {
         ? unplayed(current.declarer_hand)
         : null;
     playing.value = { ...update, my_seat: mySeatIn(update), hand, declarer_hand: declarerHand };
+  }
+
+  // A `PlayingUpdated` as the table channel brings it: compact, every card
+  // and call an id (bridge_backend docs/API.md, Event PlayingUpdated). Applied
+  // at once when both lists are held; otherwise it waits for them behind any
+  // update already waiting, so the events still apply in order. Without the
+  // lists the state is read over HTTP instead.
+  function receivePlayingUpdate(id: number, update: CompactPlaying) {
+    if (!updateQueue && cards.value.length > 0 && bids.value.length > 0) {
+      applyCompact(id, update);
+      return;
+    }
+    const queued: Promise<void> = (updateQueue ?? Promise.resolve())
+      .then(() => Promise.all([loadCards(), loadBids()]))
+      .then(
+        () => applyCompact(id, update),
+        () => reload(id),
+      )
+      .finally(() => {
+        if (updateQueue === queued) {
+          updateQueue = null;
+        }
+      });
+    updateQueue = queued;
+  }
+
+  function applyCompact(id: number, update: CompactPlaying) {
+    let expanded: PublicPlaying;
+    try {
+      expanded = expandPlaying(update, cardsById.value, bidsById.value);
+    } catch {
+      // An id neither list has: they are out of date. Read them again for the
+      // next event, and this state over HTTP.
+      Promise.all([loadCards(true), loadBids(true)]).catch(() => {
+        // The next event tries again.
+      });
+      return reload(id);
+    }
+    applyPlayingUpdate(id, expanded);
+  }
+
+  // The HTTP state of the table we hold, for an event we couldn't read.
+  async function reload(id: number) {
+    if (tableId.value === id) {
+      await load(id).catch(() => {
+        // The page shows its own errors on its next load.
+      });
+    }
+  }
+
+  // The card list, fetched once and shared like the bids.
+  async function loadCards(force = false): Promise<Card[]> {
+    if (cards.value.length > 0 && !force) {
+      return cards.value;
+    }
+    cardsRequest ??= gameService
+      .getCards()
+      .then((list) => {
+        cards.value = list;
+        return list;
+      })
+      .finally(() => {
+        cardsRequest = null;
+      });
+    return cardsRequest;
   }
 
   // The bid list, fetched once and shared (a second caller waits for the same
@@ -361,9 +436,11 @@ export const useGameStore = defineStore('game', () => {
     tableId,
     watchedUserId,
     bids,
+    cards,
     load,
     adopt,
     loadBids,
+    loadCards,
     call,
     play,
     claim,
@@ -372,6 +449,7 @@ export const useGameStore = defineStore('game', () => {
     next,
     phaseOf,
     applyPlayingUpdate,
+    receivePlayingUpdate,
     applyHandDealt,
     applyDeclarerHand,
     applyTableUpdate,
