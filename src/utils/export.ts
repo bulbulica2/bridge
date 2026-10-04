@@ -3,6 +3,7 @@ import type { Seat } from '@/services/tables';
 import type { Bid, Card, PlayedCard, Suit, Vulnerability } from '@/services/game';
 import type { BoardResults, PlayingReview, SetResults } from '@/services/history';
 import type { PublicUser } from '@/services/users';
+import { alertLines, alertText } from '@/utils/alerts';
 import { auctionRows, callLabel, contractLabel, SEAT_NAMES } from '@/utils/auction';
 import { rankLabel, sortHand, SUIT_SYMBOLS, SUITS, vulnerabilityLabel } from '@/utils/cards';
 import {
@@ -193,6 +194,10 @@ export function boardText(review: PlayingReview, extras: ExportExtras = {}): str
       lines.push(columns(row.map((cell) => (cell.kind === 'call' ? callLabel(cell.bid) : '')), 7));
     }
     lines.push('');
+    const alerts = alertLines(review.auction ?? []);
+    if (alerts.length > 0) {
+      lines.push('Alerts', ...alerts, '');
+    }
 
     const contract = review.contract;
     if (!contract) {
@@ -286,7 +291,9 @@ function tag(name: string, value: string): string {
 
 // The board as a PBN game in export format: the 15 mandatory tags in their
 // order (unknown ones "?", the passed-out ones empty), then the auction and
-// play sections, then Score. The play lines keep fixed columns, starting
+// play sections, then Score. An alerted call carries a note reference
+// ("2C =1="), its explanation a Note tag after the auction ("1:Stayman").
+// The play lines keep fixed columns, starting
 // with the opening leader's; a claim leaves "-" for the unplayed cards of
 // the trick it stopped and ends the section with "*".
 export function boardPbn(review: PlayingReview): string {
@@ -327,10 +334,18 @@ export function boardPbn(review: PlayingReview): string {
   // Supplemental tags follow in alphabetical order: Auction, Play, Score.
   if (isRecorded(review)) {
     lines.push(tag('Auction', dealer));
-    const calls = (review.auction ?? []).map((c) => pbnCall(c.bid));
+    const notes: string[] = [];
+    const calls = (review.auction ?? []).map((c) => {
+      if (!c.alert) {
+        return pbnCall(c.bid);
+      }
+      notes.push(`${notes.length + 1}:${alertText(c.alert)}`);
+      return `${pbnCall(c.bid)} =${notes.length}=`;
+    });
     for (let i = 0; i < calls.length; i += 4) {
       lines.push(calls.slice(i, i + 4).join(' '));
     }
+    lines.push(...notes.map((note) => tag('Note', note)));
 
     if (contract) {
       const leader = nextSeat(contract.declarer);
@@ -359,7 +374,7 @@ export function boardPbn(review: PlayingReview): string {
   return `${lines.join('\r\n')}\r\n`;
 }
 
-// The review exactly as the app received it.
+// The review exactly as the app received it, alerts included.
 export function boardJson(review: PlayingReview): string {
   return `${JSON.stringify(review, null, 2)}\n`;
 }

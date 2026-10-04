@@ -20,6 +20,7 @@ import {
   playerLabel,
   playingExtras,
 } from '@/utils/export'
+import BoardPrintout from '@/components/BoardPrintout.vue'
 import PlayingReviewPage from '@/views/PlayingReviewPage.vue'
 
 vi.mock('@/services/http', () => ({
@@ -506,5 +507,57 @@ describe('export on the review page', () => {
     expect(document.body.classList.contains('printing-board')).toBe(false)
     print.mockRestore()
     wrapper.unmount()
+  })
+})
+
+describe('alerts in the exports', () => {
+  // North's 1♠ explained, South's 2♠ alerted with nothing said.
+  function alerted(): PlayingReview {
+    const review = played()
+    review.auction![0] = { ...review.auction![0], alert: { explanation: 'Five or more spades' } }
+    review.auction![2] = { ...review.auction![2], alert: { explanation: null } }
+    return review
+  }
+
+  test('the text lists every alert under the auction', () => {
+    const lines = boardText(alerted()).split('\n')
+    const at = lines.indexOf('Alerts')
+
+    expect(at).toBeGreaterThan(lines.indexOf('Auction'))
+    expect(lines.slice(at, at + 4)).toEqual([
+      'Alerts',
+      '1♠ by North: Five or more spades',
+      '2♠ by South: Alerted, no explanation given.',
+      '',
+    ])
+    expect(boardText(played())).not.toContain('Alerts')
+  })
+
+  test('PBN marks each alerted call with a note, the notes after the auction', () => {
+    const pbn = boardPbn(alerted()).split('\r\n')
+    const at = pbn.indexOf('[Auction "N"]')
+
+    expect(pbn.slice(at + 1, at + 5)).toEqual([
+      '1S =1= Pass 2S =2= Pass',
+      '4S Pass Pass Pass',
+      '[Note "1:Five or more spades"]',
+      '[Note "2:Alerted, no explanation given."]',
+    ])
+    expect(pbn[at + 5]).toBe('[Play "E"]')
+  })
+
+  test('the JSON keeps the alerts as received', () => {
+    expect(JSON.parse(boardJson(alerted())).auction[0].alert).toEqual({ explanation: 'Five or more spades' })
+  })
+
+  test('the printout marks alerted calls and lists them', () => {
+    const wrapper = mount(BoardPrintout, { props: { review: alerted() } })
+
+    expect(wrapper.findAll('.auction .alert-mark')).toHaveLength(2)
+    expect(wrapper.findAll('.alerts li').map((li) => li.text())).toEqual([
+      '! 1♠ by North: Five or more spades',
+      '! 2♠ by South: Alerted, no explanation given.',
+    ])
+    expect(mount(BoardPrintout, { props: { review: played() } }).find('.alerts').exists()).toBe(false)
   })
 })

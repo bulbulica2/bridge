@@ -135,10 +135,11 @@ export function auctionColumns(mySeat: Seat | null): Seat[] {
   return GRID_SIDES.map((side) => seatAt(side, mySeat));
 }
 
-// One cell of the grid: a call made, the call awaited from `turn`, or an
-// empty cell before the dealer's first call.
+// One cell of the grid: a call made (`index` its place in the auction,
+// `call` the whole entry, alert included), the call awaited from `turn`, or
+// an empty cell before the dealer's first call.
 export type AuctionCell =
-  | { kind: 'call'; seat: Seat; bid: Bid }
+  | { kind: 'call'; seat: Seat; bid: Bid; index: number; call: AuctionCall }
   | { kind: 'next'; seat: Seat }
   | { kind: 'empty' };
 
@@ -154,7 +155,15 @@ export function auctionRows(
   const cells: AuctionCell[] = Array.from({ length: columns.indexOf(dealer) }, () => ({
     kind: 'empty' as const,
   }));
-  cells.push(...auction.map(({ seat, bid }) => ({ kind: 'call' as const, seat, bid })));
+  cells.push(
+    ...auction.map((call, index) => ({
+      kind: 'call' as const,
+      seat: call.seat,
+      bid: call.bid,
+      index,
+      call,
+    })),
+  );
   if (turn) {
     cells.push({ kind: 'next', seat: turn });
   }

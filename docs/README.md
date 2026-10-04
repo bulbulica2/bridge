@@ -33,7 +33,9 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/62-auto-next-board` (after
+> branch `bulbulica2/65-bid-alerts` (after
+> #101, players alert their calls for the opponents and may ask about the
+> opponents' calls; see [`SCREENS.md`](SCREENS.md#play--tablesidplay); after
 > #98, a set's next board is dealt by itself 10 s after a board ends,
 > counted down on the play page, with an optional **Deal now**; see
 > [`SCREENS.md`](SCREENS.md#play--tablesidplay); after

@@ -5,20 +5,20 @@ import * as tables from '@/services/tables'
 import * as game from '@/services/game'
 
 vi.mock('@/services/http', () => ({
-  default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }))
 
 // The stores' tests mock these modules away, so this is where each wrapper is
 // checked against the endpoint it calls (bridge_backend docs/API.md) and the
 // part of the answer it returns.
-type Method = 'get' | 'post' | 'patch' | 'delete'
+type Method = 'get' | 'post' | 'put' | 'patch' | 'delete'
 
 const payload = { id: 7 }
 
 beforeEach(() => {
   vi.resetAllMocks()
   // The game endpoints' envelope; auth's status answers ride along unused.
-  for (const method of ['get', 'post', 'patch', 'delete'] as Method[]) {
+  for (const method of ['get', 'post', 'put', 'patch', 'delete'] as Method[]) {
     vi.mocked(http[method]).mockResolvedValue({ data: { status: 'Sent.', message: 'OK', data: payload } })
   }
 })
@@ -92,6 +92,31 @@ const wrappers: [string, () => Promise<unknown>, Method, string, unknown, boolea
   ['getBids', () => game.getBids(), 'get', '/bids', undefined, false],
   ['getCards', () => game.getCards(), 'get', '/cards', undefined, false],
   ['makeCall', () => game.makeCall(3, 12), 'post', '/tables/3/calls', { bid_id: 12 }, false],
+  [
+    'makeCall alerted',
+    () => game.makeCall(3, 12, { alert: true, explanation: 'Stayman' }),
+    'post',
+    '/tables/3/calls',
+    { bid_id: 12, alert: true, explanation: 'Stayman' },
+    false,
+  ],
+  [
+    'makeCall not alerted',
+    () => game.makeCall(3, 12, { alert: false, explanation: null }),
+    'post',
+    '/tables/3/calls',
+    { bid_id: 12 },
+    false,
+  ],
+  ['askAboutCall', () => game.askAboutCall(3, 4), 'post', '/tables/3/calls/4/question', undefined, false],
+  [
+    'explainCall',
+    () => game.explainCall(3, 4, 'Natural'),
+    'put',
+    '/tables/3/calls/4/explanation',
+    { explanation: 'Natural' },
+    false,
+  ],
   ['playCard', () => game.playCard(3, 40), 'post', '/tables/3/cards', { card_id: 40 }, false],
   ['nextBoard', () => game.nextBoard(3), 'post', '/tables/3/playing/next', undefined, false],
   ['makeClaim', () => game.makeClaim(3, 0), 'post', '/tables/3/claim', { tricks: 0 }, false],

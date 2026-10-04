@@ -268,6 +268,8 @@ describe('game store', () => {
       expect.any(Function),
       expect.any(Function),
       expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
     )
 
     game.unwatchUser()
@@ -428,7 +430,7 @@ describe('game store', () => {
 
     await game.call(ONE_HEART.id)
 
-    expect(gameService.makeCall).toHaveBeenCalledWith(5, 6)
+    expect(gameService.makeCall).toHaveBeenCalledWith(5, 6, null)
     expect(game.playing).toEqual(after)
   })
 

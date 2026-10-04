@@ -52,9 +52,36 @@ export interface Bid {
   special: boolean;
 }
 
+// A self-alert (bridge_backend docs/API.md, Alerts): the bidder marked the
+// call, and `explanation` says what it means (null: alerted, nothing said).
+export interface CallAlert {
+  explanation: string | null;
+}
+
+// An opponent (`asked_by`) asked what a call means and its bidder hasn't
+// answered yet.
+export interface CallQuestion {
+  asked_by: Seat;
+}
+
+// `alert` and `question` are per viewer and never on the table channel: the
+// caller's own state (GET /tables/{id}/playing and the action answers) has
+// them on the opponents' calls and their own, null on partner's (seeing
+// those would be unauthorised information). `PlayingUpdated` leaves both out,
+// so the game store keeps the known ones. A review (GET /playings/{id}) has
+// every call's `alert`, public once the board is over, and no `question`.
 export interface AuctionCall {
   seat: Seat;
   bid: Bid;
+  alert?: CallAlert | null;
+  question?: CallQuestion | null;
+}
+
+// What the bidding box sends with a call to alert it: `explanation` alone
+// alerts too, and `alert` with no explanation is "alerted, no description".
+export interface AlertDraft {
+  alert: boolean;
+  explanation: string | null;
 }
 
 export interface Contract {
@@ -209,6 +236,25 @@ export interface DeclarerHandShownEvent {
   declarer_hand: Card[];
 }
 
+// `CallAlerted` on the user's own channel: an opponent alerted their call at
+// `index` of the auction, or explained it (an answer to a question, or a
+// fix). Never sent to the bidder's partner.
+export interface CallAlertedEvent {
+  table_id: number;
+  playing_id: number;
+  index: number;
+  explanation: string | null;
+}
+
+// `CallQuestioned` on the user's own channel: the opponent at `asked_by`
+// asks what the user's call at `index` means.
+export interface CallQuestionedEvent {
+  table_id: number;
+  playing_id: number;
+  index: number;
+  asked_by: Seat;
+}
+
 // The table's current board with the caller's own hand: enough to render the
 // table from scratch after a reload or a reconnect. 403 unless the caller sits
 // at this table, 404 for an unknown table.
@@ -231,13 +277,48 @@ export async function getCards(): Promise<Card[]> {
   return data.data;
 }
 
-// The caller's next call in the auction. 201 with the whole new state (hand
-// included); 409 with the reason in `message` when the call is illegal or it
-// isn't the caller's turn, 403 unless seated here, 422 for an unknown bid id.
-export async function makeCall(tableId: number, bidId: number): Promise<Playing> {
+// The caller's next call in the auction, alerted to the opponents when
+// `alert` says so (an explanation of up to ALERT_MAX characters alerts too).
+// 201 with the whole new state (hand included); 409 with the reason in
+// `message` when the call is illegal or it isn't the caller's turn, 403
+// unless seated here, 422 for an unknown bid id or too long an explanation.
+export async function makeCall(
+  tableId: number,
+  bidId: number,
+  alert: AlertDraft | null = null,
+): Promise<Playing> {
   const { data } = await http.post<ApiResponse<Playing>>(`/tables/${tableId}/calls`, {
     bid_id: bidId,
+    ...(alert?.alert || alert?.explanation ? alert : {}),
   });
+  return data.data;
+}
+
+// Ask the opponents what their call at `index` of the auction (from 0)
+// means, alerted or not, until the board is finished. A robot answers at
+// once (the answer's `alert`); a human bidder gets `CallQuestioned` and
+// answers with `explainCall`. 200 with the whole new state; 409 with the
+// reason (your side's call, a question already open, the board is over).
+export async function askAboutCall(tableId: number, index: number): Promise<Playing> {
+  const { data } = await http.post<ApiResponse<Playing>>(
+    `/tables/${tableId}/calls/${index}/question`,
+  );
+  return data.data;
+}
+
+// Explain the caller's own call at `index`: the answer to a question about
+// it, or a late or fixed alert. Both opponents get it (`CallAlerted`). 200
+// with the whole new state; 409 with the reason (not your call, the board
+// is over), 422 for an empty or too long explanation.
+export async function explainCall(
+  tableId: number,
+  index: number,
+  explanation: string,
+): Promise<Playing> {
+  const { data } = await http.put<ApiResponse<Playing>>(
+    `/tables/${tableId}/calls/${index}/explanation`,
+    { explanation },
+  );
   return data.data;
 }
 

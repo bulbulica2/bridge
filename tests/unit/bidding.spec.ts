@@ -89,7 +89,7 @@ describe('BiddingBox', () => {
 
   function enabled(wrapper: VueWrapper) {
     return wrapper
-      .findAll('button')
+      .findAll('button[data-call]')
       .filter((b) => !(b.element as HTMLButtonElement).disabled)
       .map((b) => b.attributes('data-call'))
   }
@@ -251,7 +251,7 @@ describe('TablePlayPage bidding', () => {
     // Busy: a second click goes nowhere.
     await wrapper.get('button[data-call="3C"]').trigger('click')
     expect(gameService.makeCall).toHaveBeenCalledTimes(1)
-    expect(gameService.makeCall).toHaveBeenCalledWith(5, bid('2C').id)
+    expect(gameService.makeCall).toHaveBeenCalledWith(5, bid('2C').id, null)
     expect(wrapper.text()).toContain('Sending your call')
 
     answer(state({ turn: 'W', acting_user_id: 4, auction: calls('N 1H, E P, S 2C') }))

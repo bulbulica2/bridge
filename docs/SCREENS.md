@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/64-board-result-at-a-glance`._
+_Status as of branch `bulbulica2/65-bid-alerts`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -266,7 +266,8 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #96 (claims expire after 10 s, needs bb#96), #98 (the next board by itself, needs bb#97), #53 (robots), #57 (forced cards play themselves), #56 (last trick
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
-and the forfeit), #95 (you play a robot partner's contract, needs bb#94);
+and the forfeit), #95 (you play a robot partner's contract, needs bb#94),
+#101 (bid alerts, needs bb#100);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -319,7 +320,20 @@ What it shows by phase:
   end. The last Start deals the board right here.
 - **auction**: your hand, the auction grid, and on your turn the bidding
   box. The contract (or "Passed out") is announced when the last call
-  arrives.
+  arrives. Above the calls, an **Alert** field: "Explain to the opponents
+  (optional)", up to 200 characters, and an **Alert** toggle (typing turns
+  it on), so a call can be alerted with nothing written; "Only the
+  opponents see this. Your partner doesn't." The next call goes out with
+  it; it clears once the call is taken and stays if the call is refused.
+  In the grid an alerted call stands out in amber with a "!"; hovering it
+  (or a tap) pops up its explanation, or "Alerted, no explanation given.",
+  and your own reads "You alerted: …". Partner's alerts never show. Any
+  opponent's call, alerted or not, pops up **Ask what it means** until the
+  board is over: a robot answers at once in the pop-up; a person gets a
+  toast and a sheet to type the answer, which then shows like an
+  explanation (closed, the sheet comes back from **Answer** in the call's
+  pop-up). The grid stays below your hand during the play, where asking
+  still works.
 - **play**: the contract bar with tricks won, the current trick in the
   centre, dummy's cards once the opening lead is made. From the second
   trick on, a **Last trick** button sits under the trick in progress:
@@ -405,7 +419,8 @@ play itself while it is open, and leaving the page closes it. It fits a
 |---|---|
 | `game.load()` | `GET /tables/{id}/playing`, the only request the page waits for on entry |
 | `game.loadBids()` | `GET /bids`, once per session, normally already read in the background after login; asked again only after the board is drawn |
-| `game.call()` | `POST /tables/{id}/calls` |
+| `game.call()` (with the alert, if any) | `POST /tables/{id}/calls` |
+| `game.askAboutCall()`, `game.explainCall()` | `POST /tables/{id}/calls/{index}/question`, `PUT /tables/{id}/calls/{index}/explanation` |
 | `game.play()` | `POST /tables/{id}/cards` |
 | `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
 | `game.next()` (**Deal now**, optional) | `POST /tables/{id}/playing/next` |
@@ -417,7 +432,7 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
-| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a forfeit), `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them) |
+| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a forfeit), `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer), `CallQuestioned` (a question about your call) |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
 reloads (after a set's last board, Deal now 409s: "The set is over: press Start
@@ -428,7 +443,7 @@ Start once the table is full again).
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
 bb#40 (next board; bb#74 dropped its `everyone`; bb#97 deals it by itself), bb#43 (results), bb#59 (claims), bb#96 (claims expire),
-bb#75 (sets of four boards), bb#76 (away mid-set and the forfeit).
+bb#75 (sets of four boards), bb#76 (away mid-set and the forfeit), bb#100 (alerts).
 
 ## My boards — `/history`
 
@@ -503,7 +518,8 @@ and `useBoardExport` serve both). It works the same after the table is gone.
 One table's playing of a board, replayed: the contract and the tricks each
 side has won so far, the four hands face up (you at the bottom if you
 played it, otherwise South), the trick in the middle, and the auction
-below. A stepper moves card by card or a trick at a time (start, previous
+below, with every alert of the board (public once it is over) marked and
+popped up as on the play page. A stepper moves card by card or a trick at a time (start, previous
 trick, previous card, next card, next trick, end); the hands lose their
 cards as they go but keep the room they took as dealt, so the buttons stay
 in the same place at every step (#59). The line saying where you are
@@ -523,18 +539,20 @@ only the deal and the result.
   vulnerability, the players (robots marked "(robot)"), the four hands as
   dealt, the auction as a W N E S grid, contract, declarer and opening
   lead, one line per trick (leader, the four cards in the order played,
-  winner), where a claim ended the play and how the tricks left went, the
+  winner), the alerts under the auction, where a claim ended the play and how the tricks left went, the
   result and, if you opened the board's results this session, the
   matchpoints.
 - **Download .txt**: the same text as a file.
 - **Download .pbn**: the board in Portable Bridge Notation 2.1 (export
-  format), for other bridge software: deal, auction, play (a claim ends it
-  with `*`), contract, result and score.
+  format), for other bridge software: deal, auction (each alert a note,
+  `=1=` and `[Note "1:…"]`), play (a claim ends it with `*`), contract,
+  result and score.
 - **Download .json**: the review exactly as the backend sent it, for
   debugging and for work on the robots.
 - **Print / Save as PDF**: the browser's print dialog with a paper layout
   of the board (no app menu or header): the board line and result, the
-  hands round a compass, the auction and a trick-by-trick table.
+  hands round a compass, the auction (alerted calls marked "!" and listed
+  under it) and a trick-by-trick table.
 
 A board without a recorded auction and play exports the deal and the result
 and says why nothing else is there. The files and printing need a browser:

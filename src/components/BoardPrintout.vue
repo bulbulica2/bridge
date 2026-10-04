@@ -56,12 +56,15 @@
                   v-if="cell.kind === 'call'"
                   :class="{ red: isRedStrain(cell.bid.strain) && isContractBid(cell.bid) }"
                 >
-                  {{ callLabel(cell.bid) }}
+                  {{ callLabel(cell.bid) }}<sup v-if="cell.call.alert" class="alert-mark">!</sup>
                 </span>
               </td>
             </tr>
           </tbody>
         </table>
+        <ul v-if="alerts.length > 0" class="alerts" aria-label="Alerts">
+          <li v-for="(line, i) in alerts" :key="i">! {{ line }}</li>
+        </ul>
         <p class="contract">
           <template v-if="review.contract">
             {{ contractLabel(review.contract) }}
@@ -113,6 +116,7 @@ import { computed } from 'vue';
 import { SEATS } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { PlayingReview } from '@/services/history';
+import { alertLines } from '@/utils/alerts';
 import {
   auctionRows,
   callLabel,
@@ -144,6 +148,7 @@ const recorded = computed(() => isRecorded(props.review));
 const auction = computed(() =>
   auctionRows(props.review.auction ?? [], props.review.board?.dealer ?? 'W', [...WRITTEN_SEATS]),
 );
+const alerts = computed(() => alertLines(props.review.auction ?? []));
 const tricks = computed(() => trickRows(props.review));
 const lead = computed(() => openingLead(props.review));
 const claim = computed(() => claimNote(props.review));
@@ -324,6 +329,17 @@ td.lead {
 
 .contract {
   margin-top: 6pt;
+}
+
+.alert-mark {
+  font-weight: 700;
+}
+
+.alerts {
+  margin: 4pt 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 8.5pt;
 }
 
 .key {
