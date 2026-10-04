@@ -33,7 +33,9 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/58-code-coverage` (after #91, unit tests cover 98.8 % of the app's lines,
+> branch `bulbulica2/59-play-robot-partners-hand` (after #95, when your robot
+> partner declares you play both its hand and yours; see
+> [`SCREENS.md`](SCREENS.md#play--tablesidplay); after #91, unit tests cover 98.8 % of the app's lines,
 > and CI fails any PR that leaves a file under 95 %; see
 > [`RUNNING.md`](RUNNING.md#code-coverage); after #75, an admin can ban a
 > player for some days, and a banned player is thrown out at once and sees

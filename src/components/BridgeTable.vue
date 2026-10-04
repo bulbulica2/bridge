@@ -5,7 +5,9 @@
        Once dummy is face up its cards lie at its seat: across the top when
        the viewer is declarer (who plays them from there), in suit columns on
        a side seat for a defender, and not at all when the viewer is dummy,
-       whose own hand below is the same cards. While a claim is pending, the
+       whose own hand below is the same cards. A robot declarer's dummy, who
+       plays declarer's game, has declarer's cards (`declarer`, theirs alone
+       to see) across the top instead. While a claim is pending, the
        claimer's cards lie face up at their seat (the viewer's own are below
        the table already). Once the board is over, the whole deal lies face
        up, each hand at its seat (in a replay, what is left of it, in the
@@ -22,7 +24,7 @@
         {
           'seat-turn': turn === seatOn[side],
           'seat-mine': side === 'bottom' && mySeat,
-          'seat-wide': side === 'top' && dummySide === 'top',
+          'seat-wide': side === 'top' && (dummySide === 'top' || declarerSide === 'top'),
           'seat-away': away.includes(seatOn[side]),
         },
       ]"
@@ -51,6 +53,7 @@
       <span v-if="dummy && dummy.seat === seatOn[side] && side !== 'bottom'" class="seat-dummy">
         dummy
       </span>
+      <span v-if="declarerSide === side" class="seat-dummy">declarer</span>
       <span v-if="turn === seatOn[side]" class="turn" :class="{ 'turn-thinking': !myTurn && thinking }">
         <span class="turn-dot" aria-hidden="true" />{{ turnLabel(side) }}
       </span>
@@ -69,6 +72,17 @@
         />
         <DummyColumns v-else :cards="dummy!.cards" />
       </template>
+      <HandView
+        v-else-if="declarerSide === side"
+        class="declarer-hand"
+        :cards="declarer!.cards"
+        :label="`Declarer's hand, ${SEAT_NAMES[declarer!.seat]}`"
+        :playable="declarerPlayable"
+        :busy="busy"
+        :sending-id="sendingId"
+        :forced-id="declarerForcedId"
+        @play="emit('play', $event)"
+      />
       <DummyColumns
         v-else-if="claimSide === side"
         class="claim-hand"
@@ -128,6 +142,13 @@ const props = withDefaults(
     dummyPlayable?: number[] | null;
     // Dummy's only legal card, about to play itself (see HandView).
     dummyForcedId?: number | null;
+    // A robot declarer's seat and remaining cards, for its dummy (the
+    // viewer), who plays them; null for everyone else.
+    declarer?: { seat: Seat; cards: Card[] } | null;
+    // Declarer's cards the viewer may play now, and the only legal one about
+    // to play itself, as for dummy's.
+    declarerPlayable?: number[] | null;
+    declarerForcedId?: number | null;
     // The claimer's seat and remaining cards while a claim is pending.
     claim?: { seat: Seat; cards: Card[] } | null;
     // All four hands as dealt, once the board is finished.
@@ -150,6 +171,9 @@ const props = withDefaults(
     dummy: null,
     dummyPlayable: null,
     dummyForcedId: null,
+    declarer: null,
+    declarerPlayable: null,
+    declarerForcedId: null,
     claim: null,
     deal: null,
     replay: false,
@@ -180,6 +204,14 @@ const dummySide = computed<ScreenSide | null>(() => {
     return null;
   }
   const side = SIDES.find((s) => seatOn.value[s] === dummy.seat);
+  return side && side !== 'bottom' ? side : null;
+});
+
+// Where a robot declarer's cards are drawn for its dummy: opposite them,
+// across the top.
+const declarerSide = computed<ScreenSide | null>(() => {
+  const declarer = props.declarer;
+  const side = declarer ? SIDES.find((s) => seatOn.value[s] === declarer.seat) : undefined;
   return side && side !== 'bottom' ? side : null;
 });
 
@@ -232,12 +264,14 @@ function turnLabel(side: ScreenSide): string {
   grid-row: 3;
 }
 
-/* Dummy across the top, for declarer: the whole width, like their own hand. */
+/* Dummy across the top, for declarer (or declarer, for a robot declarer's
+   dummy): the whole width, like their own hand. */
 .side-top.seat-wide {
   grid-column: 1 / 4;
 }
 
 .dummy-hand,
+.declarer-hand,
 .claim-hand,
 .dealt-hand {
   margin-top: 4px;

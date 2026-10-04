@@ -1,9 +1,10 @@
 <template>
   <!-- A claim waiting for its answers: what is claimed, who has agreed, and
        what the viewer can do about it. The claimer's cards lie face up at
-       their seat on the table (BridgeTable's `claim`). -->
+       their seat on the table (BridgeTable's `claim`). A robot declarer's
+       dummy claims and answers for declarer's seat (`actsFor`). -->
   <section class="claim" aria-live="polite" aria-label="Pending claim">
-    <p class="claim-text">{{ claimText(claim, remaining, mySeat) }}</p>
+    <p class="claim-text">{{ claimText(claim, remaining, mySeat, ownSeat) }}</p>
     <ul class="claim-answers">
       <li
         v-for="seat in answerers"
@@ -12,7 +13,7 @@
         :data-seat="seat"
       >
         <span aria-hidden="true">{{ claim.accepted.includes(seat) ? '✓' : '…' }}</span>
-        {{ seat }} {{ seat === mySeat ? 'you' : (players[seat]?.username ?? '') }}
+        {{ seat }} {{ isMine(seat) ? 'you' : (players[seat]?.username ?? '') }}
         <span class="sr-only">{{ claim.accepted.includes(seat) ? 'accepted' : 'to answer' }}</span>
       </li>
     </ul>
@@ -48,11 +49,14 @@ const props = withDefaults(
   defineProps<{
     state: PublicPlaying & { claim: Claim };
     mySeat: Seat | null;
+    // The seat the viewer claims and answers for, when not their own: a
+    // robot declarer's, whose game its dummy plays (claimSeatOf).
+    actsFor?: Seat | null;
     players: Partial<Record<Seat, PublicUser | null>>;
     // An answer or a withdrawal is on its way.
     busy?: boolean;
   }>(),
-  { busy: false },
+  { actsFor: null, busy: false },
 );
 
 const emit = defineEmits<{ accept: []; reject: []; withdraw: [] }>();
@@ -61,11 +65,16 @@ const claim = computed(() => props.state.claim);
 const remaining = computed(() => tricksLeft(props.state));
 const answerers = computed(() => claimAnswerers(props.state));
 const waitingFor = computed(() => claimWaitingFor(props.state));
-const action = computed(() => claimAction(props.state, props.mySeat));
+const ownSeat = computed(() => props.actsFor ?? props.mySeat);
+const action = computed(() => claimAction(props.state, ownSeat.value));
+
+function isMine(seat: Seat): boolean {
+  return seat === props.mySeat || seat === ownSeat.value;
+}
 
 // "East and West answer", "you answer".
 const waitingText = computed(() => {
-  const names = waitingFor.value.map((seat) => (seat === props.mySeat ? 'you' : seat));
+  const names = waitingFor.value.map((seat) => (isMine(seat) ? 'you' : seat));
   return `${names.join(' and ')} ${names.length === 1 && names[0] !== 'you' ? 'answers' : 'answer'}`;
 });
 </script>

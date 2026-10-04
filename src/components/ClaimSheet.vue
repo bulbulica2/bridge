@@ -1,7 +1,8 @@
 <template>
   <!-- A bottom sheet for making a claim: one button per number of the tricks
        still to play, then a send button for the number picked, or Concede
-       for none. The parent owns whether it is open and sends the claim. -->
+       for none. The parent owns whether it is open and sends the claim. A
+       robot declarer's dummy claims for declarer (`forSeat`). -->
   <ion-modal
     :is-open="open"
     :initial-breakpoint="0.5"
@@ -10,10 +11,14 @@
   >
     <ion-content class="ion-padding">
       <div class="claim-sheet">
-        <h2 class="claim-title">Claim tricks</h2>
+        <h2 class="claim-title">
+          Claim tricks<template v-if="forSeat"> for {{ SEAT_NAMES[forSeat] }}</template>
+        </h2>
         <p class="claim-help">
           How many of the remaining {{ remaining }} trick{{ remaining === 1 ? '' : 's' }} does your
-          side take? Your hand is shown to everyone while the others answer.
+          side take?
+          {{ forSeat ? `${SEAT_NAMES[forSeat]}'s hand` : 'Your hand' }} is shown to everyone while
+          the others answer.
         </p>
 
         <div class="trick-picks" role="group" aria-label="Tricks to claim">
@@ -60,16 +65,21 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { IonModal, IonContent, IonButton, IonSpinner } from '@ionic/vue';
+import type { Seat } from '@/services/tables';
+import { SEAT_NAMES } from '@/utils/auction';
 
 const props = withDefaults(
   defineProps<{
     open: boolean;
     // The tricks still to play: the most that can be claimed.
     remaining: number;
+    // The seat claimed for, when not the viewer's own: a robot declarer's,
+    // whose game its dummy plays.
+    forSeat?: Seat | null;
     // The claim is on its way.
     busy?: boolean;
   }>(),
-  { busy: false },
+  { forSeat: null, busy: false },
 );
 
 const emit = defineEmits<{ claim: [tricks: number]; close: [] }>();

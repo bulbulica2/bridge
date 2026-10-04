@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/56-admin-seat-protected`._
+_Status as of branch `bulbulica2/59-play-robot-partners-hand`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -254,7 +254,8 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #53 (robots), #57 (forced cards play themselves), #56 (last trick
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
-and the forfeit); **Compare** by #30. Entered from the detail page,
+and the forfeit), #95 (you play a robot partner's contract, needs bb#94);
+**Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
 detail page.
@@ -265,7 +266,14 @@ nothing on this page drives them. On a robot's turn its seat reads
 **Thinking…** instead of **To act** and the status line says
 "robot-1 is thinking…". Robots are badged at their seat and in the
 next-board box, and are ready for the next board at once, so your **Next
-board** deals it. How they bid and play is in
+board** deals it. When your robot partner wins the contract, it stays
+declarer and you stay dummy, but **you play the hand**: the contract bar
+says "robot-1 declares 4♠ — you play the hand", declarer's cards (yours
+alone to see) lie across the top from the end of the auction, and on its
+turn you tap one of them ("Play: your turn from North's hand."), on yours
+one of your own. Forced cards play themselves on both hands, and you claim
+for declarer ("You claim 4 of the remaining 5 tricks for North"). The
+defenders still play by themselves. How they bid and play is in
 [backend `ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 Like the detail page, it shows **Refresh** (under a note, **Live updates
@@ -359,7 +367,7 @@ What it shows by phase:
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
-| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a forfeit), `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt` |
+| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a forfeit), `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them) |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
 reloads (after a set's last board, Next 409s: "The set is over: press Start

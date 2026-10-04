@@ -258,7 +258,12 @@ describe('game store', () => {
     game.watchUser(3)
     game.watchUser(3)
     expect(echo.listenToUser).toHaveBeenCalledTimes(1)
-    expect(echo.listenToUser).toHaveBeenCalledWith(3, expect.any(Function), expect.any(Function))
+    expect(echo.listenToUser).toHaveBeenCalledWith(
+      3,
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+    )
 
     game.unwatchUser()
     expect(echo.leaveUser).toHaveBeenCalledWith(3)
@@ -408,6 +413,107 @@ describe('game store', () => {
 
       expect(game.playing?.hand).toEqual([HAND[0], HAND[2]])
       expect(game.playing?.my_seat).toBe('S')
+    })
+  })
+
+  // 1♥ by North, a robot; South (the user) is dummy and plays both hands.
+  describe("a robot declarer's hand", () => {
+    const ROBOT_NORTH = { ...PLAYERS, N: { ...PLAYERS.N, username: 'robot-1', is_robot: true } }
+    const NORTH = [card(40, 'H', 15), card(41, 'H', 2), card(10, 'D', 9)]
+    const LEAD = { seat: 'E' as Seat, card: card(20, 'H', 5) }
+    function inPlay(overrides: Partial<PublicPlaying> = {}): PublicPlaying {
+      return publicState({
+        phase: 'play',
+        players: ROBOT_NORTH,
+        auction: auction(PASS, PASS, ONE_HEART, PASS, PASS, PASS),
+        contract: { bid: ONE_HEART, doubled: 0, declarer: 'N', dummy: 'S' },
+        turn: 'E',
+        acting_user_id: 2,
+        tricks: [],
+        current_trick: [],
+        tricks_won: { ns: 0, ew: 0 },
+        ...overrides,
+      })
+    }
+    const shown = (overrides = {}) => ({
+      table_id: 5,
+      playing_id: 42,
+      my_seat: 'S' as Seat,
+      declarer: 'N' as Seat,
+      declarer_hand: NORTH,
+      ...overrides,
+    })
+
+    test('load keeps it with the rest of our state', async () => {
+      const game = await loaded({ ...inPlay(), my_seat: 'S', hand: HAND, declarer_hand: NORTH })
+
+      expect(game.playing?.declarer_hand).toEqual(NORTH)
+    })
+
+    test('DeclarerHandShown brings it to the board we hold, and only to that one', async () => {
+      // Watching the user channel comes first (from login): it starts afresh.
+      useGameStore().watchUser(3)
+      const onDeclarerHand = vi.mocked(echo.listenToUser).mock.calls[0][3]
+      const game = await loaded({ ...inPlay(), my_seat: 'S', hand: HAND, declarer_hand: null })
+
+      onDeclarerHand(shown({ playing_id: 41 }))
+      onDeclarerHand(shown({ table_id: 6 }))
+      expect(game.playing?.declarer_hand).toBeNull()
+
+      onDeclarerHand(shown())
+      expect(game.playing?.declarer_hand).toEqual(NORTH)
+    })
+
+    test('a late DeclarerHandShown leaves out the cards already played', async () => {
+      const lead = { seat: 'N' as Seat, card: NORTH[0] }
+      const game = await loaded({ ...inPlay({ current_trick: [LEAD, lead] }), my_seat: 'S', hand: HAND, declarer_hand: null })
+
+      game.applyDeclarerHand(shown())
+
+      expect(game.playing?.declarer_hand).toEqual([NORTH[1], NORTH[2]])
+    })
+
+    test('nothing to bring it to before a board is held', () => {
+      const game = useGameStore()
+
+      game.applyDeclarerHand(shown())
+
+      expect(game.playing).toBeNull()
+    })
+
+    test('PlayingUpdated carries it over, less the cards played from it', async () => {
+      const game = await loaded({ ...inPlay({ turn: 'N', acting_user_id: 3, current_trick: [LEAD] }), my_seat: 'S', hand: HAND, declarer_hand: NORTH })
+
+      game.applyPlayingUpdate(5, inPlay({ turn: 'W', acting_user_id: 4, current_trick: [LEAD, { seat: 'N', card: NORTH[1] }] }))
+
+      expect(game.playing?.declarer_hand).toEqual([NORTH[0], NORTH[2]])
+      expect(game.playing?.hand).toEqual(HAND)
+    })
+
+    test('it goes once the board is finished, and never comes over to another board', async () => {
+      const game = await loaded({ ...inPlay(), my_seat: 'S', hand: HAND, declarer_hand: NORTH })
+
+      game.applyPlayingUpdate(5, inPlay({ phase: 'finished', turn: null, acting_user_id: null }))
+      expect(game.playing?.declarer_hand).toBeNull()
+
+      game.applyPlayingUpdate(5, inPlay({ playing_id: 43, phase: 'auction', contract: null, turn: 'S', acting_user_id: 3 }))
+      expect(game.playing?.declarer_hand).toBeNull()
+    })
+
+    test("the answer to our card from declarer's hand takes the new one", async () => {
+      const game = await loaded({ ...inPlay({ turn: 'N', acting_user_id: 3, current_trick: [LEAD] }), my_seat: 'S', hand: HAND, declarer_hand: NORTH })
+      const after: Playing = {
+        ...inPlay({ turn: 'W', acting_user_id: 4, current_trick: [LEAD, { seat: 'N', card: NORTH[0] }] }),
+        my_seat: 'S',
+        hand: HAND,
+        declarer_hand: [NORTH[1], NORTH[2]],
+      }
+      vi.mocked(gameService.playCard).mockResolvedValue(after)
+
+      await game.play(NORTH[0].id)
+
+      expect(gameService.playCard).toHaveBeenCalledWith(5, NORTH[0].id)
+      expect(game.playing?.declarer_hand).toEqual([NORTH[1], NORTH[2]])
     })
   })
 

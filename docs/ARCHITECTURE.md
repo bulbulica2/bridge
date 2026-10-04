@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/56-admin-seat-protected`._
+_Status as of branch `bulbulica2/59-play-robot-partners-hand`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -169,7 +169,7 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 |---|---|---|
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `lostSet` (a set your side forfeited while you were away) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `comeBack`, `stakeOf`, `dismissLostSet`; owns the table channel and the heartbeat |
-| `game` | one table's game: `tableId`, `playing` (public state + your hand), the bid list | `load`, `adopt`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` |
+| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid list | `load`, `adopt`, `loadBids`, `call`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; applies `PlayingUpdated` / `HandDealt` / `DeclarerHandShown` |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadSet`, `loadReview` |
 | `users` | public profiles by id (with `ban`/`bans` for an admin) | `load`, `ban`, `liftBan` |
 
@@ -262,6 +262,21 @@ A few backend rules the stores rely on:
   so the SPA only shows them (`RobotBadge`, "Thinking…" on their turn); each
   move arrives as a normal `PlayingUpdated`. How they bid and play:
   [backend `ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
+- **A robot declarer hands the play to its human dummy** (#95, bb#94).
+  Declarer and dummy stay who they are, but `acting_user_id` names the
+  human dummy on declarer's turn and on dummy's, so `handToPlay()` in
+  `utils/play.ts` returns `'declarer'` on declarer's turn (still read from
+  `acting_user_id`, never from the robot flags). Declarer's remaining cards
+  come as `declarer_hand`, only in that player's own state (`GET
+  /tables/{id}/playing` and the answers to their moves) and pushed as
+  `DeclarerHandShown` on their user channel when the auction ends; the
+  `game` store carries it across `PlayingUpdated` less the cards played,
+  like `hand`, until the play is over. `BridgeTable`'s `declarer` prop lays
+  it across the top, where it is tapped on its turn. `playsForDeclarer()`
+  tells the page this case: forced cards play themselves on both hands,
+  and `claimSeatOf()` in `utils/claim.ts` makes declarer's seat the one the
+  user claims and answers for ("You claim 4 of the remaining 5 tricks for
+  North").
 - When the last **person** leaves a table with robots, the table is kept
   but **unattended** (`unattended_since` set, no moderator): the robots
   wait, anyone may remove them, the first person to sit down manages it,
@@ -338,7 +353,7 @@ doesn't send the XSRF header Sanctum wants.
 | Channel | Who owns it | Events |
 |---|---|---|
 | `private-table.{id}` | `tables` store, following your seat | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state, handed to the `game` store) |
-| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
+| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
 
 - The table channel only admits players seated there, and the server never
   ends a subscription. So the `tables` store subscribes and unsubscribes
@@ -434,7 +449,7 @@ arrives, and the app falls back to what each request returns.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
+| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
 | `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
 | `AwayNotice` | who is away mid-set with the time left before their side loses the set (also on the detail page); with `held`, your own held seat (detail page, Tables, Home) |
 | `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses |
@@ -443,8 +458,8 @@ arrives, and the app falls back to what each request returns.
 | `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s); the winner is ringed but never drawn over a neighbour's rank and suit. `spread` (the pop-up) parts the four cards and tags each with its seat or **You** |
 | `LastTrickPopover` | the **Last trick** button under the trick in progress and its pop-up with the last trick's cards (a spread `TrickArea`, shifted sideways if centring it on the button would cross the screen's edge); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it |
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat; given `rows`, every suit column keeps room for that many cards |
-| `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest** |
-| `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw** |
+| `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest**; `forSeat` names a robot declarer's seat claimed for |
+| `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw**; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
 | `BoardResultPanel`, `NextBoardBox` | the score once a board is finished with the set's running score, and who is ready for the next |
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, a forfeit's reason, each board with your side's score and matchpoints (opening its review), and the totals |
 | `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead) |
@@ -456,7 +471,8 @@ arrives, and the app falls back to what each request returns.
 "Thinking…" instead of "To act", and the status line under the table says
 "robot-1 is thinking…".
 
-When you are declarer and the hand you play from (your own or dummy's) has
+When you are declarer (or a robot declarer's dummy, playing both hands)
+and the hand you play from (your own, dummy's or declarer's) has
 exactly one legal card to follow with, `forcedCard()` in `play.ts` names it
 (never on the lead) and the play page's `useForcedPlay` plays it after 3 s:
 the card pulses and the status line counts down ("Playing ♥7 in 3 s…").

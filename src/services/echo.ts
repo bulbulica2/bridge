@@ -4,7 +4,7 @@ import type { ChannelAuthorizationCallback } from 'pusher-js';
 import http from './http';
 import { clearSubscribed, resetLiveStatus, setConnection, setSubscribed } from './liveStatus';
 import type { Ban } from './auth';
-import type { HandDealtEvent, PublicPlaying } from './game';
+import type { DeclarerHandShownEvent, HandDealtEvent, PublicPlaying } from './game';
 import type { BroadcastTable } from './tables';
 
 // Live updates come over Laravel Reverb, which speaks the Pusher protocol.
@@ -95,16 +95,20 @@ export function listenToTable(
 }
 
 // The user's own channel carries what only they may see: their cards
-// (`HandDealt`) each time a board is dealt at their table, and `UserBanned`
-// when an admin bans them (their session is already gone by then).
+// (`HandDealt`) each time a board is dealt at their table, a robot
+// declarer's cards (`DeclarerHandShown`) when they, its dummy, are to play
+// them, and `UserBanned` when an admin bans them (their session is already
+// gone by then).
 export function listenToUser(
   userId: number,
   onHandDealt: (event: HandDealtEvent) => void,
   onBanned: (ban: Ban) => void,
+  onDeclarerHand: (event: DeclarerHandShownEvent) => void,
 ) {
   getEcho()
     .private(`App.Models.User.${userId}`)
     .listen('HandDealt', onHandDealt)
+    .listen('DeclarerHandShown', onDeclarerHand)
     .listen('UserBanned', onBanned);
 }
 
