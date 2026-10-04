@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/65-bid-alerts`._
+_Status as of branch `bulbulica2/66-board-chat`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -212,7 +212,8 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 |---|---|---|
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `lostSet` (a set your side forfeited while you were away) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissLostSet`, `clear` (on logout); owns the table channel and the heartbeat |
-| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned`; keeps the board's known alerts by call index (see [Alerts](#alerts)) |
+| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
+| `chat` | the chat of the board the play page shows: `tableId`, `playingId`, `messages`, `open` (the panel), `about` (the call a message is about), `unread` | `follow` (the play page's board: read, emptied for a new board, read again once finished), `load`, `receive`, `send`, `setOpen`, `askAbout`, `clear`; see [Board chat](#board-chat) |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadSet`, `loadReview` |
 | `users` | public profiles by id (with `ban`/`bans` for an admin) | `load`, `ban`, `liftBan` |
 
@@ -417,7 +418,7 @@ doesn't send the XSRF header Sanctum wants.
 | Channel | Who owns it | Events |
 |---|---|---|
 | `private-table.{id}` | `tables` store, following your seat | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state in its compact shape, expanded by the `game` store) |
-| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call), `CallQuestioned` (an opponent asks what your call means), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
+| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call), `CallQuestioned` (an opponent asks what your call means), `BoardMessageSent` (a chat message you may read: handed to the `chat` store), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
 
 - The table channel only admits players seated there, and the server never
   ends a subscription. So the `tables` store subscribes and unsubscribes
@@ -442,12 +443,15 @@ doesn't send the XSRF header Sanctum wants.
   `DeclarerHandShown` are not compact.
 - Alerts never come over the table channel: the bidder's partner mustn't
   see them, so `PlayingUpdated` carries none and each opponent gets
-  `CallAlerted` on their own channel (see [Alerts](#alerts)).
+  `CallAlerted` on their own channel (see [Alerts](#alerts)). Nor does the
+  board chat: each message goes as `BoardMessageSent` to the user channel
+  of every human who may read it (see [Board chat](#board-chat)).
 - For the same 10 KB, a seat's `user` and the state's `players` carry no
   `description` (`PublicUser.description` is optional; the profile sheet
   shows it once `GET /users/{id}` is in), and the free text that gets
   broadcast is capped: `name` 50 and `username` 30 characters, a table's
-  name 50 (`src/utils/limits.ts`), a ban's reason 500 (`MAX_BAN_REASON`).
+  name 50, an alert's explanation 200, a chat message 500
+  (`src/utils/limits.ts`), a ban's reason 500 (`MAX_BAN_REASON`).
   The forms cap their inputs at those lengths.
 - After the socket reconnects, whatever was broadcast meanwhile is lost,
   so the watched table is fetched again once.
@@ -547,7 +551,8 @@ arrives, and the app falls back to what each request returns.
 | `AwayNotice` | who is away mid-set with the time left before their side loses the set (also on the detail page); with `held`, your own held seat (detail page, Tables, Home) |
 | `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses |
 | `BiddingBox` | the call grid, on your turn during the auction, under the **Alert** field for the next call (an explanation for the opponents and an Alert toggle, both owned by the page) |
-| `AuctionHistory` + `AuctionCallCell` + `CallLabel` | the calls so far, four columns rotated like the table; an alerted call in amber with a "!", its explanation in a pop-up (`usePopover`), and with `live` an **Ask** on the opponents' calls and an **Answer** on yours when asked |
+| `AuctionHistory` + `AuctionCallCell` + `CallLabel` | the calls so far, four columns rotated like the table; an alerted call in amber with a "!", its explanation in a pop-up (`usePopover`), and with `live` an **Ask** and **Ask in the chat** on the opponents' calls and an **Answer** on yours when asked |
+| `BoardChat` + `ChatMessageList` | the board chat (header **Chat**, see [Board chat](#board-chat)): the messages (sender and seat, who reads it, the time, the call it is about), then the line to write and who it goes to; `ChatMessageList` alone is the review's chat |
 | `ExplainCallSheet` | the bottom sheet for explaining one of your calls to the opponents (the answer to their question), up to 200 characters |
 | `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s); the winner is ringed but never drawn over a neighbour's rank and suit. `spread` (the pop-up) parts the four cards and tags each with its seat or **You** |
 | `LastTrickPopover` | the **Last trick** button under the trick in progress and its pop-up with the last trick's cards (a spread `TrickArea`, shifted sideways if centring it on the button would cross the screen's edge); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it (all of that is `usePopover`, shared with the auction's calls) |
@@ -585,6 +590,8 @@ follow-suit hint still dims the other cards, and they tap the one left.
 Pure logic lives in `src/utils/`: `cards.ts` (sorting, rank labels, seat
 rotation, vulnerability), `auction.ts` (call legality hints and labels),
 `alerts.ts` (the alert book the `game` store keeps, and the alerts' wording),
+`chat.ts` (who a message may go to by phase, merging messages, a message's
+sender, time and call, the question toast, the export's chat lines),
 `play.ts` (follow-suit hint, the forced card and who it plays itself for, whose hand you play, trick layout), `claim.ts`
 (who may claim, who still has to answer, the claim's wording, its countdown
 and how it ended: `claimClockText`, `claimExpired`, `claimOffText`), `result.ts`
@@ -641,6 +648,55 @@ vulnerability) with a "!"; hovering it with a mouse, or a tap, pops up
 the explanation as plain text, or "Alerted, no explanation given."; your
 own reads "You alerted: …".
 
+## Board chat
+
+A chat per board (#102, bb#101;
+[`API.md`, Chat](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md#chat)),
+so the opponents can ask what a call means and the bidder can answer in
+their own words. **Partner never reads it during the board**:
+
+- `src/services/chat.ts`: `getMessages(tableId)` (`GET
+  /tables/{id}/messages`: the current board's `playing_id` and the messages
+  you may read) and `sendMessage(tableId, {body, to, call_index})`
+  (`POST`). `to` is `opponents` (you and your two opponents) or `table`
+  (all four); mid-board only `opponents` is allowed (`chatRecipients()` in
+  `utils/chat.ts`), between boards both. A body is 1–500 characters
+  (`CHAT_MAX`), plain text.
+- Live, each message comes as `BoardMessageSent` on the user channel of
+  every human who may read it, yours included, never on the table channel.
+  The `game` store's `applyBoardMessage` hands it to the `chat` store
+  (`receive`), which keeps one board's messages by id (`mergeMessages`:
+  HTTP and the channel may bring the same one); a newer board's message
+  starts its chat, an older one's is dropped.
+- The play page calls `chat.follow(tableId, playingId, phase)` whenever
+  its board changes: entering a table reads the chat, a new board starts
+  an empty one, and a board just **finished** is read once more, since
+  partner's earlier messages are public then but aren't pushed again. A
+  reconnect reads it again. Failed reads are quiet: the chat never keeps
+  the board from showing.
+- **Unread**: the others' messages with an id above the last one you saw
+  while the panel was open (`bridge.chatSeen` in `localStorage`, try/catch;
+  ids only grow, so one number covers every board). The header's **Chat**
+  button shows them as a badge.
+- **Asking**: an opponent's call pops up **Ask in the chat** next to
+  **Ask what it means** (see [Alerts](#alerts)); it opens the chat with
+  the call attached (`chat.askAbout(index)`, "About 2♥:"), and the message
+  goes with its `call_index`. A robot bidder answers at once, in the chat.
+  The Alerts endpoints write their question and answer into the chat too.
+- **Notifications**: a message about one of your calls from an opponent,
+  with the chat closed, is told in a toast at the top (off the bidding box
+  and the hand); the same question asked with **Ask** (`CallQuestioned`)
+  isn't told twice within 10 s.
+- **Panel**: on a screen 1100 px wide or more (`useMediaQuery`) the chat
+  sits in the content's `fixed` slot beside the table, which moves over; on
+  a phone it is a bottom sheet (`ion-modal`, half height, the page usable
+  above it and padded so the bidding box and the hand can scroll clear).
+  A refused message (409, 422, 429) is told in a toast and keeps its text.
+  Leaving the page closes it.
+- **After the board**: the review's `messages` is the whole chat;
+  `BoardReview` shows it under the auction and the text export lists it
+  (`chatLines`).
+
 ## The board review
 
 `PlayingReviewPage` (`/playings/:id`) replays one finished playing from
@@ -649,7 +705,8 @@ the play page's review modal shows too, built from the same components: `BridgeT
 hands left at the current step, `replay` set so they aren't labelled "as
 dealt", and `reserve` = the deal, so each hand keeps the height it had as
 dealt and the replay buttons below the table don't move as cards go),
-`TrickArea`, `AuctionHistory` and `BoardResultPanel`. It keeps a
+`TrickArea`, `AuctionHistory`, `BoardResultPanel` and, under the
+auction, the board's whole chat (`ChatMessageList`). It keeps a
 single number, how many cards have been played, and `reviewAt()` in
 `src/utils/review.ts` works out everything else from the deal and the
 tricks. The review is cached in the `history` store by playing id and never
@@ -695,7 +752,7 @@ auction, play and `Score`; the play lines keep fixed seat columns starting
 with the opening leader, and a claim leaves `-` for the unplayed cards and
 ends the section with `*`; an alerted call carries a note reference, `2C =1=`,
 with `[Note "1:Stayman"]` after the auction) and `boardJson()`. The text lists
-the alerts under the auction, and the printout marks them. They reuse `cards.ts`,
+the alerts and then the board's chat under the auction, and the printout marks the alerts. They reuse `cards.ts`,
 `auction.ts` and `result.ts` for labels. The review doesn't say who claimed,
 so a claim is told from declarer's side ("declarer took 2 of the last 5").
 Matchpoints are added (and shown under the review's result) when the

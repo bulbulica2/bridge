@@ -30,6 +30,7 @@
               :busy="busy"
               @ask="emit('ask', $event)"
               @explain="emit('explain', $event)"
+              @chat="emit('chat', $event)"
             />
             <span v-else-if="cell.kind === 'next'" class="next" aria-label="To call">?</span>
           </td>
@@ -57,8 +58,9 @@ const props = withDefaults(
     // Whose call is awaited: a "?" marks their cell. Null once it is over.
     turn?: Seat | null;
     players?: Partial<Record<Seat, PublicUser | null>>;
-    // The board is still on: opponents' calls may be asked about, and our
-    // own answered (`ask`/`explain` with the call's index).
+    // The board is still on: opponents' calls may be asked about, in a
+    // word or in the chat, and our own answered (`ask`/`chat`/`explain`
+    // with the call's index).
     live?: boolean;
     // A question or an answer is on its way.
     busy?: boolean;
@@ -66,7 +68,11 @@ const props = withDefaults(
   { turn: null, players: () => ({}), live: false, busy: false },
 );
 
-const emit = defineEmits<{ ask: [index: number]; explain: [index: number] }>();
+const emit = defineEmits<{
+  ask: [index: number];
+  explain: [index: number];
+  chat: [index: number];
+}>();
 
 const columns = computed(() => auctionColumns(props.mySeat));
 

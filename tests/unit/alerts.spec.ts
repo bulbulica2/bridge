@@ -29,6 +29,8 @@ import {
 } from '@/utils/alerts'
 import { showToast } from '@/utils/toast'
 
+// The board chat has its own specs: its read never answers here.
+vi.mock('@/services/chat', () => ({ getMessages: () => new Promise(() => {}), sendMessage: () => new Promise(() => {}) }))
 vi.mock('@/services/game', () => ({
   getPlaying: vi.fn(),
   getBids: vi.fn(),
@@ -319,10 +321,10 @@ describe('game store alerts', () => {
 
     game.applyCallQuestioned({ table_id: 5, playing_id: 42, index: 2, asked_by: 'W' })
     expect(game.playing?.auction?.[2].question).toEqual({ asked_by: 'W' })
-    expect(showToast).toHaveBeenCalledWith('West asks what your 2♣ means.', 'warning')
+    expect(showToast).toHaveBeenCalledWith('West asks what your 2♣ means.', 'warning', 'top')
 
     game.applyCallQuestioned({ table_id: 6, playing_id: 50, index: 0, asked_by: 'E' })
-    expect(showToast).toHaveBeenLastCalledWith('East asks what your call means.', 'warning')
+    expect(showToast).toHaveBeenLastCalledWith('East asks what your call means.', 'warning', 'top')
   })
 
   test('CallQuestioned before any board is held still marks it for later', async () => {
@@ -333,7 +335,7 @@ describe('game store alerts', () => {
     game.applyCallAlerted({ table_id: 5, playing_id: 42, index: 1, explanation: null })
 
     expect(game.playing).toBeNull()
-    expect(showToast).toHaveBeenCalledWith('East asks what your call means.', 'warning')
+    expect(showToast).toHaveBeenCalledWith('East asks what your call means.', 'warning', 'top')
   })
 
   test('a call with its alert, a question and an explanation take their answers', async () => {
@@ -493,7 +495,9 @@ describe('AuctionHistory alerts', () => {
     expect(cell(w, '2♣').find('.question-mark').exists()).toBe(true)
     await cell(w, '2♣').get('.call-button').trigger('click')
     expect(w.get('.question-text').text()).toBe('You asked: waiting for the answer.')
-    expect(w.find('.popup-action').exists()).toBe(false)
+    // No second question until it is answered; the chat is still there.
+    expect(w.find('.popup-action.ask').exists()).toBe(false)
+    expect(w.find('.popup-action.ask-in-chat').exists()).toBe(true)
 
     await cell(w, '2♦').get('.call-button').trigger('click')
     expect(cell(w, '2♦').get('.question-text').text()).toBe('North asked: waiting for the answer.')

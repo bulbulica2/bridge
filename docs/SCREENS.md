@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/65-bid-alerts`._
+_Status as of branch `bulbulica2/66-board-chat`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -267,7 +267,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 and the forfeit), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100);
+#101 (bid alerts, needs bb#100), #102 (board chat, needs bb#101);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -333,7 +333,7 @@ What it shows by phase:
   toast and a sheet to type the answer, which then shows like an
   explanation (closed, the sheet comes back from **Answer** in the call's
   pop-up). The grid stays below your hand during the play, where asking
-  still works.
+  still works. The pop-up also offers **Ask in the chat** (below).
 - **play**: the contract bar with tricks won, the current trick in the
   centre, dummy's cards once the opening lead is made. From the second
   trick on, a **Last trick** button sits under the trick in progress:
@@ -402,6 +402,28 @@ What it shows by phase:
   last card's `PlayingUpdated` (or a forfeit's `TableUpdated`), and the
   page then reads the set again.
 
+**Board chat** (#102): from the first deal on, the header's **Chat**
+button (with a red badge counting the others' messages since you last
+looked) opens the board's chat: beside the table on a screen 1100 px wide
+or more, as a half-height sheet on a phone (the page stays usable above
+it, and scrolls the bidding box and your hand clear of it). Each message
+shows who wrote it and their seat, who reads it ("to opponents", "to
+table"), the time, and the call it is about as a chip; the text is plain
+(no HTML, links not clickable). While the board is bid or played a
+message goes **to the opponents only** ("Your partner can't see this"):
+you never read partner's messages to them, nor they yours. Between boards
+the **Table** (everyone, the default) or the **Opponents** can be picked.
+**Ask in the chat** in an opponent's call pop-up opens it with the call
+attached ("About 2♥:"); a robot answers such a question at once, and
+the **Ask what it means** question and its answer show in the chat too.
+Sending is disabled while a message is on its way and clears the text
+once sent; a refusal (409, 422, 429 too many at once) is toasted at the
+top and keeps the text. An opponent's question about one of your calls,
+with the chat closed, is told in a toast at the top, which never covers
+the bidding box or the hand. Once the board is finished the whole chat is
+read again (every message is public then), and it stays in the board's
+review.
+
 **Board review at the table** (#97): once a board of this table has been
 finished, **Last board** (header) opens the board review in a full-height
 sheet over the game, at any phase: the same replay and Export as
@@ -422,6 +444,8 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `game.call()` (with the alert, if any) | `POST /tables/{id}/calls` |
 | `game.askAboutCall()`, `game.explainCall()` | `POST /tables/{id}/calls/{index}/question`, `PUT /tables/{id}/calls/{index}/explanation` |
 | `game.play()` | `POST /tables/{id}/cards` |
+| `chat.follow()` (entering the table, and when a board finishes) | `GET /tables/{id}/messages`, after the board is drawn; failures are quiet |
+| `chat.send()` | `POST /tables/{id}/messages` |
 | `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
 | `game.next()` (**Deal now**, optional) | `POST /tables/{id}/playing/next` |
 | `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
@@ -432,7 +456,7 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
-| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a forfeit), `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer), `CallQuestioned` (a question about your call) |
+| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a forfeit), `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer), `CallQuestioned` (a question about your call), `BoardMessageSent` (a chat message you may read) |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
 reloads (after a set's last board, Deal now 409s: "The set is over: press Start
@@ -443,7 +467,7 @@ Start once the table is full again).
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
 bb#40 (next board; bb#74 dropped its `everyone`; bb#97 deals it by itself), bb#43 (results), bb#59 (claims), bb#96 (claims expire),
-bb#75 (sets of four boards), bb#76 (away mid-set and the forfeit), bb#100 (alerts).
+bb#75 (sets of four boards), bb#76 (away mid-set and the forfeit), bb#100 (alerts), bb#101 (board chat).
 
 ## My boards — `/history`
 
@@ -519,7 +543,8 @@ One table's playing of a board, replayed: the contract and the tricks each
 side has won so far, the four hands face up (you at the bottom if you
 played it, otherwise South), the trick in the middle, and the auction
 below, with every alert of the board (public once it is over) marked and
-popped up as on the play page. A stepper moves card by card or a trick at a time (start, previous
+popped up as on the play page, and under it the board's whole chat (#102),
+partner's messages to the opponents included, since the board is over. A stepper moves card by card or a trick at a time (start, previous
 trick, previous card, next card, next trick, end); the hands lose their
 cards as they go but keep the room they took as dealt, so the buttons stay
 in the same place at every step (#59). The line saying where you are
@@ -539,7 +564,7 @@ only the deal and the result.
   vulnerability, the players (robots marked "(robot)"), the four hands as
   dealt, the auction as a W N E S grid, contract, declarer and opening
   lead, one line per trick (leader, the four cards in the order played,
-  winner), the alerts under the auction, where a claim ended the play and how the tricks left went, the
+  winner), the alerts and the chat under the auction, where a claim ended the play and how the tricks left went, the
   result and, if you opened the board's results this session, the
   matchpoints.
 - **Download .txt**: the same text as a file.
@@ -562,7 +587,7 @@ in the native app the menu only offers Copy as text.
 |---|---|
 | `history.loadReview()` | `GET /playings/{id}` (once per session: a finished playing never changes) |
 
-Backend: bb#60.
+Backend: bb#60, bb#101 (the chat).
 
 ## User profile — `/users/:id`
 

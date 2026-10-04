@@ -294,7 +294,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   `Playing.declarer_hand` is a robot declarer's remaining cards, only for
   its human dummy (null otherwise, and once `finished`); the same channel's
   `DeclarerHandShown` (`listenToUser`'s fourth handler; the fifth and
-  sixth are `CallAlerted` / `CallQuestioned`, see Alerts) brings it when the
+  sixth are `CallAlerted` / `CallQuestioned`, see Alerts, the seventh
+  `BoardMessageSent`, see Board chat) brings it when the
   auction ends, `applyDeclarerHand` sets it on the board held, and
   `PlayingUpdated` carries it over less any card played, like `hand`.
 - **Start** (#68, bb#73, backend `docs/API.md` Dealing): filling a table
@@ -360,7 +361,47 @@ The user's standing rule (#91): **no task may leave code coverage under
   /tables/{id}/calls/{index}/explanation`; a 422 keeps it open). The play
   page opens the sheet by itself once per question (`openQuestion`, only
   while the view is active). A review's `auction` has every `alert`
-  (public once finished), shown the same way.
+  (public once finished), shown the same way. The pop-up's **Ask in the
+  chat** (`chat` event, `live` opponents' calls) opens the board chat with
+  the call attached (below).
+- **Board chat** (#102, bb#101, backend `docs/API.md` Chat): partner never
+  reads it mid-board. `src/services/chat.ts`: `getMessages` (`GET
+  /tables/{id}/messages` → `{playing_id, messages}`), `sendMessage`
+  (`POST`, `{body, to, call_index?}`; `call_index` only when set),
+  `BoardMessage` (`id`, `seat`, `user_id`, `to` `opponents|table`,
+  `call_index`, `body` plain text, `created_at`), `BoardMessageSentEvent`.
+  `to: table` only between boards (`chatRecipients(phase)` in
+  `src/utils/chat.ts`: auction/play `['opponents']`, finished `['table',
+  'opponents']`, else none; a 409 otherwise); `CHAT_MAX` 500 in
+  `limits.ts`. The Pinia store `src/stores/chat.ts` holds one board's chat
+  (`tableId`, `playingId`, `messages` merged by id via `mergeMessages`,
+  `open`, `about` = the call index attached, `unread` = others' messages
+  above `seenUpTo`, kept in `localStorage` `bridge.chatSeen`, try/catch).
+  The play page's watch calls `follow(tableId, playingId, phase)`: first
+  sight of a table `load`s (one request per table at a time, failures
+  quiet), a newer board empties it, a board turning `finished` is read once
+  more (partner's messages aren't re-pushed). `BoardMessageSent` on the
+  user channel → the game store's `applyBoardMessage` → `chat.receive`
+  (another table or an older board dropped, a newer board starts it); with
+  the chat closed, an opponent's question about one of our calls
+  (`asksAboutMyCall`) toasts at the **top** (`showToast`'s third argument,
+  off the bidding box), and `tellQuestion` tells one question
+  (`playing:index:asker`) once per 10 s, shared with `CallQuestioned`'s
+  toast. The game store calls `useChatStore()` lazily (its `clear()`
+  clears the chat too); the chat store rereads on reconnect. UI: the
+  header's **Chat** button (`ion-badge` with `unread`, only once
+  `playing_id` is set), `BoardChat.vue` (list + recipient switch + "About
+  2♥:" chip + textarea, Enter sends, the page owns `v-model:draft` and
+  sending: cleared on success, kept and toasted on any refusal, 401 →
+  login) in the content's `slot="fixed"` aside from 1100 px
+  (`useMediaQuery`), else an `ion-modal` sheet (breakpoint 0.5, page
+  padded); leaving the view closes it. `ChatMessageList.vue` (sender
+  "You"/username, seat, "to opponents"/"to table", `chatTime`, the call
+  as a `CallLabel` chip, `white-space: pre-wrap`) is also the review's
+  chat: `PlayingReview.messages` (optional) under the auction in
+  `BoardReview`, and `boardText` lists it (`chatLines`) after the alerts.
+  Play page specs mock `@/services/chat` with plain never-settling
+  functions (a `vi.fn` would be reset to `undefined`).
 - **Card play**: `play(cardId)` posts `POST /tables/{id}/cards` and takes
   its answer through the same `isBehind` guard as `call`. `turn` is the
   hand the card comes from and `acting_user_id` who sends it (declarer on
@@ -601,7 +642,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   scope dispose): Copy as text, Download .txt/.pbn/.json, Print / Save
   as PDF (only Copy on a native platform, `Capacitor.isNativePlatform()`:
   WebViews ignore `download` links and `window.print()`).
-  `src/utils/export.ts` is pure: `boardText(review, extras)` (the alerts
+  `src/utils/export.ts` is pure: `boardText(review, extras)` (the chat
+  after the alerts via `chatLines`; the alerts
   listed under the auction via `alertLines`; matchpoints
   in `extras` when `history.results[boardId]` or a cached set's `boards`
   holds this playing's row; `BoardResultPanel`'s `extras` shows them too),
@@ -663,15 +705,19 @@ The user's standing rule (#91): **no task may leave code coverage under
   store hands to the game store. Alerts never use it (partner would see
   them): `CallAlerted` `{table_id, playing_id, index, explanation}` goes to
   each human opponent's user channel, `CallQuestioned` `{…, asked_by}` to
-  the bidder's (see Alerts). Each `TableUpdated` carries the whole table and **replaces** it
+  the bidder's (see Alerts); nor does the chat: `BoardMessageSent`
+  `{table_id, playing_id, message}` goes to the user channel of every
+  human who may read it, the sender included (see Board chat). Each
+  `TableUpdated` carries the whole table and **replaces** it
   via the store's sync path; one that no longer seats the user (outside their
   own seat request) is a kick: toast, unsubscribe, and `kickedFrom` makes the
   detail page go back to `/tables`. After a reconnect the watched table is
   refetched once. The Tables list has no channel and stays refresh-only.
   Every broadcast fits in 10 KB (backend `docs/API.md`, Message size):
   hence the compact `PlayingUpdated` (see Game) and the length caps the
-  forms mirror, `NAME_MAX` 50 / `USERNAME_MAX` 30 / `TABLE_NAME_MAX` 50 in
-  `src/utils/limits.ts` and `MAX_BAN_REASON` 500 in `src/utils/ban.ts`.
+  forms mirror, `NAME_MAX` 50 / `USERNAME_MAX` 30 / `TABLE_NAME_MAX` 50 /
+  `ALERT_MAX` 200 / `CHAT_MAX` 500 in `src/utils/limits.ts` and
+  `MAX_BAN_REASON` 500 in `src/utils/ban.ts`.
   **Live or not** (#76): `echo.ts` writes the connection status and the
   table whose channel Pusher confirmed (`.subscribed()`; `.error()`,
   `leaveTable` and any non-`connected` status clear it) into

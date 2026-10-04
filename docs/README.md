@@ -33,7 +33,11 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/65-bid-alerts` (after
+> branch `bulbulica2/66-board-chat` (after
+> #102, each board has a chat: to the opponents only while it is bid or
+> played, to the whole table between boards, with **Ask in the chat** on
+> an opponent's call and the whole chat in the board's review; see
+> [`SCREENS.md`](SCREENS.md#play--tablesidplay); after
 > #101, players alert their calls for the opponents and may ask about the
 > opponents' calls; see [`SCREENS.md`](SCREENS.md#play--tablesidplay); after
 > #98, a set's next board is dealt by itself 10 s after a board ends,

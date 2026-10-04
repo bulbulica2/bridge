@@ -27,6 +27,8 @@ import { leaveWarning, moveConsequences } from '@/utils/seatMove'
 import { showToast } from '@/utils/toast'
 import { STALE_GRACE_MS } from '@/composables/useStaleDeadline'
 
+// The board chat has its own specs: its read never answers here.
+vi.mock('@/services/chat', () => ({ getMessages: () => new Promise(() => {}), sendMessage: () => new Promise(() => {}) }))
 vi.mock('@/services/game', () => ({
   getPlaying: vi.fn(),
   getBids: vi.fn(),

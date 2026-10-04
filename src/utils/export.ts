@@ -5,6 +5,7 @@ import type { BoardResults, PlayingReview, SetResults } from '@/services/history
 import type { PublicUser } from '@/services/users';
 import { alertLines, alertText } from '@/utils/alerts';
 import { auctionRows, callLabel, contractLabel, SEAT_NAMES } from '@/utils/auction';
+import { chatLines } from '@/utils/chat';
 import { rankLabel, sortHand, SUIT_SYMBOLS, SUITS, vulnerabilityLabel } from '@/utils/cards';
 import {
   matchpointPercent,
@@ -197,6 +198,10 @@ export function boardText(review: PlayingReview, extras: ExportExtras = {}): str
     const alerts = alertLines(review.auction ?? []);
     if (alerts.length > 0) {
       lines.push('Alerts', ...alerts, '');
+    }
+    const chat = chatLines(review.messages ?? [], review.players, review.auction);
+    if (chat.length > 0) {
+      lines.push('Chat', ...chat, '');
     }
 
     const contract = review.contract;

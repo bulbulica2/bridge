@@ -3,6 +3,7 @@ import http from '@/services/http'
 import * as auth from '@/services/auth'
 import * as tables from '@/services/tables'
 import * as game from '@/services/game'
+import * as chat from '@/services/chat'
 
 vi.mock('@/services/http', () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -142,5 +143,27 @@ describe('table and game services', () => {
   test('isTableDeleted tells a deleted table from a table', () => {
     expect(tables.isTableDeleted({ table_deleted: true })).toBe(true)
     expect(tables.isTableDeleted({ id: 3 } as tables.Table)).toBe(false)
+  })
+})
+
+describe('chat service', () => {
+  test('getMessages reads the current board chat', async () => {
+    await expect(chat.getMessages(3)).resolves.toEqual(payload)
+    expect(http.get).toHaveBeenCalledWith('/tables/3/messages')
+  })
+
+  test('sendMessage posts the body and recipients, with the call only when there is one', async () => {
+    await expect(chat.sendMessage(3, { body: 'Hi', to: 'table' })).resolves.toEqual(payload)
+    expect(http.post).toHaveBeenLastCalledWith('/tables/3/messages', { body: 'Hi', to: 'table' })
+
+    await chat.sendMessage(3, { body: 'What is it?', to: 'opponents', call_index: 0 })
+    expect(http.post).toHaveBeenLastCalledWith('/tables/3/messages', {
+      body: 'What is it?',
+      to: 'opponents',
+      call_index: 0,
+    })
+
+    await chat.sendMessage(3, { body: 'Hi', to: 'opponents', call_index: null })
+    expect(http.post).toHaveBeenLastCalledWith('/tables/3/messages', { body: 'Hi', to: 'opponents' })
   })
 })

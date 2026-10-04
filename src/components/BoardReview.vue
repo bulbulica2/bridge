@@ -119,6 +119,17 @@
       :turn="null"
       :players="review.players"
     />
+
+    <!-- The board's chat, all of it: public once the board is over. -->
+    <section v-if="messages.length > 0" class="review-chat" aria-label="Chat">
+      <h3 class="review-chat-title">Chat</h3>
+      <ChatMessageList
+        :messages="messages"
+        :players="review.players"
+        :auction="review.auction"
+        :me="auth.user?.id ?? null"
+      />
+    </section>
   </div>
 </template>
 
@@ -137,6 +148,7 @@ import AuctionHistory from '@/components/AuctionHistory.vue';
 import BoardResultPanel from '@/components/BoardResultPanel.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
+import ChatMessageList from '@/components/ChatMessageList.vue';
 import TrickArea from '@/components/TrickArea.vue';
 import { useAuthStore } from '@/stores/auth';
 import type { PlayingReview } from '@/services/history';
@@ -183,6 +195,8 @@ const recorded = computed(() => isRecorded(props.review));
 
 const total = computed(() => playedCards(props.review).length);
 
+const messages = computed(() => props.review.messages ?? []);
+
 const at = computed(() => reviewAt(props.review, step.value));
 
 // The viewer's seat if they played this board; otherwise South is at the
@@ -215,6 +229,16 @@ function go(to: number) {
 </script>
 
 <style scoped>
+.review-chat {
+  margin: 16px 0;
+}
+
+.review-chat-title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 .outcome {
   margin: 0 0 12px;
   padding: 10px 12px;

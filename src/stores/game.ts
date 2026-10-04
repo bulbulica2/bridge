@@ -16,8 +16,10 @@ import type {
   PublicPlaying,
 } from '@/services/game';
 import type { BroadcastTable, Seat } from '@/services/tables';
+import type { BoardMessageSentEvent } from '@/services/chat';
 import { leaveUser, listenToUser, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
+import { useChatStore } from '@/stores/chat';
 import {
   answerText,
   emptyBook,
@@ -28,6 +30,7 @@ import {
   withNotes,
 } from '@/utils/alerts';
 import type { AlertBook } from '@/utils/alerts';
+import { asksAboutMyCall, chatQuestionText } from '@/utils/chat';
 import { expandPlaying } from '@/utils/compact';
 import { showToast } from '@/utils/toast';
 
@@ -57,6 +60,10 @@ function waitingState(): Playing {
     declarer_hand: null,
   };
 }
+
+// A question about one of our calls comes twice when asked with the Ask
+// button (`CallQuestioned`, and its line in the chat): it is told once.
+const QUESTION_TOLD_MS = 10_000;
 
 // Every card already face up on the table, which no hand holds any more.
 function playedCardIds(state: PublicPlaying): Set<number> {
@@ -135,8 +142,23 @@ export const useGameStore = defineStore('game', () => {
   // back on every state we show. Our HTTP answers and the user channel's
   // `CallAlerted`/`CallQuestioned` fill it; a new board starts it again.
   let alerts: AlertBook = emptyBook();
+  // When each question about one of our calls was last told, by
+  // `playing:index:asker`.
+  const questionsTold = new Map<string, number>();
 
   const auth = useAuthStore();
+
+  // Tell a question about our call at `index`, unless the same one was told
+  // a moment ago. Toasts stay at the top, off the bidding box and the hand.
+  function tellQuestion(playingId: number, index: number, askedBy: Seat, text: string) {
+    const key = `${playingId}:${index}:${askedBy}`;
+    const now = Date.now();
+    if (now - (questionsTold.get(key) ?? -Infinity) < QUESTION_TOLD_MS) {
+      return;
+    }
+    questionsTold.set(key, now);
+    showToast(text, 'warning', 'top');
+  }
 
   function mySeatIn(state: PublicPlaying): Seat | null {
     const me = auth.user?.id;
@@ -414,7 +436,27 @@ export const useGameStore = defineStore('game', () => {
         playing.value = withNotes(current, alerts);
       }
     }
-    showToast(questionText(event.asked_by, call), 'warning');
+    tellQuestion(event.playing_id, event.index, event.asked_by, questionText(event.asked_by, call));
+  }
+
+  // A chat message we may read (`BoardMessageSent`): into the chat. An
+  // opponent asking about one of our calls is told in a toast too, unless
+  // the chat is open in front of us.
+  function applyBoardMessage(event: BoardMessageSentEvent) {
+    const chat = useChatStore();
+    const current = playing.value;
+    const message = event.message;
+    const onBoard = tableId.value === event.table_id && current?.playing_id === event.playing_id;
+    if (
+      onBoard &&
+      !chat.open &&
+      message.call_index !== null &&
+      asksAboutMyCall(message, current.auction, current.my_seat, auth.user?.id ?? null)
+    ) {
+      const call = current.auction![message.call_index];
+      tellQuestion(event.playing_id, message.call_index, message.seat, chatQuestionText(message, call));
+    }
+    chat.receive(event);
   }
 
   // A `TableUpdated` for the table we show. A player leaving mid-board
@@ -471,12 +513,14 @@ export const useGameStore = defineStore('game', () => {
     tableId.value = null;
     pendingHand = null;
     alerts = emptyBook();
+    questionsTold.clear();
+    useChatStore().clear();
   }
 
   // Follow the user's own channel from login to logout: a board can be dealt
   // while they look at any page, and its HandDealt is sent only once. The
   // channel also brings DeclarerHandShown, and UserBanned, which the auth
-  // store handles, and the opponents' alerts and questions.
+  // store handles, the opponents' alerts and questions, and the board chat.
   function watchUser(userId: number) {
     if (watchedUserId.value === userId) {
       return;
@@ -490,6 +534,7 @@ export const useGameStore = defineStore('game', () => {
       applyDeclarerHand,
       applyCallAlerted,
       applyCallQuestioned,
+      applyBoardMessage,
     );
   }
 
@@ -535,6 +580,7 @@ export const useGameStore = defineStore('game', () => {
     applyDeclarerHand,
     applyCallAlerted,
     applyCallQuestioned,
+    applyBoardMessage,
     applyTableUpdate,
     clear,
     watchUser,

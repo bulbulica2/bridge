@@ -1,4 +1,5 @@
 import http from './http';
+import type { BoardMessage } from './chat';
 import type { Bid, Board, BoardResult, PublicPlaying, SetEnding, SideCode } from './game';
 import type { Seat } from './tables';
 import type { PublicUser } from './users';
@@ -111,6 +112,9 @@ export async function getBoardResults(boardId: number): Promise<BoardResults> {
 export interface PlayingReview extends Omit<PublicPlaying, 'ready' | 'next_board_at' | 'players' | 'set'> {
   // From the seat snapshot; null only if that player's account is gone.
   players: Record<Seat, PublicUser | null>;
+  // The board's whole chat, oldest first: every message, the opponents-only
+  // ones too, since the board is over (bb#101). Empty when nobody wrote.
+  messages?: BoardMessage[];
 }
 
 // Any finished playing of a board the caller has finished themselves, even

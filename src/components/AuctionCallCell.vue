@@ -2,9 +2,10 @@
   <!-- One call of the auction grid. An alerted call stands out (amber, with
        a "!") and its explanation pops up the way the last trick does:
        hovering with a mouse, or a tap until a tap outside or Escape. While
-       the board lasts, any opponent's call also pops up an Ask button, and
-       a call of ours an opponent asked about an Answer button. Any other
-       call is just its label. -->
+       the board lasts, any opponent's call also pops up an Ask button (and
+       Ask in the chat, to ask in one's own words), and a call of ours an
+       opponent asked about an Answer button. Any other call is just its
+       label. -->
   <span
     v-if="interactive"
     ref="root"
@@ -56,6 +57,14 @@
           Ask what it means
         </button>
         <button
+          v-if="canChat"
+          type="button"
+          class="popup-action ask-in-chat"
+          @click="chatAbout"
+        >
+          Ask in the chat
+        </button>
+        <button
           v-if="canAnswer"
           type="button"
           class="popup-action answer"
@@ -93,7 +102,11 @@ const props = withDefaults(
   { live: false, busy: false },
 );
 
-const emit = defineEmits<{ ask: [index: number]; explain: [index: number] }>();
+const emit = defineEmits<{
+  ask: [index: number];
+  explain: [index: number];
+  chat: [index: number];
+}>();
 
 const { root, button, popup, open, nudge, hover, toggle, close } = usePopover();
 const popupId = `call-${useId()}`;
@@ -102,6 +115,7 @@ const mine = computed(() => props.mySeat !== null && props.call.seat === props.m
 const opponents = computed(() => isOpponent(props.call.seat, props.mySeat));
 const canAsk = computed(() => props.live && opponents.value && !props.call.question);
 const canAnswer = computed(() => props.live && mine.value && !!props.call.question);
+const canChat = computed(() => props.live && opponents.value);
 const interactive = computed(
   () => !!props.call.alert || (props.live && opponents.value) || canAnswer.value,
 );
@@ -129,6 +143,11 @@ const questionLine = computed(() => {
 function answer() {
   close();
   emit('explain', props.index);
+}
+
+function chatAbout() {
+  close();
+  emit('chat', props.index);
 }
 </script>
 
