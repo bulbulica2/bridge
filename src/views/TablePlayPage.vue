@@ -2,6 +2,18 @@
   <ion-page>
     <AppHeader :title="headerTitle">
       <template #end>
+        <!-- The board's chat, with how many messages came since we looked. -->
+        <ion-button
+          v-if="chatOn"
+          class="chat-toggle"
+          :aria-label="chatAria"
+          :aria-expanded="chat.open"
+          @click="chat.setOpen(!chat.open)"
+        >
+          <ion-icon slot="start" :icon="chatbubblesOutline" />
+          <span class="chat-toggle-label">Chat</span>
+          <ion-badge v-if="chat.unread > 0" color="danger" class="chat-badge">{{ chat.unread }}</ion-badge>
+        </ion-button>
         <!-- Look back at the finished boards without leaving the table. -->
         <ion-button v-if="reviewable.length > 0" class="review-boards" @click="reviewOpen = true">
           Last board
@@ -20,7 +32,13 @@
         <ion-refresher-content />
       </ion-refresher>
 
-      <div class="play">
+      <!-- On a wide screen the chat sits beside the table, which moves over
+           to make room; on a phone it is a bottom sheet (below). -->
+      <aside v-if="chatSide" slot="fixed" class="chat-side">
+        <BoardChat v-bind="chatProps" v-model:draft="chatDraft" v-on="chatEvents" />
+      </aside>
+
+      <div class="play" :class="{ 'with-chat-side': chatSide, 'with-chat-sheet': chatSheet }">
         <div v-if="notFound" class="gone">
           <p>This table no longer exists.</p>
           <ion-button router-link="/tables" router-direction="back">Back to tables</ion-button>
@@ -239,6 +257,7 @@
             :busy="noting"
             @ask="askAbout"
             @explain="explainIndex = $event"
+            @chat="chat.askAbout($event)"
           />
 
           <!-- A finished board shows every hand on the table instead. -->
@@ -306,6 +325,7 @@
             :busy="noting"
             @ask="askAbout"
             @explain="explainIndex = $event"
+            @chat="chat.askAbout($event)"
           />
 
           <OfflineRefresh :table-id="tableId" :disabled="loading" @refresh="load()" />
@@ -328,6 +348,22 @@
         @explain="sendExplanation"
         @close="explainIndex = null"
       />
+      <!-- A phone's chat: a sheet over the lower half of the page, which
+           stays usable above it (and gets the room to scroll the bidding
+           box and the hand up out of the sheet's way). -->
+      <ion-modal
+        v-if="!chatWide"
+        class="chat-sheet"
+        :is-open="chatSheet"
+        :initial-breakpoint="0.5"
+        :breakpoints="[0, 0.5, 0.9]"
+        :backdrop-breakpoint="0.9"
+        @did-dismiss="chat.setOpen(false)"
+      >
+        <ion-content class="ion-padding">
+          <BoardChat v-if="chatSheet" v-bind="chatProps" v-model:draft="chatDraft" v-on="chatEvents" />
+        </ion-content>
+      </ion-modal>
       <BoardReviewModal
         :open="reviewOpen"
         :choices="reviewable"
@@ -349,14 +385,19 @@ import {
   IonRefresherContent,
   IonText,
   IonSpinner,
+  IonBadge,
+  IonIcon,
+  IonModal,
   onIonViewWillEnter,
   onIonViewWillLeave,
   useIonRouter,
 } from '@ionic/vue';
+import { chatbubblesOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
 import AuctionHistory from '@/components/AuctionHistory.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
 import BiddingBox from '@/components/BiddingBox.vue';
+import BoardChat from '@/components/BoardChat.vue';
 import BoardResultPanel from '@/components/BoardResultPanel.vue';
 import BoardReviewModal from '@/components/BoardReviewModal.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
@@ -373,13 +414,16 @@ import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
 import TrickArea from '@/components/TrickArea.vue';
 import { useForcedPlay } from '@/composables/useForcedPlay';
+import { useMediaQuery } from '@/composables/useMediaQuery';
 import { useStaleDeadline } from '@/composables/useStaleDeadline';
 import { useAuthStore } from '@/stores/auth';
+import { useChatStore } from '@/stores/chat';
 import { useGameStore } from '@/stores/game';
 import { useHistoryStore } from '@/stores/history';
 import { useTablesStore } from '@/stores/tables';
 import { seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
+import type { ChatTo } from '@/services/chat';
 import type { AlertDraft, Bid, Card, Claim, PlayedCard, Playing, Trick } from '@/services/game';
 import type { PublicUser } from '@/services/users';
 import { openQuestion } from '@/utils/alerts';
@@ -412,6 +456,7 @@ const auth = useAuthStore();
 const game = useGameStore();
 const tablesStore = useTablesStore();
 const history = useHistoryStore();
+const chat = useChatStore();
 
 const tableId = ref(0);
 const loading = ref(false);
@@ -447,6 +492,12 @@ const viewActive = ref(false);
 const reviewOpen = ref(false);
 // The last board seen to finish here, to review once the next is dealt.
 const seenBoard = ref<(SeenBoard & { tableId: number }) | null>(null);
+// The chat message being written (kept when it is refused) and whether it
+// is on its way.
+const chatDraft = ref('');
+const chatSending = ref(false);
+// Wide enough for the chat beside the table, even with the menu pinned.
+const chatWide = useMediaQuery('(min-width: 1100px)');
 
 const me = computed(() => auth.user?.id ?? null);
 
@@ -766,6 +817,29 @@ const notice = computed(() =>
   turnNotice(playing.value, me.value, table.value, showStart.value),
 );
 
+// The chat is the board's: there is none before the first deal.
+const chatOn = computed(() => !!playing.value?.playing_id);
+const chatSide = computed(() => chatOn.value && chatWide.value && chat.open);
+const chatSheet = computed(() => chatOn.value && !chatWide.value && chat.open);
+
+const chatAria = computed(() => (chat.unread > 0 ? `Chat, ${chat.unread} new` : 'Chat'));
+
+const chatProps = computed(() => ({
+  messages: chat.tableId === tableId.value ? chat.messages : [],
+  players: players.value,
+  auction: playing.value?.auction ?? null,
+  phase: playing.value?.phase ?? null,
+  me: me.value,
+  about: chat.about,
+  busy: chatSending.value,
+}));
+
+const chatEvents = {
+  send: sendChat,
+  close: () => chat.setOpen(false),
+  'clear-about': () => (chat.about = null),
+};
+
 const headerTitle = computed(() => {
   const board = playing.value?.board;
   const name = table.value?.name || (tableId.value ? `Table #${tableId.value}` : 'Table');
@@ -796,7 +870,21 @@ onIonViewWillLeave(() => {
   viewActive.value = false;
   reviewOpen.value = false;
   explainIndex.value = null;
+  chat.setOpen(false);
 });
+
+// The chat follows the board on show: read on entering the table, emptied
+// for a new board, read again once a board is finished (its every message
+// is public then).
+watch(
+  () => [tableId.value, playing.value?.playing_id ?? null, playing.value?.phase ?? null] as const,
+  ([id, playingId, phase]) => {
+    if (id && playing.value) {
+      chat.follow(id, playingId, phase);
+    }
+  },
+  { immediate: true },
+);
 
 // A new board: nothing typed for the last one's calls carries over. Set
 // up before the question's watch below, which may open the sheet for it.
@@ -1155,6 +1243,29 @@ async function refused(e: unknown, fallback: string, on422?: () => Promise<void>
   }
 }
 
+// Our chat message, to `to`, about the call attached if any. Refused (409
+// to the table mid-board, 422, 429 for too many at once…), it is said in a
+// toast and the text stays, to send again.
+async function sendChat(to: ChatTo) {
+  const body = chatDraft.value.trim();
+  if (chatSending.value || body === '') {
+    return;
+  }
+  chatSending.value = true;
+  try {
+    await chat.send(body, to);
+    chatDraft.value = '';
+  } catch (e) {
+    if (statusOf(e) === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+    } else {
+      showToast(errorMessage(e, 'Your message could not be sent. Please try again.'), 'danger', 'top');
+    }
+  } finally {
+    chatSending.value = false;
+  }
+}
+
 // Claim `tricks` of the remaining tricks (0 concedes). Refused like a card.
 async function sendClaim(tricks: number) {
   if (claiming.value) {
@@ -1302,6 +1413,39 @@ async function refresh(event: CustomEvent) {
 .play {
   max-width: 520px;
   margin: 0 auto;
+}
+
+/* Room for the chat beside the table on a wide screen. */
+.play.with-chat-side {
+  margin-right: 340px;
+}
+
+/* Room to scroll the bidding box and the hand above a phone's chat sheet. */
+.play.with-chat-sheet {
+  padding-bottom: 50vh;
+}
+
+.chat-side {
+  top: 8px;
+  right: 8px;
+  bottom: 8px;
+  width: 320px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid var(--ion-color-step-150, #e0e0e0);
+  border-radius: 12px;
+  background: var(--ion-background-color, #fff);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.chat-badge {
+  margin-left: 4px;
+}
+
+@media (max-width: 575px) {
+  .chat-toggle-label {
+    display: none;
+  }
 }
 
 .compare {

@@ -256,6 +256,28 @@ describe('boardText', () => {
     expect(text.endsWith('\n')).toBe(true)
   })
 
+  test('the board’s chat follows the auction, with the call each message is about', () => {
+    const at = (h: number, m: number) => new Date(2026, 9, 5, h, m).toISOString()
+    const text = boardText({
+      ...played(),
+      messages: [
+        { id: 1, seat: 'E', user_id: 2, to: 'opponents', call_index: 2, body: 'What is 2♠?', created_at: at(12, 5) },
+        { id: 2, seat: 'S', user_id: 3, to: 'opponents', call_index: 2, body: 'Natural, 6-9.', created_at: at(12, 6) },
+        { id: 3, seat: 'N', user_id: 1, to: 'table', call_index: null, body: 'Well played', created_at: 'later' },
+      ],
+    })
+
+    expect(text).toContain(
+      [
+        'Chat',
+        '12:05 East (bo) to opponents, about 2♠: What is 2♠?',
+        '12:06 South (cy) to opponents, about 2♠: Natural, 6-9.',
+        'North (ann) to table: Well played',
+      ].join('\n'),
+    )
+    expect(boardText(played())).not.toContain('Chat')
+  })
+
   test('a claimed board: the unfinished trick, then where the claim came', () => {
     const text = boardText(claimed())
 

@@ -14,6 +14,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useTablesStore } from '@/stores/tables'
 import { showToast } from '@/utils/toast'
 
+// The board chat has its own specs: its read never answers here.
+vi.mock('@/services/chat', () => ({ getMessages: () => new Promise(() => {}), sendMessage: () => new Promise(() => {}) }))
 vi.mock('@/services/game', () => ({ getPlaying: vi.fn(), getBids: vi.fn(), makeCall: vi.fn() }))
 vi.mock('@/services/history', () => ({ getSet: vi.fn() }))
 vi.mock('@/services/tables', async (importOriginal) => ({

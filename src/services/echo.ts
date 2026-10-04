@@ -4,6 +4,7 @@ import type { ChannelAuthorizationCallback } from 'pusher-js';
 import http from './http';
 import { clearSubscribed, resetLiveStatus, setConnection, setSubscribed } from './liveStatus';
 import type { Ban } from './auth';
+import type { BoardMessageSentEvent } from './chat';
 import type {
   CallAlertedEvent,
   CallQuestionedEvent,
@@ -105,9 +106,10 @@ export function listenToTable(
 // (`HandDealt`) each time a board is dealt at their table, a robot
 // declarer's cards (`DeclarerHandShown`) when they, its dummy, are to play
 // them, an opponent's alert (`CallAlerted`), which their partner mustn't see,
-// a question about one of their own calls (`CallQuestioned`), and
-// `UserBanned` when an admin bans them (their session is already gone by
-// then).
+// a question about one of their own calls (`CallQuestioned`), a board chat
+// message they may read (`BoardMessageSent`, never on the table channel,
+// which partner hears too), and `UserBanned` when an admin bans them (their
+// session is already gone by then).
 export function listenToUser(
   userId: number,
   onHandDealt: (event: HandDealtEvent) => void,
@@ -115,6 +117,7 @@ export function listenToUser(
   onDeclarerHand: (event: DeclarerHandShownEvent) => void,
   onCallAlerted: (event: CallAlertedEvent) => void,
   onCallQuestioned: (event: CallQuestionedEvent) => void,
+  onBoardMessage: (event: BoardMessageSentEvent) => void,
 ) {
   getEcho()
     .private(`App.Models.User.${userId}`)
@@ -122,6 +125,7 @@ export function listenToUser(
     .listen('DeclarerHandShown', onDeclarerHand)
     .listen('CallAlerted', onCallAlerted)
     .listen('CallQuestioned', onCallQuestioned)
+    .listen('BoardMessageSent', onBoardMessage)
     .listen('UserBanned', onBanned);
 }
 

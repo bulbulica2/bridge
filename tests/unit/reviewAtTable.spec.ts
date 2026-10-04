@@ -15,6 +15,8 @@ import { useGameStore } from '@/stores/game'
 // The play page's review modal (#97): which boards it offers, that it opens
 // without leaving the table, tells us when it is our turn and holds the
 // forced card back. The modal itself has its own spec (boardReview.spec.ts).
+// The board chat has its own specs: its read never answers here.
+vi.mock('@/services/chat', () => ({ getMessages: () => new Promise(() => {}), sendMessage: () => new Promise(() => {}) }))
 vi.mock('@/services/game', () => ({
   getPlaying: vi.fn(),
   getBids: vi.fn(),

@@ -10,3 +10,6 @@ export const TABLE_NAME_MAX = 50;
 // A call's alert `explanation` (POST /tables/{id}/calls, PUT
 // /tables/{id}/calls/{index}/explanation): `CallAlerted` carries it.
 export const ALERT_MAX = 200;
+// A board chat message's `body` (POST /tables/{id}/messages):
+// `BoardMessageSent` carries it.
+export const CHAT_MAX = 500;

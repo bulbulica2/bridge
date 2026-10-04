@@ -4,14 +4,19 @@ import { handLeftOutline } from 'ionicons/icons';
 /**
  * A short bottom toast. It lives in the app's overlay layer, not in the page,
  * so it survives a navigation: present it after navigating and it shows on
- * the page the user lands on.
+ * the page the user lands on. `top` keeps it off the bidding box and the
+ * hand, for news that mustn't get in the way of a call or a card.
  */
-export async function showToast(message: string, color: 'success' | 'warning' | 'danger') {
+export async function showToast(
+  message: string,
+  color: 'success' | 'warning' | 'danger',
+  position: 'top' | 'bottom' = 'bottom',
+) {
   const toast = await toastController.create({
     message,
     duration: 4000,
     color,
-    position: 'bottom',
+    position,
   });
   await toast.present();
 }
