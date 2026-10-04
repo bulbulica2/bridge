@@ -2,7 +2,9 @@
   <!-- A claim waiting for its answers: what is claimed, who has agreed, and
        what the viewer can do about it. The claimer's cards lie face up at
        their seat on the table (BridgeTable's `claim`). A robot declarer's
-       dummy claims and answers for declarer's seat (`actsFor`). -->
+       dummy claims and answers for declarer's seat (`actsFor`). Silence
+       rejects it at `expires_at`: the clock counts down to it, and the
+       buttons go once it has run out (a late answer only gets a 409). -->
   <section class="claim" aria-live="polite" aria-label="Pending claim">
     <p class="claim-text">{{ claimText(claim, remaining, mySeat, ownSeat) }}</p>
     <ul class="claim-answers">
@@ -19,19 +21,21 @@
     </ul>
 
     <div v-if="action === 'answer'" class="claim-buttons">
-      <ion-button class="accept" color="success" :disabled="busy" @click="emit('accept')">
+      <ion-button class="accept" color="success" :disabled="busy || expired" @click="emit('accept')">
         Accept
       </ion-button>
-      <ion-button class="reject" color="danger" fill="outline" :disabled="busy" @click="emit('reject')">
+      <ion-button class="reject" color="danger" fill="outline" :disabled="busy || expired" @click="emit('reject')">
         Reject
       </ion-button>
     </div>
     <div v-else-if="action === 'withdraw'" class="claim-buttons">
-      <ion-button class="withdraw" fill="outline" color="medium" :disabled="busy" @click="emit('withdraw')">
+      <ion-button class="withdraw" fill="outline" color="medium" :disabled="busy || expired" @click="emit('withdraw')">
         Withdraw
       </ion-button>
     </div>
-    <p class="claim-detail">
+    <!-- Ticks every second: kept out of the live region's announcements. -->
+    <p v-if="clockText" class="claim-detail claim-clock" aria-live="off">{{ clockText }}</p>
+    <p v-else class="claim-detail">
       Play stops until {{ waitingFor.length === 0 ? 'the claim is settled' : waitingText }}.
     </p>
   </section>
@@ -40,10 +44,19 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { IonButton } from '@ionic/vue';
+import { useNow } from '@/composables/useNow';
 import type { Claim, PublicPlaying } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
-import { claimAction, claimAnswerers, claimText, claimWaitingFor, tricksLeft } from '@/utils/claim';
+import {
+  claimAction,
+  claimAnswerers,
+  claimClockText,
+  claimExpired,
+  claimText,
+  claimWaitingFor,
+  tricksLeft,
+} from '@/utils/claim';
 
 const props = withDefaults(
   defineProps<{
@@ -67,6 +80,11 @@ const answerers = computed(() => claimAnswerers(props.state));
 const waitingFor = computed(() => claimWaitingFor(props.state));
 const ownSeat = computed(() => props.actsFor ?? props.mySeat);
 const action = computed(() => claimAction(props.state, ownSeat.value));
+
+// The clock only redraws the countdown; the deadline is the claim's own.
+const now = useNow(() => !!claim.value.expires_at);
+const expired = computed(() => claimExpired(claim.value, now.value));
+const clockText = computed(() => claimClockText(props.state, ownSeat.value, now.value));
 
 function isMine(seat: Seat): boolean {
   return seat === props.mySeat || seat === ownSeat.value;
@@ -125,6 +143,11 @@ const waitingText = computed(() => {
   margin-top: 6px;
   font-size: 0.8rem;
   color: var(--ion-color-medium);
+}
+
+.claim .claim-clock {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .sr-only {

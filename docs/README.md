@@ -33,7 +33,10 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/61-review-board-at-table` (after
+> branch `bulbulica2/60-claim-timeout` (after
+> #96, a claim nobody answers within 10 s is off, with a countdown on
+> everyone's screen; see
+> [`SCREENS.md`](SCREENS.md#play--tablesidplay); after
 > #97, the play page reviews and exports the table's finished boards in a
 > sheet while the game goes on; see
 > [`SCREENS.md`](SCREENS.md#play--tablesidplay); after

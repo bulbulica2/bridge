@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/61-review-board-at-table`._
+_Status as of branch `bulbulica2/60-claim-timeout`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -413,6 +413,15 @@ works ([RUNNING.md](RUNNING.md) says the worker must run).
   earlier phase, fewer accepts of the same claim). A claim appearing or
   going away always counts as newer: a rejected or withdrawn claim leaves
   the cards as they were, so there is nothing else to order it by.
+- A claim nobody finishes answering is rejected by the backend after 10 s
+  (silence means no, bb#96): the claim carries its deadline as
+  `expires_at`, and `PlayingUpdated` clears it when it runs out. The play
+  page counts down from `expires_at` (never from when the claim arrived),
+  and if the claim is still on screen 2 s after the deadline it rereads
+  the game itself (`useStaleClaim` → `game.load()`), since that update may
+  have been lost (bb#95). One reread per deadline: a backend that still
+  answers with the claim (its queue worker stopped) is left to the next
+  update or a Refresh.
 
 **Heartbeat.** The backend frees the seats of players who went quiet. While
 the `tables` store watches a table it sends `POST /tables/{id}/heartbeat`
@@ -476,8 +485,8 @@ arrives, and the app falls back to what each request returns.
 | `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s); the winner is ringed but never drawn over a neighbour's rank and suit. `spread` (the pop-up) parts the four cards and tags each with its seat or **You** |
 | `LastTrickPopover` | the **Last trick** button under the trick in progress and its pop-up with the last trick's cards (a spread `TrickArea`, shifted sideways if centring it on the button would cross the screen's edge); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it |
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat; given `rows`, every suit column keeps room for that many cards |
-| `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest**; `forSeat` names a robot declarer's seat claimed for |
-| `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw**; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
+| `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest**; says the others have 10 s to answer and that no answer counts as no; `forSeat` names a robot declarer's seat claimed for |
+| `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw**, and the countdown to its `expires_at` ("Answer within 0:07", "Waiting for East and West · 0:07", ticked by `useNow`); the buttons disable at 0, so a late tap can't earn a 409; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
 | `BoardResultPanel`, `NextBoardBox` | the score once a board is finished with the set's running score (and, in a review, its matchpoints when already read), and who is ready for the next |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, a forfeit's reason, each board with your side's score and matchpoints (opening its review), and the totals |
@@ -509,7 +518,8 @@ follow-suit hint still dims the other cards, and they tap the one left.
 Pure logic lives in `src/utils/`: `cards.ts` (sorting, rank labels, seat
 rotation, vulnerability), `auction.ts` (call legality hints and labels),
 `play.ts` (follow-suit hint, the forced card and who it plays itself for, whose hand you play, trick layout), `claim.ts`
-(who may claim, who still has to answer, the claim's wording), `result.ts`
+(who may claim, who still has to answer, the claim's wording, its countdown
+and how it ended: `claimClockText`, `claimExpired`, `claimOffText`), `result.ts`
 (the score from your side), `seatMove.ts` (wording for leaving or moving by
 game phase and by what is at stake in the set, and whether only robots
 would be left), `away.ts` (who is away, the countdown's wording, what

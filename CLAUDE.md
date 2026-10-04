@@ -353,7 +353,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   `POST /tables/{id}/claim/response` `{accept}` (one reject cancels it) and
   the claimer may `DELETE` it. The game store's `claim`,
   `respondToClaim` and `withdrawClaim` go through the same `act`/`isBehind`
-  path as `call`/`play`. While `claim` (`{seat, tricks, hand, accepted}`)
+  path as `call`/`play`. While `claim` (`{seat, tricks, hand, accepted, expires_at}`)
   is non-null no card is played, so `handToPlay()` returns null; the
   claimer's `hand` lies face up at their seat (`BridgeTable`'s `claim`
   prop). `isBehind` orders answers to one claim by `accepted.length`, but
@@ -361,11 +361,22 @@ The user's standing rule (#91): **no task may leave code coverage under
   or withdrawal leaves the cards unchanged. `src/utils/claim.ts` holds the
   hints (`canClaim`, `claimAction`: withdraw/answer/null,
   `claimWaitingFor`, `claimText`); `ClaimSheet.vue` is the sheet (one button per number, then
-  "Claim N tricks"; Concede sends 0),
+  "Claim N tricks"; Concede sends 0; a line quotes `CLAIM_SECONDS`),
   `ClaimPanel.vue` the pending-claim banner with its buttons. A claim
-  going away mid-play toasts; the last accept lands in `finished` with
-  `result.claimed`, which `resultSummary`/`BoardResultPanel` word as
-  "by claim".
+  going away mid-play toasts (`claimOffText`); the last accept lands in
+  `finished` with `result.claimed`, which `resultSummary`/`BoardResultPanel`
+  word as "by claim". **Silence means no** (#96, bb#96): the backend
+  rejects a claim not fully accepted by `claim.expires_at` (10 s,
+  `BRIDGE_CLAIM_SECONDS`) and clears it with `PlayingUpdated`.
+  `ClaimPanel` counts down from `expires_at` (`useNow`;
+  `claimClockText`: "Answer within 0:07" / "Waiting for East and West ·
+  0:07" / "Time is up…", reusing `secondsLeft`/`formatClock` from
+  `away.ts`) and disables its buttons at 0 (`claimExpired`); a claim gone
+  at or after its deadline toasts "Nobody answered: the claim is off, play
+  on.". `src/composables/useStaleClaim.ts` rereads the game
+  (`game.load()`, errors ignored) if the claim is still shown 2 s after
+  `expires_at` (a lost update, bb#95), once per deadline and only while
+  the view is active. A claim with an empty `expires_at` gets no countdown.
 - **Board result and next board**: in `finished` the state carries `result`
   (`score_ns` is from N-S's side whichever side declared; a passed-out board
   has `score_ns: 0` and the rest null), `deal` (all four hands as dealt) and

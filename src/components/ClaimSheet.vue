@@ -20,6 +20,9 @@
           {{ forSeat ? `${SEAT_NAMES[forSeat]}'s hand` : 'Your hand' }} is shown to everyone while
           the others answer.
         </p>
+        <p class="claim-deadline">
+          The others have {{ CLAIM_SECONDS }} seconds to answer: no answer counts as no.
+        </p>
 
         <div class="trick-picks" role="group" aria-label="Tricks to claim">
           <ion-button
@@ -67,6 +70,7 @@ import { ref, watch } from 'vue';
 import { IonModal, IonContent, IonButton, IonSpinner } from '@ionic/vue';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
+import { CLAIM_SECONDS } from '@/utils/claim';
 
 const props = withDefaults(
   defineProps<{
@@ -111,9 +115,15 @@ watch(
 }
 
 .claim-help {
-  margin: 0 0 12px;
+  margin: 0 0 4px;
   font-size: 0.9rem;
   color: var(--ion-color-medium);
+}
+
+.claim-deadline {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 /* Up to 13 buttons wrap onto two or three rows on a phone. */
