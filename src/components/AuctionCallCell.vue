@@ -4,8 +4,9 @@
        hovering with a mouse, or a tap until a tap outside or Escape. While
        the board lasts, any opponent's call also pops up an Ask button (and
        Ask in the chat, to ask in one's own words), and a call of ours an
-       opponent asked about an Answer button. Any other call is just its
-       label. -->
+       opponent asked about an Answer button. Partner's alerts show only
+       once the auction is over (`bidding` hides them). Any other call is
+       just its label. -->
   <span
     v-if="interactive"
     ref="root"
@@ -17,7 +18,7 @@
       ref="button"
       type="button"
       class="call-button"
-      :class="{ alerted: !!call.alert, questioned: !!call.question }"
+      :class="{ alerted: !!alert, questioned: !!call.question }"
       :aria-label="buttonLabel"
       aria-haspopup="dialog"
       :aria-expanded="open"
@@ -25,7 +26,7 @@
       @click="toggle"
     >
       <CallLabel :bid="call.bid" />
-      <span v-if="call.alert" class="mark alert-mark" aria-hidden="true">!</span>
+      <span v-if="alert" class="mark alert-mark" aria-hidden="true">!</span>
       <span v-if="call.question" class="mark question-mark" aria-hidden="true">?</span>
     </button>
     <!-- Padded rather than offset, so the pointer crosses no gap on its way
@@ -42,8 +43,9 @@
     >
       <div class="call-box">
         <p class="call-title">{{ title }}</p>
-        <p v-if="call.alert" class="alert-text">
-          <template v-if="mine">You alerted: </template>{{ alertText(call.alert) }}
+        <p v-if="alert" class="alert-text">
+          <template v-if="mine">You alerted: </template>
+          <template v-else-if="partner">Partner alerted: </template>{{ alertText(alert) }}
         </p>
         <p v-else class="no-alert">Not alerted.</p>
         <p v-if="call.question" class="question-text">{{ questionLine }}</p>
@@ -86,7 +88,7 @@ import { usePopover } from '@/composables/usePopover';
 import type { AuctionCall } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES, callLabel, callName } from '@/utils/auction';
-import { alertText, isOpponent } from '@/utils/alerts';
+import { alertText, isOpponent, isPartner } from '@/utils/alerts';
 
 const props = withDefaults(
   defineProps<{
@@ -98,8 +100,10 @@ const props = withDefaults(
     live?: boolean;
     // A question or an answer is on its way.
     busy?: boolean;
+    // The auction is still on: partner's alert stays hidden, even if held.
+    bidding?: boolean;
   }>(),
-  { live: false, busy: false },
+  { live: false, busy: false, bidding: false },
 );
 
 const emit = defineEmits<{
@@ -113,11 +117,14 @@ const popupId = `call-${useId()}`;
 
 const mine = computed(() => props.mySeat !== null && props.call.seat === props.mySeat);
 const opponents = computed(() => isOpponent(props.call.seat, props.mySeat));
+const partner = computed(() => isPartner(props.call.seat, props.mySeat));
+// The alert the viewer may see: partner's only once the auction is over.
+const alert = computed(() => (props.bidding && partner.value ? null : props.call.alert ?? null));
 const canAsk = computed(() => props.live && opponents.value && !props.call.question);
 const canAnswer = computed(() => props.live && mine.value && !!props.call.question);
 const canChat = computed(() => props.live && opponents.value);
 const interactive = computed(
-  () => !!props.call.alert || (props.live && opponents.value) || canAnswer.value,
+  () => !!alert.value || (props.live && opponents.value) || canAnswer.value,
 );
 
 const title = computed(() =>
@@ -127,7 +134,7 @@ const title = computed(() =>
 );
 
 const buttonLabel = computed(() => {
-  const notes = [props.call.alert && 'alerted', props.call.question && 'asked about'];
+  const notes = [alert.value && 'alerted', props.call.question && 'asked about'];
   return [callName(props.call.bid), ...notes.filter(Boolean)].join(', ');
 });
 

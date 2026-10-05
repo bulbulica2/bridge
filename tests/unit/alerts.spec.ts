@@ -20,6 +20,7 @@ import {
   answerText,
   emptyBook,
   isOpponent,
+  isPartner,
   noteAlert,
   noteQuestion,
   openQuestion,
@@ -168,6 +169,31 @@ describe('alert helpers', () => {
     expect(isOpponent('N', 'S')).toBe(false)
     expect(isOpponent('S', 'S')).toBe(false)
     expect(isOpponent('E', null)).toBe(false)
+  })
+
+  test('partner sits across, never for somebody not seated', () => {
+    expect(isPartner('N', 'S')).toBe(true)
+    expect(isPartner('W', 'E')).toBe(true)
+    expect(isPartner('E', 'S')).toBe(false)
+    expect(isPartner('S', 'S')).toBe(false)
+    expect(isPartner('N', null)).toBe(false)
+  })
+
+  test("partner's alerts come with the play's state and stay", () => {
+    // During the auction partner's call has none for us.
+    let book = takeNotes(emptyBook(), state({ auction: noted('N 2C, E P, S 2D, W P') }))
+    expect(book.calls[0]).toEqual({ alert: null, question: null })
+
+    book = takeNotes(
+      book,
+      state({
+        phase: 'play',
+        auction: noted('N 2C, E P, S 2D, W P, N 2H, E P, S P, W P', { 0: { alert: { explanation: 'Strong' } } }),
+      }),
+    )
+    expect(book.calls[0]).toEqual({ alert: { explanation: 'Strong' }, question: null })
+    const shown = withNotes(publicState({ phase: 'play', auction: calls('N 2C, E P, S 2D, W P, N 2H, E P, S P, W P') }), book)
+    expect(shown.auction?.[0].alert).toEqual({ explanation: 'Strong' })
   })
 
   test('the book takes a state’s notes and lays them on a PlayingUpdated', () => {
@@ -376,6 +402,87 @@ describe('game store alerts', () => {
     expect(game.playing?.auction?.[1].question).toEqual({ asked_by: 'W' })
   })
 
+  // The auction just ended: 2♣ by North (partner), passed out round to 2♥.
+  const played = (overrides: Partial<Playing> = {}) =>
+    state({
+      phase: 'play',
+      turn: 'E',
+      acting_user_id: 2,
+      auction: noted('N 2C, E P, S 2D, W P, N 2H, E P, S P, W P'),
+      ...overrides,
+    })
+
+  test("AuctionAlertsShown lays partner's alerts on the board we hold", async () => {
+    const game = await loaded(played())
+
+    game.applyAuctionAlertsShown({
+      table_id: 5,
+      playing_id: 42,
+      alerts: [
+        { index: 0, explanation: 'Strong' },
+        { index: 4, explanation: null },
+      ],
+    })
+
+    expect(game.playing?.auction?.[0].alert).toEqual({ explanation: 'Strong' })
+    expect(game.playing?.auction?.[4].alert).toEqual({ explanation: null })
+    expect(game.playing?.auction?.[2].alert).toBeNull()
+    // PlayingUpdated carries none: they stay.
+    game.applyPlayingUpdate(5, publicState({ phase: 'play', turn: 'S', auction: calls('N 2C, E P, S 2D, W P, N 2H, E P, S P, W P') }))
+    expect(game.playing?.auction?.[0].alert).toEqual({ explanation: 'Strong' })
+    expect(showToast).not.toHaveBeenCalled()
+  })
+
+  test('AuctionAlertsShown for another table, an older or a newer board is dropped', async () => {
+    const game = await loaded(played())
+    const alerts = [{ index: 0, explanation: 'Strong' }]
+
+    game.applyAuctionAlertsShown({ table_id: 6, playing_id: 42, alerts })
+    game.applyAuctionAlertsShown({ table_id: 5, playing_id: 41, alerts })
+    game.applyAuctionAlertsShown({ table_id: 5, playing_id: 43, alerts })
+    expect(game.playing?.auction?.[0].alert).toBeNull()
+
+    // Nor is anything noted while no board is held.
+    game.clear()
+    game.tableId = 5
+    game.applyAuctionAlertsShown({ table_id: 5, playing_id: 42, alerts })
+    expect(game.playing).toBeNull()
+    vi.mocked(gameService.getPlaying).mockResolvedValue(played())
+    await game.load(5)
+    expect(game.playing?.auction?.[0].alert).toBeNull()
+  })
+
+  test("a reload in the play reads partner's alerts from the state", async () => {
+    const game = await loaded(
+      played({ auction: noted('N 2C, E P, S 2D, W P, N 2H, E P, S P, W P', { 0: { alert: { explanation: 'Strong' } } }) }),
+    )
+
+    expect(game.playing?.auction?.[0].alert).toEqual({ explanation: 'Strong' })
+  })
+
+  test("CallAlerted in the play may be partner's or our own answer: noted, never told back to us", async () => {
+    const game = await loaded(
+      played({ auction: noted('N 2C, E P, S 2D, W P, N 2H, E P, S P, W P', { 2: { question: { asked_by: 'W' } } }) }),
+    )
+
+    game.applyCallAlerted({ table_id: 5, playing_id: 42, index: 0, explanation: 'Strong' })
+    game.applyCallAlerted({ table_id: 5, playing_id: 42, index: 2, explanation: 'Waiting' })
+
+    expect(game.playing?.auction?.[0].alert).toEqual({ explanation: 'Strong' })
+    expect(game.playing?.auction?.[2]).toMatchObject({ alert: { explanation: 'Waiting' }, question: null })
+    expect(showToast).not.toHaveBeenCalled()
+  })
+
+  test("the user channel hands partner's alerts to the store", async () => {
+    useGameStore().watchUser(3)
+    const game = await loaded(played())
+    const onAlertsShown = vi.mocked(echo.listenToUser).mock.calls[0][7]
+
+    onAlertsShown({ table_id: 5, playing_id: 42, alerts: [{ index: 0, explanation: 'Strong' }] })
+
+    expect(game.playing?.auction?.[0].alert).toEqual({ explanation: 'Strong' })
+  })
+
   test('clearing forgets them', async () => {
     const game = await loaded(strong())
 
@@ -427,14 +534,14 @@ describe('AuctionHistory alerts', () => {
 
     await c.trigger('pointerenter', { pointerType: 'mouse' })
     expect(w.get('.call-popup').text()).toContain('2♣ by North')
-    expect(w.get('.alert-text').text()).toBe('Strong')
+    expect(w.get('.alert-text').text()).toBe('Partner alerted: Strong')
 
     await c.trigger('pointerleave', { pointerType: 'mouse' })
     expect(w.find('.call-popup').exists()).toBe(false)
   })
 
   test('a tap toggles it; Escape or a tap outside closes it', async () => {
-    const w = mountAuction(noted('N 2C', { 0: { alert: { explanation: null } } }))
+    const w = mountAuction(noted('N P, E 2C', { 1: { alert: { explanation: null } } }))
     const button = w.get('.call-button')
 
     await button.trigger('click')
@@ -461,7 +568,7 @@ describe('AuctionHistory alerts', () => {
 
     await w.get('.call-button').trigger('click')
 
-    expect(w.get('.alert-text').text()).toBe('<b>Strong</b>')
+    expect(w.get('.alert-text').text()).toBe('Partner alerted: <b>Strong</b>')
     expect(w.find('.alert-text b').exists()).toBe(false)
   })
 
@@ -472,6 +579,37 @@ describe('AuctionHistory alerts', () => {
 
     expect(w.get('.call-title').text()).toBe('Your 2♣')
     expect(w.get('.alert-text').text()).toBe('You alerted: Stayman')
+  })
+
+  test("during the auction partner's call shows no alert, even one held", () => {
+    const w = mountAuction(
+      noted('N 2C, E P, S 2D, W 2H', { 0: { alert: { explanation: 'Strong' } }, 3: { alert: { explanation: 'Majors' } } }),
+      { live: true, bidding: true },
+    )
+
+    // Partner's 2♣ is plain; West's 2♥ is alerted, East's pass askable.
+    expect(w.findAll('.call-button').map((b) => b.text())).toEqual(['Pass', '2♥!'])
+    expect(w.findAll('.alert-mark')).toHaveLength(1)
+  })
+
+  test("once the auction is over partner's alert shows, with no Ask", async () => {
+    const w = mountAuction(
+      noted('N 2C, E P, S 2D, W P, N 2H', { 0: { alert: { explanation: 'Strong' } }, 4: { alert: { explanation: null } } }),
+      { live: true },
+    )
+
+    const strong = cell(w, '2♣')
+    expect(strong.get('.call-button').classes()).toContain('alerted')
+    expect(strong.get('.call-button').attributes('aria-label')).toBe('2 clubs, alerted')
+    await strong.get('.call-button').trigger('click')
+    expect(w.get('.call-title').text()).toBe('2♣ by North')
+    expect(w.get('.alert-text').text()).toBe('Partner alerted: Strong')
+    expect(w.find('.popup-action.ask').exists()).toBe(false)
+    expect(w.find('.popup-action.ask-in-chat').exists()).toBe(false)
+    expect(w.find('.popup-action.answer').exists()).toBe(false)
+
+    await cell(w, '2♥').get('.call-button').trigger('click')
+    expect(cell(w, '2♥').get('.alert-text').text()).toBe('Partner alerted: Alerted, no explanation given.')
   })
 
   test("while the board is on, any opponent's call can be asked about", async () => {
@@ -792,5 +930,35 @@ describe('TablePlayPage alerts', () => {
     await w.get('.popup-action.ask').trigger('click')
     await flushPromises()
     expect(gameService.askAboutCall).toHaveBeenCalledWith(5, 1)
+  })
+
+  test("partner's alert held during the auction shows only once the play starts", async () => {
+    const auction = 'N 2C, E P, S 2D, W P, N 2H, E P, S P'
+    const w = await mountPage(state({ turn: 'W', acting_user_id: 4, auction: noted(auction) }))
+    const game = useGameStore()
+
+    // Held early (a late event), it stays hidden while the auction lasts.
+    game.applyCallAlerted({ table_id: 5, playing_id: 42, index: 0, explanation: 'Strong' })
+    await flushPromises()
+    expect(callButton(w, '2♣')).toBeUndefined()
+
+    game.applyPlayingUpdate(
+      5,
+      publicState({
+        phase: 'play',
+        turn: 'E',
+        acting_user_id: 2,
+        auction: calls(auction + ', W P'),
+        contract: { bid: bid('2H'), doubled: 0, declarer: 'N', dummy: 'S' },
+        tricks: [],
+        current_trick: [],
+        tricks_won: { ns: 0, ew: 0 },
+      }),
+    )
+    await flushPromises()
+
+    expect(callButton(w, '2♣').classes()).toContain('alerted')
+    await callButton(w, '2♣').trigger('click')
+    expect(w.get('.alert-text').text()).toBe('Partner alerted: Strong')
   })
 })

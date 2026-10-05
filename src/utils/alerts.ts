@@ -4,8 +4,9 @@ import type { AuctionCall, CallAlert, CallQuestion, PublicPlaying } from '@/serv
 import { SEAT_NAMES, callLabel } from '@/utils/auction';
 
 // Alerts (bridge_backend docs/API.md, Alerts; GAME-RULES.md §4): a bidder
-// marks their own call for the opponents, never for partner, and the
-// opponents may ask about any call of the other side until the board is over.
+// marks their own call for the opponents, never for partner while the
+// auction lasts (partner sees them once it is over), and the opponents may
+// ask about any call of the other side until the board is over.
 
 // What an alert with nothing written says.
 export const NO_EXPLANATION = 'Alerted, no explanation given.';
@@ -18,6 +19,11 @@ export function alertText(alert: CallAlert): string {
 // Is `seat` on the other side from `mySeat`? Never for a viewer not seated.
 export function isOpponent(seat: Seat, mySeat: Seat | null): boolean {
   return mySeat !== null && SEATS.indexOf(seat) % 2 !== SEATS.indexOf(mySeat) % 2;
+}
+
+// Is `seat` the partner of `mySeat`? Never for a viewer not seated.
+export function isPartner(seat: Seat, mySeat: Seat | null): boolean {
+  return mySeat !== null && seat !== mySeat && !isOpponent(seat, mySeat);
 }
 
 // The alert and open question known about one call of the board.
@@ -48,7 +54,8 @@ function callsFor(book: AlertBook, playingId: number): Record<number, CallNote> 
 }
 
 // Take the notes a state answered over HTTP carries into the book: it has
-// every alert the viewer may see and the open questions. An alert never goes
+// every alert the viewer may see (partner's too once the auction is over)
+// and the open questions. An alert never goes
 // away, so a known one stays when the state has none on that call; a new
 // board starts a new book.
 export function takeNotes(book: AlertBook, state: PublicPlaying): AlertBook {

@@ -66,8 +66,10 @@ export interface CallQuestion {
 
 // `alert` and `question` are per viewer and never on the table channel: the
 // caller's own state (GET /tables/{id}/playing and the action answers) has
-// them on the opponents' calls and their own, null on partner's (seeing
-// those would be unauthorised information). `PlayingUpdated` leaves both out,
+// them on the opponents' calls and their own, null on partner's during the
+// auction (seeing those would be unauthorised information). Once the auction
+// is over every call's `alert` is there, partner's too; `question` stays
+// null on partner's calls. `PlayingUpdated` leaves both out,
 // so the game store keeps the known ones. A review (GET /playings/{id}) has
 // every call's `alert`, public once the board is over, and no `question`.
 export interface AuctionCall {
@@ -264,12 +266,23 @@ export interface DeclarerHandShownEvent {
 
 // `CallAlerted` on the user's own channel: an opponent alerted their call at
 // `index` of the auction, or explained it (an answer to a question, or a
-// fix). Never sent to the bidder's partner.
+// fix). Never sent to the bidder's partner during the auction; an answer
+// given during the play goes to all four, partner and the bidder included.
 export interface CallAlertedEvent {
   table_id: number;
   playing_id: number;
   index: number;
   explanation: string | null;
+}
+
+// `AuctionAlertsShown` on the user's own channel, once the auction is over:
+// partner's alerts, which the user couldn't see while it lasted, by the
+// call's `index` in the auction. Sent only to a human whose partner alerted
+// something (bridge_backend docs/API.md, Event AuctionAlertsShown).
+export interface AuctionAlertsShownEvent {
+  table_id: number;
+  playing_id: number;
+  alerts: { index: number; explanation: string | null }[];
 }
 
 // `CallQuestioned` on the user's own channel: the opponent at `asked_by`

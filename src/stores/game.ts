@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import * as gameService from '@/services/game';
 import type {
   AlertDraft,
+  AuctionAlertsShownEvent,
   Bid,
   CallAlertedEvent,
   CallQuestionedEvent,
@@ -144,7 +145,8 @@ export const useGameStore = defineStore('game', () => {
   // The alerts and open questions we know of on the board we hold, by call
   // index: `PlayingUpdated` carries none, so they are kept here and laid
   // back on every state we show. Our HTTP answers and the user channel's
-  // `CallAlerted`/`CallQuestioned` fill it; a new board starts it again.
+  // `CallAlerted`/`CallQuestioned`/`AuctionAlertsShown` fill it; a new board
+  // starts it again.
   let alerts: AlertBook = emptyBook();
   // When each question about one of our calls was last told, by
   // `playing:index:asker`.
@@ -429,8 +431,9 @@ export const useGameStore = defineStore('game', () => {
   }
 
   // An opponent alerted or explained one of their calls (`CallAlerted`, on
-  // our own channel): into the book, and onto the table if it is the board
-  // we hold. The answer to a question we (or partner) asked is also told.
+  // our own channel; in the play, anyone's answer, partner's or our own
+  // too): into the book, and onto the table if it is the board we hold. The
+  // answer to a question we (or partner) asked is also told, never our own.
   function applyCallAlerted(event: CallAlertedEvent) {
     if (tableId.value !== event.table_id) {
       return;
@@ -442,9 +445,24 @@ export const useGameStore = defineStore('game', () => {
     if (current) {
       playing.value = withNotes(current, alerts);
     }
-    if (call?.question) {
+    if (call?.question && call.seat !== current?.my_seat) {
       showToast(answerText(call, { explanation: event.explanation }), 'success');
     }
+  }
+
+  // The auction is over and partner had alerted some of their calls
+  // (`AuctionAlertsShown`): those alerts are ours to see now. Only for the
+  // board we hold: another table's or another board's is dropped (a later
+  // load reads them from the state).
+  function applyAuctionAlertsShown(event: AuctionAlertsShownEvent) {
+    const current = playing.value;
+    if (tableId.value !== event.table_id || current?.playing_id !== event.playing_id) {
+      return;
+    }
+    for (const alert of event.alerts) {
+      alerts = noteAlert(alerts, event.playing_id, alert.index, alert.explanation);
+    }
+    playing.value = withNotes(current, alerts);
   }
 
   // An opponent asks what one of our calls means (`CallQuestioned`): said
@@ -524,7 +542,8 @@ export const useGameStore = defineStore('game', () => {
   // Follow the user's own channel from login to logout: a board can be dealt
   // while they look at any page, and its HandDealt is sent only once. The
   // channel also brings DeclarerHandShown, and UserBanned, which the auth
-  // store handles, the opponents' alerts and questions, and the board chat.
+  // store handles, the opponents' alerts and questions, the board chat, and
+  // partner's alerts once the auction is over.
   function watchUser(userId: number) {
     if (watchedUserId.value === userId) {
       return;
@@ -539,6 +558,7 @@ export const useGameStore = defineStore('game', () => {
       applyCallAlerted,
       applyCallQuestioned,
       applyBoardMessage,
+      applyAuctionAlertsShown,
     );
   }
 
@@ -585,6 +605,7 @@ export const useGameStore = defineStore('game', () => {
     applyCallAlerted,
     applyCallQuestioned,
     applyBoardMessage,
+    applyAuctionAlertsShown,
     applyTableUpdate,
     clear,
     watchUser,
