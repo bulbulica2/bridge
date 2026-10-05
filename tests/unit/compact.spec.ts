@@ -41,6 +41,7 @@ function waiting(): PublicPlaying {
     tricks_won: null,
     dummy_hand: null,
     claim: null,
+    claim_locked: false,
     result: null,
     deal: null,
     ready: null,
@@ -105,6 +106,11 @@ function inPlay(): PublicPlaying {
   }
 }
 
+// East's claim was refused: nobody claims until the next card (bb#115).
+function locked(): PublicPlaying {
+  return { ...inPlay(), claim: null, claim_locked: true }
+}
+
 function finished(): PublicPlaying {
   const deal = {} as Record<Seat, Card[]>
   ;(['N', 'E', 'S', 'W'] as Seat[]).forEach((seat, i) => {
@@ -146,6 +152,7 @@ describe('expandPlaying', () => {
   test.each([
     ['waiting', waiting],
     ['in play, with a claim pending', inPlay],
+    ['in play, claims locked after a refused one', locked],
     ['finished by claim', finished],
   ])('gives back the HTTP state exactly: %s', (_, state) => {
     expect(expandPlaying(compactOf(state()), CARDS, BIDS)).toEqual(state())
@@ -186,6 +193,11 @@ describe('expandPlaying', () => {
     ])
     expect(state.current_trick?.map((p) => p.seat)).toEqual(['E', 'S', 'W'])
     expect(state.dummy_hand).toEqual([c(52), c(50)])
+  })
+
+  test('carries claim_locked as it came', () => {
+    expect(expandPlaying(compactOf(locked()), CARDS, BIDS).claim_locked).toBe(true)
+    expect(expandPlaying(compactOf(inPlay()), CARDS, BIDS).claim_locked).toBe(false)
   })
 
   test('a trick nobody has led to yet is empty', () => {

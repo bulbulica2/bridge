@@ -33,7 +33,10 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/73-double-dummy` (after
+> branch `bulbulica2/74-claim-answers-and-lock` (after
+> #120, both players who must answer a claim get Accept / Reject at once,
+> and a refused claim (rejected, withdrawn or expired) keeps Claim
+> disabled for everyone until the next card; after
 > #119, a finished board's double dummy table and opening-lead analysis
 > on the review, the table on the results page and one line under the
 > result at the table; after

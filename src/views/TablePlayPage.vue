@@ -296,17 +296,21 @@
             </div>
           </section>
 
-          <!-- Ending the play early: any player but dummy, while no claim is pending. -->
+          <!-- Ending the play early: any player but dummy, while no claim is
+               pending. After a refused claim, nobody claims until the next
+               card: the button stays, disabled, with a note. -->
           <ion-button
-            v-if="mayClaim"
+            v-if="mayClaim || claimBlocked"
             expand="block"
             fill="outline"
             class="claim-button"
-            :disabled="sendingCard !== null || claiming"
-            @click="claimOpen = true"
+            :class="{ 'is-locked': claimBlocked }"
+            :disabled="claimBlocked || sendingCard !== null || claiming"
+            @click="claimOpen = mayClaim"
           >
             Claim
           </ion-button>
+          <p v-if="claimBlocked" class="claim-locked-note">{{ CLAIM_LOCKED_TEXT }}</p>
 
           <template v-if="canBid">
             <BiddingBox
@@ -447,7 +451,7 @@ import type { PublicUser, SearchedUser } from '@/services/users';
 import { openQuestion } from '@/utils/alerts';
 import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
 import { SUIT_NAMES, SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
-import { canClaim, claimOffText, claimSeatOf, tricksLeft } from '@/utils/claim';
+import { CLAIM_LOCKED_TEXT, canClaim, claimLocked, claimOffText, claimSeatOf, tricksLeft } from '@/utils/claim';
 import {
   autoPlaysForced,
   cardsToPlay,
@@ -590,8 +594,10 @@ const pendingClaim = computed(() => {
 });
 
 // The Claim button: any player but dummy (unless dummy plays for a robot
-// declarer), while no claim is pending.
+// declarer), while no claim is pending and none was refused since the last
+// card. `claimBlocked`: refused, so no claim until the next card (bb#115).
 const mayClaim = computed(() => !!playing.value && canClaim(playing.value, claimSeat.value));
+const claimBlocked = computed(() => !!playing.value && claimLocked(playing.value, claimSeat.value));
 
 // Dummy's cards lie face up from the opening lead to the last trick.
 const dummy = computed(() => {
@@ -1763,5 +1769,16 @@ async function refresh(event: CustomEvent) {
 
 .claim-button {
   margin: 0 0 16px;
+}
+
+.claim-button.is-locked {
+  margin-bottom: 4px;
+}
+
+.claim-locked-note {
+  margin: 0 0 16px;
+  font-size: 0.85rem;
+  text-align: center;
+  color: var(--ion-color-medium);
 }
 </style>

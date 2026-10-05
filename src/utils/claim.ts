@@ -29,9 +29,24 @@ export function claimSeatOf(state: Playing): Seat | null {
 }
 
 // Whether `seat` may claim now: any player but dummy, during the play, while
-// no other claim is pending and tricks are left. A robot declarer's dummy
-// claims as declarer (claimSeatOf).
+// no other claim is pending, tricks are left and no claim was refused since
+// the last card (`claim_locked`, bb#115). A robot declarer's dummy claims as
+// declarer (claimSeatOf).
 export function canClaim(state: PublicPlaying, seat: Seat | null): boolean {
+  return mayClaimButForLock(state, seat) && !state.claim_locked;
+}
+
+// `seat` would be free to claim but for a claim refused (rejected, expired
+// or withdrawn) since the last card: nobody claims until the next card is
+// played, which clears `claim_locked` by itself.
+export function claimLocked(state: PublicPlaying, seat: Seat | null): boolean {
+  return !!state.claim_locked && mayClaimButForLock(state, seat);
+}
+
+// The note under the disabled Claim button while claims are locked.
+export const CLAIM_LOCKED_TEXT = 'The claim was refused: play a card before claiming again.';
+
+function mayClaimButForLock(state: PublicPlaying, seat: Seat | null): boolean {
   return (
     state.phase === 'play' &&
     !!state.contract &&
@@ -129,9 +144,11 @@ export function claimClockText(state: PublicPlaying, seat: Seat | null, now: num
 }
 
 // The toast for a claim going away mid-play. Gone at or after its deadline,
-// silence rejected it; before, somebody rejected or withdrew it.
+// silence rejected it; before, somebody rejected or withdrew it. Either way
+// claims are locked until the next card (`claim_locked`).
 export function claimOffText(claim: Claim, now: number): string {
-  return claimExpired(claim, now)
-    ? 'Nobody answered: the claim is off, play on.'
-    : `${SEAT_NAMES[claim.seat]}'s claim is off: play goes on.`;
+  const off = claimExpired(claim, now)
+    ? 'Nobody answered: the claim is off.'
+    : `${SEAT_NAMES[claim.seat]}'s claim is off.`;
+  return `${off} Play on: no claim until the next card.`;
 }
