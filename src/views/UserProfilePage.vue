@@ -40,6 +40,9 @@
             <p v-else class="profile-empty">No description yet.</p>
           </div>
 
+          <!-- Your own read GET /api/user/stats; nothing for a robot. -->
+          <PlayerStats v-if="!profile.is_robot" ref="stats" :user-id="historyOwner" />
+
           <!-- Admins only: GET /users/{id} gives them the ban in force. -->
           <div v-if="profile.ban" class="card ban-card">
             <p class="ban-until">Banned until {{ banDate(profile.ban.until) }}</p>
@@ -107,6 +110,7 @@ import AdminBadge from '@/components/AdminBadge.vue';
 import AppHeader from '@/components/AppHeader.vue';
 import BanUserForm from '@/components/BanUserForm.vue';
 import HistoryList from '@/components/HistoryList.vue';
+import PlayerStats from '@/components/PlayerStats.vue';
 import { useUsersStore } from '@/stores/users';
 import { useAuthStore } from '@/stores/auth';
 import { banDate, canBan } from '@/utils/ban';
@@ -131,6 +135,7 @@ const isMe = computed(() => !!userId.value && auth.user?.id === userId.value);
 // Your own profile shares the "My boards" list (null); anyone else's is theirs.
 const historyOwner = computed(() => (isMe.value ? null : userId.value));
 const history = ref<InstanceType<typeof HistoryList> | null>(null);
+const stats = ref<InstanceType<typeof PlayerStats> | null>(null);
 
 // Ionic keeps the page alive, so read the param on every entry rather than at
 // setup time — opening another player must not reuse the old id.
@@ -148,15 +153,15 @@ onIonViewWillEnter(() => {
   load();
 });
 
-// The profile, then (once it is up and the list follows the new id) the
-// boards they played.
+// The profile, then (once it is up and the list follows the new id) their
+// stats and the boards they played. Each says its own failures.
 async function load() {
   loading.value = true;
   loadError.value = '';
   try {
     await store.load(userId.value);
     await nextTick();
-    await history.value?.load();
+    await Promise.all([stats.value?.load(), history.value?.load()]);
   } catch (e) {
     // A 401 here means the session expired after the router guard let us in.
     if (statusOf(e) === 401) {

@@ -86,3 +86,50 @@ export async function liftBan(id: number): Promise<UserBan> {
   const { data } = await http.delete<ApiResponse<UserBan>>(`/users/${id}/ban`);
   return data.data;
 }
+
+// Why a robot took a player's seat mid-set (`SetReplacement.reason`), plus
+// `left`: a set that ended abandoned as they left, with no robot to step in.
+export type AbandonReason = 'turn_timeout' | 'away' | 'moved' | 'kicked' | 'left';
+
+// How a user plays (bridge_backend docs/API.md, GET /users/{user}/stats),
+// worked out on every read since matchpoints change as more tables finish a
+// board. Rates are 0–1, `average_percent` 0–100; a rate or percentage with
+// nothing to divide by is null.
+export interface UserStats {
+  user_id: number;
+  boards: {
+    played: number;
+    // Those another table has finished too, so they have matchpoints.
+    compared: number;
+    // Compared boards where the user's side got more than half the matchpoints.
+    won: number;
+    win_rate: number | null;
+    average_percent: number | null;
+  };
+  sets: {
+    // Completed with the user still in their seat.
+    played: number;
+    won: number;
+    win_rate: number | null;
+    average_percent: number | null;
+  };
+  leaving: {
+    // Sets the user walked out on: a robot took their seat, or the set ended
+    // abandoned as they left. Never counted against their partner.
+    abandoned: number;
+    abandoned_by_reason: Record<AbandonReason, number>;
+    left_rate: number | null;
+  };
+}
+
+// Anyone's stats (a robot's too: callers hide them). 404 for an unknown id.
+export async function getUserStats(id: number): Promise<UserStats> {
+  const { data } = await http.get<ApiResponse<UserStats>>(`/users/${id}/stats`);
+  return data.data;
+}
+
+// The logged-in user's own stats.
+export async function getMyStats(): Promise<UserStats> {
+  const { data } = await http.get<ApiResponse<UserStats>>('/api/user/stats');
+  return data.data;
+}

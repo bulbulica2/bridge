@@ -1,13 +1,16 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import * as usersService from '@/services/users';
-import type { BanRequest, PublicUser, UserBan } from '@/services/users';
+import type { BanRequest, PublicUser, UserBan, UserStats } from '@/services/users';
 import { statusOf } from '@/utils/errors';
 
 // Other players' public profiles, by id. Table payloads already embed one per
 // seat, so views show that copy at once and ask for a fresh one here.
 export const useUsersStore = defineStore('users', () => {
   const profiles = ref<Record<number, PublicUser>>({});
+  // Players' stats by user id, the logged-in user's own included. They change
+  // after every board, so each page that shows them reads them again.
+  const stats = ref<Record<number, UserStats>>({});
 
   // Refreshes one profile. A 404 means the account is gone, so its cached copy
   // is dropped before the error reaches the caller.
@@ -67,5 +70,27 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
-  return { profiles, load, ban, liftBan };
+  // One player's stats, or (null) the logged-in user's own, kept under the
+  // id the answer names. A 404 means the account is gone: its cached stats
+  // are dropped before the error reaches the caller.
+  async function loadStats(id: number | null): Promise<UserStats> {
+    try {
+      const fresh = id === null ? await usersService.getMyStats() : await usersService.getUserStats(id);
+      stats.value[fresh.user_id] = fresh;
+      return fresh;
+    } catch (e) {
+      if (id !== null && statusOf(e) === 404) {
+        delete stats.value[id];
+      }
+      throw e;
+    }
+  }
+
+  // Logout: nothing read for one user is kept for the next.
+  function clear() {
+    profiles.value = {};
+    stats.value = {};
+  }
+
+  return { profiles, stats, load, loadStats, ban, liftBan, clear };
 });

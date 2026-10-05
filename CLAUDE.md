@@ -817,7 +817,26 @@ The user's standing rule (#91): **no task may leave code coverage under
   `description` only from `GET /users/{id}`: seats and `players` leave it
   out to keep broadcasts under 10 KB, so it is optional); `TableSeat.user` uses that type
   too, since table payloads embed the same profile per seat. The Pinia store
-  `src/stores/users.ts` caches profiles by id (a 404 drops the cached one).
+  `src/stores/users.ts` caches profiles by id (a 404 drops the cached one)
+  and `stats` by user id; `clear()` on logout (`endSession`) drops both.
+  **Stats** (#131, bb#121): `getUserStats(id)` (`GET /users/{id}/stats`)
+  and `getMyStats()` (`GET /api/user/stats`) → `UserStats` (`boards
+  {played, compared, won, win_rate, average_percent}`, `sets {played,
+  won, win_rate, average_percent}`, `leaving {abandoned,
+  abandoned_by_reason, left_rate}`: rates 0–1, averages 0–100, null with
+  nothing to divide by; no `forfeited`, sets aren't forfeited since
+  bb#120). The store's `loadStats(id | null)` (null = your own, kept under
+  the answer's `user_id`; a 404 drops them) runs on every showing, since
+  they change after every board: `PlayerStats.vue` (`userId`, `compact`,
+  exposes `load()`; skeleton, "Couldn't load the stats." + Retry, 401 →
+  login, only the latest read settles) is loaded by `UserProfilePage`
+  (with the history, `historyOwner`), `AccountPage`
+  (`onIonViewWillEnter`) and `PlayerProfileSheet` (compact, after
+  `nextTick` in its watch); never mounted for a robot.
+  `src/utils/stats.ts` words it (`rateText`, `averageText` "56.0 %",
+  `NO_FIGURE` "—", `setsLine`, `boardsLine`, `comparedNote`,
+  `leavingLine`, `leavingReasons`, `statsSummary`, `STATS_EXPLAINED`);
+  `percentText` takes a number or a formatted string.
   Tapping a seated player's name on either table page opens
   `src/components/PlayerProfileSheet.vue`, a bottom-sheet `ion-modal` that
   shows the embedded copy at once, refreshes it from the store, and links to

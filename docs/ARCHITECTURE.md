@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/76-turn-timer`._
+_Status as of branch `bulbulica2/77-player-stats`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -36,7 +36,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
 | `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved) |
-| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
+| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), a player's stats in words (`stats.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
@@ -231,7 +231,22 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 | `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
 | `chat` | the chat of the board the play page shows: `tableId`, `playingId`, `messages`, `open` (the panel), `about` (the call a message is about), `unread` | `follow` (the play page's board: read, emptied for a new board, read again once finished), `load`, `receive`, `send`, `setOpen`, `askAbout`, `clear`; see [Board chat](#board-chat) |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, double dummy tables per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadDoubleDummy`, `loadSet`, `loadReview` |
-| `users` | public profiles by id (with `ban`/`bans` for an admin) | `load`, `ban`, `liftBan` |
+| `users` | public profiles by id (with `ban`/`bans` for an admin), players' stats by id (your own under your id) | `load`, `loadStats` (a number, or `null` for your own; read again every time a page shows them, since they change after every board; a 404 drops the cached ones), `ban`, `liftBan`, `clear` (on logout) |
+
+**Player stats** (#131, backend
+[`API.md`, `GET /users/{user}/stats`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md))
+are worked out by the backend on every read (matchpoints move as more
+tables finish a board), so the SPA never trusts a cached copy for long:
+`PlayerStats.vue` shows the held one at once and reads them again each
+time its page calls `load()`. It is a card with three lines (sets,
+boards, sets left early) worded by `src/utils/stats.ts` (`rateText` for
+the 0–1 rates, `averageText` for the 0–100 averages, "—" for the
+backend's `null`), or one line (`compact`, the profile sheet). It has its
+own skeleton and a quiet "Couldn't load the stats." with **Retry**, so a
+failure never hides the rest of the page; a 401 goes to Login. Nobody
+mounts it for a robot. There is no "forfeited" count: since bb#120 a set
+is never forfeited, and a seat a robot took over counts as an abandon
+(`leaving.abandoned_by_reason` says why).
 
 A table changed by any answer or broadcast is written into both `tables`
 and `currentTable`, so the list and the detail page stay in step. `create`
@@ -273,7 +288,7 @@ so every extra request on the way in delays the one the page needs:
 | `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
 | `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `GET /cards`, `POST /tables/{id}/calls`, `POST /tables/{id}/calls/{index}/question`, `PUT /tables/{id}/calls/{index}/explanation`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
 | `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /boards/{id}/double-dummy`, `GET /playings/{id}`, `GET /sets/{id}` |
-| `users.ts` | `GET /users/{id}`, `GET /users?search=`, `POST` / `DELETE /users/{id}/ban` |
+| `users.ts` | `GET /users/{id}`, `GET /users?search=`, `POST` / `DELETE /users/{id}/ban`, `GET /users/{id}/stats` (`getUserStats`), `GET /api/user/stats` (`getMyStats`) |
 | `echo.ts` | the websocket, and `POST /broadcasting/auth` to sign private channels |
 
 Most game endpoints sit at the root (not under `/api`) and answer with an

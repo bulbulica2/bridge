@@ -33,7 +33,10 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/76-turn-timer` (after
+> branch `bulbulica2/77-player-stats` (after
+> #131, a player's **stats** (sets and boards played, won and their
+> average matchpoints, sets left early) on their profile, your own on the
+> Account page, and one line in the profile sheet; after
 > #130, the player on turn has a minute: the play page counts it down
 > ("Your turn · 0:42", red in the last 15 s; "Waiting for East · 0:42"
 > for the others), the tab's title pings while hidden, and running out

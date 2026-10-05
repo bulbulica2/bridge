@@ -22,6 +22,8 @@
                docs/API.md, Message size): it shows once GET /users/{id} is in. -->
           <p v-if="shown.description" class="profile-description">{{ shown.description }}</p>
           <p v-else-if="shown.description === null" class="profile-empty">No description yet.</p>
+          <!-- One line of their stats; a robot has none worth showing. -->
+          <PlayerStats v-if="!shown.is_robot" ref="stats" :user-id="shown.id" compact />
         </template>
 
         <div v-if="refreshing" class="refreshing">
@@ -54,10 +56,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { IonModal, IonContent, IonButton, IonSpinner, IonText, useIonRouter } from '@ionic/vue';
 import BanUserForm from '@/components/BanUserForm.vue';
 import AdminBadge from '@/components/AdminBadge.vue';
+import PlayerStats from '@/components/PlayerStats.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useUsersStore } from '@/stores/users';
@@ -80,6 +83,7 @@ const loadError = ref('');
 const gone = ref(false);
 // An admin has the ban form open.
 const banning = ref(false);
+const stats = ref<InstanceType<typeof PlayerStats> | null>(null);
 
 watch(
   () => props.player,
@@ -92,6 +96,8 @@ watch(
     banning.value = false;
     loadError.value = '';
     refreshing.value = true;
+    // The stats line reads by itself, beside the profile (failures said there).
+    nextTick(() => stats.value?.load());
     try {
       const fresh = await store.load(player.id);
       // Another player may have been tapped while this one loaded.
