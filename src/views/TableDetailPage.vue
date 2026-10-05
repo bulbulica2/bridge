@@ -206,7 +206,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   IonPage,
@@ -216,7 +216,6 @@ import {
   IonRefresherContent,
   IonText,
   IonSpinner,
-  alertController,
   onIonViewWillEnter,
   useIonRouter,
 } from '@ionic/vue';
@@ -234,10 +233,16 @@ import { useGameStore } from '@/stores/game';
 import { UNATTENDED_MINUTES, canRemove, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { PublicUser, SearchedUser } from '@/services/users';
-import { errorMessage, statusOf } from '@/utils/errors';
+import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
 import { awaySeats } from '@/utils/away';
-import { confirmLeave, confirmMove, heldNotice, leaveWarning } from '@/utils/seatMove';
-import { SIDE_LABELS, sideOf } from '@/utils/result';
+import {
+  confirmLeave,
+  confirmMove,
+  confirmRemove as confirmSeatRemoval,
+  heldNotice,
+  leaveWarning,
+  removeCost,
+} from '@/utils/seatMove';
 import { currentSet, setLabel } from '@/utils/sets';
 import { isReady, startNeeded } from '@/utils/start';
 import { showToast } from '@/utils/toast';
@@ -455,21 +460,32 @@ async function sit(seat: Seat) {
   }
 }
 
-async function leave(seat: Seat) {
-  const atStake = stake.value;
-  const confirmed = await confirmLeave(
-    table.value,
-    me.value,
-    boardPhase.value,
-    game.playing?.board?.number ?? null,
-    atStake,
-  );
-  if (!confirmed) {
-    return;
-  }
+// Our own sheets go before a confirmation, so nothing of the page's stands
+// over the alert (#121): closed, and drawn closed.
+async function closeSheets() {
+  player.value = null;
+  seatingAt.value = null;
+  await nextTick();
+}
 
-  busySeat.value = seat;
+// The confirmation is inside the try: whatever goes wrong on the way, even
+// before a request, is told and logged rather than lost (#121).
+async function leave(seat: Seat) {
   try {
+    await closeSheets();
+    const atStake = stake.value;
+    const confirmed = await confirmLeave(
+      table.value,
+      me.value,
+      boardPhase.value,
+      game.playing?.board?.number ?? null,
+      atStake,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    busySeat.value = seat;
     const { tableDeleted, held: kept } = await store.leave(tableId.value);
     if (kept) {
       // Mid-set: the seat waits for us a few minutes. Off to the list, where
@@ -481,30 +497,19 @@ async function leave(seat: Seat) {
       // The id 404s from here on, so go back to the list instead of reloading.
       await showToast('You left the table. Nobody was left, so it was deleted.', 'success');
       ionRouter.navigate('/tables', 'back', 'replace');
+    } else {
+      // Others (or robots) stay: the page shows the seat free, and says so.
+      await showToast('You left the table.', 'success');
     }
   } catch (e) {
     if (!handleExpiredSession(e)) {
+      logUnexpected(e);
       await showToast(errorMessage(e, 'Could not leave the table. Please try again.'), 'danger');
       await load();
     }
   } finally {
     busySeat.value = null;
   }
-}
-
-// What a kick costs the set going on here (bridge_backend docs/API.md, DELETE
-// /tables/{table}/seats/{user}): a player away loses it for their side, one
-// who is there only breaks it off.
-function removeCost(seat: Seat): string {
-  const current = table.value;
-  const set = current ? currentSet(current, game.tableId === tableId.value ? game.playing : null) : null;
-  if (!current || !set || set.finished) {
-    return '';
-  }
-  const theirs = current.seats.find((s) => s.seat === seat);
-  return theirs?.forfeit_at
-    ? `They are away, so ${SIDE_LABELS[sideOf(seat)]} lose set ${set.number} by forfeit.`
-    : `Set ${set.number} ends with no winner.`;
 }
 
 // Back to a held seat before the time is up: the store vouches for us, and
@@ -520,26 +525,17 @@ async function comeBack() {
 }
 
 async function confirmRemove(seat: Seat, user: PublicUser) {
-  const alert = await alertController.create({
-    header: `Remove ${user.username}?`,
-    message: user.is_robot
-      ? `The robot leaves seat ${seat}, which becomes free.`
-      : [`${user.username} loses seat ${seat}. They can sit down again afterwards.`, removeCost(seat)]
-          .filter(Boolean)
-          .join(' '),
-    buttons: [
-      { text: 'Cancel', role: 'cancel' },
-      { text: 'Remove', role: 'destructive' },
-    ],
-  });
-  await alert.present();
-  const { role } = await alert.onDidDismiss();
-  if (role !== 'destructive') {
-    return;
-  }
-
-  busySeat.value = seat;
   try {
+    await closeSheets();
+    const current = table.value;
+    const cost = current
+      ? removeCost(current, game.tableId === tableId.value ? game.playing : null, seat)
+      : '';
+    if (!(await confirmSeatRemoval(user, seat, cost))) {
+      return;
+    }
+
+    busySeat.value = seat;
     const { tableDeleted } = await store.removePlayer(tableId.value, user.id);
     if (tableDeleted) {
       // The last robot of an unattended table (a manager is otherwise still
@@ -553,6 +549,7 @@ async function confirmRemove(seat: Seat, user: PublicUser) {
     if (!handleExpiredSession(e)) {
       // 403: you no longer manage this table (the role moves when a manager
       // leaves). 404: they already left. Either way the page is stale.
+      logUnexpected(e);
       await showToast(errorMessage(e, 'Could not remove that player. Please try again.'), 'danger');
       await load();
     }

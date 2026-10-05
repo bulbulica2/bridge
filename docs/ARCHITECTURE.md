@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/72-suit-order-trumps-left`._
+_Status as of branch `bulbulica2/75-leave-and-remove-after-a-set`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -357,7 +357,9 @@ A few backend rules the stores rely on:
   viewer)` in `services/tables.ts` is the hint for who gets Remove (a
   manager, or anyone for a robot at an unattended table, never on your own
   seat); `whoIsLeft()` / `leaveNote()` in `utils/seatMove.ts` word what
-  leaving does.
+  leaving does, and `removeCost()` / `confirmRemove()` there word and ask
+  before a Remove (the detail page's compass and the play page's Start
+  box, #121).
 - **Admins' seats** (#77, bb#78): `is_admin` is public on every seat's
   user. Only another admin may remove an admin, never the moderator, so
   `canRemove()` gives an admin's seat Remove only when the viewer is an
@@ -383,6 +385,14 @@ A few backend rules the stores rely on:
   404 → gone, 409 → stale view, reload), or `null` if the server was never
   reached.
 - `fieldErrors(e)`: a 422's first message per field, shown under each input.
+- `logUnexpected(e)`: logs an error that didn't come from the backend (a
+  bug, an alert that failed to open) to the console, since the toast's
+  fallback text would otherwise hide it.
+
+Leave and Remove keep their confirmation inside the same `try` as the
+request (#121): whatever fails on the way, before any request too, is
+toasted and logged, never lost. The pages close their own sheets and
+modals before asking, so nothing of theirs stands over the alert.
 
 Three body shapes reach the SPA: the game endpoints' `{status, message,
 data}`, Laravel's 422 `{message, errors}`, and a bare `{message}` from auth
@@ -582,7 +592,7 @@ arrives, and the app falls back to what each request returns.
 | `BoardResultPanel`, `NextBoardBox` | the result once a board is finished, at a glance: one big row with the contract in table notation ("2♣ by West +2") and your score (N-S's, tagged, for someone who didn't play it), the tricks ("10 tricks · by claim"), then the set's position and the board's matchpoints for your side when known, and the countdown to the set's next board ("Next board in 0:08", then "Dealing the next board…") with the optional **Deal now** and, once pressed, the humans who haven't yet |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, a forfeit's reason, each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score) |
-| `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead), plus, with `manage`, **Seat a player** / **Add robot** per empty seat (`seatPlayer` / `addRobot` events; the play page runs them, #117) |
+| `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead), plus, with `manage`, **Seat a player** / **Add robot** per empty seat (`seatPlayer` / `addRobot` events; the play page runs them, #117), **Remove** on each seat in `removable` (`remove` event) and, with `canLeave`, **Leave the table** (`leave` event): the play page's way off the seat between sets (#121) |
 | `RobotBadge` | the "robot" mark next to a robot's name (also on Home, Tables, Table detail and the profile sheet) |
 | `AdminBadge` | the "admin" mark next to an admin's name, wherever `RobotBadge` goes, plus `StartBox` and the User profile page |
 

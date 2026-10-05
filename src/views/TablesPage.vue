@@ -29,6 +29,27 @@
           </ion-button>
         </div>
 
+        <!-- Leaving the table's pages keeps the seat (the header's Your
+             table goes back to it): getting up is Leave, here too (#121). -->
+        <p v-else-if="seatedAt" class="seated-at">
+          You sit at
+          <router-link :to="`/tables/${seatedAt.id}`">{{
+            seatedAt.name || `table #${seatedAt.id}`
+          }}</router-link>
+          ·
+          <ion-button
+            fill="clear"
+            size="small"
+            color="danger"
+            class="seated-leave"
+            :disabled="leaving"
+            @click="leave(seatedAt)"
+          >
+            <ion-spinner v-if="leaving" name="crescent" />
+            <span v-else>Leave</span>
+          </ion-button>
+        </p>
+
         <!-- First visit: skeleton rows where the list will be. -->
         <ion-list v-if="loading && !tablesStore.loaded" aria-busy="true">
           <ion-item v-for="n in 3" :key="n" lines="full">
@@ -209,9 +230,9 @@ import { seatsOf } from '@/services/tables';
 import type { Seat, Table } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { banText } from '@/utils/ban';
-import { errorMessage, statusOf } from '@/utils/errors';
+import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
 import { TABLE_NAME_MAX } from '@/utils/limits';
-import { confirmMove } from '@/utils/seatMove';
+import { confirmLeave, confirmMove, heldNotice } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
 const tablesStore = useTablesStore();
@@ -227,8 +248,13 @@ const heldTable = computed(() =>
   tablesStore.myTable && tablesStore.heldTableId === tablesStore.myTable.id ? tablesStore.myTable : null,
 );
 
+// The table we sit at, when the seat isn't held (that has Come back above).
+const seatedAt = computed(() => (heldTable.value ? null : tablesStore.myTable));
+
 const loading = ref(false);
 const loadError = ref('');
+// Our Leave on its way.
+const leaving = ref(false);
 const joining = ref<string | null>(null);
 const createOpen = ref(false);
 const creating = ref(false);
@@ -309,6 +335,40 @@ async function join(table: Table, seat: Seat) {
   ionRouter.navigate(path, 'forward', 'push');
 }
 
+// Getting up without opening the table: the same confirmation as on its
+// pages, inside the try so nothing fails unseen. The store updates the list.
+async function leave(table: Table) {
+  player.value = null;
+  try {
+    const stake = tablesStore.stakeOf(table);
+    const board = game.tableId === table.id ? (game.playing?.board?.number ?? null) : null;
+    if (!(await confirmLeave(table, me.value, game.phaseOf(table.id), board, stake))) {
+      return;
+    }
+    leaving.value = true;
+    const { tableDeleted, held } = await tablesStore.leave(table.id);
+    if (held) {
+      game.clear();
+      await showToast(heldNotice(stake), 'warning');
+    } else {
+      await showToast(
+        tableDeleted ? 'You left the table. Nobody was left, so it was deleted.' : 'You left the table.',
+        'success',
+      );
+    }
+  } catch (e) {
+    if (statusOf(e) === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+      return;
+    }
+    logUnexpected(e);
+    await showToast(errorMessage(e, 'Could not leave the table. Please try again.'), 'danger');
+    await load();
+  } finally {
+    leaving.value = false;
+  }
+}
+
 function closeCreate() {
   createOpen.value = false;
   createError.value = '';
@@ -344,6 +404,16 @@ async function submitCreate() {
 .tables-page {
   max-width: 720px;
   margin: 0 auto;
+}
+
+.seated-at {
+  margin: 12px 0 0;
+  text-align: center;
+}
+
+.seated-leave {
+  margin: 0;
+  vertical-align: middle;
 }
 
 .refreshing {

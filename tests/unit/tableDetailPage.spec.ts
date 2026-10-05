@@ -77,7 +77,7 @@ function axiosError(status: number, message = 'Conflict'): AxiosError {
 
 // The user is ana (id 1). Seats are seat -> username; `robot-…` are robots.
 // eve is an admin.
-const IDS: Record<string, number> = { ana: 1, bob: 2, cy: 3, eve: 7, 'robot-1': 101 }
+const IDS: Record<string, number> = { ana: 1, bob: 2, cy: 3, eve: 7, 'robot-1': 101, 'robot-2': 102, 'robot-3': 103 }
 
 function makeTable(seats: Partial<Record<Seat, string>>, extra: Partial<Table> = {}): Table {
   const taken = Object.entries(seats) as [Seat, string][]
@@ -308,15 +308,29 @@ describe('TableDetailPage leaving', () => {
     expect(navigate).toHaveBeenCalledWith('/tables', 'back', 'replace')
   })
 
-  test('a failed leave toasts the reason and reloads', async () => {
+  test('a failed leave toasts the reason, logs it and reloads', async () => {
     const wrapper = await mountPage(makeTable({ N: 'ana', E: 'bob' }))
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(useTablesStore(), 'leave').mockRejectedValue(new Error('offline'))
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
     await click(wrapper, 'N', 'Leave')
 
     expect(showToast).toHaveBeenCalledWith('Could not leave the table. Please try again.', 'danger')
+    expect(logged).toHaveBeenCalledWith(new Error('offline'))
     expect(tablesService.getTable).toHaveBeenCalledTimes(2)
+    logged.mockRestore()
+  })
+
+  test('with others staying, the page says the seat was left', async () => {
+    const wrapper = await mountPage(makeTable({ N: 'ana', E: 'bob' }))
+    vi.spyOn(useTablesStore(), 'leave').mockResolvedValue({ tableDeleted: false, held: false })
+    vi.mocked(confirmLeave).mockResolvedValue(true)
+
+    await click(wrapper, 'N', 'Leave')
+
+    expect(showToast).toHaveBeenCalledWith('You left the table.', 'success')
+    expect(navigate).not.toHaveBeenCalled()
   })
 
   test('a held seat offers Come back instead of Leave', async () => {
@@ -500,6 +514,112 @@ describe('TableDetailPage manager controls', () => {
 })
 
 // Refresh shows only once live updates have been off for a few seconds (#76).
+// #121: a set of four boards with robots played to the end. The table's copy
+// of the set may still say it runs (a board finishing sends no
+// TableUpdated); the finished last board the game store holds knows better.
+describe('TableDetailPage after a set', () => {
+  const running = { id: 8, number: 8, board: 4, of: 4, finished: false, ended: null, forfeited_by: null }
+
+  // ana (the user) at S manages it, with robots in the other three seats.
+  const robotTable = () =>
+    makeTable(
+      { N: 'robot-1', E: 'robot-2', S: 'ana', W: 'robot-3' },
+      { can_manage: true, board_id: 18, set: running },
+    )
+
+  beforeEach(() => {
+    const game = useGameStore()
+    game.tableId = 5
+    game.playing = {
+      phase: 'finished',
+      playing_id: 18,
+      set: { ...running, finished: true, ended: 'completed' },
+      board: { id: 18, number: 4, dealer: 'W', vulnerable: '' },
+      next_board_at: null,
+    } as unknown as typeof game.playing
+  })
+
+  afterEach(() => vi.restoreAllMocks())
+
+  test('Leave speaks of no set, asks plainly and frees the seat', async () => {
+    const wrapper = await mountPage(robotTable())
+    const leave = vi.spyOn(useTablesStore(), 'leave').mockResolvedValue({ tableDeleted: false, held: false })
+    vi.mocked(confirmLeave).mockResolvedValue(true)
+
+    expect(wrapper.find('.between-boards').text()).toBe(
+      'Board 4 is over, so leaving abandons nothing: its score is kept.',
+    )
+    expect(wrapper.find('.table-set').exists()).toBe(false)
+    await click(wrapper, 'S', 'Leave')
+
+    expect(confirmLeave).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }), 1, 'finished', 4, null)
+    expect(leave).toHaveBeenCalledWith(5)
+    expect(showToast).toHaveBeenCalledWith('You left the table.', 'success')
+  })
+
+  test.each([
+    ['N', 'robot-1', 101],
+    ['E', 'robot-2', 102],
+    ['W', 'robot-3', 103],
+  ] as [Seat, string, number][])('Remove takes %s (%s) out', async (seat, username, id) => {
+    const wrapper = await mountPage(robotTable())
+    const remove = vi.spyOn(useTablesStore(), 'removePlayer').mockResolvedValue({ tableDeleted: false })
+
+    await click(wrapper, seat, 'Remove')
+
+    expect(alertController.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        header: `Remove ${username}?`,
+        message: `The robot leaves seat ${seat}, which becomes free.`,
+      }),
+    )
+    expect(remove).toHaveBeenCalledWith(5, id)
+    expect(showToast).toHaveBeenCalledWith(`${username} was removed from the table.`, 'success')
+  })
+
+  test('the profile and seat sheets close before the confirmation', async () => {
+    const wrapper = await mountPage(robotTable())
+    await wrapper.find('.seat-n .seat-user').trigger('click')
+    expect(wrapper.findComponent(PlayerProfileSheet).props('player')).not.toBeNull()
+    let shownWhenAsked: unknown = 'not asked'
+    vi.mocked(confirmLeave).mockImplementation(async () => {
+      shownWhenAsked = wrapper.findComponent(PlayerProfileSheet).props('player')
+      return false
+    })
+
+    await click(wrapper, 'S', 'Leave')
+
+    expect(shownWhenAsked).toBeNull()
+  })
+
+  test('a Leave confirmation that fails is told and logged, never silent', async () => {
+    const wrapper = await mountPage(robotTable())
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const leave = vi.spyOn(useTablesStore(), 'leave')
+    vi.mocked(confirmLeave).mockRejectedValue(new TypeError('no overlay'))
+
+    await click(wrapper, 'S', 'Leave')
+
+    expect(leave).not.toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith('Could not leave the table. Please try again.', 'danger')
+    expect(logged).toHaveBeenCalledWith(expect.any(TypeError))
+    expect(seatButton(wrapper, 'S', 'Leave')!.props('disabled')).toBe(false)
+  })
+
+  test('a Remove confirmation that fails is told and logged, never silent', async () => {
+    const wrapper = await mountPage(robotTable())
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const remove = vi.spyOn(useTablesStore(), 'removePlayer')
+    vi.mocked(alertController.create).mockRejectedValueOnce(new TypeError('no overlay'))
+
+    await click(wrapper, 'N', 'Remove')
+
+    expect(remove).not.toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith('Could not remove that player. Please try again.', 'danger')
+    expect(logged).toHaveBeenCalledWith(expect.any(TypeError))
+  })
+})
+
 describe('TableDetailPage live updates', () => {
   beforeEach(() => {
     resetLiveStatus()

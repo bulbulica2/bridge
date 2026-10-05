@@ -1,10 +1,12 @@
 import { alertController } from '@ionic/vue';
-import type { Phase } from '@/services/game';
+import type { Phase, PublicPlaying } from '@/services/game';
 import { UNATTENDED_MINUTES } from '@/services/tables';
-import type { Table } from '@/services/tables';
+import type { BroadcastTable, Seat, Table } from '@/services/tables';
+import type { PublicUser } from '@/services/users';
 import { SET_FORFEIT_MINUTES } from '@/utils/away';
 import type { SetAtStake } from '@/utils/away';
-import { SIDE_LABELS } from '@/utils/result';
+import { SIDE_LABELS, sideOf } from '@/utils/result';
+import { currentSet } from '@/utils/sets';
 
 function tableLabel(table: Pick<Table, 'id' | 'name'>) {
   return table.name || `table #${table.id}`;
@@ -85,6 +87,16 @@ export function moveConsequences(
   return lines;
 }
 
+// One confirmation alert, answered with the role of the button pressed.
+// The pages close their own sheets and modals first, so nothing of theirs
+// stands over it (#121).
+async function ask(header: string, message: string, buttons: { text: string; role: string }[]) {
+  const alert = await alertController.create({ header, message, buttons });
+  await alert.present();
+  const { role } = await alert.onDidDismiss();
+  return role;
+}
+
 /** Asks before a seat request that moves the user off another table. */
 export async function confirmMove(
   from: Table,
@@ -94,16 +106,14 @@ export async function confirmMove(
   stake: SetAtStake | null = null,
 ) {
   const forfeits = !!stake?.forfeits;
-  const alert = await alertController.create({
-    header: forfeits ? `Move to ${tableLabel(to)} and lose the set?` : `Move to ${tableLabel(to)}?`,
-    message: moveConsequences(from, userId, phase, stake).join(' '),
-    buttons: [
+  const role = await ask(
+    forfeits ? `Move to ${tableLabel(to)} and lose the set?` : `Move to ${tableLabel(to)}?`,
+    moveConsequences(from, userId, phase, stake).join(' '),
+    [
       { text: 'Cancel', role: 'cancel' },
       { text: forfeits ? 'Move anyway' : 'Move', role: 'confirm' },
     ],
-  });
-  await alert.present();
-  const { role } = await alert.onDidDismiss();
+  );
   return role === 'confirm';
 }
 
@@ -170,16 +180,59 @@ export async function confirmLeave(
   stake: SetAtStake | null = null,
 ) {
   const forfeits = !!stake?.forfeits;
-  const alert = await alertController.create({
-    header: stake ? `Leave in the middle of set ${stake.number}?` : 'Leave this table?',
-    message: leaveMessage(table, userId, phase, boardNumber, stake),
-    buttons: [
+  const role = await ask(
+    stake ? `Leave in the middle of set ${stake.number}?` : 'Leave this table?',
+    leaveMessage(table, userId, phase, boardNumber, stake),
+    [
       { text: 'Cancel', role: 'cancel' },
       { text: forfeits ? 'Leave anyway' : 'Leave', role: 'destructive' },
     ],
-  });
-  await alert.present();
-  const { role } = await alert.onDidDismiss();
+  );
+  return role === 'destructive';
+}
+
+/**
+ * What taking the player at `seat` out costs the set going on there
+ * (bridge_backend docs/API.md, DELETE /tables/{table}/seats/{user}): a
+ * player away loses it for their side, one who is there only breaks it off.
+ * Nothing once the set is over (the board's own `set` knows that first), nor
+ * for a robot, whose seat a manager frees between sets.
+ */
+export function removeCost(table: BroadcastTable, playing: PublicPlaying | null, seat: Seat): string {
+  const set = currentSet(table, playing);
+  const theirs = table.seats.find((s) => s.seat === seat);
+  if (!set || set.finished || !theirs || theirs.user.is_robot) {
+    return '';
+  }
+  return theirs.forfeit_at
+    ? `They are away, so ${SIDE_LABELS[sideOf(seat)]} lose set ${set.number} by forfeit.`
+    : `Set ${set.number} ends with no winner.`;
+}
+
+/** The Remove confirmation's message: what becomes of the seat, and the set. */
+export function removeMessage(
+  user: Pick<PublicUser, 'username' | 'is_robot'>,
+  seat: Seat,
+  cost = '',
+): string {
+  if (user.is_robot) {
+    return `The robot leaves seat ${seat}, which becomes free.`;
+  }
+  return [`${user.username} loses seat ${seat}. They can sit down again afterwards.`, cost]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** Asks before taking another player (or a robot) out of their seat. */
+export async function confirmRemove(
+  user: Pick<PublicUser, 'username' | 'is_robot'>,
+  seat: Seat,
+  cost = '',
+) {
+  const role = await ask(`Remove ${user.username}?`, removeMessage(user, seat, cost), [
+    { text: 'Cancel', role: 'cancel' },
+    { text: 'Remove', role: 'destructive' },
+  ]);
   return role === 'destructive';
 }
 

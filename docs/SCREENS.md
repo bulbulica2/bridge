@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/72-suit-order-trumps-left`._
+_Status as of branch `bulbulica2/75-leave-and-remove-after-a-set`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -147,7 +147,8 @@ Backend: `PATCH /api/user` came with bb#21 (`15-player-identity`).
 
 **Logged in**, menu item **Tables**. Built by #8; seat moves by #22;
 profile sheet by #24; robots by #53; a seat opening the table by #67;
-Start by #68; held seat by #74; banned users by #75.
+Start by #68; held seat by #74; banned users by #75; your seat with Leave
+by #121.
 
 The list of open tables, each with its four seats (robots carry a
 **robot** badge). Tap an empty seat to sit (or **move here** at your own
@@ -171,8 +172,12 @@ leaving your seat can abandon a board there; in the middle of a set it
 says **Your side loses the set now** (the backend forfeits it at once,
 bb#76). After a Leave mid-set a notice at the top says your seat is held
 (counting down to the forfeit once the board waits for you, #116), with
-**Come back to …** (opens the game). No live updates on this
-page: pull to refresh.
+**Come back to …** (opens the game). Otherwise, while you sit
+somewhere, a line at the top says so: **You sit at Club · Leave** (the
+table's name links to its page). Going to another page never gets you up
+from a table, so this is the way to leave it without opening it: the same
+confirmation as on the table's pages, then a toast. No live updates on
+this page: pull to refresh.
 
 A **banned** user still sees the list, but the ban (reason and end date)
 takes the place of **Create table**, every seat button is disabled and
@@ -183,6 +188,7 @@ there is no **Open**.
 | `tables.load()` | `GET /tables` |
 | `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` (`robots: true` by default) |
 | `tables.join()` | `GET /sanctum/csrf-cookie`, `POST /tables/{id}/seats`, then `GET /tables` after a move |
+| `tables.leave()` (You sit at … · Leave) | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 
 Backend: bb#9 (create table, 3 active per creator), bb#12 (join a seat),
 bb#25 (joining elsewhere moves you), bb#65 (robots), bb#73 (nothing is
@@ -192,7 +198,7 @@ dealt before Start), bb#77 (bans).
 
 **Logged in.** Built by #15; manager Remove by #16; live updates by #21;
 moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
-robots by #53; Start by #68; the set line by #73; away and the forfeit by #74; admins' seats by #77. Reached from a table's **Open** button, by
+robots by #53; Start by #68; the set line by #73; away and the forfeit by #74; admins' seats by #77; Leave and Remove after a set by #121. Reached from a table's **Open** button, by
 taking a seat, or from **Create table** with robots.
 
 The four seats as a compass (N/E/S/W), robots and admins badged. Sit, move or
@@ -227,6 +233,14 @@ buttons meanwhile). Not back in time, your side forfeits: the seat is
 freed and you are sent to the set's results. Removing a player mid-set
 says what it costs: a player who is away loses the set for their side,
 one who is there only ends it with no winner.
+
+**After a set** (#121). Once the set's last board is finished nothing is
+at stake: **Leave** says only that the board is over and what becomes of
+the table, and frees the seat at once (a toast says so); a manager's
+**Remove** takes each robot out with no word of a set. Leave and Remove
+close the page's sheets before asking, and anything that goes wrong on
+the way, even before a request is sent, is toasted ("Could not leave the
+table. Please try again.") and logged to the console.
 
 **Start.** A board is dealt only once the table is full and every person
 seated there has pressed **Start**; robots are always ready. While the
@@ -321,7 +335,12 @@ within 3 minutes of their turn, their side **forfeits**: a toast ("bob is gone: 
 by forfeit."), the board in progress is abandoned, and the set's results
 show (below). If it was you, your seat is freed and the page goes to the
 set's results. **Leave the table** mid-set (in the next-board box) is
-confirmed more sternly, as on the detail page.
+confirmed more sternly, as on the detail page. Between sets, and before
+the first, the Start box has its own **Leave the table**, and a manager
+gets **Remove** on each other seat there (a robot, say), so finishing a
+set is no dead end (#121). Leave and Remove close the review, the chat
+and any sheet before asking; a failure is toasted and logged, never
+silent.
 
 What it shows by phase:
 - **waiting**: who's seated, and the same Start box as on the detail page
@@ -330,7 +349,8 @@ What it shows by phase:
   also gets **Seat a player** and **Add robot** in the box for each empty
   seat, as on the detail page (#117): left alone after the others were
   freed or the set forfeited, they fill the table without leaving the
-  game. Everyone else sees the empty seats and Start only.
+  game, and get **Remove** on each other seat (#121). Everyone sees
+  **Leave the table** under Start.
 - **auction**: your hand (always ♥ ♣ ♦ ♠, red and black alternating), the auction grid, and on your turn the bidding
   box. The contract (or "Passed out") is announced when the last call
   arrives. Above the calls, an **Alert** field: "Explain to the opponents

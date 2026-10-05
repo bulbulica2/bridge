@@ -49,3 +49,14 @@ export function fieldErrors(e: unknown): Record<string, string> {
   }
   return result;
 }
+
+/**
+ * Logs an error that didn't come from the backend (a bug, an overlay that
+ * failed to open), which a toast's fallback text would otherwise hide.
+ * HTTP errors are expected and already told to the user.
+ */
+export function logUnexpected(e: unknown): void {
+  if (!isAxiosError(e)) {
+    console.error(e);
+  }
+}
