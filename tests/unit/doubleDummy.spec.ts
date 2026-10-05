@@ -20,6 +20,7 @@ import { useHistoryStore } from '@/stores/history'
 import { DOUBLE_DUMMY_REREAD_MS, useDoubleDummy } from '@/composables/useDoubleDummy'
 import {
   DOUBLE_DUMMY_PENDING,
+  DOUBLE_DUMMY_UNAVAILABLE,
   bestLeads,
   ddTricks,
   doubleDummyLine,
@@ -252,7 +253,8 @@ describe('double dummy wording', () => {
     expect(doubleDummyLine(READY, result())).toBe('Double dummy: 4♠ by North makes 10')
     expect(doubleDummyLine(READY, result({ declarer: 'S' }))).toBe('Double dummy: 4♠ by South makes 9')
     expect(doubleDummyLine(PENDING, result())).toBe(DOUBLE_DUMMY_PENDING)
-    expect(doubleDummyLine({ status: 'unavailable', table: null }, result())).toBeNull()
+    expect(doubleDummyLine({ status: 'unavailable', table: null }, result())).toBe(DOUBLE_DUMMY_UNAVAILABLE)
+    expect(doubleDummyLine({ status: 'unavailable', table: null }, PASSED)).toBeNull()
     expect(doubleDummyLine(READY, PASSED)).toBeNull()
     expect(doubleDummyLine(null, result())).toBeNull()
   })
@@ -410,7 +412,7 @@ describe('DoubleDummyTable', () => {
       mount(DoubleDummyTable, { props: { analysis: { status: 'unavailable', table: null } } })
         .get('.dd-note')
         .text(),
-    ).toContain("isn't available")
+    ).toBe("Double dummy analysis isn't set up on this server.")
     expect(mount(DoubleDummyTable, { props: { analysis: null } }).find('.double-dummy').exists()).toBe(false)
   })
 })
@@ -481,6 +483,19 @@ describe('BoardReview double dummy', () => {
 
     expect(wrapper.find('.double-dummy').exists()).toBe(false)
     expect(wrapper.find('.lead-analysis').exists()).toBe(false)
+  })
+
+  test('a server without a solver: the note, no lead analysis, never read again', async () => {
+    vi.useFakeTimers()
+    const wrapper = mount(BoardReview, {
+      props: { review: review({ double_dummy: { status: 'unavailable', table: null, leads: null } }) },
+    })
+
+    expect(wrapper.get('.dd-note').text()).toBe(DOUBLE_DUMMY_UNAVAILABLE)
+    expect(wrapper.find('.lead-analysis').exists()).toBe(false)
+    vi.advanceTimersByTime(DOUBLE_DUMMY_REREAD_MS)
+    await nextTick()
+    expect(http.get).not.toHaveBeenCalled()
   })
 
   test('pending: the note, then the numbers once read again (once)', async () => {
@@ -566,6 +581,15 @@ describe('BoardResultPanel double dummy line', () => {
     expect(wrapper.find('.result-dd-review').exists()).toBe(false)
   })
 
+  test('the note on a server without a solver', () => {
+    const wrapper = mount(BoardResultPanel, {
+      props: { result: result(), mySeat: 'S', doubleDummy: { status: 'unavailable', table: null } },
+    })
+
+    expect(wrapper.get('.result-dd').text()).toBe(DOUBLE_DUMMY_UNAVAILABLE)
+    expect(wrapper.find('.result-dd-review').exists()).toBe(false)
+  })
+
   test('nothing without it, or on a passed-out board', () => {
     expect(mount(BoardResultPanel, { props: { result: result(), mySeat: 'S' } }).find('.result-dd').exists()).toBe(
       false,
@@ -634,6 +658,18 @@ describe('BoardResultsPage double dummy', () => {
 
     expect(wrapper.get('.dd-note').text()).toBe(DOUBLE_DUMMY_PENDING)
     expect(wrapper.find('.played').exists()).toBe(false)
+  })
+
+  test('a server without a solver: the note', async () => {
+    useAuthStore().user = { ...cy, email: 'cy@example.com' } as never
+    answer(RESULTS)
+    answer({ status: 'unavailable', table: null })
+
+    const wrapper = mount(BoardResultsPage)
+    await flushPromises()
+
+    expect(wrapper.get('.dd-note').text()).toBe(DOUBLE_DUMMY_UNAVAILABLE)
+    expect(wrapper.find('.dd-table').exists()).toBe(false)
   })
 
   test('results refused: no double dummy asked for', async () => {

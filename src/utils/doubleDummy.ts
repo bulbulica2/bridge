@@ -9,7 +9,9 @@ import { HAND_SUITS, rankLabel, sortHand, SUIT_SYMBOLS } from '@/utils/cards';
 // words it. The numbers are tricks (0–13), not levels.
 
 export const DOUBLE_DUMMY_PENDING = 'Double dummy analysis is being worked out…';
-export const DOUBLE_DUMMY_UNAVAILABLE = "Double dummy analysis isn't available for this board.";
+// `unavailable` is the server's, not the board's: it has no solver set up
+// (bridge_backend docs/GAME-RULES.md §6), for every board alike.
+export const DOUBLE_DUMMY_UNAVAILABLE = "Double dummy analysis isn't set up on this server.";
 
 // The table's rows, as it is usually drawn: the declarers down the side…
 export const DD_SEATS: readonly Seat[] = ['N', 'E', 'S', 'W'];
@@ -26,8 +28,8 @@ export function ddTricks(
 }
 
 // The result panel's line: "Double dummy: 4♠ by South makes 10", the note
-// while it is being solved, or null (a passed-out board, no solver, not
-// read yet).
+// while it is being solved or on a server without a solver, or null (a
+// passed-out board, not read yet).
 export function doubleDummyLine(
   analysis: DoubleDummy | null | undefined,
   result: BoardResult,
@@ -37,6 +39,9 @@ export function doubleDummyLine(
   }
   if (analysis.status === 'pending') {
     return DOUBLE_DUMMY_PENDING;
+  }
+  if (analysis.status === 'unavailable') {
+    return DOUBLE_DUMMY_UNAVAILABLE;
   }
   const tricks = ddTricks(analysis.table, result.declarer, result.contract.strain);
   if (analysis.status !== 'ready' || tricks === null) {

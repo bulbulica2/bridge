@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/81-partner-alerts-after-the-auction`._
+_Status as of branch `bulbulica2/84-double-dummy-unavailable-wording`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -462,8 +462,9 @@ What it shows by phase:
   N-S's, tagged "N-S", if you didn't play it), then a small line
   ("10 tricks · by claim"), and one double dummy line (#119): "Double
   dummy: 4♠ by South makes 10" with **Review** (the board review at the
-  table, where the whole table is), or "Double dummy analysis is being
-  worked out…" while the backend solves it. Below it, where the set stands ("Set 2 · 3 of
+  table, where the whole table is), "Double dummy analysis is being
+  worked out…" while the backend solves it, or "Double dummy analysis
+  isn't set up on this server." on a server without the solver (#138). Below it, where the set stands ("Set 2 · 3 of
   4 boards played", read from the set) and, once another table has played
   the board, its matchpoints for your side ("Matchpoints 75 %"). Scores
   are never added up over a set: each board is compared with the other
@@ -623,7 +624,8 @@ highlighted with your side's matchpoint percentage. Above the list, the
 board's double dummy table (#119): the tricks each declarer (N E S W) makes
 in each strain (♣ ♦ ♥ ♠ NT) with every card in view and best play on both
 sides, your contract marked, so every result can be held up against what
-was possible ("being worked out…" while the backend solves it). Tapping a
+was possible ("being worked out…" while the backend solves it, "isn't set
+up on this server" on a server without the solver). Tapping a
 row opens that table's [review](#board-review--playingsid). A 403 or 404
 shows as a reason on the page, not as an error.
 
@@ -663,7 +665,8 @@ after that lead, the lead made raised, the best leads (fewest tricks for
 declarer) ringed green, and in words ("Your lead ♠K: declarer can make 10.
 Best was ♥2: 9."). While the backend is still solving it the page says
 "Double dummy analysis is being worked out…" and reads the board once more
-5 s later. A passed-out board has only its
+5 s later; on a server without the solver it says "Double dummy analysis
+isn't set up on this server." (every board alike, #138). A passed-out board has only its
 auction, the deal, the result and the double dummy table; a board that ended by a claim stops where
 the claim was made.
 
