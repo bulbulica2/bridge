@@ -6,17 +6,14 @@ import { isOpponent } from '@/utils/alerts';
 import { SEAT_NAMES, callLabel } from '@/utils/auction';
 
 // The board chat (bridge_backend docs/API.md, Chat; GAME-RULES.md, table
-// talk): while the board is bid or played only the opponents may be told
-// anything, so partners can't talk; once it is finished, the whole table.
+// talk): everyone at the table, from the first deal on. A message goes to
+// the table (all four) or to the opponents only, never partner, until the
+// board is finished; there is no partner-only message.
 
 // Who a message may go to in `phase`, the default first: nothing before the
-// first deal (the chat opens with it), the opponents during the board, and
-// the table or the opponents once it is finished.
+// first deal (the chat opens with it), then the table or the opponents.
 export function chatRecipients(phase: Phase | null): ChatTo[] {
-  if (phase === 'auction' || phase === 'play') {
-    return ['opponents'];
-  }
-  return phase === 'finished' ? ['table', 'opponents'] : [];
+  return phase === 'auction' || phase === 'play' || phase === 'finished' ? ['table', 'opponents'] : [];
 }
 
 export const RECIPIENT_LABELS: Record<ChatTo, string> = {

@@ -1,8 +1,8 @@
 <template>
   <!-- The board's chat at the table: its messages, then a line to write.
-       While the board is bid or played a message goes to the opponents only
-       (partners can't talk); once it is finished, to the table too. The
-       play page shows it beside the table on a wide screen, in a bottom
+       From the first deal a message goes to the whole table (the default)
+       or to the opponents only, never partner; a call attached (Ask)
+       switches it to the opponents. The play page shows it beside the table on a wide screen, in a bottom
        sheet on a phone, and owns the draft and the sending. -->
   <section class="board-chat" aria-label="Board chat">
     <header class="chat-head">
@@ -18,27 +18,23 @@
         :players="players"
         :auction="auction"
         :me="me"
-        empty="No messages yet. Ask the opponents about their calls here."
+        empty="No messages yet. Say hello to the table, or ask the opponents about their calls."
       />
     </div>
 
     <p v-if="recipients.length === 0" class="chat-closed">The chat opens with the first deal.</p>
     <div v-else class="chat-compose">
       <div class="chat-to-row">
-        <!-- Mid-board there is no choice to make: it says so. -->
-        <template v-if="recipients.length > 1">
-          <button
-            v-for="option in recipients"
-            :key="option"
-            type="button"
-            class="chat-to-option"
-            :aria-pressed="to === option"
-            @click="to = option"
-          >
-            {{ option === 'table' ? 'Table' : 'Opponents' }}
-          </button>
-        </template>
-        <span v-else class="chat-to-fixed">To the opponents</span>
+        <button
+          v-for="option in recipients"
+          :key="option"
+          type="button"
+          class="chat-to-option"
+          :aria-pressed="to === option"
+          @click="picked = option"
+        >
+          {{ option === 'table' ? 'Table' : 'Opponents' }}
+        </button>
         <span class="chat-to-note">{{ toNote }}</span>
       </div>
       <p v-if="aboutBid" class="chat-about">
@@ -112,32 +108,28 @@ const input = ref<HTMLTextAreaElement | null>(null);
 
 const recipients = computed(() => chatRecipients(props.phase));
 
-// The phase's default, until the user picks the other one; a phase that
-// no longer allows the pick goes back to its default.
-const to = ref<ChatTo>(recipients.value[0] ?? 'opponents');
-watch(
-  () => props.phase,
-  () => {
-    to.value = recipients.value[0] ?? 'opponents';
-  },
+// The user's pick while the phase allows it, else the phase's default (the
+// table). Only shown, and sent, once there is a board.
+const picked = ref<ChatTo | null>(null);
+const to = computed<ChatTo>(() =>
+  picked.value !== null && recipients.value.includes(picked.value) ? picked.value : (recipients.value[0] ?? 'table'),
 );
 
-const toNote = computed(() => {
-  if (to.value === 'table') {
-    return 'Everyone at the table sees this.';
-  }
-  return recipients.value.length > 1 ? 'Only the opponents see this.' : "Your partner can't see this.";
-});
+const toNote = computed(() =>
+  to.value === 'table' ? 'Everyone at the table sees this.' : 'Only the opponents see this, not your partner.',
+);
 
 const aboutBid = computed(() =>
   props.about === null ? null : (props.auction?.[props.about]?.bid ?? null),
 );
 
-// A call attached (Ask in a call's pop-up): straight to the typing.
+// A call attached (Ask in a call's pop-up): a question for the opponents,
+// straight to the typing.
 watch(
   () => props.about,
   (index) => {
     if (index !== null) {
+      picked.value = 'opponents';
       nextTick(() => input.value?.focus());
     }
   },
@@ -222,10 +214,6 @@ function send() {
 .chat-to-option[aria-pressed='true'] {
   background: var(--ion-color-primary, #3880ff);
   color: var(--ion-color-primary-contrast, #fff);
-}
-
-.chat-to-fixed {
-  font-weight: 600;
 }
 
 .chat-to-note {

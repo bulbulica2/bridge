@@ -364,15 +364,19 @@ The user's standing rule (#91): **no task may leave code coverage under
   (public once finished), shown the same way. The pop-up's **Ask in the
   chat** (`chat` event, `live` opponents' calls) opens the board chat with
   the call attached (below).
-- **Board chat** (#102, bb#101, backend `docs/API.md` Chat): partner never
-  reads it mid-board. `src/services/chat.ts`: `getMessages` (`GET
+- **Board chat** (#102, #115, bb#101, bb#110, backend `docs/API.md`
+  Chat): the whole table's, partner never reads an `opponents` message
+  mid-board. `src/services/chat.ts`: `getMessages` (`GET
   /tables/{id}/messages` → `{playing_id, messages}`), `sendMessage`
   (`POST`, `{body, to, call_index?}`; `call_index` only when set),
   `BoardMessage` (`id`, `seat`, `user_id`, `to` `opponents|table`,
   `call_index`, `body` plain text, `created_at`), `BoardMessageSentEvent`.
-  `to: table` only between boards (`chatRecipients(phase)` in
-  `src/utils/chat.ts`: auction/play `['opponents']`, finished `['table',
-  'opponents']`, else none; a 409 otherwise); `CHAT_MAX` 500 in
+  Both `to`s from the first deal on (#115, `chatRecipients(phase)` in
+  `src/utils/chat.ts`: auction/play/finished `['table', 'opponents']`,
+  table first, else none; a 409 before the first deal); `opponents` never
+  reaches partner mid-board, and there is no partner-only message.
+  `BoardChat`'s switch (`picked`, else the phase's first) goes to
+  Opponents when a call is attached (`about`); `CHAT_MAX` 500 in
   `limits.ts`. The Pinia store `src/stores/chat.ts` holds one board's chat
   (`tableId`, `playingId`, `messages` merged by id via `mergeMessages`,
   `open`, `about` = the call index attached, `unread` = others' messages

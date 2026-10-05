@@ -223,18 +223,29 @@ describe('the Chat button', () => {
 })
 
 describe('the chat panel', () => {
-  test('sends to the opponents mid-board, and clears the text once sent', async () => {
-    const mine = message(5, { seat: 'S', user_id: 3, body: 'Hello' })
+  test('sends to the table mid-board, and clears the text once sent', async () => {
+    const mine = message(5, { seat: 'S', user_id: 3, to: 'table', body: 'Hello' })
     vi.mocked(chatService.sendMessage).mockResolvedValue(mine)
     const wrapper = await mountPage()
     await openChat(wrapper)
 
-    expect(wrapper.get('.chat-to-note').text()).toBe("Your partner can't see this.")
+    expect(wrapper.get('.chat-to-note').text()).toBe('Everyone at the table sees this.')
     await write(wrapper, '  Hello ')
 
-    expect(chatService.sendMessage).toHaveBeenCalledWith(5, { body: 'Hello', to: 'opponents', call_index: null })
+    expect(chatService.sendMessage).toHaveBeenCalledWith(5, { body: 'Hello', to: 'table', call_index: null })
     expect((wrapper.get('.chat-input').element as HTMLTextAreaElement).value).toBe('')
     expect(wrapper.get('.board-chat .chat-message.mine').text()).toContain('Hello')
+  })
+
+  test('or to the opponents only, picked on the switch', async () => {
+    vi.mocked(chatService.sendMessage).mockResolvedValue(message(5, { seat: 'S', user_id: 3, body: 'Hi' }))
+    const wrapper = await mountPage()
+    await openChat(wrapper)
+
+    await wrapper.findAll('.chat-to-option')[1].trigger('click')
+    expect(wrapper.get('.chat-to-note').text()).toBe('Only the opponents see this, not your partner.')
+    await write(wrapper, 'Hi')
+    expect(chatService.sendMessage).toHaveBeenCalledWith(5, { body: 'Hi', to: 'opponents', call_index: null })
   })
 
   test('a refused message is told at the top and keeps its text', async () => {
@@ -328,6 +339,7 @@ describe('Ask in the chat', () => {
     await flushPromises()
 
     expect(wrapper.get('.chat-about').text()).toContain('About 1♥:')
+    expect(wrapper.get('.chat-to-note').text()).toBe('Only the opponents see this, not your partner.')
     await write(wrapper, 'What does it show?')
     expect(chatService.sendMessage).toHaveBeenCalledWith(5, {
       body: 'What does it show?',
