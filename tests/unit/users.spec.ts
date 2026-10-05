@@ -36,10 +36,13 @@ const ann: PublicUser = {
 }
 
 // GET /users/{id} as the backend answers it: the public profile in the envelope.
+// The sheet's stats line (GET /users/{id}/stats, playerStats.spec.ts) waits.
 function answer(user: PublicUser) {
-  vi.mocked(http.get).mockResolvedValue({
-    data: { status: 200, message: 'User retrieved successfully.', data: user },
-  })
+  vi.mocked(http.get).mockImplementation((url: string) =>
+    url.endsWith('/stats')
+      ? new Promise(() => {})
+      : Promise.resolve({ data: { status: 200, message: 'User retrieved successfully.', data: user } }),
+  )
 }
 
 // Laravel's route-model binding 404: a bare {message}, no envelope.

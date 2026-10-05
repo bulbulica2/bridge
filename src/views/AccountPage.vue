@@ -92,6 +92,9 @@
             </ion-item>
           </ion-list>
 
+          <!-- Your own stats, read again each time the page opens. -->
+          <PlayerStats ref="stats" :user-id="null" class="account-stats" />
+
           <!-- How big the cards are drawn at the table, for this browser
                (cardSize.ts); two cards show the pick at once. -->
           <section class="card-size" aria-labelledby="card-size-title">
@@ -142,10 +145,12 @@ import {
   IonNote,
   IonSegment,
   IonSegmentButton,
+  onIonViewWillEnter,
   useIonRouter,
 } from '@ionic/vue';
 import { createOutline, personCircleOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
+import PlayerStats from '@/components/PlayerStats.vue';
 import PlayingCard from '@/components/PlayingCard.vue';
 import { navigateAndSettle } from '@/router/loading';
 import { useAuthStore } from '@/stores/auth';
@@ -177,6 +182,12 @@ const auth = useAuthStore();
 const ionRouter = useIonRouter();
 
 const loggingOut = ref(false);
+
+// The stats change after every board, so they are read on every visit.
+const stats = ref<InstanceType<typeof PlayerStats> | null>(null);
+onIonViewWillEnter(() => {
+  stats.value?.load();
+});
 
 const editing = ref(false);
 const saving = ref(false);
@@ -287,6 +298,10 @@ async function logOut() {
 
 .wrap {
   white-space: normal;
+}
+
+.account-stats {
+  margin: 0 16px 24px;
 }
 
 .card-size {

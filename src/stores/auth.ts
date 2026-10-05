@@ -5,6 +5,7 @@ import { disconnectEcho } from '@/services/echo';
 import { useGameStore } from '@/stores/game';
 import { useHistoryStore } from '@/stores/history';
 import { useTablesStore } from '@/stores/tables';
+import { useUsersStore } from '@/stores/users';
 import type {
   Ban,
   LoginCredentials,
@@ -61,6 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
     useTablesStore().clear();
     useGameStore().unwatchUser();
     useHistoryStore().clear();
+    useUsersStore().clear();
     disconnectEcho();
     user.value = null;
     sessionCheck = Promise.resolve();

@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { IonRefresher } from '@ionic/vue'
 import UserProfilePage from '@/views/UserProfilePage.vue'
-import { getUser, liftBan } from '@/services/users'
-import type { UserBan } from '@/services/users'
+import { getMyStats, getUser, getUserStats, liftBan } from '@/services/users'
+import type { UserBan, UserStats } from '@/services/users'
 import BanUserForm from '@/components/BanUserForm.vue'
 import { showToast } from '@/utils/toast'
 import { getMyPlayings, getUserPlayings } from '@/services/history'
@@ -13,7 +13,7 @@ import type { PublicUser } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 
-vi.mock('@/services/users', () => ({ getUser: vi.fn(), liftBan: vi.fn() }))
+vi.mock('@/services/users', () => ({ getUser: vi.fn(), liftBan: vi.fn(), getUserStats: vi.fn(), getMyStats: vi.fn() }))
 vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
 vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn(), getUserPlayings: vi.fn() }))
 vi.mock('@/services/echo', () => ({
@@ -48,6 +48,18 @@ function axiosError(status: number): AxiosError {
 
 const ann: PublicUser = { id: 3, name: 'Ann', username: 'ann', description: 'Plays a strong club.', is_robot: false }
 const emptyPage = { data: [], current_page: 1, last_page: 1, total: 0 }
+function statsOf(userId: number): UserStats {
+  return {
+    user_id: userId,
+    boards: { played: 48, compared: 40, won: 26, win_rate: 0.65, average_percent: 56 },
+    sets: { played: 12, won: 7, win_rate: 0.5833, average_percent: 54.2 },
+    leaving: {
+      abandoned: 0,
+      abandoned_by_reason: { turn_timeout: 0, away: 0, moved: 0, kicked: 0, left: 0 },
+      left_rate: 0,
+    },
+  }
+}
 
 const mountPage = () => mount(UserProfilePage, { global: { stubs: { 'router-link': true } } })
 
@@ -57,6 +69,8 @@ beforeEach(() => {
   route.params = { id: '3' }
   vi.mocked(getUserPlayings).mockResolvedValue(emptyPage)
   vi.mocked(getMyPlayings).mockResolvedValue(emptyPage)
+  vi.mocked(getUserStats).mockImplementation(async (id) => statsOf(id))
+  vi.mocked(getMyStats).mockResolvedValue(statsOf(3))
 })
 
 describe('UserProfilePage', () => {
@@ -223,5 +237,62 @@ describe('UserProfilePage for an admin', () => {
     wrapper.findComponent(BanUserForm).vm.$emit('cancel')
     await flushPromises()
     expect(wrapper.findComponent(BanUserForm).exists()).toBe(false)
+  })
+
+  test("shows the player's stats under the description, above their boards", async () => {
+    vi.mocked(getUser).mockResolvedValue(ann)
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(getUserStats).toHaveBeenCalledWith(3)
+    expect(getMyStats).not.toHaveBeenCalled()
+    expect(wrapper.find('.stats-sets').text()).toBe('12 played · 7 won (58 %) · avg 54.2 %')
+    expect(wrapper.find('.stats-boards').text()).toBe('48 played · 26 won (65 %) · avg 56.0 %')
+    const html = wrapper.html()
+    expect(html.indexOf('profile-description')).toBeLessThan(html.indexOf('player-stats'))
+    expect(html.indexOf('player-stats')).toBeLessThan(html.indexOf('boards-title'))
+  })
+
+  test('your own profile shows your own stats', async () => {
+    useAuthStore().user = { id: 3, name: 'Ann', username: 'ann', email: 'ann@example.com' }
+    vi.mocked(getUser).mockResolvedValue(ann)
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(getMyStats).toHaveBeenCalled()
+    expect(getUserStats).not.toHaveBeenCalled()
+    expect(wrapper.find('.stats-boards').exists()).toBe(true)
+  })
+
+  test('Refresh reads the stats again', async () => {
+    vi.mocked(getUser).mockResolvedValue(ann)
+    const wrapper = mountPage()
+    await flushPromises()
+
+    await wrapper.find('ion-button.refresh').trigger('click')
+    await flushPromises()
+
+    expect(getUserStats).toHaveBeenCalledTimes(2)
+  })
+
+  test('a failed stats read shows the retry note, the rest of the page stays', async () => {
+    vi.mocked(getUser).mockResolvedValue(ann)
+    vi.mocked(getUserStats).mockRejectedValue(axiosError(500))
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.find('.stats-error').text()).toContain("Couldn't load the stats.")
+    expect(wrapper.find('.profile-name').text()).toBe('Ann')
+    expect(wrapper.find('.error').exists()).toBe(false)
+    expect(getUserPlayings).toHaveBeenCalledWith(3, 1)
+  })
+
+  test('a robot has no stats', async () => {
+    vi.mocked(getUser).mockResolvedValue({ ...ann, is_robot: true })
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.find('.player-stats').exists()).toBe(false)
+    expect(getUserStats).not.toHaveBeenCalled()
   })
 })

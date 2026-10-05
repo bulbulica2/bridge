@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/76-turn-timer`._
+_Status as of branch `bulbulica2/77-player-stats`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -142,6 +142,8 @@ their text can still be selected and copied). **Card size** (#136) picks
 how big the cards are drawn at the table, **Normal**, **Large** (the
 default) or **Extra large**, with two sample cards showing the pick at
 once; it is kept in this browser (`bridge.cardSize`), not on the account.
+**Stats** (#131) are your own, as on your profile (see User profile),
+read again every time the page opens.
 **Log out** ends the session, closes every channel and goes to
 `/login` with a toast.
 
@@ -149,8 +151,10 @@ once; it is kept in this browser (`bridge.cardSize`), not on the account.
 |---|---|
 | `auth.updateProfile()` | `GET /sanctum/csrf-cookie`, `PATCH /api/user` |
 | `auth.logout()` | `GET /sanctum/csrf-cookie`, `POST /logout` |
+| `users.loadStats(null)` (`PlayerStats`) | `GET /api/user/stats` |
 
-Backend: `PATCH /api/user` came with bb#21 (`15-player-identity`).
+Backend: `PATCH /api/user` came with bb#21 (`15-player-identity`), the
+stats with bb#121.
 
 ## Tables — `/tables`
 
@@ -700,13 +704,32 @@ Backend: bb#60, bb#101 (the chat), bb#114 (double dummy).
 
 ## User profile — `/users/:id`
 
-**Logged in.** Built by #24; "Boards played" by #30; bans by #75. Reached from the
+**Logged in.** Built by #24; "Boards played" by #30; bans by #75; stats by #131. Reached from the
 profile sheet (tap a seated player's name on Tables, Table detail or Play,
 then **Full profile**; a robot's sheet has no such link).
 
 A player's public profile (name, username with the **Admin** badge for an
-admin (#77), description, never the email) and their finished boards, paged and grouped by set like My boards (each
-opens its review).
+admin (#77), description, never the email), their **stats** and their
+finished boards, paged and grouped by set like My boards (each opens its
+review).
+
+**Stats** (#131), under the description, read again on every visit and
+on Refresh, never for a robot:
+- **Sets**: "12 played · 7 won (58 %) · avg 54.2 %": sets completed with
+  the player still in their seat, those their side won, and their
+  average matchpoints over the sets another table has played.
+- **Boards**: "48 played · 31 won (65 %) · avg 56.0 %", a board won with
+  more than half the matchpoints; "40 compared with other tables" when
+  some boards have nothing to compare with yet (they count only in
+  played).
+- **Left early**: "2 abandoned (8 %)", the sets they walked out on (a
+  robot took their seat, or the set ended as they left) out of all their
+  sets, with why ("1 out of time · 1 moved table").
+
+"—" stands for nothing to average yet, and a line under them explains
+what won means. While they load a skeleton stands in; a failed read says
+"Couldn't load the stats." with **Retry**, and the rest of the page
+stays.
 
 **Admins** see more. A banned player's profile shows the ban in force
 (until when, the reason, since when and by which admin) with **Lift ban**.
@@ -721,11 +744,12 @@ shows the ban, but lifting it is only here.
 | Calls | Endpoint |
 |---|---|
 | `users.load()` | `GET /users/{id}` (an admin also gets `ban` and `bans`) |
+| `users.loadStats(id)` (`PlayerStats`; your own profile `loadStats(null)`) | `GET /users/{id}/stats` (yours: `GET /api/user/stats`) |
 | `history.loadHistory(id)`, `history.loadMore(id)` | `GET /users/{id}/playings?page=N` |
 | `users.ban()` (admins) | `POST /users/{id}/ban` |
 | `users.liftBan()` (admins) | `DELETE /users/{id}/ban` |
 
-Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans).
+Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans), bb#121 (stats).
 
 ## Shared pieces
 
@@ -736,7 +760,8 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans).
 | `BanUserForm` | User profile, profile sheet (admins) | `users.ban()` → `POST /users/{id}/ban` |
 | `AppMenu` | the app shell | none (reads the auth store; **Your table** first while seated, via `useYourTable`) |
 | `BoardReview` | Board review, Play (`BoardReviewModal`) | none (given the review from `history.loadReview`) |
-| `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}`; **Ban** for admins (`BanUserForm`) |
+| `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}`; one line of stats ("48 boards · 65 % won · avg 56.0 %", none for a robot) via `PlayerStats` → `GET /users/{id}/stats`; **Ban** for admins (`BanUserForm`) |
+| `PlayerStats` | User profile, Account, profile sheet (one line) | `users.loadStats()` → `GET /users/{id}/stats` or `GET /api/user/stats` (#131) |
 | `RobotBadge` | Home, Tables, Table detail, Play (`BridgeTable`), profile sheet | none (`is_robot` on the user) |
 | `AdminBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `StartBox`), profile sheet, User profile | none (`is_admin` on the user, #77) |
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |

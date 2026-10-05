@@ -79,8 +79,8 @@ export function viewerScore(result: BoardResult, seat: Seat | null): number | nu
   return seat ? scoreFor(result.score_ns, sideOf(seat)) : null;
 }
 
-// "75 %".
-export function percentText(percent: number): string {
+// "75 %" (or "56.0 %" for a number already formatted).
+export function percentText(percent: number | string): string {
   return `${percent} %`;
 }
 
