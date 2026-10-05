@@ -583,3 +583,64 @@ describe('alerts in the exports', () => {
     expect(mount(BoardPrintout, { props: { review: played() } }).find('.alerts').exists()).toBe(false)
   })
 })
+
+describe('double dummy in the exports', () => {
+  const TABLE = {
+    N: { C: 7, D: 5, H: 6, S: 10, NT: 6 },
+    E: { C: 5, D: 7, H: 6, S: 3, NT: 6 },
+    S: { C: 7, D: 5, H: 6, S: 10, NT: 6 },
+    W: { C: 5, D: 7, H: 6, S: 3, NT: 6 },
+  }
+  // East led the ♠Q (10 tricks); the ♥5 would have held declarer to 9.
+  const LEADS = DEAL.E.map((c) => ({ card: c, tricks: c.suit === 'H' && c.rank === 5 ? 9 : 10 }))
+
+  test('the text adds the table and the opening lead', () => {
+    const text = boardText(played({ double_dummy: { status: 'ready', table: TABLE, leads: LEADS } }))
+
+    expect(text).toContain(
+      [
+        'Double dummy (tricks declarer makes)',
+        '       ♣   ♦   ♥   ♠  NT',
+        'N      7   5   6  10   6',
+        'E      5   7   6   3   6',
+        'S      7   5   6  10   6',
+        'W      5   7   6   3   6',
+        "East's lead ♠Q: declarer can make 10. Best was ♥5: 9.",
+      ].join('\n'),
+    )
+  })
+
+  test('a passed-out board: the table alone; pending: nothing yet', () => {
+    const passed = boardText(passedOut())
+    expect(passed).not.toContain('Double dummy')
+
+    const table = boardText({ ...passedOut(), double_dummy: { status: 'ready', table: TABLE, leads: null } })
+    expect(table).toContain('W      5   7   6   3   6')
+    expect(table.trimEnd().endsWith('W      5   7   6   3   6')).toBe(true)
+
+    const pending = boardText(played({ double_dummy: { status: 'pending', table: null, leads: null } }))
+    expect(pending).not.toContain('Double dummy')
+  })
+
+  test('PBN adds an OptimumResultTable between the auction and the play', () => {
+    const pbn = boardPbn(played({ double_dummy: { status: 'ready', table: TABLE, leads: LEADS } }))
+    const lines = pbn.split('\r\n')
+    const at = lines.indexOf('[OptimumResultTable "Declarer;Denomination\\2R;Result\\2R"]')
+
+    expect(at).toBeGreaterThan(lines.indexOf('[Auction "N"]'))
+    expect(lines.slice(at + 1, at + 6)).toEqual(['N NT  6', 'N  S 10', 'N  H  6', 'N  D  5', 'N  C  7'])
+    expect(lines.slice(at + 6, at + 21)).toHaveLength(15)
+    expect(lines[at + 21]).toBe('[Play "E"]')
+    // Not solved yet: no table.
+    expect(boardPbn(played())).not.toContain('OptimumResultTable')
+  })
+
+  test('an unrecorded board still carries the table after the mandatory tags', () => {
+    const pbn = boardPbn({ ...unrecorded(), double_dummy: { status: 'ready', table: TABLE, leads: null } })
+    const lines = pbn.split('\r\n')
+    const at = lines.findIndex((l) => l.startsWith('[OptimumResultTable'))
+
+    expect(lines[at - 1]).toBe('[Result "10"]')
+    expect(lines[at + 21]).toBe('[Score "NS 420"]')
+  })
+})

@@ -128,6 +128,9 @@
               :my-seat="mySeat"
               :set-so-far="setResults"
               :extras="boardExtras"
+              :double-dummy="doubleDummy.analysis.value"
+              :reviewable="reviewable.length > 0"
+              @review="reviewOpen = true"
             />
             <!-- The same board at every other table, with matchpoints. -->
             <ion-button
@@ -427,6 +430,7 @@ import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
 import TrickArea from '@/components/TrickArea.vue';
+import { useDoubleDummy } from '@/composables/useDoubleDummy';
 import { useForcedPlay } from '@/composables/useForcedPlay';
 import { useMediaQuery } from '@/composables/useMediaQuery';
 import { useStaleDeadline } from '@/composables/useStaleDeadline';
@@ -818,6 +822,22 @@ const boardExtras = computed(() =>
     playing.value?.board?.id ?? null,
     playing.value?.playing_id ?? null,
   ),
+);
+
+// The finished board's double dummy table (bb#114), read once it is over
+// here (the backend refuses earlier): one line under its result.
+const finishedBoardId = computed(() =>
+  playing.value?.phase === 'finished' ? (playing.value.board?.id ?? null) : null,
+);
+const doubleDummy = useDoubleDummy(() => finishedBoardId.value);
+watch(
+  finishedBoardId,
+  (boardId) => {
+    if (boardId) {
+      doubleDummy.load();
+    }
+  },
+  { immediate: true },
 );
 
 // The set is over and its results are in: they replace the board's result.

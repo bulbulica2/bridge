@@ -53,6 +53,14 @@
             </template>
           </section>
 
+          <!-- What was possible on this deal, to hold every result up
+               against: the viewer's own contract marked. -->
+          <DoubleDummyTable
+            :analysis="doubleDummy.analysis.value"
+            :highlight="myContract"
+            highlight-note="Your contract"
+          />
+
           <p class="count">
             {{ data.results.length }} table{{ data.results.length === 1 ? '' : 's' }} played it,
             best N-S score first. Matchpoints: 2 for each table you beat, 1 for each tie.
@@ -134,6 +142,8 @@ import {
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
 import CallLabel from '@/components/CallLabel.vue';
+import DoubleDummyTable from '@/components/DoubleDummyTable.vue';
+import { useDoubleDummy } from '@/composables/useDoubleDummy';
 import { useAuthStore } from '@/stores/auth';
 import { useHistoryStore } from '@/stores/history';
 import type { BoardResultRow } from '@/services/history';
@@ -164,6 +174,17 @@ const loadError = ref('');
 const gone = ref('');
 
 const data = computed(() => store.results[boardId.value] ?? null);
+
+// The board's double dummy table, read after its results (both refuse a
+// board the viewer hasn't finished, and the local backend answers one
+// request at a time).
+const doubleDummy = useDoubleDummy(() => boardId.value || null);
+
+// The viewer's contract on this board, marked in that table.
+const myContract = computed(() => {
+  const result = mine.value.find((m) => m.result.declarer && m.result.contract?.strain)?.result;
+  return result ? { declarer: result.declarer!, strain: result.contract!.strain! } : null;
+});
 
 // Where the viewer sat on each playing of the board (normally one).
 const mine = computed(() => {
@@ -215,6 +236,7 @@ async function load() {
   loadError.value = '';
   try {
     await store.loadResults(boardId.value);
+    doubleDummy.load();
   } catch (e) {
     const status = statusOf(e);
     // A 401 here means the session expired after the router guard let us in.
