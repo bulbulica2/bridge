@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { IonButton } from '@ionic/vue'
 import StartBox from '@/components/StartBox.vue'
 import TableDetailPage from '@/views/TableDetailPage.vue'
 import * as echo from '@/services/echo'
@@ -239,6 +240,45 @@ describe('StartBox.vue', () => {
 
     expect(wrapper.get('[data-seat="N"]').find('.admin-badge').exists()).toBe(true)
     expect(wrapper.findAll('.admin-badge')).toHaveLength(1)
+  })
+
+  test('a manager fills each empty seat from the box (#117)', async () => {
+    const wrapper = mount(StartBox, {
+      props: { table: makeTable({ N: 'robot-1', S: 'ana' }), me: 1, showSeats: true, manage: true },
+    })
+
+    const rows = wrapper.findAll('.start-fill li')
+    expect(rows.map((li) => li.attributes('data-fill-seat'))).toEqual(['E', 'W'])
+    await rows[0].get('.start-seat-player').trigger('click')
+    await rows[1].get('.start-add-robot').trigger('click')
+
+    expect(wrapper.emitted('seatPlayer')).toEqual([['E']])
+    expect(wrapper.emitted('addRobot')).toEqual([['W']])
+  })
+
+  test('a seat being filled spins its Add robot and holds the others', async () => {
+    const wrapper = mount(StartBox, {
+      props: { table: makeTable({ S: 'ana' }), me: 1, showSeats: true, manage: true, fillingSeat: 'E' as Seat },
+    })
+
+    expect(wrapper.get('[data-fill-seat="E"] .start-add-robot').find('ion-spinner').exists()).toBe(true)
+    expect(wrapper.get('[data-fill-seat="N"] .start-add-robot').text()).toBe('Add robot')
+    const buttons = wrapper.findAllComponents(IonButton).filter((b) => b.element.closest('.start-fill'))
+    expect(buttons).toHaveLength(6)
+    expect(buttons.every((b) => b.props('disabled'))).toBe(true)
+  })
+
+  test('no fill buttons for a non-manager, a full table, or without the seats', () => {
+    const seats = { S: 'ana' }
+    const notManager = mount(StartBox, { props: { table: makeTable(seats), me: 1, showSeats: true } })
+    const noSeats = mount(StartBox, { props: { table: makeTable(seats), me: 1, manage: true } })
+    const full = mount(StartBox, {
+      props: { table: makeTable({ N: 'robot-1', E: 'robot-2', S: 'ana', W: 'robot-3' }), me: 1, showSeats: true, manage: true },
+    })
+
+    for (const wrapper of [notManager, noSeats, full]) {
+      expect(wrapper.find('.start-fill').exists()).toBe(false)
+    }
   })
 })
 

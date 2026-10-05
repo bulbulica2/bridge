@@ -176,15 +176,21 @@
 
           <!-- No board yet (or a finished one with new players): the same
                Start as on the table's page, so opening the game table early
-               is no dead end. The last Start deals the board here. -->
+               is no dead end. The last Start deals the board here. A
+               manager fills the empty seats from it too, as on the table's
+               page (left alone after the others were freed, say). -->
           <StartBox
             v-if="showStart && table"
             :table="table"
             :me="me"
             show-seats
             :busy="asking"
+            :manage="table.can_manage"
+            :filling-seat="fillingSeat"
             @start="start"
             @cancel="cancelStart"
+            @seat-player="seatingAt = $event"
+            @add-robot="addRobot"
           />
 
           <BridgeTable
@@ -334,6 +340,7 @@
       </div>
 
       <PlayerProfileSheet :player="player" @close="player = null" />
+      <SeatPlayerSheet :seat="seatingAt" @select="seatPlayer" @close="seatingAt = null" />
       <ClaimSheet
         :open="claimOpen"
         :remaining="playing ? tricksLeft(playing) : 0"
@@ -411,6 +418,7 @@ import LastTrickPopover from '@/components/LastTrickPopover.vue';
 import NextBoardBox from '@/components/NextBoardBox.vue';
 import OfflineRefresh from '@/components/OfflineRefresh.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
+import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
 import TrickArea from '@/components/TrickArea.vue';
@@ -426,7 +434,7 @@ import { seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { ChatTo } from '@/services/chat';
 import type { AlertDraft, Bid, Card, Claim, PlayedCard, Playing, Trick } from '@/services/game';
-import type { PublicUser } from '@/services/users';
+import type { PublicUser, SearchedUser } from '@/services/users';
 import { openQuestion } from '@/utils/alerts';
 import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
 import { SUIT_NAMES, SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
@@ -484,6 +492,10 @@ const finishedTrick = ref<Trick | null>(null);
 // Asking for the next board, Start (or taking it back), or leaving between
 // boards: one at a time.
 const asking = ref(false);
+// A manager filling an empty seat: the seat whose player search is open, and
+// the seat a player or robot is on its way to.
+const seatingAt = ref<Seat | null>(null);
+const fillingSeat = ref<Seat | null>(null);
 // The claim sheet is open; a claim, an answer or a withdrawal is on its way.
 const claimOpen = ref(false);
 const claiming = ref(false);
@@ -871,6 +883,7 @@ onIonViewWillLeave(() => {
   viewActive.value = false;
   reviewOpen.value = false;
   explainIndex.value = null;
+  seatingAt.value = null;
   chat.setOpen(false);
 });
 
@@ -1358,6 +1371,59 @@ async function cancelStart() {
     await refused(e, 'Could not take your Start back. Please try again.');
   } finally {
     asking.value = false;
+  }
+}
+
+// A manager fills an empty seat, as on the table's page: the player picked
+// in the search (yourself is a plain seat change here), or a robot.
+async function seatPlayer(user: SearchedUser) {
+  const seat = seatingAt.value;
+  seatingAt.value = null;
+  if (!seat) {
+    return;
+  }
+  await fillSeat(
+    seat,
+    () =>
+      user.id === me.value
+        ? tablesStore.join(tableId.value, seat)
+        : tablesStore.seatUser(tableId.value, user.id, seat),
+    user.id === me.value ? `You now sit at ${seat}.` : `${user.username} now sits at ${seat}.`,
+    'Could not seat that player. Please try again.',
+  );
+}
+
+async function addRobot(seat: Seat) {
+  await fillSeat(
+    seat,
+    () => tablesStore.seatRobot(tableId.value, seat),
+    `A robot now sits at ${seat}.`,
+    'Could not add a robot. Please try again.',
+  );
+}
+
+// 409: the seat was taken (or the player sat down elsewhere) meanwhile.
+// 403: we no longer manage the table. Either way its copy is stale, so it
+// is read again; the game itself is untouched.
+async function fillSeat(seat: Seat, request: () => Promise<unknown>, done: string, fallback: string) {
+  if (fillingSeat.value !== null) {
+    return;
+  }
+  fillingSeat.value = seat;
+  try {
+    await request();
+    showToast(done, 'success');
+  } catch (e) {
+    if (statusOf(e) === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+      return;
+    }
+    showToast(errorMessage(e, fallback), 'danger');
+    await tablesStore.loadTable(tableId.value).catch(() => {
+      // The next update or refresh says how the seats stand.
+    });
+  } finally {
+    fillingSeat.value = null;
   }
 }
 

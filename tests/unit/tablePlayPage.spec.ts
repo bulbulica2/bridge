@@ -7,6 +7,7 @@ import TablePlayPage from '@/views/TablePlayPage.vue'
 import BiddingBox from '@/components/BiddingBox.vue'
 import ClaimPanel from '@/components/ClaimPanel.vue'
 import NextBoardBox from '@/components/NextBoardBox.vue'
+import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue'
 import StartBox from '@/components/StartBox.vue'
 import * as gameService from '@/services/game'
 import * as tablesService from '@/services/tables'
@@ -40,6 +41,9 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   getTable: vi.fn(),
   cancelStart: vi.fn(),
   sendHeartbeat: vi.fn(),
+  seatRobot: vi.fn(),
+  seatUser: vi.fn(),
+  joinSeat: vi.fn(),
 }))
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
@@ -340,6 +344,140 @@ describe('TablePlayPage claims and Start', () => {
     vi.mocked(tablesService.cancelStart).mockRejectedValue(axiosError(409, 'The board is dealt.'))
     await emitFrom(wrapper, StartBox, 'cancel')
     expect(showToast).toHaveBeenCalledWith('The board is dealt.', 'danger')
+  })
+})
+
+// Left alone after the other three were freed (#117): a manager fills the
+// empty seats without leaving the game table.
+describe('TablePlayPage filling empty seats', () => {
+  const waiting = () => auction({ phase: 'waiting', board: null, turn: null, acting_user_id: null, hand: [] })
+
+  // Only the user (Cy, South) is left.
+  function alone(canManage: boolean): Table {
+    const table = makeTable({ board_id: null, moderated_by: 3, can_manage: canManage })
+    return { ...table, seats: table.seats.filter((s) => s.seat === 'S'), free_seats: ['N', 'E', 'W'] }
+  }
+
+  function withSeat(table: Table, seat: Seat, user: Table['seats'][number]['user']): Table {
+    return {
+      ...table,
+      seats: [...table.seats, { id: 9, table_id: 5, user_id: user.id, seat, ready: user.is_robot, user }],
+      free_seats: table.free_seats.filter((s) => s !== seat),
+    }
+  }
+
+  const robot = { id: 90, name: 'Robot', username: 'robot-1', description: null, is_robot: true }
+
+  test('a manager gets Seat a player and Add robot per empty seat', async () => {
+    const wrapper = await mountPage(waiting(), alone(true))
+
+    const box = wrapper.findComponent(StartBox)
+    expect(box.props('manage')).toBe(true)
+    expect(wrapper.findAll('.start-fill li').map((li) => li.attributes('data-fill-seat'))).toEqual(['N', 'E', 'W'])
+  })
+
+  test('nobody else gets them', async () => {
+    const wrapper = await mountPage(waiting(), alone(false))
+
+    expect(wrapper.findComponent(StartBox).props('manage')).toBe(false)
+    expect(wrapper.find('.start-fill').exists()).toBe(false)
+  })
+
+  test('Add robot seats one and says so', async () => {
+    const table = alone(true)
+    const wrapper = await mountPage(waiting(), table)
+    vi.mocked(tablesService.seatRobot).mockResolvedValue(withSeat(table, 'N', robot))
+
+    await emitFrom(wrapper, StartBox, 'addRobot', 'N')
+
+    expect(tablesService.seatRobot).toHaveBeenCalledWith(5, 'N')
+    expect(showToast).toHaveBeenCalledWith('A robot now sits at N.', 'success')
+    expect(wrapper.find('[data-fill-seat="N"]').exists()).toBe(false)
+  })
+
+  test('one seat at a time', async () => {
+    const wrapper = await mountPage(waiting(), alone(true))
+    vi.mocked(tablesService.seatRobot).mockReturnValue(new Promise(() => {}))
+
+    await emitFrom(wrapper, StartBox, 'addRobot', 'N')
+    expect(wrapper.findComponent(StartBox).props('fillingSeat')).toBe('N')
+    await emitFrom(wrapper, StartBox, 'addRobot', 'E')
+
+    expect(tablesService.seatRobot).toHaveBeenCalledTimes(1)
+  })
+
+  test('Seat a player opens the search, and the pick is seated', async () => {
+    const table = alone(true)
+    const wrapper = await mountPage(waiting(), table)
+    const ann = { id: 1, name: 'Ann', username: 'ann', seated: false }
+    vi.mocked(tablesService.seatUser).mockResolvedValue(withSeat(table, 'E', PLAYERS.N))
+
+    await emitFrom(wrapper, StartBox, 'seatPlayer', 'E')
+    expect(wrapper.findComponent(SeatPlayerSheet).props('seat')).toBe('E')
+    await emitFrom(wrapper, SeatPlayerSheet, 'select', ann)
+
+    expect(tablesService.seatUser).toHaveBeenCalledWith(5, 1, 'E')
+    expect(showToast).toHaveBeenCalledWith('ann now sits at E.', 'success')
+    expect(wrapper.findComponent(SeatPlayerSheet).props('seat')).toBeNull()
+  })
+
+  test('picking yourself moves you to that seat', async () => {
+    const table = alone(true)
+    const wrapper = await mountPage(waiting(), table)
+    vi.mocked(tablesService.joinSeat).mockResolvedValue({
+      ...table,
+      seats: table.seats.map((s) => ({ ...s, seat: 'W' as Seat })),
+    })
+
+    await emitFrom(wrapper, StartBox, 'seatPlayer', 'W')
+    await emitFrom(wrapper, SeatPlayerSheet, 'select', { id: 3, name: 'Cy', username: 'cy', seated: true })
+
+    expect(tablesService.joinSeat).toHaveBeenCalledWith(5, 'W')
+    expect(showToast).toHaveBeenCalledWith('You now sit at W.', 'success')
+  })
+
+  test('a pick after the search closed seats nobody', async () => {
+    const wrapper = await mountPage(waiting(), alone(true))
+
+    await emitFrom(wrapper, StartBox, 'seatPlayer', 'E')
+    await emitFrom(wrapper, SeatPlayerSheet, 'close')
+    await emitFrom(wrapper, SeatPlayerSheet, 'select', { id: 1, name: 'Ann', username: 'ann', seated: false })
+
+    expect(tablesService.seatUser).not.toHaveBeenCalled()
+  })
+
+  test('a refusal is told and the table read again', async () => {
+    const wrapper = await mountPage(waiting(), alone(true))
+    vi.mocked(tablesService.getTable).mockClear()
+    vi.mocked(tablesService.seatRobot).mockRejectedValue(axiosError(409, 'That seat is taken.'))
+
+    await emitFrom(wrapper, StartBox, 'addRobot', 'N')
+
+    expect(showToast).toHaveBeenCalledWith('That seat is taken.', 'danger')
+    expect(tablesService.getTable).toHaveBeenCalledWith(5)
+    expect(wrapper.findComponent(StartBox).props('fillingSeat')).toBeNull()
+  })
+
+  test('a refusal whose reread fails too leaves the page as it was', async () => {
+    const wrapper = await mountPage(waiting(), alone(true))
+    vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
+    vi.mocked(tablesService.seatUser).mockRejectedValue(axiosError(403, 'You do not manage this table.'))
+
+    await emitFrom(wrapper, StartBox, 'seatPlayer', 'N')
+    await emitFrom(wrapper, SeatPlayerSheet, 'select', { id: 1, name: 'Ann', username: 'ann', seated: false })
+
+    expect(showToast).toHaveBeenCalledWith('You do not manage this table.', 'danger')
+    expect(wrapper.findComponent(StartBox).exists()).toBe(true)
+  })
+
+  test('an expired session goes to log in', async () => {
+    const wrapper = await mountPage(waiting(), alone(true))
+    vi.mocked(tablesService.seatRobot).mockRejectedValue(axiosError(401))
+
+    await emitFrom(wrapper, StartBox, 'addRobot', 'N')
+
+    expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
+    expect(showToast).not.toHaveBeenCalledWith(expect.anything(), 'danger')
   })
 })
 

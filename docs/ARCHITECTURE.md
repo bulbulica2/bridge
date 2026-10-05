@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/70-one-forfeit-clock-at-a-time`._
+_Status as of branch `bulbulica2/71-manager-controls-when-left-alone`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -270,7 +270,15 @@ A few backend rules the stores rely on:
 - Manager controls (Remove, Seat a player, Add robot) show when the table
   payload's `can_manage` says so: the table's moderator or an admin
   (bb#74; the creator only while they are the moderator). Don't work it out
-  from `moderated_by` or `created_by`; the backend decides. Nothing at the
+  from `moderated_by` or `created_by`; the backend decides. `TableUpdated`
+  carries no `can_manage`, so the `tables` store keeps the last HTTP value
+  and, when `moderated_by` changes, reads the table again for it (only
+  `can_manage` is taken from that answer). Until an answer for the
+  moderator it holds lands, every broadcast asks again, and a failed read
+  is retried 3 times, 3 s apart (#117: left alone after three seats were
+  freed in a row, no broadcast may follow). The detail page and the play
+  page's Start box (#117) both show Seat a player and Add robot on each
+  empty seat. Nothing at the
   table moves the others on: within a set the next board comes by itself,
   and **Deal now** only asks for the player who presses it (#72, #98).
 - **Nothing is dealt before Start** (bb#73). Filling a table deals no
@@ -574,7 +582,7 @@ arrives, and the app falls back to what each request returns.
 | `BoardResultPanel`, `NextBoardBox` | the result once a board is finished, at a glance: one big row with the contract in table notation ("2♣ by West +2") and your score (N-S's, tagged, for someone who didn't play it), the tricks ("10 tricks · by claim"), then the set's position and the board's matchpoints for your side when known, and the countdown to the set's next board ("Next board in 0:08", then "Dealing the next board…") with the optional **Deal now** and, once pressed, the humans who haven't yet |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, a forfeit's reason, each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score) |
-| `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead) |
+| `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead), plus, with `manage`, **Seat a player** / **Add robot** per empty seat (`seatPlayer` / `addRobot` events; the play page runs them, #117) |
 | `RobotBadge` | the "robot" mark next to a robot's name (also on Home, Tables, Table detail and the profile sheet) |
 | `AdminBadge` | the "admin" mark next to an admin's name, wherever `RobotBadge` goes, plus `StartBox` and the User profile page |
 

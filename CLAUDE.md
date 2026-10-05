@@ -230,7 +230,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   goes, plus `StartBox` and `UserProfilePage`. `TableUpdated` leaves
   `can_manage` out, so the store's
   `withCanManage` keeps the last HTTP value and refetches the table when
-  `moderated_by` changes (taking only `can_manage` from that answer). The
+  `moderated_by` changes (taking only `can_manage` from that answer);
+  `canManageDue` keeps asking on every broadcast until an answer for the
+  held moderator lands (`loadTable` clears it too), and a failed refetch
+  retries `CAN_MANAGE_RETRIES` (3) times `CAN_MANAGE_RETRY_MS` (3 s) apart
+  while the table is watched (#117). The play page's `StartBox` (`manage`
+  = `can_manage`, with `showSeats`) offers Seat a player / Add robot per
+  empty seat (`seatPlayer`/`addRobot` events, `fillingSeat`), run by the
+  page's `fillSeat` (picking yourself is a `join`; a refusal toasts and
+  `loadTable`s, 401 → login) with its own `SeatPlayerSheet` (#117). The
   channel payload is typed `BroadcastTable`, `Table` adds `can_manage`.
   "Seat a player" opens `src/components/SeatPlayerSheet.vue`, a search over
   `GET /users?search=` (`searchUsers` in `src/services/users.ts`) through
