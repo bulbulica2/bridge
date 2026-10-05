@@ -1,10 +1,17 @@
 <template>
-  <!-- Who is away mid-set, each with the time left before their side loses
-       the set (bridge_backend docs/API.md, Away mid-set). The deadline is the
-       seat's forfeit_at; the clock here only redraws it every second. With
-       `held`, the viewer's own held seat instead, seen away from the table. -->
+  <!-- Who is away mid-set (bridge_backend docs/API.md, Away mid-set). Only
+       the away player the board waits for (on turn) has a clock, the seat's
+       forfeit_at, which this redraws every second: that line comes first,
+       highlighted. Any other away seat gets one plain line, or one line
+       together, until the turn reaches it. With `held`, the viewer's own
+       held seat instead, seen away from the table. -->
   <div v-if="lines.length > 0" class="away-notice" role="status" aria-live="polite">
-    <p v-for="line in lines" :key="line.key" class="away-line" :class="{ 'away-urgent': line.urgent }">
+    <p
+      v-for="line in lines"
+      :key="line.key"
+      class="away-line"
+      :class="{ 'away-clock': line.clock, 'away-urgent': line.urgent }"
+    >
       {{ line.text }}
     </p>
   </div>
@@ -14,7 +21,15 @@
 import { computed } from 'vue';
 import { useNow } from '@/composables/useNow';
 import type { BroadcastTable } from '@/services/tables';
-import { awaySeats, awayText, heldText, myAwaySeat, secondsLeft } from '@/utils/away';
+import {
+  awaySeats,
+  awayText,
+  awayTogetherText,
+  forfeitSuspended,
+  heldText,
+  myAwaySeat,
+  secondsLeft,
+} from '@/utils/away';
 
 const props = withDefaults(
   defineProps<{
@@ -38,16 +53,48 @@ const seats = computed(() => {
   return awaySeats(table, props.me);
 });
 
-const now = useNow(() => seats.value.length > 0);
+const waits = computed(() => !!props.table && forfeitSuspended(props.table));
+
+// The backend runs one clock at a time; should two ever show, the nearest
+// deadline comes first.
+const clocked = computed(() =>
+  seats.value
+    .filter((s) => !!s.forfeit_at)
+    .sort((a, b) => Date.parse(a.forfeit_at as string) - Date.parse(b.forfeit_at as string)),
+);
+const waiting = computed(() => seats.value.filter((s) => !s.forfeit_at));
+
+const now = useNow(() => clocked.value.length > 0);
+
+interface Line {
+  key: string;
+  text: string;
+  clock: boolean;
+  urgent: boolean;
+}
 
 // The last minute is urgent.
-const lines = computed(() =>
-  seats.value.map((seat) => ({
+const lines = computed<Line[]>(() => {
+  const tell = props.held ? heldText : awayText;
+  const out: Line[] = clocked.value.map((seat) => ({
     key: seat.seat,
-    text: props.held ? heldText(seat, now.value) : awayText(seat, now.value),
-    urgent: !!seat.forfeit_at && secondsLeft(seat.forfeit_at, now.value) <= 60,
-  })),
-);
+    text: tell(seat, now.value, waits.value),
+    clock: true,
+    urgent: secondsLeft(seat.forfeit_at as string, now.value) <= 60,
+  }));
+  if (waiting.value.length === 1) {
+    const seat = waiting.value[0];
+    out.push({ key: seat.seat, text: tell(seat, now.value, waits.value), clock: false, urgent: false });
+  } else if (waiting.value.length > 1) {
+    out.push({
+      key: waiting.value.map((s) => s.seat).join(''),
+      text: awayTogetherText(waiting.value, waits.value),
+      clock: false,
+      urgent: false,
+    });
+  }
+  return out;
+});
 </script>
 
 <style scoped>
@@ -67,6 +114,10 @@ const lines = computed(() =>
 
 .away-line + .away-line {
   margin-top: 4px;
+}
+
+.away-clock {
+  font-weight: 600;
 }
 
 .away-urgent {

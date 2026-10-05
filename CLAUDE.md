@@ -561,15 +561,25 @@ The user's standing rule (#91): **no task may leave code coverage under
 - **Away mid-set and the forfeit** (#74, bb#76, backend `docs/API.md` Away
   mid-set): a seat has `away_since`/`forfeit_at` (`TableSeat`, on payloads
   and `TableUpdated`); the backend's `tables:check-away` marks a quiet
-  player away after a minute and their side forfeits 3 minutes on.
+  player away after a minute; the clock runs **only for the away player
+  the board waits for** (on turn, #116, bb#113): only that seat has
+  `forfeit_at` (3 minutes from when the board began waiting for them),
+  every other away seat `forfeit_at: null` until the turn reaches it.
   `src/utils/away.ts`: `awaySeats`, `myAwaySeat`, `secondsLeft`/
-  `formatClock`, `awayText` ("East is away. E-W lose the set in 2:41
-  unless they come back."), `heldText` (own held seat), `setAtStake`
-  (side + `forfeits`, false for an admin or while any away seat has
-  `forfeit_at: null`), `lostSetText`, `SET_FORFEIT_MINUTES` (only quoted
-  in confirmations; countdowns read `forfeit_at`). `AwayNotice.vue`
-  (`useNow` ticks it, `held` for the own seat) on the play page above the
-  status, the detail page, Tables and Home; `BridgeTable`'s `away` prop and
+  `formatClock`, `awayText(seat, now, waits)` (clock: "East is away. E-W
+  lose the set in 2:41 unless they come back."; none: "… if they aren't
+  back within 3:00 of their turn."; `waits`: "The table waits for
+  them."), `awayTogetherText` ("South and West are away. …"), `heldText`
+  (own held seat, same split), `forfeitSuspended(table)` (an away seat's
+  `user.is_admin`: nobody forfeits, the `waits` case), `setAtStake` (side
+  + `forfeits`, false for an admin viewer or while `forfeitSuspended`;
+  never read from a null `forfeit_at`), `lostSetText`,
+  `SET_FORFEIT_MINUTES` (quoted in confirmations and the no-clock lines;
+  countdowns read `forfeit_at`). `AwayNotice.vue` (`useNow` ticks it,
+  `held` for the own seat; the clocked seat first with `away-clock`, the
+  others one plain line each or `awayTogetherText`, never two
+  countdowns) on the play page above the status, the detail page, Tables
+  and Home; `BridgeTable`'s `away` prop and
   the detail compass tag seats. The tables store: `leave()` returns
   `held: true` on the 202 (still seated) and sets `heldTableId`, which
   `shouldBeat()` excludes; `watchTable(id, away)` also holds a seat found

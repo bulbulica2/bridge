@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/69-table-chat-during-the-board`._
+_Status as of branch `bulbulica2/70-one-forfeit-clock-at-a-time`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -169,8 +169,9 @@ robots you stay on
 the list and wait for players. Moving to another table asks first, because
 leaving your seat can abandon a board there; in the middle of a set it
 says **Your side loses the set now** (the backend forfeits it at once,
-bb#76). After a Leave mid-set a notice at the top counts down to the
-forfeit, with **Come back to …** (opens the game). No live updates on this
+bb#76). After a Leave mid-set a notice at the top says your seat is held
+(counting down to the forfeit once the board waits for you, #116), with
+**Come back to …** (opens the game). No live updates on this
 page: pull to refresh.
 
 A **banned** user still sees the list, but the ban (reason and end date)
@@ -212,11 +213,14 @@ table you don't sit at, which has no channel) a note says **Live updates
 are off. Refresh to see the latest.** above a **Refresh** button (#76).
 
 **Away mid-set** (#74, bb#76). A player quiet for a minute in the middle
-of a set is marked **away** on the compass, and a notice counts down from
-their seat's `forfeit_at`: "East is away. E-W lose the set in 2:41 unless
-they come back." It clears the moment they are back. **Leave** mid-set is
-confirmed more sternly ("If you don't come back within 3 minutes, N-S lose
-the set."): the backend holds the seat (202), the page goes to `/tables`
+of a set is marked **away** on the compass. The one the board waits for
+(on turn) gets a countdown from their seat's `forfeit_at`: "East is away.
+E-W lose the set in 2:41 unless they come back."; any other away player a
+plain line with no clock until the turn reaches them ("South is away. N-S
+lose the set if they aren't back within 3:00 of their turn.", #116,
+bb#113). It clears the moment they are back. **Leave** mid-set is
+confirmed more sternly ("N-S lose the set if you aren't back within 3
+minutes of your turn."): the backend holds the seat (202), the page goes to `/tables`
 with a toast, and the store stops the heartbeat. Opening this page again
 shows your held seat counting down, with **Come back** (no Leave or seat
 buttons meanwhile). Not back in time, your side forfeits: the seat is
@@ -301,14 +305,19 @@ it is).
 
 **Going away costs the set** (#74, bb#76). A player quiet for a minute
 mid-set is tagged **away** at their seat, and a notice above the status
-line counts down from their seat's `forfeit_at`: "East is away. E-W lose
-the set in 2:41 unless they come back." (the last minute in red; with no
-deadline, an admin away, "The table waits for them."). It clears the
+line shows **one countdown at a time** (#116, bb#113): the player the
+board waits for (on turn), first and in bold, from their seat's
+`forfeit_at`: "East is away. E-W lose the set in 2:41 unless they come
+back." (the last minute in red). Any other away player gets a plain line
+with no clock ("South is away. N-S lose the set if they aren't back
+within 3:00 of their turn.", or "South and West are away. …" for two);
+when the turn reaches them their countdown starts at 3:00. While an admin
+is away, nobody forfeits: "The table waits for them." It clears the
 moment they are back. Opening this page is coming back: a seat held after
 a Leave, or marked away, is yours again, with a **Welcome back. The set
 goes on.** toast and the board reloaded. Mid-set the heartbeat keeps going
-while the tab is hidden, so switching tabs is not going away. Not back in
-3 minutes, their side **forfeits**: a toast ("bob is gone: E-W lose set 2
+while the tab is hidden, so switching tabs is not going away. Not back
+within 3 minutes of their turn, their side **forfeits**: a toast ("bob is gone: E-W lose set 2
 by forfeit."), the board in progress is abandoned, and the set's results
 show (below). If it was you, your seat is freed and the page goes to the
 set's results. **Leave the table** mid-set (in the next-board box) is

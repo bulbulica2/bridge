@@ -138,11 +138,11 @@ describe('leaving mid-set', () => {
   test('a Leave only holds the seat, and not coming back loses the set', () => {
     const during = leaveWarning('play', 7, STAKE)
     expect(during).toContain('Board 7 is in progress and set 3 isn\'t over: your seat is held')
-    expect(during).toContain("If you don't come back within 3 minutes, N-S lose the set.")
+    expect(during).toContain("N-S lose the set if you aren't back within 3 minutes of your turn.")
 
     const between = leaveWarning('finished', 7, STAKE)
     expect(between).toBe(
-      "Set 3 isn't over: your seat is held for you. If you don't come back within 3 minutes, N-S lose the set.",
+      "Set 3 isn't over: your seat is held for you. N-S lose the set if you aren't back within 3 minutes of your turn.",
     )
   })
 
@@ -166,11 +166,11 @@ describe('leaving mid-set', () => {
     )
   })
 
-  test('the toast after a held Leave says how long and what is at stake', () => {
+  test('the toast after a held Leave says the time counts from the user\'s turn', () => {
     expect(heldNotice(STAKE)).toBe(
-      'You left in the middle of a set. Your seat is held for 3 minutes: come back before then, or N-S lose the set.',
+      "You left in the middle of a set. Your seat is held: N-S lose the set if you aren't back within 3 minutes of your turn.",
     )
-    expect(heldNotice(null)).toContain('or your side loses the set.')
+    expect(heldNotice(null)).toContain("your side loses the set if you aren't back within 3 minutes of your turn.")
   })
 })
 
