@@ -758,7 +758,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   loop: `src/composables/useDoubleDummy.ts` (`analysis`, `load()`; failures
   quiet) for the table, `BoardReview`'s own timer for a review.
   `src/utils/doubleDummy.ts`: `doubleDummyLine` ("Double dummy: 4♠ by
-  South makes 10" / `DOUBLE_DUMMY_PENDING`), `leadsInHandOrder`
+  South makes 10" / `DOUBLE_DUMMY_PENDING` / `DOUBLE_DUMMY_UNAVAILABLE`,
+  "…isn't set up on this server.": `unavailable` is the server without a
+  solver, bb#125, never the board, #138), `leadsInHandOrder`
   (`HAND_SUITS`), `bestLeads`, `leadSummary` ("Your lead ♠K: declarer can
   make 10. Best was ♥2: 9."), `doubleDummyLines` (text export),
   `pbnOptimumResultTable`. `DoubleDummyTable.vue` (N E S W down, ♣ ♦ ♥ ♠

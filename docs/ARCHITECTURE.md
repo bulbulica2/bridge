@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/81-partner-alerts-after-the-auction`._
+_Status as of branch `bulbulica2/84-double-dummy-unavailable-wording`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -902,6 +902,10 @@ board's results they are refused (403) until you have finished the board.
   **once** more 5 s later (`DOUBLE_DUMMY_REREAD_MS`): `useDoubleDummy` for
   the table, `BoardReview` itself for a review. No polling loop; a refresh or
   another visit asks afresh.
+- **Unavailable** means the server has no solver set up (the backend's
+  `DDS_LIBRARY`, bb#125), for every board alike, so it reads "Double dummy
+  analysis isn't set up on this server." (`DOUBLE_DUMMY_UNAVAILABLE`, #138)
+  in the table and in `BoardResultPanel`'s line, and is never read again.
 
 Where it shows: `BoardReview` (the review page and the play page's review
 modal) has `DoubleDummyTable`, the contract played marked, and
