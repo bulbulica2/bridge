@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/77-player-stats`._
+_Status as of branch `bulbulica2/81-partner-alerts-after-the-auction`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -299,7 +299,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #102 (board chat, needs bb#101);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -403,7 +403,9 @@ What it shows by phase:
   it; it clears once the call is taken and stays if the call is refused.
   In the grid an alerted call stands out in amber with a "!"; hovering it
   (or a tap) pops up its explanation, or "Alerted, no explanation given.",
-  and your own reads "You alerted: …". Partner's alerts never show. Any
+  and your own reads "You alerted: …". Partner's alerts don't show while
+  the auction lasts; once the play starts they do, as "Partner alerted:
+  …" (with no Ask). Any
   opponent's call, alerted or not, pops up **Ask what it means** until the
   board is over: a robot answers at once in the pop-up; a person gets a
   toast and a sheet to type the answer, which then shows like an
@@ -551,7 +553,7 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
-| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a robot taking a seat over), `PlayingUpdated` (with `turn_deadline`); `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer), `CallQuestioned` (a question about your call), `BoardMessageSent` (a chat message you may read) |
+| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a robot taking a seat over), `PlayingUpdated` (with `turn_deadline`); `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer; in the play, anyone's answer), `CallQuestioned` (a question about your call), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read) |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
 reloads (after a set's last board, Deal now 409s: "The set is over: press Start
@@ -562,7 +564,7 @@ Start once the table is full again).
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
 bb#40 (next board; bb#74 dropped its `everyone`; bb#97 deals it by itself), bb#43 (results), bb#59 (claims), bb#96 (claims expire), bb#115 (claims answered at once, the claim lock),
-bb#75 (sets of four boards), bb#76 (away mid-set), bb#120 (the turn clock, a robot taking the seat of a player who walks out), bb#100 (alerts), bb#101 (board chat).
+bb#75 (sets of four boards), bb#76 (away mid-set), bb#120 (the turn clock, a robot taking the seat of a player who walks out), bb#100 (alerts), bb#124 (partner's alerts after the auction), bb#101 (board chat).
 
 ## My boards — `/history`
 

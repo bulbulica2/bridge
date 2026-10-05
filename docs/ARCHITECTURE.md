@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/77-player-stats`._
+_Status as of branch `bulbulica2/81-partner-alerts-after-the-auction`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -228,7 +228,7 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 |---|---|---|
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `replacedFrom` (a set a robot took your seat over in) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissReplaced`, `clear` (on logout); owns the table channel and the heartbeat |
-| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
+| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned` / `AuctionAlertsShown`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
 | `chat` | the chat of the board the play page shows: `tableId`, `playingId`, `messages`, `open` (the panel), `about` (the call a message is about), `unread` | `follow` (the play page's board: read, emptied for a new board, read again once finished), `load`, `receive`, `send`, `setOpen`, `askAbout`, `clear`; see [Board chat](#board-chat) |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, double dummy tables per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadDoubleDummy`, `loadSet`, `loadReview` |
 | `users` | public profiles by id (with `ban`/`bans` for an admin), players' stats by id (your own under your id) | `load`, `loadStats` (a number, or `null` for your own; read again every time a page shows them, since they change after every board; a 404 drops the cached ones), `ban`, `liftBan`, `clear` (on logout) |
@@ -472,7 +472,7 @@ doesn't send the XSRF header Sanctum wants.
 | Channel | Who owns it | Events |
 |---|---|---|
 | `private-table.{id}` | `tables` store, following your seat | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state in its compact shape, expanded by the `game` store) |
-| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call), `CallQuestioned` (an opponent asks what your call means), `BoardMessageSent` (a chat message you may read: handed to the `chat` store), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
+| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call; in the play, anyone's answer), `CallQuestioned` (an opponent asks what your call means), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read: handed to the `chat` store), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
 
 - The table channel only admits players seated there, and the server never
   ends a subscription. So the `tables` store subscribes and unsubscribes
@@ -497,8 +497,9 @@ doesn't send the XSRF header Sanctum wants.
   instead (and the lists, for a stale id). HTTP answers, `HandDealt` and
   `DeclarerHandShown` are not compact.
 - Alerts never come over the table channel: the bidder's partner mustn't
-  see them, so `PlayingUpdated` carries none and each opponent gets
-  `CallAlerted` on their own channel (see [Alerts](#alerts)). Nor does the
+  see them during the auction, so `PlayingUpdated` carries none and each
+  opponent gets `CallAlerted` on their own channel; partner gets them as
+  `AuctionAlertsShown` once the auction is over (see [Alerts](#alerts)). Nor does the
   board chat: each message goes as `BoardMessageSent` to the user channel
   of every human who may read it (see [Board chat](#board-chat)).
 - For the same 10 KB, a seat's `user` and the state's `players` carry no
@@ -755,25 +756,35 @@ A player may **alert** their own call for the opponents (#101, bb#100;
 **Alert** field (an explanation, up to `ALERT_MAX` = 200 characters in
 `utils/limits.ts`, and an Alert toggle, which typing turns on) goes out
 with the next call (`game.call(bidId, alert)`), is cleared once the call is
-taken, and stays if it is refused. The opponents see it; **partner never
-does** (that would be unauthorised information), so:
+taken, and stays if it is refused. The opponents see it; **partner
+doesn't while the auction lasts** (that would be unauthorised information),
+only once it is over (#135, bb#124), so:
 
 - Your own state (`GET /tables/{id}/playing` and the action answers) has
   `alert` (`{explanation}` or null) and `question` (`{asked_by}`, an open
-  question) on the opponents' calls and your own, null on partner's.
+  question) on the opponents' calls and your own, null on partner's. From
+  the end of the auction (phase `play`) every call's `alert` is there,
+  partner's too; `question` stays null on partner's calls.
 - `PlayingUpdated` carries neither. The `game` store keeps an **alert
   book** (`AlertBook` in `utils/alerts.ts`): the board's notes by call
   index, filled from every HTTP state (`takeNotes`) and from the user
-  channel's `CallAlerted` / `CallQuestioned`, and laid back on every state
+  channel's `CallAlerted` / `CallQuestioned` / `AuctionAlertsShown`, and
+  laid back on every state
   it shows (`withNotes`), so a known alert is never dropped. A new board
   starts a new book; news of an older board is ignored.
+- When the auction ends, each human whose partner alerted something gets
+  those alerts once as `AuctionAlertsShown` (the auction usually ends on a
+  robot's call, so no HTTP answer of ours has them yet): the store's
+  `applyAuctionAlertsShown` notes each into the book, only for the board it
+  holds (another table's, an older or a newer board's is dropped; a later
+  load reads them from the state).
 - An opponent's call can be **asked** about until the board is over
   (`game.askAboutCall(index)`). A robot answers at once, in the answer; a
   human bidder gets `CallQuestioned` (a toast wherever they are, and on the
   play page the `ExplainCallSheet` opens by itself, once per question) and
   answers with `game.explainCall(index, text)`, which reaches both
-  opponents as `CallAlerted` (the asker's side is told the answer in a
-  toast).
+  opponents as `CallAlerted` (all four humans during the play; the asker's
+  side is told the answer in a toast, the bidder never their own).
 - Robots alert their conventional calls themselves (Stayman, transfers,
   the strong 2♣ …), with their explanation.
 - Once the board is finished every alert is public: the review
@@ -784,7 +795,11 @@ does** (that would be unauthorised information), so:
 so it reads in light and dark mode, never the red and green of
 vulnerability) with a "!"; hovering it with a mouse, or a tap, pops up
 the explanation as plain text, or "Alerted, no explanation given."; your
-own reads "You alerted: …".
+own reads "You alerted: …" and partner's "Partner alerted: …". **Ask**
+and **Ask in the chat** are only on the opponents' calls, never partner's.
+During the auction the play page passes `bidding` to `AuctionHistory`, so
+partner's calls show no alert even if one is held (`isPartner` in
+`utils/alerts.ts`).
 
 ## Board chat
 

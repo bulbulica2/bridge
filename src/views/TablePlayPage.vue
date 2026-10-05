@@ -275,8 +275,9 @@
             {{ status }}
           </p>
 
-          <!-- Alerted calls stand out; until the board is over, an
-               opponent's call may be asked about and ours answered. -->
+          <!-- Alerted calls stand out (partner's only once the auction is
+               over); until the board is over, an opponent's call may be
+               asked about and ours answered. -->
           <AuctionHistory
             v-if="playing.phase === 'auction' && playing.auction"
             :auction="playing.auction"
@@ -285,6 +286,7 @@
             :turn="playing.turn"
             :players="players"
             live
+            bidding
             :busy="noting"
             @ask="askAbout"
             @explain="explainIndex = $event"

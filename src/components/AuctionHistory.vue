@@ -28,6 +28,7 @@
               :my-seat="mySeat"
               :live="live"
               :busy="busy"
+              :bidding="bidding"
               @ask="emit('ask', $event)"
               @explain="emit('explain', $event)"
               @chat="emit('chat', $event)"
@@ -64,8 +65,10 @@ const props = withDefaults(
     live?: boolean;
     // A question or an answer is on its way.
     busy?: boolean;
+    // The auction is still on: partner's alerts stay hidden.
+    bidding?: boolean;
   }>(),
-  { turn: null, players: () => ({}), live: false, busy: false },
+  { turn: null, players: () => ({}), live: false, busy: false, bidding: false },
 );
 
 const emit = defineEmits<{

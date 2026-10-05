@@ -6,6 +6,7 @@ import { clearSubscribed, resetLiveStatus, setConnection, setSubscribed } from '
 import type { Ban } from './auth';
 import type { BoardMessageSentEvent } from './chat';
 import type {
+  AuctionAlertsShownEvent,
   CallAlertedEvent,
   CallQuestionedEvent,
   CompactPlaying,
@@ -105,11 +106,13 @@ export function listenToTable(
 // The user's own channel carries what only they may see: their cards
 // (`HandDealt`) each time a board is dealt at their table, a robot
 // declarer's cards (`DeclarerHandShown`) when they, its dummy, are to play
-// them, an opponent's alert (`CallAlerted`), which their partner mustn't see,
-// a question about one of their own calls (`CallQuestioned`), a board chat
-// message they may read (`BoardMessageSent`, never on the table channel,
-// which partner hears too), and `UserBanned` when an admin bans them (their
-// session is already gone by then).
+// them, an opponent's alert (`CallAlerted`), which their partner mustn't see
+// during the auction (anyone's answer, in the play), a question about one of
+// their own calls (`CallQuestioned`), a board chat message they may read
+// (`BoardMessageSent`, never on the table channel, which partner hears too),
+// partner's alerts once the auction is over (`AuctionAlertsShown`), and
+// `UserBanned` when an admin bans them (their session is already gone by
+// then).
 export function listenToUser(
   userId: number,
   onHandDealt: (event: HandDealtEvent) => void,
@@ -118,6 +121,7 @@ export function listenToUser(
   onCallAlerted: (event: CallAlertedEvent) => void,
   onCallQuestioned: (event: CallQuestionedEvent) => void,
   onBoardMessage: (event: BoardMessageSentEvent) => void,
+  onAlertsShown: (event: AuctionAlertsShownEvent) => void,
 ) {
   getEcho()
     .private(`App.Models.User.${userId}`)
@@ -126,6 +130,7 @@ export function listenToUser(
     .listen('CallAlerted', onCallAlerted)
     .listen('CallQuestioned', onCallQuestioned)
     .listen('BoardMessageSent', onBoardMessage)
+    .listen('AuctionAlertsShown', onAlertsShown)
     .listen('UserBanned', onBanned);
 }
 
