@@ -20,6 +20,34 @@
       </li>
     </ul>
 
+    <!-- A manager fills the empty seats from here too (the table's page has
+         the same buttons), so being left alone at the game table is no dead
+         end. -->
+    <ul v-if="fillable.length > 0" class="start-fill" aria-label="Fill the empty seats">
+      <li v-for="seat in fillable" :key="seat" :data-fill-seat="seat">
+        <span class="start-fill-seat">{{ seat }}</span>
+        <ion-button
+          size="small"
+          fill="outline"
+          class="start-seat-player"
+          :disabled="busy || fillingSeat !== null"
+          @click="emit('seatPlayer', seat)"
+        >
+          Seat a player
+        </ion-button>
+        <ion-button
+          size="small"
+          fill="outline"
+          class="start-add-robot"
+          :disabled="busy || fillingSeat !== null"
+          @click="emit('addRobot', seat)"
+        >
+          <ion-spinner v-if="fillingSeat === seat" name="crescent" />
+          <span v-else>Add robot</span>
+        </ion-button>
+      </li>
+    </ul>
+
     <p v-if="waiting" class="start-detail" aria-live="polite">{{ waiting }}</p>
 
     <ion-button
@@ -53,7 +81,7 @@ import { IonButton, IonSpinner } from '@ionic/vue';
 import AdminBadge from '@/components/AdminBadge.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import { SEATS } from '@/services/tables';
-import type { BroadcastTable } from '@/services/tables';
+import type { BroadcastTable, Seat } from '@/services/tables';
 import { isReady, startWaiting } from '@/utils/start';
 
 const props = withDefaults(
@@ -65,14 +93,23 @@ const props = withDefaults(
     showSeats?: boolean;
     // A Start or a Cancel on its way.
     busy?: boolean;
+    // The viewer manages the table (`can_manage`): with the seats shown,
+    // each empty one offers Seat a player and Add robot.
+    manage?: boolean;
+    // The empty seat being filled, while that request is on its way.
+    fillingSeat?: Seat | null;
   }>(),
-  { showSeats: false, busy: false },
+  { showSeats: false, busy: false, manage: false, fillingSeat: null },
 );
 
-const emit = defineEmits<{ start: []; cancel: [] }>();
+const emit = defineEmits<{ start: []; cancel: []; seatPlayer: [seat: Seat]; addRobot: [seat: Seat] }>();
 
 const seats = computed(() =>
   SEATS.map((seat) => ({ seat, held: props.table.seats.find((s) => s.seat === seat) ?? null })),
+);
+
+const fillable = computed(() =>
+  props.showSeats && props.manage ? seats.value.filter((s) => !s.held).map((s) => s.seat) : [],
 );
 
 const iAmReady = computed(
@@ -137,6 +174,29 @@ const waiting = computed(() => startWaiting(props.table, props.me));
 
 .is-ready .start-mark {
   color: var(--ion-color-success-shade, #28ba62);
+}
+
+.start-fill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.start-fill li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.start-fill-seat {
+  min-width: 1.5em;
+  font-weight: 700;
 }
 
 .start-button {

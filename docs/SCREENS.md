@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/70-one-forfeit-clock-at-a-time`._
+_Status as of branch `bulbulica2/71-manager-controls-when-left-alone`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -326,7 +326,11 @@ confirmed more sternly, as on the detail page.
 What it shows by phase:
 - **waiting**: who's seated, and the same Start box as on the detail page
   (with each seat's ready mark), so opening the game table early is no dead
-  end. The last Start deals the board right here.
+  end. The last Start deals the board right here. A manager (`can_manage`)
+  also gets **Seat a player** and **Add robot** in the box for each empty
+  seat, as on the detail page (#117): left alone after the others were
+  freed or the set forfeited, they fill the table without leaving the
+  game. Everyone else sees the empty seats and Start only.
 - **auction**: your hand, the auction grid, and on your turn the bidding
   box. The contract (or "Passed out") is announced when the last call
   arrives. Above the calls, an **Alert** field: "Explain to the opponents
@@ -462,6 +466,7 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
 | `game.next()` (**Deal now**, optional) | `POST /tables/{id}/playing/next` |
 | `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
+| `tables.seatRobot()`, `tables.seatUser()` (managers, Start box, #117) | `POST /tables/{id}/seats/robots`, `GET /users?search=` + `POST /tables/{id}/seats/users` (picking yourself is `tables.join()`, `POST /tables/{id}/seats`); a refusal toasts and rereads the table |
 | `game.load()` 2 s after a claim's or the next board's deadline with no update | `GET /tables/{id}/playing` |
 | `history.loadSet()` (after each finished board, when the set ends, and on entry mid-set) | `GET /sets/{id}` |
 | `history.loadReview()` (the board review) | `GET /playings/{id}`, once per board per session |

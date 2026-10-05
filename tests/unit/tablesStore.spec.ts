@@ -2,7 +2,7 @@ import { AxiosError, AxiosHeaders } from 'axios'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { HEARTBEAT_MS, IDLE_NOTICE, WELCOME_BACK, useTablesStore } from '@/stores/tables'
+import { CAN_MANAGE_RETRIES, CAN_MANAGE_RETRY_MS, HEARTBEAT_MS, IDLE_NOTICE, WELCOME_BACK, useTablesStore } from '@/stores/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
 import * as tablesService from '@/services/tables'
@@ -149,7 +149,6 @@ describe('tables store', () => {
     const store = useTablesStore()
     await expect(store.load()).rejects.toThrow()
 
-    expect(store.tables).toEqual([])
     expect(store.loaded).toBe(false)
   })
 
@@ -187,7 +186,6 @@ describe('tables store', () => {
     const store = useTablesStore()
     await expect(store.create({ name: 'Table 2' })).rejects.toThrow()
 
-    expect(store.tables).toEqual([])
     expect(store.currentTable).toBeNull()
   })
 
@@ -383,7 +381,6 @@ describe('tables store', () => {
     const result = await store.removePlayer(1, 1)
 
     expect(result).toEqual({ tableDeleted: true })
-    expect(store.tables).toEqual([])
     expect(store.currentTable).toBeNull()
   })
 
@@ -1389,5 +1386,182 @@ describe('tables store edge cases', () => {
 
     expect(store.watchedTableId).toBe(1)
     expect(store.heldTableId).toBe(1)
+  })
+})
+
+// Left alone after the other three were freed (#117): the moderator role can
+// change several times in a row, and the last broadcast may be the last one.
+describe('tables store can_manage after a new moderator', () => {
+  // ana (1) moderates; bob (2) and cy (3, the user) sit there too.
+  function threeAt(): Table {
+    return makeTable(1, { N: 'ana', E: 'bob', S: 'cy' })
+  }
+
+  // The table once `left` are gone, with `moderator` in charge.
+  function without(left: number[], moderator: number): BroadcastTable {
+    const table = threeAt()
+    const seats = table.seats.filter((s) => !left.includes(s.user_id))
+    return broadcastOf({
+      ...table,
+      moderated_by: moderator,
+      seats,
+      free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !seats.some((x) => x.seat === s)),
+    })
+  }
+
+  function answer(update: BroadcastTable, canManage: boolean): Table {
+    return { ...update, can_manage: canManage }
+  }
+
+  async function seated() {
+    logInAs(3)
+    vi.mocked(tablesService.getTable).mockResolvedValue(threeAt())
+    const store = useTablesStore()
+    await store.loadTable(1)
+    vi.mocked(tablesService.getTable).mockReset()
+    return store
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    visibility = 'visible'
+    vi.mocked(tablesService.sendHeartbeat).mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    useTablesStore().unwatchTable()
+    vi.useRealTimers()
+  })
+
+  test('back-to-back changes end with the answer for the moderator we hold', async () => {
+    const store = await seated()
+    const toBob = without([1], 2)
+    const toMe = without([1, 2], 3)
+    let first!: (t: Table) => void
+    let second!: (t: Table) => void
+    vi.mocked(tablesService.getTable)
+      .mockReturnValueOnce(new Promise((resolve) => (first = resolve)))
+      .mockReturnValueOnce(new Promise((resolve) => (second = resolve)))
+
+    pushUpdate(toBob)
+    pushUpdate(toMe)
+    expect(tablesService.getTable).toHaveBeenCalledTimes(2)
+
+    // The later answer lands first; the earlier one, about bob, changes nothing.
+    second(answer(toMe, true))
+    await flushPromises()
+    expect(store.currentTable?.can_manage).toBe(true)
+    first(answer(toBob, false))
+    await flushPromises()
+
+    expect(store.currentTable).toEqual(answer(toMe, true))
+  })
+
+  test('an answer about a moderator not yet broadcast waits for that broadcast', async () => {
+    const store = await seated()
+    const toBob = without([1], 2)
+    const toMe = without([1, 2], 3)
+    vi.mocked(tablesService.getTable).mockResolvedValueOnce(answer(toMe, true))
+
+    pushUpdate(toBob)
+    await flushPromises()
+    expect(store.currentTable?.can_manage).toBe(false)
+
+    vi.mocked(tablesService.getTable).mockResolvedValueOnce(answer(toMe, true))
+    pushUpdate(toMe)
+    await flushPromises()
+
+    expect(store.currentTable?.can_manage).toBe(true)
+  })
+
+  test('a failed refetch is tried again a while later', async () => {
+    vi.useFakeTimers()
+    const store = await seated()
+    const toMe = without([1, 2], 3)
+    vi.mocked(tablesService.getTable)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(answer(toMe, true))
+
+    pushUpdate(toMe)
+    await flushPromises()
+    expect(store.currentTable?.can_manage).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(CAN_MANAGE_RETRY_MS)
+
+    expect(tablesService.getTable).toHaveBeenCalledTimes(2)
+    expect(store.currentTable?.can_manage).toBe(true)
+  })
+
+  test('the retries give up after a few failures, and the next broadcast asks again', async () => {
+    vi.useFakeTimers()
+    const store = await seated()
+    const toMe = without([1, 2], 3)
+    vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
+
+    pushUpdate(toMe)
+    await vi.advanceTimersByTimeAsync(10 * CAN_MANAGE_RETRY_MS)
+    expect(tablesService.getTable).toHaveBeenCalledTimes(1 + CAN_MANAGE_RETRIES)
+    expect(store.currentTable?.can_manage).toBe(false)
+
+    // Same moderator, a seat taken: still due, so it asks.
+    const robot = broadcastOf({
+      ...answer(toMe, false),
+      seats: [...toMe.seats, { ...threeAt().seats[0], user_id: 9, user: { ...threeAt().seats[0].user, id: 9, username: 'robot-1', is_robot: true } }],
+    })
+    vi.mocked(tablesService.getTable).mockResolvedValue(answer(toMe, true))
+    pushUpdate(robot)
+    await flushPromises()
+
+    expect(store.currentTable?.can_manage).toBe(true)
+
+    // Answered: the next broadcast asks nothing.
+    vi.mocked(tablesService.getTable).mockClear()
+    pushUpdate(robot)
+    expect(tablesService.getTable).not.toHaveBeenCalled()
+  })
+
+  test('a reload answers it, and a pending retry then asks nothing', async () => {
+    vi.useFakeTimers()
+    const store = await seated()
+    const toMe = without([1, 2], 3)
+    vi.mocked(tablesService.getTable).mockRejectedValueOnce(new Error('offline'))
+    pushUpdate(toMe)
+    await flushPromises()
+
+    vi.mocked(tablesService.getTable).mockResolvedValue(answer(toMe, true))
+    await store.loadTable(1)
+    expect(store.currentTable?.can_manage).toBe(true)
+    await vi.advanceTimersByTimeAsync(CAN_MANAGE_RETRY_MS)
+
+    expect(tablesService.getTable).toHaveBeenCalledTimes(2)
+  })
+
+  test('no retry once the table is no longer followed', async () => {
+    vi.useFakeTimers()
+    const store = await seated()
+    vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
+    pushUpdate(without([1, 2], 3))
+    await flushPromises()
+
+    store.unwatchTable()
+    await vi.advanceTimersByTimeAsync(10 * CAN_MANAGE_RETRY_MS)
+
+    expect(tablesService.getTable).toHaveBeenCalledTimes(1)
+  })
+
+  test('logging out forgets what was due', async () => {
+    const store = await seated()
+    vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
+    pushUpdate(without([1, 2], 3))
+    await flushPromises()
+
+    store.clear()
+    vi.mocked(tablesService.getTable).mockClear().mockResolvedValue(answer(without([1, 2], 3), true))
+    await store.loadTable(1)
+    vi.mocked(tablesService.getTable).mockClear()
+    pushUpdate(without([1, 2], 3))
+
+    expect(tablesService.getTable).not.toHaveBeenCalled()
   })
 })

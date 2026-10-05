@@ -21,6 +21,11 @@ export const HEARTBEAT_MS = 30_000;
 
 export const IDLE_NOTICE = 'You were removed from the table after being inactive.';
 
+// A `can_manage` refetch that failed is tried again this long after, at most
+// this many times in a row (see refreshCanManage).
+export const CAN_MANAGE_RETRY_MS = 3_000;
+export const CAN_MANAGE_RETRIES = 3;
+
 export const WELCOME_BACK = 'Welcome back. The set goes on.';
 
 // The set the user was last in the middle of, kept across visits: if their
@@ -160,6 +165,7 @@ export const useTablesStore = defineStore('tables', () => {
     loaded.value = false;
     kickedFrom.value = null;
     lostSet.value = null;
+    canManageDue.clear();
   }
 
   // A table came back from the backend: refresh every copy we hold.
@@ -178,33 +184,68 @@ export const useTablesStore = defineStore('tables', () => {
     return tables.value.find((t) => t.id === tableId) ?? null;
   }
 
+  // Tables whose moderator changed since our last `can_manage` from HTTP.
+  const canManageDue = new Set<number>();
+  // A failed refetch is tried again a few times, a while apart, as long as
+  // we still follow the table and nothing answered meanwhile.
+  let canManageRetry: ReturnType<typeof setTimeout> | null = null;
+  let canManageFailures = 0;
+
   // `TableUpdated` leaves `can_manage` out, so a broadcast keeps the answer we
   // last got over HTTP. Only a new moderator changes it for somebody who didn't
-  // make the request, so that asks the backend again.
+  // make the request, so that asks the backend again, and so does every
+  // broadcast until one such answer lands (`canManageDue`): left alone at a
+  // table after the others were freed, no further broadcast may come.
   function withCanManage(update: BroadcastTable | Table): Table {
     if ('can_manage' in update) {
+      canManageDue.delete(update.id);
       return update;
     }
     const held = heldTable(update.id);
-    if (!held || held.moderated_by !== update.moderated_by) {
+    const newModerator = !held || held.moderated_by !== update.moderated_by;
+    if (newModerator) {
+      canManageFailures = 0;
+    }
+    if (newModerator || canManageDue.has(update.id)) {
       refreshCanManage(update.id);
     }
     return { ...update, can_manage: held?.can_manage ?? false };
+  }
+
+  function stopCanManageRetry() {
+    if (canManageRetry !== null) {
+      clearTimeout(canManageRetry);
+      canManageRetry = null;
+    }
   }
 
   // Takes only `can_manage` from the refetch: seats keep coming over the
   // channel, and a later broadcast may already have overtaken this answer.
   // Skipped if the moderator changed again meanwhile (that refetches anew).
   async function refreshCanManage(tableId: number) {
+    canManageDue.add(tableId);
+    stopCanManageRetry();
     let fresh: Table;
     try {
       fresh = await tablesService.getTable(tableId);
     } catch {
-      // Gone or offline: the next load or catch-up says what happened.
+      // Offline or busy: try again shortly. Gone: the next load or catch-up
+      // says what happened.
+      canManageFailures++;
+      if (canManageFailures <= CAN_MANAGE_RETRIES && canManageRetry === null) {
+        canManageRetry = setTimeout(() => {
+          canManageRetry = null;
+          if (canManageDue.has(tableId) && watchedTableId.value === tableId) {
+            refreshCanManage(tableId);
+          }
+        }, CAN_MANAGE_RETRY_MS);
+      }
       return;
     }
+    canManageFailures = 0;
     const held = heldTable(tableId);
     if (held && held.moderated_by === fresh.moderated_by) {
+      canManageDue.delete(tableId);
       syncTable({ ...held, can_manage: fresh.can_manage });
     }
   }
@@ -246,6 +287,7 @@ export const useTablesStore = defineStore('tables', () => {
   // Leaving, a kick, a move and logout all end here, and so does the heartbeat.
   function unwatchTable() {
     stopHeartbeat();
+    stopCanManageRetry();
     heldTableId.value = null;
     if (watchedTableId.value !== null) {
       leaveTable(watchedTableId.value);
@@ -589,6 +631,7 @@ export const useTablesStore = defineStore('tables', () => {
   async function loadTable(tableId: number) {
     const before = watchedTableId.value === tableId ? heldTable(tableId) : null;
     const table = await tablesService.getTable(tableId);
+    canManageDue.delete(tableId);
     currentTable.value = table;
     upsertInList(table);
     followSeat(table);
