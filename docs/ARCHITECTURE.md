@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/83-claim-all-by-default`._
+_Status as of branch `bulbulica2/82-bigger-cards`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -608,14 +608,14 @@ arrives, and the app falls back to what each request returns.
 | `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
 | `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
 | `AwayNotice` | who is away mid-set: first and highlighted the one the board waits for, with the time left before their side loses the set, then the other away seats in a plain line, never more than one countdown (also on the detail page); with `held`, your own held seat (detail page, Tables, Home) |
-| `HandView` + `PlayingCard` | your hand, always ♥ ♣ ♦ ♠ (or the suits in `order`); playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses |
+| `HandView` + `PlayingCard` | your hand, always ♥ ♣ ♦ ♠ (or the suits in `order`); playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses; each card shows at least 44 px of itself, the part a tap reaches, and the hand keeps the height it had as dealt while its cards go (`useSteadyHeight`); see [Card size](#card-size) |
 | `BiddingBox` | the call grid, on your turn during the auction, under the **Alert** field for the next call (an explanation for the opponents and an Alert toggle, both owned by the page) |
 | `AuctionHistory` + `AuctionCallCell` + `CallLabel` | the calls so far, four columns rotated like the table; an alerted call in amber with a "!", its explanation in a pop-up (`usePopover`), and with `live` an **Ask** and **Ask in the chat** on the opponents' calls and an **Answer** on yours when asked |
 | `BoardChat` + `ChatMessageList` | the board chat (header **Chat**, see [Board chat](#board-chat)): the messages (sender and seat, who reads it, the time, the call it is about), then the line to write and who it goes to; `ChatMessageList` alone is the review's chat |
 | `ExplainCallSheet` | the bottom sheet for explaining one of your calls to the opponents (the answer to their question), up to 200 characters |
-| `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s); the winner is ringed but never drawn over a neighbour's rank and suit. `spread` (the pop-up) parts the four cards and tags each with its seat or **You** |
+| `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s), its cards as large as the setting and the centre's width allow; the winner is ringed but never drawn over a neighbour's rank and suit. `spread` (the pop-up) parts the four cards and tags each with its seat or **You** |
 | `LastTrickPopover` | the **Last trick** button (22 px tall; the play page keeps that row, `trick-peek`, under the trick's caption while the button is hidden, #133) under the trick in progress and its pop-up with the last trick's cards (a spread `TrickArea`, shifted sideways if centring it on the button would cross the screen's edge); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it (all of that is `usePopover`, shared with the auction's calls) |
-| `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat, in `order` (bridge order ♠ ♥ ♦ ♣ by default; dummy trumps first); given `rows`, every suit column keeps room for that many cards |
+| `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat, in `order` (bridge order ♠ ♥ ♦ ♣ by default; dummy trumps first); given `rows`, every suit column keeps room for that many cards; its text follows the card size (1.15rem ranks when Large, at most 1.1rem on a phone) |
 | `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left, all of them picked on opening (#137: a tap picks fewer, **Claim N tricks** sends; a trick finishing moves the default to the new maximum and keeps a hand-picked number while still possible), and **Concede the rest**; says the others have 10 s to answer and that no answer counts as no; `forSeat` names a robot declarer's seat claimed for |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw**, and the countdown to its `expires_at` ("Answer within 0:07", "Waiting for East and West · 0:07", ticked by `useNow`); the buttons disable at 0, so a late tap can't earn a 409; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
 | `BoardResultPanel`, `NextBoardBox` | the result once a board is finished, at a glance: one big row with the contract in table notation ("2♣ by West +2") and your score (N-S's, tagged, for someone who didn't play it), the tricks ("10 tricks · by claim"), then, at the table, one double dummy line ("Double dummy: 4♠ by South makes 10") with **Review**, then the set's position and the board's matchpoints for your side when known, and the countdown to the set's next board ("Next board in 0:08", then "Dealing the next board…") with the optional **Deal now** and, once pressed, the humans who haven't yet |
@@ -676,6 +676,34 @@ trick shown, tricks won, the trick-by-trick steps; which boards the play page's 
 board as text, PBN and JSON, and the pieces the printout uses). These are the
 best-tested parts of the app. For the rules
 themselves see [`GAME-RULES.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/GAME-RULES.md).
+
+### Card size
+
+The cards are large from the start (#136): many players are older, so the
+table has to read well without zooming. `src/utils/cardSize.ts` holds the
+setting, **Normal** (the old 48 × 68 px card), **Large** (96 × 136 px, the
+default) or **Extra large** (120 × 170 px), picked on the Account page and
+kept per browser in `localStorage` (`bridge.cardSize`, read and written in
+try/catch like the pinned menu; a browser that never chose, or whose
+storage refuses, gets Large).
+
+One CSS variable, `--card-w`, sizes every card: `PlayingCard` draws its
+height (17/12 of the width), corner, rank and pip from it, and `HandView`,
+`TrickArea` and `LeadAnalysis` set the same value on themselves so the
+overlaps and the trick's cross agree with the cards. Its value,
+`cardWidthCss`, is the setting's width capped by `--card-max` where the
+room is short: on a phone (below 576 px) a hand's cards are 72 px (1.5 ×
+the old card), and the trick's cards are at most half the table centre's
+width (the centre is a size container, so `100cqi` is its width). On a
+phone the side seats take only the room their name, tags and any hand
+need, and the centre the rest. In a hand each card shows `--card-step`
+of itself, never less than 44 px (`MIN_TARGET_PX`, the touch-target
+minimum), so a 13-card hand wraps whole suits onto two or three rows;
+`useSteadyHeight` then holds the hand at the height it had as dealt, so
+it doesn't shrink under the page as cards go (#133). The play page, the
+review page and the review modal are 720 px wide at most, room for a
+trick of Extra large cards. The printout is text and doesn't follow the
+setting.
 
 ## Alerts
 

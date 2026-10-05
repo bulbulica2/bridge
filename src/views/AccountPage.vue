@@ -92,6 +92,25 @@
             </ion-item>
           </ion-list>
 
+          <!-- How big the cards are drawn at the table, for this browser
+               (cardSize.ts); two cards show the pick at once. -->
+          <section class="card-size" aria-labelledby="card-size-title">
+            <h2 id="card-size-title" class="card-size-title">Card size</h2>
+            <ion-segment
+              :value="cardSize"
+              aria-labelledby="card-size-title"
+              @ion-change="pickCardSize($event.detail.value)"
+            >
+              <ion-segment-button v-for="size in CARD_SIZES" :key="size.value" :value="size.value">
+                <ion-label>{{ size.label }}</ion-label>
+              </ion-segment-button>
+            </ion-segment>
+            <div class="card-size-preview" aria-hidden="true">
+              <PlayingCard v-for="card in PREVIEW_CARDS" :key="card.id" :card="card" />
+            </div>
+            <ion-note class="card-size-note">Kept on this device. Large unless you pick another.</ion-note>
+          </section>
+
           <ion-button expand="block" fill="outline" :disabled="loggingOut" @click="startEdit">
             <ion-icon slot="start" :icon="createOutline" />
             Edit profile
@@ -121,13 +140,18 @@ import {
   IonInput,
   IonTextarea,
   IonNote,
+  IonSegment,
+  IonSegmentButton,
   useIonRouter,
 } from '@ionic/vue';
 import { createOutline, personCircleOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
+import PlayingCard from '@/components/PlayingCard.vue';
 import { navigateAndSettle } from '@/router/loading';
 import { useAuthStore } from '@/stores/auth';
 import type { ProfileUpdate } from '@/services/auth';
+import type { Card } from '@/services/game';
+import { CARD_SIZES, cardSize, setCardSize } from '@/utils/cardSize';
 import { errorMessage, fieldErrors } from '@/utils/errors';
 import { NAME_MAX } from '@/utils/limits';
 import { showToast } from '@/utils/toast';
@@ -135,6 +159,19 @@ import { showToast } from '@/utils/toast';
 // The backend's limit on the description (UpdateProfileRequest in
 // bridge_backend); the name's is shared with registration.
 const DESCRIPTION_MAX = 1000;
+
+// The card size preview: the ten is the widest rank.
+const PREVIEW_CARDS: Card[] = [
+  { id: -1, suit: 'S', rank: 15, rank_name: 'Ace' },
+  { id: -2, suit: 'H', rank: 10, rank_name: 'Ten' },
+];
+
+function pickCardSize(value: unknown) {
+  const size = CARD_SIZES.find((option) => option.value === value);
+  if (size) {
+    setCardSize(size.value);
+  }
+}
 
 const auth = useAuthStore();
 const ionRouter = useIonRouter();
@@ -250,6 +287,29 @@ async function logOut() {
 
 .wrap {
   white-space: normal;
+}
+
+.card-size {
+  margin: 0 16px 24px;
+}
+
+.card-size-title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.card-size-preview {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.card-size-note {
+  display: block;
+  font-size: 0.85rem;
+  text-align: center;
 }
 
 .counter {

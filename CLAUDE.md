@@ -856,6 +856,26 @@ The user's standing rule (#91): **no task may leave code coverage under
   structure, typography, plus optional utility CSS). Dark mode is wired via
   `@ionic/vue/css/palettes/dark.system.css` (follows OS setting) — swap this
   import if dark mode behavior needs to change (class-based vs. always-on).
+- **Card size** (#136): `src/utils/cardSize.ts` is the setting, `normal`
+  (the old 48 px card) / `large` (96 px, the default) / `xlarge` (120 px),
+  on the Account page (an `ion-segment` + two preview cards), kept in
+  `localStorage` `bridge.cardSize` (try/catch, like `bridge.menuPinned`;
+  anything else reads as Large). `cardWidthCss` (`min(<width>px,
+  var(--card-max, <width>px))`) is bound as `--card-w` on `PlayingCard`,
+  `HandView`, `TrickArea` and `LeadAnalysis`; everything a card draws
+  (height 17/12 of it, corner, rank, pip) and every overlap or slot is a
+  `calc()` of `--card-w`, never a fixed px. `--card-max` caps it where room
+  is short: 72 px for a hand below 576 px, half the centre's width for the
+  trick (`.centre-slot` is `container-type: inline-size`, `100cqi`), the
+  screen's width for the spread pop-up. A hand's `--card-step` (the part of
+  a card left showing) is `max(MIN_TARGET_PX = 44px, 0.46 × --card-w)`;
+  `useSteadyHeight` (`src/composables/`, ResizeObserver) holds the hand at
+  its tallest until a new deal, a size change or a width change.
+  `DummyColumns` takes `cardTextSize` as `--hand-text` (at most 1.1rem
+  below 576 px, so a finished deal's three hands fit 360 px).
+  `BridgeTable` below 576 px is `auto minmax(0, 1fr) auto`. The play page,
+  `PlayingReviewPage` and `BoardReviewModal` are 720 px wide at most (the
+  chat aside's `clamp()` uses 720 + 2 × 328 = 1376 px).
 - **Path alias**: `@/*` maps to `src/*` (configured in both `tsconfig.json`
   and `vite.config.ts` — keep both in sync if it changes).
 - **Capacitor**: `capacitor.config.ts` declares `webDir: 'dist'`, so native

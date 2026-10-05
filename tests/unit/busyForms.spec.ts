@@ -177,6 +177,22 @@ describe('Logout confirmation', () => {
     expect(showToast).toHaveBeenCalledWith('You have been logged out.', 'success')
   })
 
+  test('a second tap while logging out does nothing more', async () => {
+    const navigation = deferred()
+    vi.mocked(navigateAndSettle).mockReturnValue(navigation.promise)
+    const wrapper = mount(AccountPage)
+
+    // The button shows a spinner instead of its label meanwhile.
+    const logOut = logOutButton(wrapper)
+    await logOut.trigger('click')
+    await logOut.trigger('click')
+    navigation.resolve()
+    await flushPromises()
+
+    expect(authService.logout).toHaveBeenCalledTimes(1)
+    expect(navigateAndSettle).toHaveBeenCalledTimes(1)
+  })
+
   test('warns when the server could not be told', async () => {
     vi.mocked(authService.logout).mockRejectedValue(new Error('offline'))
     const wrapper = mount(AccountPage)
@@ -300,6 +316,19 @@ describe('Profile edit', () => {
     expect(isDisabled(wrapper.find('ion-input'))).toBe(false)
     expect(showToast).not.toHaveBeenCalled()
     expect(useAuthStore().user?.name).toBe('Ana')
+  })
+
+  test('shows any other failure below the form', async () => {
+    vi.mocked(authService.updateProfile).mockRejectedValue(new Error('offline'))
+    const wrapper = await editPage()
+
+    await wrapper.findComponent(IonInput).setValue('Ana Maria')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('.error').text()).toBe('Could not save your profile. Please try again.')
+    expect(wrapper.find('.field-error').exists()).toBe(false)
+    expect(wrapper.find('form').exists()).toBe(true)
   })
 
   test('shows username and email read-only', async () => {

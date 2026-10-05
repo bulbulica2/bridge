@@ -2,8 +2,15 @@
   <!-- The trick in the middle of the table: each card in front of the hand it
        came from, rotated like the table (the viewer's card at the bottom).
        A finished trick rings its winning card. `spread` (the Last trick
-       pop-up) parts the cards and names each seat. -->
-  <div class="trick" :class="{ spread }" role="group" :aria-label="label">
+       pop-up) parts the cards and names each seat. The cards are the card
+       size setting's (cardSize.ts), as large as the table's centre allows. -->
+  <div
+    class="trick"
+    :class="{ spread }"
+    :style="{ '--card-w': cardWidthCss }"
+    role="group"
+    :aria-label="label"
+  >
     <div
       v-for="side in SIDES"
       :key="side"
@@ -26,6 +33,7 @@ import PlayingCard from '@/components/PlayingCard.vue';
 import type { PlayedCard } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import { SUIT_NAMES, rankLabel, seatAt } from '@/utils/cards';
+import { cardWidthCss } from '@/utils/cardSize';
 import type { ScreenSide } from '@/utils/cards';
 import { trickBySide } from '@/utils/play';
 
@@ -66,39 +74,44 @@ const label = computed(() => {
 </script>
 
 <style scoped>
-/* Four card slots in a cross; the middle row overlaps the top and bottom
-   ones a little so the whole trick fits the table's centre cell. A spread
-   trick (below) drops the overlap. */
+/* Four card slots in a cross, all measured in cards (`--card-w`, and
+   `--card-h` = 17/12 of it): two cards wide and two tall. The side cards
+   lie over the top card's lower half and under the bottom card's upper
+   half, so every overlap hides a corner without an index. In the table's centre
+   (a size container, see BridgeTable) the cards shrink to fit its width.
+   A spread trick (below) drops the overlap. */
 .trick {
+  --card-max: calc(100cqi / 2);
+  --card-h: calc(var(--card-w) * 17 / 12);
   position: relative;
-  width: 124px;
-  height: 150px;
+  width: calc(var(--card-w) * 2);
+  height: calc(var(--card-h) * 2);
   margin: 0 auto;
 }
 
 .slot {
   position: absolute;
-  width: 48px;
-  height: 68px;
+  width: var(--card-w);
+  height: var(--card-h);
 }
 
 .slot-top {
   top: 0;
-  left: 38px;
+  left: calc(var(--card-w) / 2);
 }
 
 .slot-bottom {
   bottom: 0;
-  left: 38px;
+  left: calc(var(--card-w) / 2);
 }
 
 .slot-left {
-  top: 41px;
+  top: calc(var(--card-h) / 2);
   left: 0;
 }
 
 .slot-right {
-  top: 41px;
+  top: calc(var(--card-h) / 2);
   right: 0;
 }
 
@@ -120,35 +133,37 @@ const label = computed(() => {
 
 /* Spread: no overlap at all. The side cards sit halfway down, level with
    the gap between top and bottom, and a 10px gap all round leaves the
-   winner's ring room. Each seat's tag sits on the outer side of its card. */
+   winner's ring room. Each seat's tag sits on the outer side of its card.
+   A pop-up, so its cards fit the screen's width rather than the centre's. */
 .trick.spread {
-  width: 192px;
-  height: 178px;
+  --card-max: calc((100vw - 82px) / 3);
+  width: calc(var(--card-w) * 3 + 48px);
+  height: calc(var(--card-h) * 2 + 42px);
 }
 
 .spread .slot-top {
   top: 16px;
-  left: 72px;
+  left: calc(var(--card-w) + 24px);
 }
 
 .spread .slot-bottom {
   bottom: 16px;
-  left: 72px;
+  left: calc(var(--card-w) + 24px);
 }
 
 .spread .slot-left {
-  top: 55px;
+  top: calc(var(--card-h) / 2 + 21px);
   left: 14px;
 }
 
 .spread .slot-right {
-  top: 55px;
+  top: calc(var(--card-h) / 2 + 21px);
   right: 14px;
 }
 
 .seat-tag {
   position: absolute;
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;

@@ -5,8 +5,18 @@
        Given `playable`, the hand is the one being played: every card is a
        button, and the ones that can't legally go now are dimmed. The
        `forcedId` card, the only legal one, is about to play itself: it
-       stands raised and pulses until it goes (see useForcedPlay). -->
-  <div class="hand" :class="{ active: playable }" :aria-label="label" :aria-busy="busy">
+       stands raised and pulses until it goes (see useForcedPlay). The cards
+       are the card size setting's (cardSize.ts), smaller on a phone, and
+       each shows at least 44 px of itself to tap. The hand keeps the height
+       it had as dealt while its cards go (useSteadyHeight). -->
+  <div
+    ref="root"
+    class="hand"
+    :class="{ active: playable }"
+    :style="{ '--card-w': cardWidthCss, '--card-step': cardStep }"
+    :aria-label="label"
+    :aria-busy="busy"
+  >
     <div v-for="group in groups" :key="group.suit" class="suit-group">
       <template v-if="playable">
         <button
@@ -35,10 +45,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import PlayingCard from '@/components/PlayingCard.vue';
+import { useSteadyHeight } from '@/composables/useSteadyHeight';
 import type { Card, Suit } from '@/services/game';
 import { groupBySuit, HAND_SUITS } from '@/utils/cards';
+import { MIN_TARGET_PX, cardSize, cardWidthCss } from '@/utils/cardSize';
 
 const props = withDefaults(
   defineProps<{
@@ -67,13 +79,33 @@ const props = withDefaults(
 const emit = defineEmits<{ play: [card: Card] }>();
 
 const groups = computed(() => groupBySuit(props.cards, props.order));
+
+// How much of each card shows before the next one covers it: rank and suit,
+// and never less than a finger's width.
+const cardStep = `max(${MIN_TARGET_PX}px, calc(var(--card-w) * 0.46))`;
+
+// A new deal (more cards than before) or another card size: the hand's
+// height is measured afresh, then held while the cards are played.
+const root = ref<HTMLElement | null>(null);
+const deals = ref(0);
+watch(
+  () => props.cards.length,
+  (count, before) => {
+    if (count > before) {
+      deals.value++;
+    }
+  },
+);
+useSteadyHeight(root, () => [deals.value, cardSize.value]);
 </script>
 
 <style scoped>
 .hand {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   justify-content: center;
+  box-sizing: border-box;
   gap: 8px 6px;
 }
 
@@ -82,13 +114,22 @@ const groups = computed(() => groupBySuit(props.cards, props.order));
   padding-top: 10px;
 }
 
+/* A phone: 1.5 times the old card, so two suits share a row (about six
+   cards) and 13 cards take two or three rows. */
+@media (max-width: 575px) {
+  .hand {
+    --card-max: 72px;
+  }
+}
+
 .suit-group {
   display: flex;
 }
 
-/* Each card covers most of the one before it, leaving rank and suit showing. */
+/* Each card covers the one before it but for `--card-step`, which leaves
+   its rank and suit showing and is the whole of it a tap can reach. */
 .card + .card {
-  margin-left: -27px;
+  margin-left: calc(var(--card-step) - var(--card-w));
 }
 
 .card-button {

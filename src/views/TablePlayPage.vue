@@ -1572,9 +1572,10 @@ async function refresh(event: CustomEvent) {
 </script>
 
 <style scoped>
-/* Wide enough for 13 overlapping cards on one line, capped like the detail page. */
+/* Wide enough for the table's centre to hold a trick of Extra large cards
+   (cardSize.ts); a hand of large cards wraps two suits to a row. */
 .play {
-  max-width: 520px;
+  max-width: 720px;
   margin: 0 auto;
 }
 
@@ -1583,12 +1584,12 @@ async function refresh(event: CustomEvent) {
    16 px, so reserving 328 px of padding (outside `max-width`, hence
    content-box) centres the column in what the chat leaves, as far from the
    chat as from the left edge. Where the column centred on the whole content
-   already clears the chat by that much (100 % >= 520 + 2 x 328 px), the
+   already clears the chat by that much (100 % >= 720 + 2 x 328 px), the
    clamp() steps the padding down to 0, so opening the chat doesn't move the
    board. 100 % is the content's width, with or without the side menu. */
 .play.with-chat-side {
   box-sizing: content-box;
-  padding-right: calc(328px - clamp(0px, (100% - 1176px) * 1000, 328px));
+  padding-right: calc(328px - clamp(0px, (100% - 1376px) * 1000, 328px));
 }
 
 /* Room to scroll the bidding box and the hand above a phone's chat sheet. */

@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/83-claim-all-by-default`._
+_Status as of branch `bulbulica2/82-bigger-cards`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -135,7 +135,11 @@ profile). Reached from the header's **Account** button.
 Shows your name, username, email and description. **Edit profile** turns
 the page into a form for name (at most 50 characters) and description (username and email are
 read-only, with the plain arrow cursor rather than the text cursor, #66;
-their text can still be selected and copied). **Log out** ends the session, closes every channel and goes to
+their text can still be selected and copied). **Card size** (#136) picks
+how big the cards are drawn at the table, **Normal**, **Large** (the
+default) or **Extra large**, with two sample cards showing the pick at
+once; it is kept in this browser (`bridge.cardSize`), not on the account.
+**Log out** ends the session, closes every channel and goes to
 `/login` with a toast.
 
 | Calls | Endpoint |
@@ -318,6 +322,15 @@ room for two lines (empty while a claim's panel says what is going on);
 and the trick's caption sits over the **Last trick** button's row, which
 keeps its height while the button is hidden. So the table and your hand
 stay put on a phone as on a desktop.
+
+**Large cards** (#136): the cards are twice the old size unless the
+Account page's **Card size** says otherwise, in your hand, dummy's and a
+robot declarer's across the top, the trick and the **Last trick** pop-up;
+dummy's columns, a claimer's and the finished deal use larger text. Every
+card in your hand shows at least 44 px of itself to tap, so on a phone the
+hand wraps whole suits, about two to a row, at 1.5 × the old size, and
+keeps the height it had as dealt while you play. On a phone the side seats
+narrow to their name and tags so the trick in the middle can be large.
 
 Like the detail page, it shows **Refresh** (under a note, **Live updates
 are off. Refresh to see the latest.**) only once live updates have been

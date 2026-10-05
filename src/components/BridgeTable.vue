@@ -429,7 +429,9 @@ function turnLabel(side: ScreenSide): string {
   background: var(--ion-color-light, #f4f5f8);
 }
 
+/* The trick's cards fit the centre's width (TrickArea's `--card-max`). */
 .centre.centre-slot {
+  container-type: inline-size;
   padding: 6px 4px;
 }
 
@@ -444,5 +446,22 @@ function turnLabel(side: ScreenSide): string {
 .board-line {
   font-size: 0.8rem;
   color: var(--ion-color-medium);
+}
+
+/* A phone: the side seats take only what their name, tags and any hand
+   need, and the centre all the rest, so the trick's cards stay large. */
+@media (max-width: 575px) {
+  .bridge-table {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .seat {
+    padding: 6px 3px;
+  }
+
+  .seat-user {
+    max-width: 64px;
+  }
 }
 </style>
