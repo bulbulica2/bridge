@@ -34,6 +34,7 @@ function waiting(): PublicPlaying {
     players: null,
     turn: null,
     acting_user_id: null,
+    turn_deadline: null,
     auction: null,
     contract: null,
     tricks: null,
@@ -56,7 +57,7 @@ function inPlay(): PublicPlaying {
     ...waiting(),
     phase: 'play',
     playing_id: 42,
-    set: { id: 5, number: 1, board: 2, of: 4, finished: false, ended: null, forfeited_by: null },
+    set: { id: 5, number: 1, board: 2, of: 4, finished: false, ended: null, replaced: [] },
     board: { id: 7, number: 7, dealer: 'W', vulnerable: 'N-S E-W' },
     players: PLAYERS,
     turn: 'W',
@@ -193,6 +194,14 @@ describe('expandPlaying', () => {
     ])
     expect(state.current_trick?.map((p) => p.seat)).toEqual(['E', 'S', 'W'])
     expect(state.dummy_hand).toEqual([c(52), c(50)])
+  })
+
+  test('carries the turn clock as it came, or none', () => {
+    const deadline = '2026-09-22T10:20:31.000000Z'
+    const clocked = { ...compactOf(inPlay()), turn_deadline: deadline }
+
+    expect(expandPlaying(clocked, CARDS, BIDS).turn_deadline).toBe(deadline)
+    expect(expandPlaying(compactOf(inPlay()), CARDS, BIDS).turn_deadline).toBeNull()
   })
 
   test('carries claim_locked as it came', () => {

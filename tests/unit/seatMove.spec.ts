@@ -11,6 +11,7 @@ import {
   moveConsequences,
   removeCost,
   removeMessage,
+  robotTakesOver,
   whoIsLeft,
 } from '@/utils/seatMove'
 import { setAtStake } from '@/utils/away'
@@ -136,18 +137,21 @@ describe('leaveNote', () => {
 })
 
 // Mid-set (setAtStake): set 3, the user sits North.
-const STAKE: SetAtStake = { number: 3, seat: 'N', side: 'ns', forfeits: true }
-const NO_FORFEIT: SetAtStake = { ...STAKE, forfeits: false }
+const STAKE: SetAtStake = { number: 3, seat: 'N', side: 'ns', held: true }
+// An admin's (or anyone's while an admin there is away): not held.
+const NOT_HELD: SetAtStake = { ...STAKE, held: false }
 
 describe('leaving mid-set', () => {
-  test('a Leave only holds the seat, and not coming back loses the set', () => {
+  test('a Leave only holds the seat, and not playing on hands it to a robot', () => {
     const during = leaveWarning('play', 7, STAKE)
-    expect(during).toContain('Board 7 is in progress and set 3 isn\'t over: your seat is held')
-    expect(during).toContain("N-S lose the set if you aren't back within 3 minutes of your turn.")
+    expect(during).toContain("Board 7 is in progress and set 3 isn't over: your seat is held")
+    expect(during).toContain(
+      "If you aren't back to play within 60 seconds of your turn, a robot takes your seat for the rest of the set.",
+    )
 
     const between = leaveWarning('finished', 7, STAKE)
     expect(between).toBe(
-      "Set 3 isn't over: your seat is held for you. N-S lose the set if you aren't back within 3 minutes of your turn.",
+      "Set 3 isn't over: your seat is held for you. If you aren't back to play within 60 seconds of your turn, a robot takes your seat for the rest of the set.",
     )
   })
 
@@ -160,51 +164,56 @@ describe('leaving mid-set', () => {
     )
   })
 
-  test('where nobody can forfeit (an admin), leaving breaks the set off at once', () => {
+  test('where the seat is not held (an admin), leaving breaks the set off at once', () => {
     const table = makeTable({ N: 1, E: 2, S: 3, W: 4 }, { boardId: 9 })
 
-    expect(leaveWarning('auction', 7, NO_FORFEIT)).toBe(
+    expect(leaveWarning('auction', 7, NOT_HELD)).toBe(
       "Set 3 isn't over: leaving ends it with no winner and abandons board 7 for the other three players.",
     )
-    expect(leaveMessage(table, 1, 'finished', 7, NO_FORFEIT)).toBe(
+    expect(leaveMessage(table, 1, 'finished', 7, NOT_HELD)).toBe(
       "Set 3 isn't over: leaving ends it with no winner. Your seat will be freed.",
     )
   })
 
-  test('the toast after a held Leave says the time counts from the user\'s turn', () => {
-    expect(heldNotice(STAKE)).toBe(
-      "You left in the middle of a set. Your seat is held: N-S lose the set if you aren't back within 3 minutes of your turn.",
+  test("the toast after a held Leave says the time counts from the user's turn", () => {
+    expect(heldNotice()).toBe(
+      "You left in the middle of a set. Your seat is held. If you aren't back to play within 60 seconds of your turn, a robot takes your seat for the rest of the set.",
     )
-    expect(heldNotice(null)).toContain("your side loses the set if you aren't back within 3 minutes of your turn.")
   })
 })
 
 describe('moving mid-set', () => {
-  test('your side loses the set now, and says so in place of the abandoned board', () => {
-    const lines = moveConsequences(makeTable({ N: 1, E: 2, S: 3, W: 4 }, { moderatedBy: 2, boardId: 9 }), 1, 'play', STAKE)
+  test('a robot takes the seat at once and plays the board on: nothing is abandoned', () => {
+    const from = makeTable({ N: 1, E: 2, S: 3, W: 4 }, { moderatedBy: 2, boardId: 9 })
 
-    expect(lines).toEqual([
+    expect(robotTakesOver(from, 1, STAKE)).toBe(true)
+    expect(moveConsequences(from, 1, 'play', STAKE)).toEqual([
       'You give up seat N at Friday club for good.',
-      'Your side loses the set now: N-S forfeit set 3, and the board in progress there is abandoned.',
+      "A robot takes your seat there for the rest of set 3, and you can't sit down there again until it is over.",
     ])
   })
 
-  test('between boards there is no board to abandon, robots or not', () => {
-    const lines = moveConsequences(makeTable({ N: 1, E: 100, S: 101, W: 102 }, { boardId: 9 }), 1, 'finished', STAKE)
+  test('with only robots left there, the set ends instead', () => {
+    const from = makeTable({ N: 1, E: 100, S: 101, W: 102 }, { boardId: 9 })
 
-    expect(lines[1]).toBe('Your side loses the set now: N-S forfeit set 3.')
+    expect(robotTakesOver(from, 1, STAKE)).toBe(false)
+    const lines = moveConsequences(from, 1, 'play', STAKE)
+    expect(lines[1]).toBe('Set 3 there ends with no winner, and the board in progress there is abandoned.')
     expect(lines[2]).toContain('Only robots are left there')
+    expect(moveConsequences(from, 1, 'finished', STAKE)[1]).toBe('Set 3 there ends with no winner.')
   })
 
-  test('where nobody can forfeit, the set there just ends', () => {
-    const lines = moveConsequences(makeTable({ N: 1, E: 2, S: 3, W: 4 }, { moderatedBy: 2, boardId: 9 }), 1, 'finished', NO_FORFEIT)
+  test('where the seat is not held, the set there just ends', () => {
+    const from = makeTable({ N: 1, E: 2, S: 3, W: 4 }, { moderatedBy: 2, boardId: 9 })
 
-    expect(lines[1]).toBe('Set 3 there ends with no winner.')
+    expect(robotTakesOver(from, 1, NOT_HELD)).toBe(false)
+    expect(robotTakesOver(from, 1, null)).toBe(false)
+    expect(moveConsequences(from, 1, 'finished', NOT_HELD)[1]).toBe('Set 3 there ends with no winner.')
   })
 })
 
 describe('confirmation alerts', () => {
-  const stake: SetAtStake = { number: 2, seat: 'N', side: 'NS', forfeits: true }
+  const stake: SetAtStake = { number: 2, seat: 'N', side: 'ns', held: true }
 
   beforeEach(() => {
     vi.mocked(alertController.create).mockClear()
@@ -231,13 +240,13 @@ describe('confirmation alerts', () => {
     await expect(confirmMove(from, { id: 9, name: 'Late night' }, 1)).resolves.toBe(false)
   })
 
-  test('confirmMove is sterner when the move loses the set', async () => {
+  test('confirmMove is sterner mid-set', async () => {
     dismissedWith = 'backdrop'
 
     await expect(
       confirmMove(makeTable({ N: 1, E: 2, S: 3, W: 4 }), { id: 9, name: 'Late night' }, 1, 'play', stake),
     ).resolves.toBe(false)
-    expect(lastAlert().header).toBe('Move to Late night and lose the set?')
+    expect(lastAlert().header).toBe('Move to Late night and leave set 2?')
     expect(lastAlert().buttons[1].text).toBe('Move anyway')
   })
 
@@ -254,15 +263,16 @@ describe('confirmation alerts', () => {
     await expect(confirmLeave(table, 1, 'finished', 3)).resolves.toBe(false)
   })
 
-  test('confirmLeave names the set at stake', async () => {
+  test('confirmLeave names the set at stake, held or broken off', async () => {
     dismissedWith = 'destructive'
 
     await confirmLeave(makeTable({ N: 1, E: 2, S: 3, W: 4 }), 1, 'play', 2, stake)
     expect(lastAlert().header).toBe('Leave in the middle of set 2?')
     expect(lastAlert().buttons[1].text).toBe('Leave anyway')
 
-    await confirmLeave(makeTable({ N: 1, E: 2, S: 3, W: 4 }), 1, 'play', 2, { ...stake, forfeits: false })
-    expect(lastAlert().buttons[1].text).toBe('Leave')
+    await confirmLeave(makeTable({ N: 1, E: 2, S: 3, W: 4 }), 1, 'play', 2, { ...stake, held: false })
+    expect(lastAlert().message).toContain('ends it with no winner')
+    expect(lastAlert().buttons[1].text).toBe('Leave anyway')
   })
 })
 
@@ -270,7 +280,7 @@ describe('confirmation alerts', () => {
 // finished and still on show. A board finishing sends no TableUpdated, so the
 // table's own copy of the set may still say it runs; the board's knows.
 describe('after the last board of a set', () => {
-  const running: SetPosition = { id: 8, number: 8, board: 4, of: 4, finished: false, ended: null, forfeited_by: null }
+  const running: SetPosition = { id: 8, number: 8, board: 4, of: 4, finished: false, ended: null, replaced: [] }
   const over: SetPosition = { ...running, finished: true, ended: 'completed' }
 
   // The admin (1) at S with three robots, board 18 still on the table.
@@ -314,9 +324,7 @@ describe('after the last board of a set', () => {
   })
 
   test('removing a robot costs nothing, nor anybody once the set is over', () => {
-    const table = { ...afterSet(), seats: afterSet().seats.map((s) => ({ ...s, forfeit_at: null })) }
-
-    expect(removeCost(table, lastBoard, 'W')).toBe('')
+    expect(removeCost(afterSet(), lastBoard, 'W')).toBe('')
     expect(removeCost({ ...makeTable({ S: 1, N: 2 }, { boardId: 18 }), set: over }, null, 'N')).toBe('')
   })
 
@@ -328,24 +336,32 @@ describe('after the last board of a set', () => {
 })
 
 describe('removing a player', () => {
-  const running: SetPosition = { id: 3, number: 3, board: 2, of: 4, finished: false, ended: null, forfeited_by: null }
+  const running: SetPosition = { id: 3, number: 3, board: 2, of: 4, finished: false, ended: null, replaced: [] }
 
-  function midSet(forfeitAt: string | null): Table {
-    const table = { ...makeTable({ N: 1, E: 2, S: 3, W: 4 }, { boardId: 7 }), set: running }
-    return { ...table, seats: table.seats.map((s) => ({ ...s, forfeit_at: s.seat === 'E' ? forfeitAt : null })) }
+  // East (2) away or not, mid-set; `seats` as makeTable's.
+  function midSet(eastAway: boolean, seats: Partial<Record<Seat, number>> = { N: 1, E: 2, S: 3, W: 4 }): Table {
+    const table = { ...makeTable(seats, { boardId: 7 }), set: running }
+    return {
+      ...table,
+      seats: table.seats.map((s) => ({ ...s, away_since: s.seat === 'E' && eastAway ? '2026-10-05T12:00:00Z' : null })),
+    }
   }
 
-  test('mid-set, kicking a player away loses the set for their side', () => {
-    expect(removeCost(midSet('2026-10-05T12:03:00Z'), null, 'E')).toBe('They are away, so E-W lose set 3 by forfeit.')
+  test('mid-set, kicking a player away hands their seat to a robot', () => {
+    expect(removeCost(midSet(true), null, 'E')).toBe('They are away, so a robot takes their seat for the rest of set 3.')
+  })
+
+  test('with nobody else human there, kicking them ends the set', () => {
+    expect(removeCost(midSet(true, { N: 100, E: 2, S: 101, W: 102 }), null, 'E')).toBe('Set 3 ends with no winner.')
   })
 
   test('mid-set, kicking a player who is there only ends the set', () => {
-    expect(removeCost(midSet(null), null, 'E')).toBe('Set 3 ends with no winner.')
+    expect(removeCost(midSet(false), null, 'E')).toBe('Set 3 ends with no winner.')
   })
 
   test('outside a set, or for an empty seat, it costs nothing', () => {
     expect(removeCost(makeTable({ N: 1, E: 2 }), null, 'E')).toBe('')
-    expect(removeCost({ ...midSet(null), seats: [] }, null, 'E')).toBe('')
+    expect(removeCost({ ...midSet(false), seats: [] }, null, 'E')).toBe('')
   })
 
   test('the message says what becomes of the seat, and of the set', () => {

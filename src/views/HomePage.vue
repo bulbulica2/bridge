@@ -39,19 +39,20 @@
               <p class="error">{{ loadError }}</p>
             </ion-text>
 
-            <!-- Our side lost a set by forfeit while we were away from it
-                 (told live, or on the next visit): its results are a tap away. -->
-            <ion-card v-if="tablesStore.lostSet" class="lost-set" color="warning">
+            <!-- A robot took our seat over in a set (our turn clock ran out
+                 while we were away from it; told live, or on the next
+                 visit): the set's results are a tap away. -->
+            <ion-card v-if="tablesStore.replacedFrom" class="replaced-from" color="warning">
               <ion-card-header>
-                <ion-card-subtitle>Set {{ tablesStore.lostSet.number }} lost by forfeit</ion-card-subtitle>
+                <ion-card-subtitle>Set {{ tablesStore.replacedFrom.number }}: a robot took your seat</ion-card-subtitle>
               </ion-card-header>
               <ion-card-content>
-                <p>{{ lostSetText(tablesStore.lostSet) }}</p>
-                <div class="lost-set-actions">
-                  <ion-button size="small" :router-link="`/sets/${tablesStore.lostSet.id}`">
+                <p>{{ replacedFromText(tablesStore.replacedFrom) }}</p>
+                <div class="replaced-from-actions">
+                  <ion-button size="small" :router-link="`/sets/${tablesStore.replacedFrom.id}`">
                     See the set
                   </ion-button>
-                  <ion-button size="small" fill="clear" color="dark" @click="tablesStore.dismissLostSet()">
+                  <ion-button size="small" fill="clear" color="dark" @click="tablesStore.dismissReplaced()">
                     Dismiss
                   </ion-button>
                 </div>
@@ -162,7 +163,7 @@ import RobotBadge from '@/components/RobotBadge.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useTablesStore } from '@/stores/tables';
 import { seatsOf } from '@/services/tables';
-import { lostSetText } from '@/utils/away';
+import { replacedFromText } from '@/utils/sets';
 import { errorMessage } from '@/utils/errors';
 
 const auth = useAuthStore();
@@ -228,11 +229,11 @@ ion-card {
   margin-bottom: 8px;
 }
 
-.lost-set p {
+.replaced-from p {
   margin: 0 0 8px;
 }
 
-.lost-set-actions {
+.replaced-from-actions {
   display: flex;
   gap: 8px;
 }

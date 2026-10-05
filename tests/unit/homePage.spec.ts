@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { IonButton } from '@ionic/vue'
 import HomePage from '@/views/HomePage.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useTablesStore } from '@/stores/tables'
 import * as tablesService from '@/services/tables'
 import type { Seat, Table } from '@/services/tables'
 
@@ -127,5 +128,26 @@ describe('HomePage.vue', () => {
     const wrapper = await mountLoggedIn()
 
     expect(wrapper.text()).toContain('Could not check your table')
+  })
+
+  test('a set a robot took our seat over in: told until dismissed, its results a tap away', async () => {
+    vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(2, { N: 'bob' })])
+    const wrapper = await mountLoggedIn()
+    const store = useTablesStore()
+
+    store.replacedFrom = { id: 9, number: 3, seat: 'E', reason: 'turn_timeout', tableId: 7 }
+    await flushPromises()
+
+    const card = wrapper.get('.replaced-from')
+    expect(card.text()).toContain('Set 3: a robot took your seat')
+    expect(card.text()).toContain(
+      "You didn't play in time: a robot took your seat. You may sit down at that table again once set 3 is over.",
+    )
+    expect(pageLinks(wrapper)).toContainEqual({ text: 'See the set', to: '/sets/9' })
+
+    const dismiss = card.findAllComponents(IonButton).find((b) => b.text() === 'Dismiss')!
+    await dismiss.trigger('click')
+    expect(store.replacedFrom).toBeNull()
+    expect(wrapper.find('.replaced-from').exists()).toBe(false)
   })
 })

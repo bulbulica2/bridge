@@ -17,8 +17,12 @@
 import { IonApp, IonProgressBar, IonRouterOutlet, IonSplitPane } from '@ionic/vue';
 import AppMenu from '@/components/AppMenu.vue';
 import BanNotice from '@/components/BanNotice.vue';
+import { useTurnTitle } from '@/composables/useTurnTitle';
 import { routeLoading } from '@/router/loading';
 import { menuPinned, PINNED_FROM } from '@/utils/menu';
+
+// Our turn while the tab is hidden: its title says so (and how long is left).
+useTurnTitle();
 </script>
 
 <style scoped>

@@ -130,13 +130,27 @@ export interface Claim {
   expires_at: string;
 }
 
-// The side that forfeited a set, in the backend's spelling.
+// A side in the backend's spelling (a set's winner).
 export type SideCode = 'NS' | 'EW';
 
-// How a set ended: all its boards played, given up by one side (a player
-// away too long, see bridge_backend docs/API.md, Away mid-set), or broken off
-// with no winner (one of its four taken out of the table otherwise).
-export type SetEnding = 'completed' | 'forfeit' | 'abandoned';
+// How a set ended: all its boards played, or broken off with no winner (one
+// of its four taken out of the table otherwise, or walking out with no other
+// human left to play on with a robot). A set is never forfeited any more
+// (bb#120): whoever walks out is replaced (`replaced`).
+export type SetEnding = 'completed' | 'abandoned';
+
+// Why a robot took a player's seat over mid-set (bridge_backend docs/API.md,
+// Away mid-set): their turn clock ran out (`turn_timeout`, or `away` if they
+// were away then), they moved to another table, or they were kicked while
+// away or banned.
+export type ReplacementReason = 'turn_timeout' | 'away' | 'moved' | 'kicked';
+
+// One player a robot took a seat over from, for the rest of the set.
+export interface SetReplacement {
+  seat: Seat;
+  user_id: number;
+  reason: ReplacementReason;
+}
 
 // Where a table is in its set of boards (bridge_backend docs/API.md, Sets):
 // the set's `id` (for GET /sets/{id}), its `number` at the table (1, 2, 3…)
@@ -151,8 +165,9 @@ export interface SetPosition {
   finished: boolean;
   // Null while the set goes on.
   ended: SetEnding | null;
-  // Set on a forfeit only.
-  forfeited_by: SideCode | null;
+  // The players a robot took a seat over from, in seat order; [] while the
+  // four who opened the set are all still there.
+  replaced: SetReplacement[];
 }
 
 // What every player at the table may see: the `PlayingUpdated` payload.
@@ -166,6 +181,13 @@ export interface PublicPlaying {
   players: Record<Seat, PublicUser> | null;
   turn: Seat | null;
   acting_user_id: number | null;
+  // When the turn clock of `acting_user_id` runs out (ISO 8601),
+  // BRIDGE_TURN_SECONDS (60) after the board began waiting for them; past
+  // it a robot takes their seat for the rest of the set (bb#120). Only a
+  // call, a card or a claim action moves it. Null whenever nobody's clock
+  // runs: `waiting`, `finished`, a claim pending, a robot or an admin on
+  // turn. Count down from it, never from when the state arrived.
+  turn_deadline: string | null;
   auction: AuctionCall[] | null;
   contract: Contract | null;
   tricks: Trick[] | null;

@@ -14,9 +14,11 @@ import { useAuthStore } from '@/stores/auth'
 import { useHistoryStore } from '@/stores/history'
 import {
   currentSet,
-  forfeitText,
-  forfeitedSeat,
   groupBySet,
+  replacedFromText,
+  replacedText,
+  replacementOf,
+  seatInSet,
   setLabel,
   setTitle,
   setPercent,
@@ -96,7 +98,7 @@ function results(overrides: Partial<SetResults> = {}): SetResults {
     finished_at: '2026-10-01T13:00:00Z',
     finished: true,
     ended: 'completed',
-    forfeited_by: null,
+    replaced: [],
     players: { N: ann, E: bo, S: cy, W: di },
     boards: [
       boardRow(1, 420),
@@ -111,7 +113,7 @@ function results(overrides: Partial<SetResults> = {}): SetResults {
 }
 
 function position(overrides: Partial<SetPosition> = {}): SetPosition {
-  return { id: 5, number: 3, board: 2, of: 4, finished: false, ended: null, forfeited_by: null, ...overrides }
+  return { id: 5, number: 3, board: 2, of: 4, finished: false, ended: null, replaced: [], ...overrides }
 }
 
 function table(set: SetPosition | null, seated: [Seat, PublicUser][] = [['N', ann], ['E', bo], ['S', cy], ['W', di]]): BroadcastTable {
@@ -168,12 +170,19 @@ describe('set helpers', () => {
       finished: true,
       ended: 'completed',
     })
-    // A forfeit between boards comes with the table only.
-    const forfeit = position({ finished: true, ended: 'forfeit', forfeited_by: 'EW' })
-    expect(currentSet(table(forfeit), { set: position() } as PublicPlaying)).toMatchObject({
+    // A set broken off between boards comes with the table only.
+    const abandoned = position({ finished: true, ended: 'abandoned' })
+    expect(currentSet(table(abandoned), { set: position() } as PublicPlaying)).toMatchObject({
       finished: true,
-      forfeited_by: 'EW',
+      ended: 'abandoned',
     })
+    // Replacements only add up: whichever copy knows more of them.
+    const robotEast = position({ replaced: [{ seat: 'E', user_id: 2, reason: 'turn_timeout' }] })
+    expect(currentSet(table(position()), { set: robotEast } as PublicPlaying)?.replaced).toEqual(robotEast.replaced)
+    expect(currentSet(table(robotEast), { set: position() } as PublicPlaying)?.replaced).toEqual(robotEast.replaced)
+    // An older payload without the list reads as none.
+    const bare = { ...position(), replaced: undefined } as unknown as SetPosition
+    expect(currentSet(table(bare), { set: bare } as PublicPlaying)?.replaced).toBeUndefined()
     // A new set beats the old one, whichever holds it.
     const next = position({ id: 6, number: 4, board: 1 })
     expect(currentSet(table(next), { set: fromBoard } as PublicPlaying)).toBe(next)
@@ -198,17 +207,45 @@ describe('set helpers', () => {
     expect(setWinnerText(results({ finished: false, ended: null, winner: null }), 'N')).toBeNull()
   })
 
-  test('a forfeit: who won it, who gave it up and why', () => {
-    const forfeit = results({ ended: 'forfeit', forfeited_by: 'EW', winner: 'NS' })
-    expect(setWinnerText(forfeit, 'S')).toBe('You won the set by forfeit.')
-    expect(setWinnerText(forfeit, 'E')).toBe('You lost the set by forfeit.')
-    // East's seat is free (or someone else's) now: East is who went.
-    const gone = forfeitedSeat(forfeit, table(position(), [['N', ann], ['S', cy], ['W', di]]))
-    expect(gone).toBe('E')
-    expect(forfeitText(forfeit, gone)).toBe("E-W forfeited, East didn't come back in time.")
-    expect(forfeitText(forfeit)).toBe('E-W forfeited the set.')
-    expect(forfeitedSeat(forfeit, null)).toBeNull()
-    expect(forfeitText(results())).toBeNull()
+  test('a robot taking a seat over, said of somebody else and of the player it replaced', () => {
+    expect(replacedText({ seat: 'E', reason: 'turn_timeout' })).toBe("East didn't play in time: a robot took their seat.")
+    expect(replacedText({ seat: 'E', reason: 'turn_timeout' }, true)).toBe(
+      "You didn't play in time: a robot took your seat.",
+    )
+    expect(replacedText({ seat: 'N', reason: 'away' })).toBe('North was away on their turn: a robot took their seat.')
+    expect(replacedText({ seat: 'N', reason: 'away' }, true)).toBe('You were away on your turn: a robot took your seat.')
+    expect(replacedText({ seat: 'S', reason: 'moved' })).toBe('South moved to another table: a robot took their seat.')
+    expect(replacedText({ seat: 'W', reason: 'kicked' })).toBe('West was removed while away: a robot took their seat.')
+    expect(replacedText({ seat: 'W', reason: 'kicked' }, true)).toBe('You were removed while away: a robot took your seat.')
+    expect(replacedFromText({ seat: 'E', reason: 'turn_timeout', number: 3 })).toBe(
+      "You didn't play in time: a robot took your seat. You may sit down at that table again once set 3 is over.",
+    )
+  })
+
+  test("the user's own replacement, but never a move they made themselves", () => {
+    const set = position({
+      replaced: [
+        { seat: 'E', user_id: 2, reason: 'turn_timeout' },
+        { seat: 'W', user_id: 4, reason: 'moved' },
+      ],
+    })
+    expect(replacementOf(set, 2)).toEqual({ seat: 'E', user_id: 2, reason: 'turn_timeout' })
+    expect(replacementOf(set, 4)).toBeNull()
+    expect(replacementOf(set, 1)).toBeNull()
+    expect(replacementOf(null, 2)).toBeNull()
+  })
+
+  test("the viewer's seat in a set: the one they play, or the one a robot took over", () => {
+    const robot = { ...bo, id: 100, username: 'robot-1', is_robot: true }
+    const set = results({
+      players: { N: ann, E: robot, S: cy, W: di },
+      replaced: [{ seat: 'E', user_id: bo.id, reason: 'turn_timeout' }],
+    })
+    expect(seatInSet(set, ann.id)).toBe('N')
+    expect(seatInSet(set, bo.id)).toBe('E')
+    expect(seatInSet(set, 99)).toBeNull()
+    expect(seatInSet(set, null)).toBeNull()
+    expect(seatInSet({ ...set, replaced: undefined } as unknown as SetResults, bo.id)).toBeNull()
   })
 
   test("the totals turned to the viewer's side", () => {
@@ -264,15 +301,28 @@ describe('SetResultsPanel', () => {
     expect(wrapper.text()).not.toContain('1160')
     expect(wrapper.text()).not.toContain('Your total')
     expect(wrapper.find('.set-total-none').exists()).toBe(false)
-    expect(wrapper.find('.set-forfeit').exists()).toBe(false)
+    expect(wrapper.find('.set-replaced').exists()).toBe(false)
   })
 
-  test('a forfeit names the side and the player who went', () => {
-    const forfeit = results({ ended: 'forfeit', forfeited_by: 'NS', winner: 'EW', boards: [boardRow(1, 420)] })
-    const wrapper = mount(SetResultsPanel, { props: { set: forfeit, mySeat: 'W', gone: 'N' } })
+  test('says whom a robot replaced, "you" for the viewer it replaced', () => {
+    const set = results({
+      replaced: [
+        { seat: 'N', user_id: ann.id, reason: 'turn_timeout' },
+        { seat: 'W', user_id: di.id, reason: 'moved' },
+      ],
+      boards: [boardRow(1, 420)],
+    })
 
-    expect(wrapper.get('.set-winner').text()).toBe('You won the set by forfeit.')
-    expect(wrapper.get('.set-forfeit').text()).toBe("N-S forfeited, North didn't come back in time.")
+    const other = mount(SetResultsPanel, { props: { set, mySeat: 'E' } })
+    expect(other.findAll('.set-replaced').map((l) => l.text())).toEqual([
+      "North didn't play in time: a robot took their seat.",
+      'West moved to another table: a robot took their seat.',
+    ])
+    // The set's result stands for the seats as they ended it.
+    expect(other.get('.set-winner').text()).toBe('You lost the set.')
+
+    const replaced = mount(SetResultsPanel, { props: { set, mySeat: 'N' } })
+    expect(replaced.get('.set-replaced').text()).toBe("You didn't play in time: a robot took your seat.")
   })
 
   test("someone who didn't play it sees N-S's matchpoints", () => {
@@ -296,7 +346,7 @@ describe('SetResultsPanel', () => {
 
   test('a set broken off before any board: no totals at all', () => {
     const wrapper = mount(SetResultsPanel, {
-      props: { set: results({ ended: 'forfeit', forfeited_by: 'NS', winner: 'EW', boards: [] }), mySeat: 'N' },
+      props: { set: results({ ended: 'abandoned', winner: null, boards: [] }), mySeat: 'N' },
     })
 
     expect(wrapper.get('.set-empty').text()).toBe('No board of this set was finished.')
@@ -407,6 +457,18 @@ describe('SetResultsPage', () => {
     expect(wrapper.text()).toContain('Table 9')
     expect(wrapper.get('.set-players').text()).toContain('N-S ann & cy')
     expect(wrapper.get('.set-winner').text()).toBe('You lost the set.')
+  })
+
+  test('a player a robot replaced still sees it from their side', async () => {
+    useAuthStore().user = { id: 4, name: 'Di', username: 'di', email: 'di@example.com' }
+    const robot = { ...di, id: 100, username: 'robot-1', is_robot: true }
+    answer(results({ players: { N: ann, E: bo, S: cy, W: robot }, replaced: [{ seat: 'W', user_id: 4, reason: 'turn_timeout' }] }))
+
+    const wrapper = mount(SetResultsPage)
+    await flushPromises()
+
+    expect(wrapper.get('.set-winner').text()).toBe('You lost the set.')
+    expect(wrapper.get('.set-replaced').text()).toBe("You didn't play in time: a robot took your seat.")
   })
 
   test('explains the 403 for a set you neither played nor finished', async () => {

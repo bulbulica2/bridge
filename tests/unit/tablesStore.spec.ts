@@ -95,7 +95,6 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>> = {}): Table
       seat,
       ready: false,
       away_since: null,
-      forfeit_at: null,
       user: {
         id: i + 1,
         name: username,
@@ -1159,11 +1158,10 @@ describe('tables store', () => {
     function midSet(awaySeat: Seat | null = null): Table {
       const table = makeTable(1, { N: 'ana', E: 'bob', S: 'cy', W: 'dee' })
       table.board_id = 9
-      table.set = { id: 5, number: 3, board: 2, of: 4, finished: false, ended: null, forfeited_by: null }
+      table.set = { id: 5, number: 3, board: 2, of: 4, finished: false, ended: null, replaced: [] }
       const seat = table.seats.find((s) => s.seat === awaySeat)
       if (seat) {
         seat.away_since = '2026-10-03T12:00:00.000000Z'
-        seat.forfeit_at = '2026-10-03T12:03:00.000000Z'
       }
       return table
     }
@@ -1269,21 +1267,46 @@ describe('tables store', () => {
       expect(showToast).not.toHaveBeenCalled()
     })
 
-    test('freed because our side forfeited: the lost set is told, and the pages go to it', async () => {
-      const store = await seatedMidSet()
+    // The update that hands our seat (East) to a robot for `reason`.
+    function replacedBy(reason: 'turn_timeout' | 'away' | 'moved' | 'kicked'): Table {
       const after = midSet()
-      after.seats = after.seats.filter((s) => s.seat !== 'E')
-      after.board_id = null
-      after.set = { ...after.set!, finished: true, ended: 'forfeit', forfeited_by: 'EW' }
+      const east = after.seats.find((s) => s.seat === 'E')!
+      east.user_id = 100
+      east.user = { ...east.user, id: 100, username: 'robot-1', is_robot: true }
+      after.set = { ...after.set!, replaced: [{ seat: 'E', user_id: 2, reason }] }
+      return after
+    }
 
-      pushUpdate(broadcastOf(after))
+    test('our turn clock ran out: told, and the pages go to the set', async () => {
+      const store = await seatedMidSet()
 
-      expect(store.lostSet).toEqual({ id: 5, number: 3, side: 'ew', tableId: 1 })
+      pushUpdate(broadcastOf(replacedBy('turn_timeout')))
+
+      expect(store.replacedFrom).toEqual({ id: 5, number: 3, seat: 'E', reason: 'turn_timeout', tableId: 1 })
       expect(store.kickedFrom).toBe(1)
-      expect(showToast).toHaveBeenCalledWith('You were away too long: E-W lost set 3 by forfeit.', 'warning')
+      expect(showToast).toHaveBeenCalledWith(
+        "You didn't play in time: a robot took your seat. You may sit down at that table again once set 3 is over.",
+        'warning',
+      )
+
+      store.dismissReplaced()
+      expect(store.replacedFrom).toBeNull()
     })
 
-    test('a forfeit while the tab was closed is told on the next visit', async () => {
+    test('a kick while away is told the same way; logging out forgets it', async () => {
+      const store = await seatedMidSet()
+
+      pushUpdate(broadcastOf(replacedBy('kicked')))
+      expect(showToast).toHaveBeenCalledWith(
+        'You were removed while away: a robot took your seat. You may sit down at that table again once set 3 is over.',
+        'warning',
+      )
+
+      store.clear()
+      expect(store.replacedFrom).toBeNull()
+    })
+
+    test('a replacement while the tab was closed is told on the next visit', async () => {
       await seatedMidSet()
       // The next visit: a fresh app, no longer seated anywhere.
       setActivePinia(createPinia())
@@ -1291,10 +1314,10 @@ describe('tables store', () => {
       vi.mocked(tablesService.listTables).mockResolvedValue([])
       const set = {
         number: 3,
-        finished: true,
-        ended: 'forfeit',
-        forfeited_by: 'EW',
-        players: { N: { id: 1 }, E: { id: 2 }, S: { id: 3 }, W: { id: 4 } },
+        finished: false,
+        ended: null,
+        players: { N: { id: 1 }, E: { id: 100 }, S: { id: 3 }, W: { id: 4 } },
+        replaced: [{ seat: 'E', user_id: 2, reason: 'away' }],
       } as unknown as SetResults
       vi.mocked(historyService.getSet).mockResolvedValue(set)
       const store = useTablesStore()
@@ -1303,12 +1326,33 @@ describe('tables store', () => {
       await flushPromises()
 
       expect(historyService.getSet).toHaveBeenCalledWith(5)
-      expect(store.lostSet).toEqual({ id: 5, number: 3, side: 'ew', tableId: 1 })
+      expect(store.replacedFrom).toEqual({ id: 5, number: 3, seat: 'E', reason: 'away', tableId: 1 })
 
       // Told once: the memory is gone.
       await store.load()
       await flushPromises()
       expect(historyService.getSet).toHaveBeenCalledTimes(1)
+    })
+
+    test('a set played on without us being replaced leaves nothing to tell on the next visit', async () => {
+      await seatedMidSet()
+      setActivePinia(createPinia())
+      logInAs(2)
+      vi.mocked(tablesService.listTables).mockResolvedValue([])
+      vi.mocked(historyService.getSet).mockResolvedValue({
+        number: 3,
+        finished: true,
+        ended: 'abandoned',
+        players: { N: { id: 1 }, E: { id: 2 }, S: { id: 3 }, W: { id: 4 } },
+        replaced: [],
+      } as unknown as SetResults)
+      const store = useTablesStore()
+
+      await store.load()
+      await flushPromises()
+
+      expect(historyService.getSet).toHaveBeenCalledWith(5)
+      expect(store.replacedFrom).toBeNull()
     })
 
     test('a set won (or lost by partner) while still seated leaves nothing to tell later', async () => {
@@ -1330,7 +1374,7 @@ describe('tables store edge cases', () => {
   function runningSet(): Table {
     const table = makeTable(1, { N: 'ana', E: 'bob', S: 'cy', W: 'dee' })
     table.board_id = 9
-    table.set = { id: 5, number: 3, board: 2, of: 4, finished: false, ended: null, forfeited_by: null }
+    table.set = { id: 5, number: 3, board: 2, of: 4, finished: false, ended: null, replaced: [] }
     return table
   }
 
@@ -1378,7 +1422,6 @@ describe('tables store edge cases', () => {
     logInAs(2)
     const held = runningSet()
     held.seats[1].away_since = '2026-10-03T12:00:00.000000Z'
-    held.seats[1].forfeit_at = '2026-10-03T12:03:00.000000Z'
     vi.mocked(tablesService.leaveSeat).mockResolvedValue(held)
     const store = useTablesStore()
 

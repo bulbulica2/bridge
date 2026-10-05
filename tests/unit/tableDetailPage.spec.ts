@@ -232,6 +232,16 @@ describe('TableDetailPage loading', () => {
 
     expect(navigate).toHaveBeenCalledWith('/tables', 'back', 'replace')
   })
+  test('replaced by a robot: off to the set we were taken out of', async () => {
+    await mountPage(makeTable({ N: 'ana', E: 'bob' }))
+    const store = useTablesStore()
+
+    store.replacedFrom = { id: 9, number: 2, seat: 'E', reason: 'kicked', tableId: 5 }
+    store.kickedFrom = 5
+    await flushPromises()
+
+    expect(navigate).toHaveBeenCalledWith('/sets/9', 'back', 'replace')
+  })
 })
 
 describe('TableDetailPage sitting down', () => {
@@ -369,7 +379,7 @@ describe('TableDetailPage manager controls', () => {
   })
 
   test('removing a player mid-set says the set ends', async () => {
-    const set = { id: 4, number: 2, board: 1, of: 4, finished: false, ended: null, forfeited_by: null }
+    const set = { id: 4, number: 2, board: 1, of: 4, finished: false, ended: null, replaced: [] }
     const wrapper = await mountPage(managed({ N: 'ana', E: 'bob' }, { board_id: 8, set }))
     vi.spyOn(useTablesStore(), 'removePlayer').mockResolvedValue({ tableDeleted: false })
 
@@ -518,7 +528,7 @@ describe('TableDetailPage manager controls', () => {
 // of the set may still say it runs (a board finishing sends no
 // TableUpdated); the finished last board the game store holds knows better.
 describe('TableDetailPage after a set', () => {
-  const running = { id: 8, number: 8, board: 4, of: 4, finished: false, ended: null, forfeited_by: null }
+  const running = { id: 8, number: 8, board: 4, of: 4, finished: false, ended: null, replaced: [] }
 
   // ana (the user) at S manages it, with robots in the other three seats.
   const robotTable = () =>

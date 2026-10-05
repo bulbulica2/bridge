@@ -130,7 +130,7 @@ function setResults(boards: SetBoardRow[], id = 5): SetResults {
     finished_at: null,
     finished: false,
     ended: null,
-    forfeited_by: null,
+    replaced: [],
     players: PLAYERS,
     boards,
     totals: { score: { ns: 0, ew: 0 }, matchpoints: { ns: 0, ew: 0 }, top: 0 },

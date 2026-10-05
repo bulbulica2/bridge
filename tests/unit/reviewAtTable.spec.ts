@@ -115,7 +115,7 @@ const position = (overrides: Partial<SetPosition> = {}): SetPosition => ({
   of: 4,
   finished: false,
   ended: null,
-  forfeited_by: null,
+  replaced: [],
   ...overrides,
 })
 

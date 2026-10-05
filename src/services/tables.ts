@@ -23,15 +23,11 @@ export interface TableSeat {
   // so everyone sees who the board waits for; a robot's is always true.
   ready: boolean;
   // Mid-set only: since when this player has been away (their last sign of
-  // life, or their Leave), their seat held for them, and when their side
-  // forfeits the set unless they are back by then. Only the away player the
-  // board waits for (on turn) has a `forfeit_at`, so at most one seat does;
-  // it is null for anyone else away (not their turn yet, nobody on turn),
-  // for an away admin, and for everyone while an admin here is away (the
-  // table just waits). Both null when they are here. See bridge_backend
-  // docs/API.md, Away mid-set, and utils/away.
+  // life, or their Leave), their seat held for them; null when they are
+  // here. A seat has no clock of its own: how long the board still waits
+  // for the player on turn, away or not, is the game state's `turn_deadline`
+  // (bb#120). See bridge_backend docs/API.md, Away mid-set, and utils/away.
   away_since: string | null;
-  forfeit_at: string | null;
   user: PublicUser;
 }
 
@@ -130,8 +126,8 @@ export async function getTable(tableId: number): Promise<Table> {
 // it is a 202 that *holds* the seat instead: the table comes back with us
 // still in it, away, and any request at the table (a heartbeat, GET
 // /playing) brings us back. Once the board waits for us (at once on our
-// turn) we have BRIDGE_SET_FORFEIT_MINUTES; otherwise our side forfeits the
-// set and the seat is freed then.
+// turn) our turn clock runs as anyone's (`turn_deadline`): not back and
+// played by then, a robot takes the seat for the rest of the set.
 export async function leaveSeat(tableId: number): Promise<SeatRemovalResult> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.delete<ApiResponse<SeatRemovalResult>>(`/tables/${tableId}/seats`);
@@ -140,9 +136,9 @@ export async function leaveSeat(tableId: number): Promise<SeatRemovalResult> {
 
 // "Still here": keeps the caller's seat from being freed as idle. The backend
 // frees a seat nobody has vouched for in a few minutes (through the normal
-// leave path) and, mid-set, marks a player away after a minute and forfeits
-// their side's set three minutes after the board began waiting for them, so a seated client sends this about every
-// 30 s. It also brings an away player back (a held seat after a Leave too).
+// leave path) and, mid-set, marks a player away after a minute, so a seated
+// client sends this about every 30 s. It never resets the turn clock: only
+// playing does (bb#120). It also brings an away player back (a held seat after a Leave too).
 // 403 once the caller no longer sits here, 404 once the table is gone.
 export async function sendHeartbeat(tableId: number): Promise<void> {
   await http.post(`/tables/${tableId}/heartbeat`);

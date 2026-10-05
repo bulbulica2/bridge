@@ -3,10 +3,12 @@ import type { Phase, PublicPlaying } from '@/services/game';
 import { UNATTENDED_MINUTES } from '@/services/tables';
 import type { BroadcastTable, Seat, Table } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
-import { SET_FORFEIT_MINUTES } from '@/utils/away';
+import { TURN_SECONDS, isAway } from '@/utils/away';
 import type { SetAtStake } from '@/utils/away';
-import { SIDE_LABELS, sideOf } from '@/utils/result';
 import { currentSet } from '@/utils/sets';
+
+// What a held seat costs once the turn reaches it (bb#120).
+const TURN_CLOCK_COST = `If you aren't back to play within ${TURN_SECONDS} seconds of your turn, a robot takes your seat for the rest of the set.`;
 
 function tableLabel(table: Pick<Table, 'id' | 'name'>) {
   return table.name || `table #${table.id}`;
@@ -44,12 +46,23 @@ export function leaveNote(table: Table | null, userId: number | null): string {
 }
 
 /**
+ * Whether walking out of the set at stake hands the user's seat to a robot
+ * for the rest of it (bb#120): it does when a Leave would hold the seat
+ * (`stake.held`) and another human is left there to play on with the robot;
+ * otherwise the set is broken off with no winner.
+ */
+export function robotTakesOver(from: Table, userId: number, stake: SetAtStake | null): boolean {
+  return !!stake?.held && whoIsLeft(from, userId) === 'people';
+}
+
+/**
  * What moving off `from` costs, one sentence each: taking a seat at another
  * table frees the old one with every consequence of leaving it
  * (bridge_backend docs/API.md, POST /tables/{table}/seats). `phase` is that
  * table's board, when known: a finished one isn't abandoned. `stake` is the
- * set going on there (`setAtStake`): walking out on it mid-set forfeits it
- * for the user's side at once, or breaks it off when nobody can forfeit.
+ * set going on there (`setAtStake`): walking out on it mid-set hands the
+ * seat to a robot at once (`robotTakesOver`), which plays the board on, or
+ * else breaks the set off.
  */
 export function moveConsequences(
   from: Table,
@@ -64,8 +77,8 @@ export function moveConsequences(
   if (stake) {
     const board = inProgress ? ', and the board in progress there is abandoned' : '';
     lines.push(
-      stake.forfeits
-        ? `Your side loses the set now: ${SIDE_LABELS[stake.side]} forfeit set ${stake.number}${board}.`
+      robotTakesOver(from, userId, stake)
+        ? `A robot takes your seat there for the rest of set ${stake.number}, and you can't sit down there again until it is over.`
         : `Set ${stake.number} there ends with no winner${board}.`,
     );
   }
@@ -105,13 +118,12 @@ export async function confirmMove(
   phase: Phase | null = null,
   stake: SetAtStake | null = null,
 ) {
-  const forfeits = !!stake?.forfeits;
   const role = await ask(
-    forfeits ? `Move to ${tableLabel(to)} and lose the set?` : `Move to ${tableLabel(to)}?`,
+    stake ? `Move to ${tableLabel(to)} and leave set ${stake.number}?` : `Move to ${tableLabel(to)}?`,
     moveConsequences(from, userId, phase, stake).join(' '),
     [
       { text: 'Cancel', role: 'cancel' },
-      { text: forfeits ? 'Move anyway' : 'Move', role: 'confirm' },
+      { text: stake ? 'Move anyway' : 'Move', role: 'confirm' },
     ],
   );
   return role === 'confirm';
@@ -121,12 +133,13 @@ export async function confirmMove(
  * What leaving costs, by the phase of the table's board: during one it is
  * abandoned for the other three, between boards (`finished`) nothing is lost
  * (bridge_backend docs/API.md, POST /tables/{table}/playing/next). In the
- * middle of a set (`stake`) a Leave only holds the seat, and the clock runs
- * only once the board waits for the user (at once on their turn): back
- * within SET_FORFEIT_MINUTES of their turn, play goes on, otherwise their
- * side loses the set (bridge_backend docs/API.md, Away mid-set). Where nobody
- * can forfeit (an admin), it breaks the set off instead. Empty when there is no board or
- * its phase is unknown, outside a set.
+ * middle of a set (`stake`) a Leave only holds the seat, and the turn clock
+ * runs once the board waits for the user (at once on their turn): back and
+ * played within TURN_SECONDS, play goes on, otherwise a robot takes the seat
+ * for the rest of the set (bridge_backend docs/API.md, Away mid-set). Where
+ * the seat isn't held (an admin, or an admin here away), it breaks the set
+ * off instead. Empty when there is no board or its phase is unknown, outside
+ * a set.
  */
 export function leaveWarning(
   phase: Phase | null,
@@ -135,11 +148,11 @@ export function leaveWarning(
 ): string {
   const board = boardNumber ? `Board ${boardNumber}` : 'The board';
   const inProgress = phase === 'auction' || phase === 'play';
-  if (stake?.forfeits) {
+  if (stake?.held) {
     const held = inProgress
       ? `${board} is in progress and set ${stake.number} isn't over: your seat is held, and the board waits for you.`
       : `Set ${stake.number} isn't over: your seat is held for you.`;
-    return `${held} ${SIDE_LABELS[stake.side]} lose the set if you aren't back within ${SET_FORFEIT_MINUTES} minutes of your turn.`;
+    return `${held} ${TURN_CLOCK_COST}`;
   }
   if (stake) {
     return inProgress
@@ -166,7 +179,7 @@ export function leaveMessage(
   boardNumber: number | null = null,
   stake: SetAtStake | null = null,
 ): string {
-  return [leaveWarning(phase, boardNumber, stake), stake?.forfeits ? '' : leaveNote(table, userId)]
+  return [leaveWarning(phase, boardNumber, stake), stake?.held ? '' : leaveNote(table, userId)]
     .filter(Boolean)
     .join(' ');
 }
@@ -179,13 +192,12 @@ export async function confirmLeave(
   boardNumber: number | null = null,
   stake: SetAtStake | null = null,
 ) {
-  const forfeits = !!stake?.forfeits;
   const role = await ask(
     stake ? `Leave in the middle of set ${stake.number}?` : 'Leave this table?',
     leaveMessage(table, userId, phase, boardNumber, stake),
     [
       { text: 'Cancel', role: 'cancel' },
-      { text: forfeits ? 'Leave anyway' : 'Leave', role: 'destructive' },
+      { text: stake ? 'Leave anyway' : 'Leave', role: 'destructive' },
     ],
   );
   return role === 'destructive';
@@ -194,9 +206,10 @@ export async function confirmLeave(
 /**
  * What taking the player at `seat` out costs the set going on there
  * (bridge_backend docs/API.md, DELETE /tables/{table}/seats/{user}): a
- * player away loses it for their side, one who is there only breaks it off.
- * Nothing once the set is over (the board's own `set` knows that first), nor
- * for a robot, whose seat a manager frees between sets.
+ * player away is replaced by a robot for the rest of it (unless nobody else
+ * human is left to play with it), one who is there breaks it off. Nothing
+ * once the set is over (the board's own `set` knows that first), nor for a
+ * robot, whose seat a manager frees between sets.
  */
 export function removeCost(table: BroadcastTable, playing: PublicPlaying | null, seat: Seat): string {
   const set = currentSet(table, playing);
@@ -204,8 +217,9 @@ export function removeCost(table: BroadcastTable, playing: PublicPlaying | null,
   if (!set || set.finished || !theirs || theirs.user.is_robot) {
     return '';
   }
-  return theirs.forfeit_at
-    ? `They are away, so ${SIDE_LABELS[sideOf(seat)]} lose set ${set.number} by forfeit.`
+  const othersHuman = table.seats.some((s) => s.seat !== seat && !s.user.is_robot);
+  return isAway(theirs) && othersHuman
+    ? `They are away, so a robot takes their seat for the rest of set ${set.number}.`
     : `Set ${set.number} ends with no winner.`;
 }
 
@@ -238,7 +252,6 @@ export async function confirmRemove(
 
 // The toast after a Leave that held the seat. The clock starts once the
 // board waits for the user, so the time counts from their turn.
-export function heldNotice(stake: Pick<SetAtStake, 'side'> | null): string {
-  const loses = stake ? `${SIDE_LABELS[stake.side]} lose` : 'your side loses';
-  return `You left in the middle of a set. Your seat is held: ${loses} the set if you aren't back within ${SET_FORFEIT_MINUTES} minutes of your turn.`;
+export function heldNotice(): string {
+  return `You left in the middle of a set. Your seat is held. ${TURN_CLOCK_COST}`;
 }

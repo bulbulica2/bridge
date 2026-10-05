@@ -554,7 +554,7 @@ describe('TablePlayPage after a set', () => {
     is_robot: true,
   })
   const ROBOTS = { N: robot(101, 1), E: robot(102, 2), W: robot(103, 3) }
-  const running = { id: 8, number: 8, board: 4, of: 4, finished: false, ended: null, forfeited_by: null }
+  const running = { id: 8, number: 8, board: 4, of: 4, finished: false, ended: null, replaced: [] }
 
   // Cy (the user, South) manages it, with robots in the other three seats.
   function robotTable(): Table {
@@ -766,5 +766,101 @@ describe('TablePlayPage live updates', () => {
     setSubscribed(5)
     await flushPromises()
     expect(wrapper.find('.offline-refresh').exists()).toBe(false)
+  })
+})
+
+describe('TablePlayPage turn clock', () => {
+  const NOW = Date.parse('2026-10-05T12:00:00Z')
+  const inSeconds = (s: number) => new Date(NOW + s * 1000).toISOString()
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test('our turn: "Your turn · m:ss", red with the bidding box ringed in the last 15 s', async () => {
+    const wrapper = await mountPage(auction({ turn_deadline: inSeconds(42) }))
+
+    const clock = () => wrapper.get('.turn-clock')
+    await flushPromises()
+    expect(wrapper.findComponent(BiddingBox).exists()).toBe(true)
+    expect(clock().text()).toBe('Your turn · 0:42')
+    expect(clock().classes()).toContain('turn-clock-mine')
+    expect(clock().classes()).not.toContain('turn-clock-urgent')
+    expect(wrapper.get('.bidding-box').classes()).not.toContain('turn-urgent')
+
+    vi.advanceTimersByTime(27_000)
+    await flushPromises()
+    expect(clock().text()).toBe('Your turn · 0:15')
+    expect(clock().classes()).toContain('turn-clock-urgent')
+    expect(wrapper.get('.bidding-box').classes()).toContain('turn-urgent')
+  })
+
+  test('in the play, our own hand is ringed when we play from it', async () => {
+    const wrapper = await mountPage(
+      auction({
+        phase: 'play',
+        contract: { bid: { id: 9, call: '1N', level: 1, strain: 'NT' }, doubled: 0, declarer: 'W', dummy: 'E' },
+        auction: [],
+        tricks: [],
+        current_trick: [],
+        tricks_won: { ns: 0, ew: 0 },
+        turn: 'S',
+        turn_deadline: inSeconds(10),
+      } as unknown as Partial<Playing>),
+    )
+
+    expect(wrapper.get('.turn-clock').text()).toBe('Your turn · 0:10')
+    expect(wrapper.get('.my-hand .hand').classes()).toContain('turn-urgent')
+  })
+
+  test('somebody else\'s turn: "Waiting for East · m:ss", never red', async () => {
+    const wrapper = await mountPage(auction({ turn: 'E', acting_user_id: 2, turn_deadline: inSeconds(5) }))
+
+    expect(wrapper.get('.turn-clock').text()).toBe('Waiting for East · 0:05')
+    expect(wrapper.get('.turn-clock').classes()).not.toContain('turn-clock-mine')
+    expect(wrapper.get('.turn-clock').classes()).not.toContain('turn-clock-urgent')
+  })
+
+  test('no clock (a robot or an admin on turn): the line stays, empty', async () => {
+    const wrapper = await mountPage(auction({ turn_deadline: null }))
+
+    expect(wrapper.get('.turn-clock').text()).toBe('')
+    vi.advanceTimersByTime(120_000)
+    await flushPromises()
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
+  })
+
+  test('time up: says so, and rereads the game once 2 s after the deadline', async () => {
+    const wrapper = await mountPage(auction({ turn: 'E', acting_user_id: 2, turn_deadline: inSeconds(3) }))
+
+    vi.advanceTimersByTime(3000)
+    await flushPromises()
+    expect(wrapper.get('.turn-clock').text()).toBe('Time is up…')
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(2000)
+    await flushPromises()
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+
+    // Nothing more for the same deadline.
+    vi.advanceTimersByTime(60_000)
+    await flushPromises()
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+  })
+
+  test('replaced by a robot: off to the set we were taken out of', async () => {
+    await mountPage(auction())
+    const store = useTablesStore()
+
+    store.replacedFrom = { id: 9, number: 2, seat: 'S', reason: 'turn_timeout', tableId: 5 }
+    store.kickedFrom = 5
+    await flushPromises()
+
+    expect(navigate).toHaveBeenCalledWith('/sets/9', 'back', 'replace')
   })
 })

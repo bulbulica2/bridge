@@ -72,9 +72,8 @@ export async function searchUsers(search: string): Promise<SearchedUser[]> {
 }
 
 // Admins only: bans the user for `days` (1–365) with a reason they are shown.
-// The backend frees their seat (mid-set their side forfeits), logs them out
-// and sends UserBanned. 201 with the ban and a message naming its end (plus
-// the forfeit, if it cost a set); 403 for a non-admin or a target that can't
+// The backend frees their seat (mid-set a robot takes it over), logs them
+// out and sends UserBanned. 201 with the ban and a message naming its end; 403 for a non-admin or a target that can't
 // be banned (yourself, an admin, a robot), 422 for bad fields.
 export async function banUser(id: number, request: BanRequest): Promise<{ ban: UserBan; message: string }> {
   const { data } = await http.post<ApiResponse<UserBan>>(`/users/${id}/ban`, request);

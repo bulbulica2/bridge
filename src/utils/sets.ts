@@ -1,4 +1,4 @@
-import type { PublicPlaying, SetPosition, SideCode } from '@/services/game';
+import type { PublicPlaying, ReplacementReason, SetPosition, SetReplacement, SideCode } from '@/services/game';
 import type { PlayingHistoryEntry, SetResults } from '@/services/history';
 import { SEATS } from '@/services/tables';
 import type { BroadcastTable, Seat } from '@/services/tables';
@@ -43,13 +43,16 @@ export function currentSet(
     board: Math.max(fromTable.board, fromBoard.board),
     finished: fromTable.finished || fromBoard.finished,
     ended: fromTable.ended ?? fromBoard.ended,
-    forfeited_by: fromTable.forfeited_by ?? fromBoard.forfeited_by,
+    // Replacements only add up over a set: the longer list is the later.
+    replaced: replacementsOf(fromBoard).length > replacementsOf(fromTable).length
+      ? fromBoard.replaced
+      : fromTable.replaced,
   };
 }
 
 // The set the table is in the middle of (a board of it on, or between its
-// boards), else null: no set yet, or the last one is over. Mid-set, going
-// away costs the set (bridge_backend docs/API.md, Away mid-set).
+// boards), else null: no set yet, or the last one is over. Mid-set, walking
+// out hands the seat to a robot (bridge_backend docs/API.md, Away mid-set).
 export function runningSet(
   table: BroadcastTable | null,
   playing: PublicPlaying | null,
@@ -68,8 +71,8 @@ export function setTitle(set: SetResults): string {
 }
 
 // Who won, turned to the viewer's side: "You won the set.", "You lost the
-// set by forfeit.", or "N-S won the set." for someone who didn't play it.
-// Null while the set goes on.
+// set.", or "N-S won the set." for someone who didn't play it. Null while
+// the set goes on.
 export function setWinnerText(set: SetResults, seat: Seat | null): string | null {
   if (!set.finished) {
     return null;
@@ -81,11 +84,10 @@ export function setWinnerText(set: SetResults, seat: Seat | null): string | null
     return 'A tie: no winner.';
   }
   const winner = sideOfCode(set.winner);
-  const how = set.ended === 'forfeit' ? ' by forfeit' : '';
   if (seat) {
-    return sideOf(seat) === winner ? `You won the set${how}.` : `You lost the set${how}.`;
+    return sideOf(seat) === winner ? 'You won the set.' : 'You lost the set.';
   }
-  return `${SIDE_LABELS[winner]} won the set${how}.`;
+  return `${SIDE_LABELS[winner]} won the set.`;
 }
 
 // Did the viewer's side win (true), lose (false), or neither (null)?
@@ -96,32 +98,67 @@ export function setWon(set: SetResults, seat: Seat | null): boolean | null {
   return sideOf(seat) === sideOfCode(set.winner);
 }
 
-// The seat whose player cost their side the set: the forfeiting side's seat
-// whose player no longer sits at `table` (they didn't come back, or moved
-// away). Null when that can't be told, e.g. without the table.
-export function forfeitedSeat(set: SetResults, table: BroadcastTable | null): Seat | null {
-  if (set.ended !== 'forfeit' || !set.forfeited_by || !table) {
+// A set's replacements, [] for a payload that has none.
+export function replacementsOf(set: Pick<SetPosition, 'replaced'> | null | undefined): SetReplacement[] {
+  return set?.replaced ?? [];
+}
+
+// Why a robot took a seat over (bridge_backend docs/API.md, Away mid-set),
+// said of somebody else and of the viewer.
+const REPLACED_WHY: Record<ReplacementReason, { them: string; you: string }> = {
+  turn_timeout: { them: "didn't play in time", you: "didn't play in time" },
+  away: { them: 'was away on their turn', you: 'were away on your turn' },
+  moved: { them: 'moved to another table', you: 'moved to another table' },
+  kicked: { them: 'was removed while away', you: 'were removed while away' },
+};
+
+// "East didn't play in time: a robot took their seat.", or for the player
+// it replaced, `mine`: "You didn't play in time: a robot took your seat."
+export function replacedText(entry: Pick<SetReplacement, 'seat' | 'reason'>, mine = false): string {
+  const why = REPLACED_WHY[entry.reason];
+  return mine
+    ? `You ${why.you}: a robot took your seat.`
+    : `${SEAT_NAMES[entry.seat]} ${why.them}: a robot took their seat.`;
+}
+
+// The viewer's seat in a set's results: the seat they play, or the one a
+// robot took over from them (their side is still the one they played for).
+export function seatInSet(set: Pick<SetResults, 'players' | 'replaced'>, userId: number | null | undefined): Seat | null {
+  if (userId == null) {
     return null;
   }
-  const side = sideOfCode(set.forfeited_by);
-  const seated = new Set(table.seats.map((s) => s.user_id));
   return (
-    SEATS.find(
-      (seat) => sideOf(seat) === side && set.players[seat] && !seated.has(set.players[seat]!.id),
-    ) ?? null
+    SEATS.find((seat) => set.players[seat]?.id === userId) ??
+    replacementsOf(set).find((r) => r.user_id === userId)?.seat ??
+    null
   );
 }
 
-// "N-S forfeited, East didn't come back in time.", or "N-S forfeited the
-// set." when we can't tell who went. Null unless the set was forfeited.
-export function forfeitText(set: SetResults, gone: Seat | null = null): string | null {
-  if (set.ended !== 'forfeit' || !set.forfeited_by) {
-    return null;
-  }
-  const side = SIDE_LABELS[sideOfCode(set.forfeited_by)];
-  return gone
-    ? `${side} forfeited, ${SEAT_NAMES[gone]} didn't come back in time.`
-    : `${side} forfeited the set.`;
+// A set a robot took the user's seat over in while they were away from the
+// table (their turn clock ran out, or a kick while away): told on Home until
+// dismissed, and the pages of that table go to its results.
+export interface ReplacedFrom {
+  id: number;
+  number: number;
+  seat: Seat;
+  reason: ReplacementReason;
+  // Where it was played, so only that table's pages act on it.
+  tableId: number;
+}
+
+// The replacement of `userId` in `set`, unless they walked out themselves by
+// moving (they know: they confirmed it).
+export function replacementOf(
+  set: Pick<SetPosition, 'replaced'> | null | undefined,
+  userId: number | null | undefined,
+): SetReplacement | null {
+  return replacementsOf(set).find((r) => r.user_id === userId && r.reason !== 'moved') ?? null;
+}
+
+// "You didn't play in time: a robot took your seat. You may sit down at
+// that table again once set 3 is over."
+export function replacedFromText(replaced: Pick<ReplacedFrom, 'seat' | 'reason' | 'number'>): string {
+  return `${replacedText(replaced, true)} You may sit down at that table again once set ${replaced.number} is over.`;
 }
 
 // The viewer's side of the totals (N-S for someone who didn't play it):

@@ -112,7 +112,7 @@ function setSoFar(overrides: Partial<SetResults> = {}): SetResults {
     finished_at: null,
     finished: false,
     ended: null,
-    forfeited_by: null,
+    replaced: [],
     players: { N: null, E: null, S: null, W: null },
     boards: [row(1, 420), row(2, 450)],
     totals: { score: { ns: 870, ew: -870 }, matchpoints: { ns: 2, ew: 2 }, top: 4 },
@@ -359,7 +359,7 @@ describe('TablePlayPage between boards', () => {
       updated_at: '',
       seats: seated.map((seat, i) => ({ id: i + 1, table_id: 5, user_id: PLAYERS[seat].id, seat, user: PLAYERS[seat] })),
       free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !seated.includes(s)),
-      set: { id: 5, number: 1, board: 2, of: 4, finished: false, ended: null, forfeited_by: null },
+      set: { id: 5, number: 1, board: 2, of: 4, finished: false, ended: null, replaced: [] },
       can_manage: false,
     }
   }
@@ -367,7 +367,7 @@ describe('TablePlayPage between boards', () => {
   // The fourth board of set 1, just finished: the set is over.
   function lastBoard(): Playing {
     return finished({
-      set: { id: 5, number: 1, board: 4, of: 4, finished: true, ended: 'completed', forfeited_by: null },
+      set: { id: 5, number: 1, board: 4, of: 4, finished: true, ended: 'completed', replaced: [] },
     })
   }
 
@@ -376,7 +376,7 @@ describe('TablePlayPage between boards', () => {
     return {
       phase: 'finished',
       playing_id: 42,
-      set: { id: 5, number: 1, board: 2, of: 4, finished: false, ended: null, forfeited_by: null },
+      set: { id: 5, number: 1, board: 2, of: 4, finished: false, ended: null, replaced: [] },
       board: { id: 7, number: 7, dealer: 'N', vulnerable: '' },
       players: PLAYERS,
       turn: null,
@@ -402,7 +402,7 @@ describe('TablePlayPage between boards', () => {
       ...finished(),
       phase: 'auction',
       playing_id: 43,
-      set: { id: 5, number: 1, board: 3, of: 4, finished: false, ended: null, forfeited_by: null },
+      set: { id: 5, number: 1, board: 3, of: 4, finished: false, ended: null, replaced: [] },
       board: { id: 8, number: 8, dealer: 'E', vulnerable: 'N-S' },
       turn: 'E',
       acting_user_id: 2,
@@ -718,7 +718,7 @@ describe('TablePlayPage between boards', () => {
     const wrapper = await mountPage(lastBoard())
 
     const next = newBoard()
-    next.set = { id: 6, number: 2, board: 1, of: 4, finished: false, ended: null, forfeited_by: null }
+    next.set = { id: 6, number: 2, board: 1, of: 4, finished: false, ended: null, replaced: [] }
     vi.mocked(tablesService.startTable).mockResolvedValue({ ...makeTable(), board_id: 8, set: next.set, playing: next })
     await wrapper.get('.start-button').trigger('click')
     await flushPromises()
@@ -729,23 +729,22 @@ describe('TablePlayPage between boards', () => {
     expect(wrapper.findAll('.my-hand .playing-card')).toHaveLength(13)
   })
 
-  test('a forfeit between boards comes with the table and ends the set there', async () => {
-    const forfeit = setSoFar({ finished: true, ended: 'forfeit', forfeited_by: 'EW', winner: 'NS' })
-    vi.mocked(historyService.getSet).mockResolvedValue(forfeit)
+  test('a set broken off between boards comes with the table and ends the set there', async () => {
+    const abandoned = setSoFar({ finished: true, ended: 'abandoned', winner: null })
+    vi.mocked(historyService.getSet).mockResolvedValue(abandoned)
     const wrapper = await mountPage(finished())
     expect(wrapper.find('.set-results').exists()).toBe(false)
 
-    // East went away and didn't come back: their seat is free, the set over.
+    // East was kicked while there: their seat is free, the set over.
     const table = makeTable(['N', 'S', 'W'])
-    table.set = { ...table.set!, finished: true, ended: 'forfeit', forfeited_by: 'EW' }
-    forfeit.players = { N: PLAYERS.N, E: PLAYERS.E, S: PLAYERS.S, W: PLAYERS.W }
+    table.set = { ...table.set!, finished: true, ended: 'abandoned' }
     useTablesStore().applyTableUpdate(table)
     await flushPromises()
 
     expect(historyService.getSet).toHaveBeenCalledTimes(2)
     const panel = wrapper.get('.set-results')
-    expect(panel.get('.set-winner').text()).toBe('You won the set by forfeit.')
-    expect(panel.get('.set-forfeit').text()).toBe("E-W forfeited, East didn't come back in time.")
+    expect(panel.get('.set-winner').text()).toBe('Abandoned: no winner.')
+    expect(panel.find('.set-replaced').exists()).toBe(false)
     expect(wrapper.get('.start-box').text()).toContain('Waiting for a fourth player')
   })
 

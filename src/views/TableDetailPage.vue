@@ -357,9 +357,9 @@ watch(
   (kicked) => {
     if (kicked !== null && kicked === tableId.value) {
       store.kickedFrom = null;
-      // Freed because our side forfeited the set: its results instead.
-      const lost = store.lostSet;
-      ionRouter.navigate(lost?.tableId === kicked ? `/sets/${lost.id}` : '/tables', 'back', 'replace');
+      // Replaced by a robot (our turn clock ran out): the set's results.
+      const replaced = store.replacedFrom;
+      ionRouter.navigate(replaced?.tableId === kicked ? `/sets/${replaced.id}` : '/tables', 'back', 'replace');
     }
   },
 );
@@ -488,10 +488,10 @@ async function leave(seat: Seat) {
     busySeat.value = seat;
     const { tableDeleted, held: kept } = await store.leave(tableId.value);
     if (kept) {
-      // Mid-set: the seat waits for us a few minutes. Off to the list, where
+      // Mid-set: the seat waits for us until our turn. Off to the list, where
       // being away is what it is (staying here would read as being back).
       game.clear();
-      await showToast(heldNotice(atStake), 'warning');
+      await showToast(heldNotice(), 'warning');
       ionRouter.navigate('/tables', 'back', 'replace');
     } else if (tableDeleted) {
       // The id 404s from here on, so go back to the list instead of reloading.

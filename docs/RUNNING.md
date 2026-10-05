@@ -1,6 +1,6 @@
 # Running the frontend locally
 
-_Last verified: branch `bulbulica2/78-create-opens-the-table`._
+_Last verified: branch `bulbulica2/76-turn-timer`._
 
 Requirements: Node.js 18 or newer (Vite 5 needs it; 23 works) with npm
 (`.nvmrc` names 22, the LTS that CI uses; `nvm use` picks it up), and
@@ -77,7 +77,7 @@ are logged in. Start, each in its own terminal (details in
 | API | `bridge_backend` | `php artisan serve --host=localhost` (port 8000; see [Local speed](#local-speed) for the `--host`) | everything |
 | Websocket server | `bridge_backend` | `php artisan reverb:start` (port 8080) | live updates |
 | Queue worker | `bridge_backend` | `php artisan queue:work --sleep=0.1` | live updates (broadcasts are queued), robots (every robot move is a queued job), and a set's next board being dealt by itself 10 s after a board ends (bb#97; without it the table stays on the finished board until everyone presses **Deal now**) |
-| Scheduler | `bridge_backend` | `php artisan schedule:work` | freeing idle seats, and mid-set marking a quiet player away and forfeiting their side's set after 3 minutes (`tables:check-away`, every 10 s). Without it nobody is ever shown away, and a Leave mid-set holds the seat for good |
+| Scheduler | `bridge_backend` | `php artisan schedule:work` | freeing idle seats, and mid-set marking a quiet player away and handing the seat of a player whose turn clock ran out (`turn_deadline`, a minute) to a robot (`tables:check-away`, every 10 s). Without it nobody is ever shown away, the turn clock stops at "Time is up…", and a Leave mid-set holds the seat for good |
 | SPA | `bridge` | `npm run dev` (port 3000) | the app |
 
 Without Reverb and the queue worker the app still works, but each browser

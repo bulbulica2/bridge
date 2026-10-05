@@ -165,12 +165,12 @@ describe('start helpers', () => {
   })
 
   test("the set's last board: Start for the next set, though the same four sit there", () => {
-    const set = { id: 5, number: 1, board: 4, of: 4, finished: false, ended: null, forfeited_by: null }
+    const set = { id: 5, number: 1, board: 4, of: 4, finished: false, ended: null, replaced: [] }
     const table = makeTable(TWO_HUMANS, [], { board_id: 8, set })
     const over = { ...set, finished: true, ended: 'completed' as const }
     // A board finishing sends no TableUpdated: the board's own set says it.
     expect(startNeeded(table, stateOf(table, { phase: 'finished', set: over }))).toBe(true)
-    // A forfeit between boards comes with the table instead.
+    // A set broken off between boards comes with the table instead.
     expect(startNeeded({ ...table, set: over }, stateOf(table, { phase: 'finished', set }))).toBe(true)
     // Board 3 of 4: Next.
     const third = { ...set, board: 3 }

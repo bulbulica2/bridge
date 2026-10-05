@@ -14,6 +14,7 @@ import type {
   Phase,
   Playing,
   PublicPlaying,
+  SetPosition,
 } from '@/services/game';
 import type { BroadcastTable, Seat } from '@/services/tables';
 import type { BoardMessageSentEvent } from '@/services/chat';
@@ -32,6 +33,7 @@ import {
 import type { AlertBook } from '@/utils/alerts';
 import { asksAboutMyCall, chatQuestionText } from '@/utils/chat';
 import { expandPlaying } from '@/utils/compact';
+import { replacedText, replacementsOf } from '@/utils/sets';
 import { showToast } from '@/utils/toast';
 
 // What GET /tables/{id}/playing answers for a table without a board.
@@ -44,6 +46,7 @@ function waitingState(): Playing {
     players: null,
     turn: null,
     acting_user_id: null,
+    turn_deadline: null,
     auction: null,
     contract: null,
     tricks: null,
@@ -123,9 +126,9 @@ export const useGameStore = defineStore('game', () => {
   // A HandDealt that beat its board's PlayingUpdated: both come from the same
   // request, but on different channels, so either can arrive first.
   let pendingHand: HandDealtEvent | null = null;
-  // The set whose forfeit we have told (applyTableUpdate), so a later event
-  // of the same table doesn't tell it again.
-  let forfeitToldFor: number | null = null;
+  // The robot replacements we know of, by `set:seat:user`: each is told
+  // once, whichever of TableUpdated and PlayingUpdated brings it first.
+  const replacementsKnown = new Set<string>();
   // The 38 calls from GET /bids: a call is sent as its id, and ids aren't
   // pinned, so they are read once rather than hard-coded.
   const bids = ref<Bid[]>([]);
@@ -167,9 +170,28 @@ export const useGameStore = defineStore('game', () => {
     return (entry?.[0] as Seat | undefined) ?? null;
   }
 
+  // A robot took somebody's seat over mid-set (their turn clock ran out, a
+  // move, a kick while away; bb#120): tell the table once. With `tell`
+  // false (a state read over HTTP, which may be the first we see of the
+  // table) they are only noted. Our own replacement is the tables store's
+  // to tell: it unseats us.
+  function noteReplacements(set: SetPosition | null | undefined, tell: boolean) {
+    for (const entry of replacementsOf(set)) {
+      const key = `${set!.id}:${entry.seat}:${entry.user_id}`;
+      if (replacementsKnown.has(key)) {
+        continue;
+      }
+      replacementsKnown.add(key);
+      if (tell && entry.user_id !== auth.user?.id) {
+        showToast(replacedText(entry), 'warning');
+      }
+    }
+  }
+
   // A full state answered over HTTP, with the alerts we may see: they go in
   // the book, and the state is shown with every alert known.
   function hold(state: Playing) {
+    noteReplacements(state.set, false);
     alerts = takeNotes(alerts, state);
     playing.value = withNotes(state, alerts);
     if (pendingHand?.playing_id === state.playing_id) {
@@ -223,6 +245,7 @@ export const useGameStore = defineStore('game', () => {
       sameBoard && current.declarer_hand && update.phase === 'play'
         ? unplayed(current.declarer_hand)
         : null;
+    noteReplacements(update.set, true);
     playing.value = withNotes(
       { ...update, my_seat: mySeatIn(update), hand, declarer_hand: declarerHand },
       alerts,
@@ -476,32 +499,11 @@ export const useGameStore = defineStore('game', () => {
     const leaver = Object.values(current.players ?? {}).find(
       (user) => !table.seats.some((s) => s.user_id === user.id),
     );
-    const set = table.set;
-    // A side forfeited the set this board belongs to (a player away too
-    // long, or walking out), mid-board or between boards: say so once. The
-    // set's results show next on the play page.
-    const forfeit =
-      set?.ended === 'forfeit' &&
-      set.forfeited_by &&
-      set.id === current.set?.id &&
-      !current.set.ended &&
-      forfeitToldFor !== set.id
-        ? set
-        : null;
-    if (forfeit) {
-      forfeitToldFor = forfeit.id;
-    }
+    // A robot in a seat that walked out mid-set: the board goes on with it.
+    noteReplacements(table.set, true);
     const inProgress = current.phase === 'auction' || current.phase === 'play';
     if (table.board_id === null && inProgress) {
       playing.value = waitingState();
-    }
-    if (forfeit) {
-      const side = forfeit.forfeited_by === 'NS' ? 'N-S' : 'E-W';
-      showToast(
-        `${leaver ? `${leaver.username} is gone` : 'A player is gone'}: ${side} lose set ${forfeit.number} by forfeit.`,
-        'warning',
-      );
-    } else if (table.board_id === null && inProgress) {
       showToast(
         `${leaver ? leaver.username : 'A player'} left, the board was abandoned.`,
         'warning',
@@ -515,6 +517,7 @@ export const useGameStore = defineStore('game', () => {
     pendingHand = null;
     alerts = emptyBook();
     questionsTold.clear();
+    replacementsKnown.clear();
     useChatStore().clear();
   }
 
