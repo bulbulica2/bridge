@@ -33,7 +33,9 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/70-one-forfeit-clock-at-a-time` (after
+> branch `bulbulica2/72-suit-order-trumps-left` (after
+> #118, your own hand always reads ♥ ♣ ♦ ♠ and dummy's (or a robot
+> declarer's) cards trumps first; after
 > #116, only the away player the board waits for has a forfeit
 > countdown, the others are shown away with no clock; after
 > #115, the board chat is for the whole table during the board too,

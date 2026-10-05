@@ -296,9 +296,14 @@ The user's standing rule (#91): **no task may leave code coverage under
   `TablePlayPage.vue` draws it with `src/components/BridgeTable.vue` (the four
   seats rotated so the viewer is always at the bottom, dealer and
   red/green vulnerability, whose turn), `HandView.vue` and `PlayingCard.vue`;
-  card sorting, rank labels (the backend skips 11: `12`=J … `15`=A), seat
-  rotation and vulnerability live in `src/utils/cards.ts`. The detail page
-  moves a seated player to `/play` when `board_id` changes to a new board.
+  card sorting (`sortHand`/`groupBySuit` take an order, bridge order
+  `SUITS` by default: the deal, a claimer's hand, exports; `HandView`
+  defaults to `HAND_SUITS` ♥ ♣ ♦ ♠, the viewer's own hand; `BridgeTable`'s
+  `trump` (the contract's strain) gives dummy and a robot declarer's cards
+  `suitOrder(trump)`, that cycle rotated trumps first, #118), rank labels
+  (the backend skips 11: `12`=J … `15`=A), seat rotation and
+  vulnerability live in `src/utils/cards.ts`. The detail page moves a
+  seated player to `/play` when `board_id` changes to a new board.
   `Playing.declarer_hand` is a robot declarer's remaining cards, only for
   its human dummy (null otherwise, and once `finished`); the same channel's
   `DeclarerHandShown` (`listenToUser`'s fourth handler; the fifth and

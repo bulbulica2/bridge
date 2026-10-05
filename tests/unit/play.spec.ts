@@ -358,6 +358,49 @@ describe("BridgeTable with a robot declarer's hand", () => {
   })
 })
 
+describe('BridgeTable suit order', () => {
+  const PLAYERS = {}
+  const HAND = cards('SQ', 'H3', 'D5', 'C9')
+  const columnSuits = (el: ReturnType<ReturnType<typeof mount>['get']>) =>
+    el.findAll('.column .suit').map((s) => s.text())
+  const groupSuits = (el: ReturnType<ReturnType<typeof mount>['get']>) =>
+    el.findAll('.suit-group .corner .suit').map((s) => s.text())
+
+  test("dummy's and a robot declarer's cards read trumps first", () => {
+    const declarer = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: null, trump: 'D', dummy: { seat: 'N', cards: HAND } },
+    })
+    expect(groupSuits(declarer.get('.dummy-hand'))).toEqual(['♦', '♠', '♥', '♣'])
+
+    const defender = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'E', board: null, turn: null, trump: 'S', dummy: { seat: 'N', cards: HAND } },
+    })
+    expect(columnSuits(defender.get('.side-right .dummy-columns'))).toEqual(['♠', '♥', '♣', '♦'])
+
+    const robotsDummy = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: null, trump: 'C', declarer: { seat: 'N', cards: HAND } },
+    })
+    expect(groupSuits(robotsDummy.get('.declarer-hand'))).toEqual(['♣', '♦', '♠', '♥'])
+  })
+
+  test('no trumps keeps the base order; a claimer and the deal keep bridge order', () => {
+    const noTrumps = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: null, trump: 'NT', dummy: { seat: 'N', cards: HAND } },
+    })
+    expect(groupSuits(noTrumps.get('.dummy-hand'))).toEqual(['♥', '♣', '♦', '♠'])
+
+    const claim = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: null, trump: 'D', claim: { seat: 'W', cards: HAND } },
+    })
+    expect(columnSuits(claim.get('.claim-hand'))).toEqual(['♠', '♥', '♦', '♣'])
+
+    const deal = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: null, trump: 'D', deal: { N: HAND, E: [], S: [], W: [] } },
+    })
+    expect(columnSuits(deal.get('.side-top .dealt-hand'))).toEqual(['♠', '♥', '♦', '♣'])
+  })
+})
+
 describe('trick layout by seat', () => {
   test('each card lies on the side its hand is drawn on', () => {
     const trick = played('W SK, N S2, E SA, S S9')
@@ -428,10 +471,11 @@ describe('HandView on play', () => {
   test('only the legal cards can be tapped; the rest are dimmed', async () => {
     const wrapper = mount(HandView, { props: { cards: hand, playable: [c('HK').id] } })
 
+    // Your own hand reads ♥ ♣ ♦ ♠: the heart comes first.
     const buttons = wrapper.findAll('button')
-    expect(buttons.map((b) => (b.element as HTMLButtonElement).disabled)).toEqual([true, true, false])
+    expect(buttons.map((b) => (b.element as HTMLButtonElement).disabled)).toEqual([false, true, true])
     expect(wrapper.findAll('.illegal')).toHaveLength(2)
-    await buttons[2].trigger('click')
+    await buttons[0].trigger('click')
     expect(wrapper.emitted('play')).toEqual([[c('HK')]])
   })
 
@@ -552,6 +596,15 @@ describe('TablePlayPage card play', () => {
     vi.useRealTimers()
   })
 
+  test("in 4♠ declarer's own hand reads ♥ ♣ ♦ ♠ and dummy's ♠ ♥ ♣ ♦", async () => {
+    const wrapper = await mountPage(state({ dummy_hand: cards('SQ', 'H3', 'C9', 'D5') }))
+
+    const suits = (selector: string) =>
+      wrapper.findAll(`${selector} .suit-group`).map((g) => g.get('.corner .suit').text())
+    expect(suits('.my-hand')).toEqual(['♥', '♦', '♠'])
+    expect(suits('.side-top .dummy-hand')).toEqual(['♠', '♥', '♣', '♦'])
+  })
+
   test("declarer plays dummy's cards from the top of the table, following suit", async () => {
     const wrapper = await mountPage(state({ dummy_hand: cards('SQ', 'S4', 'H3', 'C9') }))
 
@@ -660,14 +713,17 @@ describe('TablePlayPage card play', () => {
     useGameStore().applyPlayingUpdate(5, { ...state({ turn: 'N', acting_user_id: 3 }) })
     await flushPromises()
 
-    // East sees North on the right.
+    // East sees North on the right, trumps (4♠) first: ♠ ♥ ♣ ♦.
     const columns = wrapper.get('.side-right .dummy-columns')
+    expect(columns.findAll('.column .suit').map((s) => s.text())).toEqual(['♠', '♥', '♣', '♦'])
     expect(columns.findAll('.column').map((col) => col.findAll('.rank').map((r) => r.text()))).toEqual([
       ['Q'],
       ['3'],
-      [],
       ['9'],
+      [],
     ])
+    // Their own hand stays ♥ ♣ ♦ ♠ (here spades only).
+    expect(wrapper.findAll('.my-hand .suit-group')).toHaveLength(1)
     expect(wrapper.text()).toContain('Play: waiting for cy, from dummy.')
   })
 
@@ -835,6 +891,22 @@ describe('TablePlayPage card play', () => {
       expect(wrapper.get('.status').text()).toBe("Play: your turn from North's hand. Follow suit: spades.")
       expect(wrapper.get('.status').classes()).not.toContain('status-robot')
       expect(wrapper.get('.outcome-you').text()).toBe('robot-1 declares 4♠ — you play the hand')
+    })
+
+    test("in 2♥ declarer's hand and the dummy's own both read ♥ ♣ ♦ ♠", async () => {
+      const TWO_HEARTS: Bid = { id: 8, call: '2H', level: 2, strain: 'H', special: false }
+      const wrapper = await mountPage(
+        robotState({
+          contract: { bid: TWO_HEARTS, doubled: 0, declarer: 'N', dummy: 'S' },
+          declarer_hand: cards('SQ', 'D4', 'C6', 'H3'),
+        }),
+      )
+
+      const suits = (selector: string) =>
+        wrapper.findAll(`${selector} .suit-group`).map((g) => g.get('.corner .suit').text())
+      // Only the robot's cards turn trumps first; in 2♥ that is the base order anyway.
+      expect(suits('.side-top .declarer-hand')).toEqual(['♥', '♣', '♦', '♠'])
+      expect(suits('.my-hand')).toEqual(['♥', '♦', '♠'])
     })
 
     test("a tapped card from declarer's hand goes out", async () => {
