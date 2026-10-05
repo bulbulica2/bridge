@@ -381,16 +381,14 @@ async function submitCreate() {
   creating.value = true;
   try {
     // The name is optional; an empty field means an unnamed table.
-    const robots = withRobots.value;
-    const table = await tablesStore.create({ name: name.value.trim() || null, robots });
+    const table = await tablesStore.create({ name: name.value.trim() || null, robots: withRobots.value });
     closeCreate();
-    // Robots filled the table, but nothing is dealt until the creator presses
-    // Start: off to the table's page, where Start is. Not awaited: the page
-    // draws the table the store already holds, so the form has nothing left
-    // to wait for. Without robots the new table waits on top of the list.
-    if (robots) {
-      ionRouter.navigate(`/tables/${table.id}`, 'forward', 'push');
-    }
+    // The creator sits there already: off to the table's page, where Start,
+    // the seats and Seat a player / Add robot are (with robots the table is
+    // full, but nothing is dealt until Start). Not awaited: the page draws
+    // the table the store already holds, so the form has nothing left to
+    // wait for.
+    ionRouter.navigate(`/tables/${table.id}`, 'forward', 'push');
   } catch (e) {
     createError.value = errorMessage(e, 'Could not create the table. Please try again.');
   } finally {

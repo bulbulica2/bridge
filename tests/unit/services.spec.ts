@@ -80,7 +80,8 @@ describe('auth service', () => {
 // [name, call, method, url, body (undefined = none), needs the CSRF cookie]
 const wrappers: [string, () => Promise<unknown>, Method, string, unknown, boolean][] = [
   ['listTables', () => tables.listTables(), 'get', '/tables', undefined, false],
-  ['createTable', () => tables.createTable({ robots: true }), 'post', '/tables', { robots: true }, true],
+  ['createTable', () => tables.createTable({ robots: true }), 'post', '/tables', { seat: 'S', robots: true }, true],
+  ['createTable at a given seat', () => tables.createTable({ seat: 'E' }), 'post', '/tables', { seat: 'E' }, true],
   ['joinSeat', () => tables.joinSeat(3, 'E'), 'post', '/tables/3/seats', { seat: 'E' }, true],
   ['getTable', () => tables.getTable(3), 'get', '/tables/3', undefined, false],
   ['leaveSeat', () => tables.leaveSeat(3), 'delete', '/tables/3/seats', undefined, true],

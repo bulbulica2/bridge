@@ -69,7 +69,7 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>>): Table {
   }
 }
 
-const modalStub = { template: '<div><slot /></div>' }
+const modalStub = { props: ['isOpen'], template: '<div class="modal" :data-open="isOpen"><slot /></div>' }
 const mountPage = () =>
   mount(TablesPage, {
     global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub, PlayerProfileSheet: true } },
@@ -181,6 +181,21 @@ describe('TablesPage.vue loading', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('You already have 3 active tables.')
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  test('an invalid name keeps the modal open with the error, and goes nowhere', async () => {
+    vi.mocked(tablesService.listTables).mockResolvedValue([])
+    vi.mocked(tablesService.createTable).mockRejectedValue(axiosError(422, 'The name field must not be greater than 50 characters.'))
+    const wrapper = mountPage()
+    await flushPromises()
+    await wrapper.findAll('ion-button').find((b) => b.text() === 'Create table')!.trigger('click')
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('.modal').attributes('data-open')).toBe('true')
+    expect(wrapper.text()).toContain('The name field must not be greater than 50 characters.')
     expect(navigate).not.toHaveBeenCalled()
   })
 })

@@ -123,9 +123,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   `src/theme/toasts.css`: toasts render outside the pages, so the CSS is
   global and styles the toast's shadow parts through `::part()`. Create
   table and taking a seat on the Tables page are the exceptions to
-  `navigateAndSettle`: Create's modal closes and, with robots, it
-  navigates to `/tables/:id` (where Start is, #68) as soon as
-  `POST /tables` answers (#55); a seat navigates as soon as
+  `navigateAndSettle`: Create's modal closes and it navigates to
+  `/tables/:id` (where Start, the seats and Seat a player / Add robot
+  are, #68), with or without robots (#132), as soon as `POST /tables`
+  answers (#55; `createTable` seats the creator South, `CREATOR_SEAT`,
+  robots N, E and W); a seat navigates as soon as
   `join` answers, to `/tables/:id/play` if the returned table's `board_id`
   is set, else `/tables/:id` (#67), with the seat buttons disabled until
   `onIonViewDidLeave`.

@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/80-menu-your-table-entry`._
+_Status as of branch `bulbulica2/78-create-opens-the-table`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -165,11 +165,12 @@ cancelled move or a seat taken meanwhile (409, toasted) keeps you on the
 list. A table only robots sit at (`unattended_since` set: its last
 person left) reads **Robots only — sit down to take over**. **Create
 table** opens a modal with an optional name and **Play with robots**, on
-by default: robots take the other three seats and the page goes to the
-new table's page, where your **Start** deals the first board (robots are
-always ready; the modal closes as soon as the table exists, #55). Without
-robots you stay on
-the list and wait for players. Moving to another table asks first, because
+by default. You sit **South** at the new table, and the page goes to its
+page as soon as it exists (the modal closes first, #55; #132): with robots
+they take North, East and West and your **Start** deals the first board
+(robots are always ready); without them the other three seats are free
+for players to take, or for you to fill with **Seat a player** / **Add
+robot**. Moving to another table asks first, because
 leaving your seat can abandon a board there; in the middle of a set it
 says **Your side loses the set now** (the backend forfeits it at once,
 bb#76). After a Leave mid-set a notice at the top says your seat is held
@@ -188,7 +189,7 @@ there is no **Open**.
 | Calls | Endpoint |
 |---|---|
 | `tables.load()` | `GET /tables` |
-| `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` (`robots: true` by default) |
+| `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` (`seat: 'S'`, `robots: true` by default) |
 | `tables.join()` | `GET /sanctum/csrf-cookie`, `POST /tables/{id}/seats`, then `GET /tables` after a move |
 | `tables.leave()` (You sit at … · Leave) | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 
@@ -201,7 +202,7 @@ dealt before Start), bb#77 (bans).
 **Logged in.** Built by #15; manager Remove by #16; live updates by #21;
 moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
 robots by #53; Start by #68; the set line by #73; away and the forfeit by #74; admins' seats by #77; Leave and Remove after a set by #121. Reached from a table's **Open** button, by
-taking a seat, or from **Create table** with robots.
+taking a seat, or from **Create table**.
 
 The four seats as a compass (N/E/S/W), robots and admins badged. Sit, move or
 **Leave** (confirmed; the last player leaving deletes the table and the
