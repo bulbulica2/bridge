@@ -1,7 +1,7 @@
 <template>
   <!-- A bottom sheet for making a claim: one button per number of the tricks
-       still to play, then a send button for the number picked, or Concede
-       for none. The parent owns whether it is open and sends the claim. A
+       still to play, every one of them picked to start with, then a send
+       button for the number picked, or Concede for none. The parent owns whether it is open and sends the claim. A
        robot declarer's dummy claims for declarer (`forSeat`). -->
   <ion-modal
     :is-open="open"
@@ -16,7 +16,7 @@
         </h2>
         <p class="claim-help">
           How many of the remaining {{ remaining }} trick{{ remaining === 1 ? '' : 's' }} does your
-          side take?
+          side take? All of them unless you pick fewer.
           {{ forSeat ? `${SEAT_NAMES[forSeat]}'s hand` : 'Your hand' }} is shown to everyone while
           the others answer.
         </p>
@@ -34,7 +34,7 @@
             :aria-pressed="tricks === n"
             :data-tricks="n"
             :disabled="busy"
-            @click="tricks = n"
+            @click="pick(n)"
           >
             {{ n }}
           </ion-button>
@@ -43,11 +43,10 @@
         <ion-button
           expand="block"
           class="send-claim"
-          :disabled="busy || tricks === null"
-          @click="tricks !== null && emit('claim', tricks)"
+          :disabled="busy || tricks < 1"
+          @click="emit('claim', tricks)"
         >
           <ion-spinner v-if="busy" name="crescent" />
-          <span v-else-if="tricks === null">Pick a number</span>
           <span v-else>Claim {{ tricks }} trick{{ tricks === 1 ? '' : 's' }}</span>
         </ion-button>
         <ion-button
@@ -89,15 +88,32 @@ const props = withDefaults(
 const emit = defineEmits<{ claim: [tricks: number]; close: [] }>();
 
 // The number picked; nothing is sent until the send button is pressed.
-const tricks = ref<number | null>(null);
+const tricks = ref(props.remaining);
+// The player picked it by hand since the sheet opened.
+const picked = ref(false);
 
-// Each opening (or a trick finishing meanwhile) starts with nothing picked.
+function pick(n: number) {
+  tricks.value = n;
+  picked.value = true;
+}
+
+// Each opening starts with every remaining trick picked: a claim is almost
+// always for all of them (#137).
 watch(
-  () => [props.open, props.remaining] as const,
+  () => props.open,
   () => {
-    tricks.value = null;
+    tricks.value = props.remaining;
+    picked.value = false;
   },
-  { immediate: true },
+);
+
+// A trick finishing meanwhile moves the default to the new maximum, and
+// keeps a number picked by hand while it is still possible.
+watch(
+  () => props.remaining,
+  (remaining) => {
+    if (!picked.value || tricks.value > remaining) tricks.value = remaining;
+  },
 );
 </script>
 

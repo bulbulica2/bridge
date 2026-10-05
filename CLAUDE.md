@@ -507,8 +507,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   `canClaim` is false then, `claimLocked(state, seat)` says who would
   claim but for it, and the play page keeps Claim disabled with
   `CLAIM_LOCKED_TEXT` under it (the sheet closes through `mayClaim`); a
-  409 for it toasts and reloads like any other. `ClaimSheet.vue` is the sheet (one button per number, then
-  "Claim N tricks"; Concede sends 0; a line quotes `CLAIM_SECONDS`),
+  409 for it toasts and reloads like any other. `ClaimSheet.vue` is the sheet (one button per number, opening with
+  all of the tricks left picked, #137, then "Claim N tricks"; a trick
+  finishing re-picks the new maximum unless a lower number was picked by
+  hand, kept while still possible; Concede sends 0; a line quotes
+  `CLAIM_SECONDS`),
   `ClaimPanel.vue` the pending-claim banner with its buttons. A claim
   going away mid-play toasts (`claimOffText`); the last accept lands in
   `finished` with `result.claimed`, which `resultSummary`/`BoardResultPanel`

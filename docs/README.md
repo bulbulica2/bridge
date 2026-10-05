@@ -33,7 +33,9 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/79-steady-play-layout-2` (after
+> branch `bulbulica2/83-claim-all-by-default` (after
+> #137, the claim sheet opens with every remaining trick picked, so one
+> tap claims them all; after
 > #133, the play page no longer jumps from card to card: every seat keeps
 > room for the turn label, the status line keeps two lines, and the
 > trick's foot keeps its height with or without **Last trick**; after
