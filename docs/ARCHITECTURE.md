@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/69-table-chat-during-the-board`._
+_Status as of branch `bulbulica2/70-one-forfeit-clock-at-a-time`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -507,13 +507,23 @@ whom no timer frees, a plain "removed" one) and goes back to `/tables`.
 **Away mid-set and the forfeit** (#74, bb#76, backend
 [`API.md`, Away mid-set](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)).
 The backend marks a player with no sign of life for a minute **away**:
-their seat gets `away_since` and `forfeit_at` (when their side loses the
-set unless they are back), sent in every table payload and `TableUpdated`.
-The SPA only shows it and never keeps a clock of its own: `AwayNotice`
-counts down from `forfeit_at` ("East is away. E-W lose the set in 2:41
-unless they come back."; `useNow` redraws it every second), `BridgeTable`
-and the detail page's compass tag the seat **away**. `forfeit_at: null`
-means no deadline (an admin away): the table just waits.
+their seat gets `away_since`, sent in every table payload and
+`TableUpdated`. The forfeit clock runs **only for the away player the
+board is waiting for** (on turn, #116, bb#113): only that seat gets
+`forfeit_at` (when their side loses the set unless they are back), three
+minutes from when the board began waiting for them, so at most one
+countdown shows at a time. The SPA only shows it and never keeps a clock
+of its own: `AwayNotice` puts the seat with a clock first, highlighted,
+and counts down from its `forfeit_at` ("East is away. E-W lose the set in
+2:41 unless they come back."; `useNow` redraws it every second). Any
+other away seat (`forfeit_at: null`, not their turn yet) gets one plain
+line, or one line together: "South is away. N-S lose the set if they
+aren't back within 3:00 of their turn." / "South and West are away. …".
+When the turn reaches them, the backend sets their `forfeit_at` and the
+countdown starts at 3:00. While an away seat's user `is_admin`
+(`forfeitSuspended` in `utils/away.ts`) nobody forfeits and no clock
+runs: "The table waits for them." `BridgeTable` and the detail page's
+compass tag every away seat **away**, clock or not.
 - **Leave mid-set** answers 202 and *holds* the seat: you stay seated,
   away. The store then sets `heldTableId` and stops beating (a beat would
   bring you back). It also holds a seat it finds away on a fresh load (the
@@ -532,10 +542,12 @@ means no deadline (an admin away): the table just waits.
   forfeit that happened while the tab was closed is found on the next
   visit (`GET /sets/{id}` from `load()`).
 - **Leave and move confirmations** say what is at stake (`stakeOf(table)`
-  → `setAtStake` in `utils/away.ts`): a Leave "If you don't come back
-  within 3 minutes, N-S lose the set.", a move "Your side loses the set
-  now." An admin, or anyone while an admin is away, can't forfeit: then
-  leaving or moving just ends the set with no winner.
+  → `setAtStake` in `utils/away.ts`): a Leave "N-S lose the set if you
+  aren't back within 3 minutes of your turn." (leaving when it isn't your
+  turn starts no clock), a move "Your side loses the set now." An admin,
+  or anyone while an admin is away (read from the away seats' `is_admin`,
+  not from a missing `forfeit_at`), can't forfeit: then leaving or moving
+  just ends the set with no winner.
 
 Without Reverb and a queue worker running on the backend, none of this
 arrives, and the app falls back to what each request returns.
@@ -548,7 +560,7 @@ arrives, and the app falls back to what each request returns.
 |---|---|
 | `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn; dummy's cards; a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
 | `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
-| `AwayNotice` | who is away mid-set with the time left before their side loses the set (also on the detail page); with `held`, your own held seat (detail page, Tables, Home) |
+| `AwayNotice` | who is away mid-set: first and highlighted the one the board waits for, with the time left before their side loses the set, then the other away seats in a plain line, never more than one countdown (also on the detail page); with `held`, your own held seat (detail page, Tables, Home) |
 | `HandView` + `PlayingCard` | your hand; playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses |
 | `BiddingBox` | the call grid, on your turn during the auction, under the **Alert** field for the next call (an explanation for the opponents and an Alert toggle, both owned by the page) |
 | `AuctionHistory` + `AuctionCallCell` + `CallLabel` | the calls so far, four columns rotated like the table; an alerted call in amber with a "!", its explanation in a pop-up (`usePopover`), and with `live` an **Ask** and **Ask in the chat** on the opponents' calls and an **Answer** on yours when asked |

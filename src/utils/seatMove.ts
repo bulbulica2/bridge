@@ -111,10 +111,11 @@ export async function confirmMove(
  * What leaving costs, by the phase of the table's board: during one it is
  * abandoned for the other three, between boards (`finished`) nothing is lost
  * (bridge_backend docs/API.md, POST /tables/{table}/playing/next). In the
- * middle of a set (`stake`) a Leave only holds the seat: back within
- * SET_FORFEIT_MINUTES, play goes on, otherwise the user's side loses the set
- * (bridge_backend docs/API.md, Away mid-set). Where nobody can forfeit (an
- * admin), it breaks the set off instead. Empty when there is no board or
+ * middle of a set (`stake`) a Leave only holds the seat, and the clock runs
+ * only once the board waits for the user (at once on their turn): back
+ * within SET_FORFEIT_MINUTES of their turn, play goes on, otherwise their
+ * side loses the set (bridge_backend docs/API.md, Away mid-set). Where nobody
+ * can forfeit (an admin), it breaks the set off instead. Empty when there is no board or
  * its phase is unknown, outside a set.
  */
 export function leaveWarning(
@@ -128,7 +129,7 @@ export function leaveWarning(
     const held = inProgress
       ? `${board} is in progress and set ${stake.number} isn't over: your seat is held, and the board waits for you.`
       : `Set ${stake.number} isn't over: your seat is held for you.`;
-    return `${held} If you don't come back within ${SET_FORFEIT_MINUTES} minutes, ${SIDE_LABELS[stake.side]} lose the set.`;
+    return `${held} ${SIDE_LABELS[stake.side]} lose the set if you aren't back within ${SET_FORFEIT_MINUTES} minutes of your turn.`;
   }
   if (stake) {
     return inProgress
@@ -182,8 +183,9 @@ export async function confirmLeave(
   return role === 'destructive';
 }
 
-// The toast after a Leave that held the seat.
+// The toast after a Leave that held the seat. The clock starts once the
+// board waits for the user, so the time counts from their turn.
 export function heldNotice(stake: Pick<SetAtStake, 'side'> | null): string {
   const loses = stake ? `${SIDE_LABELS[stake.side]} lose` : 'your side loses';
-  return `You left in the middle of a set. Your seat is held for ${SET_FORFEIT_MINUTES} minutes: come back before then, or ${loses} the set.`;
+  return `You left in the middle of a set. Your seat is held: ${loses} the set if you aren't back within ${SET_FORFEIT_MINUTES} minutes of your turn.`;
 }

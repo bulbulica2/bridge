@@ -7,6 +7,8 @@ import type { BroadcastTable, Seat, TableSeat } from '@/services/tables'
 import {
   awaySeats,
   awayText,
+  awayTogetherText,
+  forfeitSuspended,
   formatClock,
   heldText,
   lostSetText,
@@ -22,7 +24,8 @@ function inSeconds(left: number): string {
   return new Date(NOW + left * 1000).toISOString()
 }
 
-type SeatSpec = { user: number; away?: number | 'no-deadline'; robot?: boolean }
+// `away: 'no-clock'`: away, but not the player the board waits for.
+type SeatSpec = { user: number; away?: number | 'no-clock'; robot?: boolean; admin?: boolean }
 
 // Seats as seat -> user id (and how many seconds are left if away).
 function makeTable(
@@ -52,6 +55,7 @@ function makeTable(
         username: `user${spec.user}`,
         description: null,
         is_robot: !!spec.robot,
+        is_admin: !!spec.admin,
       },
     })),
     free_seats: [],
@@ -96,15 +100,39 @@ describe('awayText', () => {
     )
   })
 
-  test('without a deadline (an admin away) the table just waits', () => {
-    expect(awayText({ seat: 'S', forfeit_at: null }, NOW)).toBe('South is away. The table waits for them.')
+  test('without a clock it is not their turn yet: the full three minutes start then', () => {
+    expect(awayText({ seat: 'S', forfeit_at: null }, NOW)).toBe(
+      "South is away. N-S lose the set if they aren't back within 3:00 of their turn.",
+    )
   })
 
-  test('heldText words the viewer\'s own held seat', () => {
+  test('while an admin is away (`waits`) the table just waits', () => {
+    expect(awayText({ seat: 'S', forfeit_at: null }, NOW, true)).toBe('South is away. The table waits for them.')
+  })
+
+  test('heldText words the viewer\'s own held seat, with a clock once it is their turn', () => {
     expect(heldText({ seat: 'S', forfeit_at: inSeconds(100) }, NOW)).toBe(
       'Your seat is held. N-S lose the set in 1:40 unless you come back.',
     )
-    expect(heldText({ seat: 'S', forfeit_at: null }, NOW)).toBe('Your seat is held while you are away.')
+    expect(heldText({ seat: 'S', forfeit_at: null }, NOW)).toBe(
+      "Your seat is held. N-S lose the set if you aren't back within 3:00 of your turn.",
+    )
+    expect(heldText({ seat: 'S', forfeit_at: null }, NOW, true)).toBe('Your seat is held while you are away.')
+    expect(heldText({ seat: 'E', forfeit_at: inSeconds(-1) }, NOW)).toBe(
+      'Your seat is held, but time is up: E-W lose the set any moment now.',
+    )
+  })
+
+  test('awayTogetherText tells several seats with no clock in one line', () => {
+    const seats = [{ seat: 'S' as Seat }, { seat: 'W' as Seat }]
+
+    expect(awayTogetherText(seats)).toBe(
+      "South and West are away. Whoever isn't back within 3:00 of their turn loses the set for their side.",
+    )
+    expect(awayTogetherText([{ seat: 'N' }, ...seats], true)).toBe(
+      'North, South and West are away. The table waits for them.',
+    )
+    expect(awayTogetherText([{ seat: 'E' }], true)).toBe('East is away. The table waits for them.')
   })
 
   test('lostSetText names the side and the set', () => {
@@ -144,8 +172,20 @@ describe('setAtStake', () => {
 
   test('an admin never forfeits, and nobody does while an admin is away', () => {
     expect(setAtStake(makeTable(FOUR), null, 2, true)?.forfeits).toBe(false)
-    const adminAway = makeTable({ ...FOUR, N: { user: 1, away: 'no-deadline' } })
+    const adminAway = makeTable({ ...FOUR, N: { user: 1, away: 'no-clock', admin: true } })
+    expect(forfeitSuspended(adminAway)).toBe(true)
     expect(setAtStake(adminAway, null, 2)?.forfeits).toBe(false)
+  })
+
+  test('an away seat with no clock is only not on turn yet: the set is still at stake', () => {
+    const notOnTurn = makeTable({ ...FOUR, N: { user: 1, away: 'no-clock' }, S: { user: 3, away: 120 } })
+    expect(forfeitSuspended(notOnTurn)).toBe(false)
+    expect(setAtStake(notOnTurn, null, 2)?.forfeits).toBe(true)
+  })
+
+  test('an admin seated but here suspends nothing', () => {
+    const adminHere = makeTable({ ...FOUR, N: { user: 1, admin: true }, S: { user: 3, away: 'no-clock' } })
+    expect(forfeitSuspended(adminHere)).toBe(false)
   })
 })
 
@@ -185,6 +225,77 @@ describe('AwayNotice', () => {
 
     await wrapper.setProps({ table: makeTable(FOUR) })
     expect(wrapper.find('.away-notice').exists()).toBe(false)
+  })
+
+  test('one countdown at a time: the player on turn first and highlighted, the other plain', async () => {
+    const table = makeTable({ ...FOUR, S: { user: 3, away: 'no-clock' }, E: { user: 2, away: 25 } })
+    const wrapper = mount(AwayNotice, { props: { table, me: 1 } })
+
+    const lines = wrapper.findAll('.away-line')
+    expect(lines.map((l) => l.text())).toEqual([
+      'East is away. E-W lose the set in 0:25 unless they come back.',
+      "South is away. N-S lose the set if they aren't back within 3:00 of their turn.",
+    ])
+    expect(lines[0].classes()).toContain('away-clock')
+    expect(lines[1].classes()).not.toContain('away-clock')
+    expect(lines[1].classes()).not.toContain('away-urgent')
+
+    // East comes back and calls; the turn reaches South, whose clock starts.
+    await wrapper.setProps({ table: makeTable({ ...FOUR, S: { user: 3, away: 180 } }) })
+    expect(wrapper.findAll('.away-line').map((l) => l.text())).toEqual([
+      'South is away. N-S lose the set in 3:00 unless they come back.',
+    ])
+  })
+
+  test('the other away seats share one plain line', () => {
+    const table = makeTable({
+      ...FOUR,
+      W: { user: 4, away: 'no-clock' },
+      E: { user: 2, away: 90 },
+      S: { user: 3, away: 'no-clock' },
+    })
+    const wrapper = mount(AwayNotice, { props: { table, me: 1 } })
+
+    expect(wrapper.findAll('.away-line').map((l) => l.text())).toEqual([
+      'East is away. E-W lose the set in 1:30 unless they come back.',
+      "South and West are away. Whoever isn't back within 3:00 of their turn loses the set for their side.",
+    ])
+  })
+
+  test('should two clocks ever show, the nearest deadline comes first', () => {
+    const table = makeTable({ ...FOUR, N: { user: 1, away: 150 }, E: { user: 2, away: 40 } })
+    const wrapper = mount(AwayNotice, { props: { table, me: 3 } })
+
+    expect(wrapper.findAll('.away-line').map((l) => l.text().split('.')[0])).toEqual([
+      'East is away',
+      'North is away',
+    ])
+  })
+
+  test('while an admin is away, the table waits for everyone', () => {
+    const table = makeTable({
+      ...FOUR,
+      N: { user: 1, away: 'no-clock', admin: true },
+      E: { user: 2, away: 'no-clock' },
+    })
+    const wrapper = mount(AwayNotice, { props: { table, me: 3 } })
+
+    expect(wrapper.get('.away-line').text()).toBe('North and East are away. The table waits for them.')
+  })
+
+  test('nothing for no table', () => {
+    const wrapper = mount(AwayNotice, { props: { table: null, me: 1 } })
+
+    expect(wrapper.find('.away-notice').exists()).toBe(false)
+  })
+
+  test('with `held`, a seat whose clock has not started yet', () => {
+    const table = makeTable({ ...FOUR, S: { user: 3, away: 'no-clock' } })
+    const wrapper = mount(AwayNotice, { props: { table, me: 3, held: true } })
+
+    expect(wrapper.get('.away-line').text()).toBe(
+      "Your seat is held. N-S lose the set if you aren't back within 3:00 of your turn.",
+    )
   })
 
   test('with `held`, the viewer\'s own held seat', () => {
