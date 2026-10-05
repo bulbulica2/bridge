@@ -51,6 +51,7 @@ function waitingState(): Playing {
     tricks_won: null,
     dummy_hand: null,
     claim: null,
+    claim_locked: false,
     result: null,
     deal: null,
     ready: null,

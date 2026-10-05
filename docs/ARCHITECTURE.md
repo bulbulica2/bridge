@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/73-double-dummy`._
+_Status as of branch `bulbulica2/74-claim-answers-and-lock`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -510,6 +510,17 @@ works ([RUNNING.md](RUNNING.md) says the worker must run).
   have been lost (bb#95). One reread per deadline: a backend that still
   answers with the claim (its queue worker stopped) is left to the next
   update or a Refresh.
+- Both players who must answer a claim see **Accept** / **Reject** the
+  moment it arrives; neither waits for the other or for a turn, and one
+  reject ends it. A claim that ends **without** being accepted (rejected,
+  withdrawn or expired) locks claims for the whole table until the next
+  card (bb#115): the state's `claim_locked` is true meanwhile (over HTTP
+  and in the compact `PlayingUpdated`, which `expandPlaying` passes
+  through), `canClaim()` says no, and the play page keeps the **Claim**
+  button disabled with a note ("The claim was refused: play a card before
+  claiming again."). The next card's `PlayingUpdated` clears it by itself;
+  a claim sent anyway gets the backend's 409, toasted with a reread like
+  any other.
 
 **Heartbeat.** The backend frees the seats of players who went quiet. While
 the `tables` store watches a table it sends `POST /tables/{id}/heartbeat`
@@ -628,8 +639,9 @@ requiring it), `auction.ts` (call legality hints and labels),
 `chat.ts` (who a message may go to by phase, merging messages, a message's
 sender, time and call, the question toast, the export's chat lines),
 `play.ts` (follow-suit hint, the forced card and who it plays itself for, whose hand you play, trick layout), `claim.ts`
-(who may claim, who still has to answer, the claim's wording, its countdown
-and how it ended: `claimClockText`, `claimExpired`, `claimOffText`), `result.ts`
+(who may claim, `claimLocked` after a refused claim, who still has to answer,
+the claim's wording, its countdown and how it ended: `claimClockText`,
+`claimExpired`, `claimOffText`), `result.ts`
 (the score from your side, and the table notation: `madeSuffix()` for "+2"
 / "=" / "−1", `doubledMark()` for X / XX, `resultSummary()` for "2♣ W +2 ·
 −130" in toasts and the text export, `percentText()`), `seatMove.ts` (wording for leaving or moving by

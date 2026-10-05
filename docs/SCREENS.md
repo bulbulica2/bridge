@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/73-double-dummy`._
+_Status as of branch `bulbulica2/74-claim-answers-and-lock`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -281,7 +281,7 @@ search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
 
 **Logged in, seated at that table** (403 otherwise). Built by #26 (game
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
-#47 (claims), #96 (claims expire after 10 s, needs bb#96), #98 (the next board by itself, needs bb#97), #53 (robots), #57 (forced cards play themselves), #56 (last trick
+#47 (claims), #96 (claims expire after 10 s, needs bb#96), #120 (both answer a claim at once, and a refused claim locks claims until the next card, needs bb#115), #98 (the next board by itself, needs bb#97), #53 (robots), #57 (forced cards play themselves), #56 (last trick
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 and the forfeit), #95 (you play a robot partner's contract, needs bb#94),
@@ -393,15 +393,20 @@ What it shows by phase:
   says the others have 10 seconds to answer and that no answer counts as
   no. While a claim is pending, a banner says what is claimed, the
   claimer's cards lie face up at their seat, no card can be played, the
-  players who still have to answer get **Accept** / **Reject** and the
+  players who still have to answer get **Accept** / **Reject** at once
+  (both of them, neither waits for the other; one reject ends it) and the
   claimer **Withdraw**. The banner counts down to the claim's deadline:
   "Answer within 0:07" for those who still have to answer, "Waiting for
   East and West · 0:07" for everyone else, then "Time is up: no answer
   counts as no.", when its buttons disable. A reject or withdrawal toasts
-  and play goes on; so does a claim nobody answered in time ("Nobody
-  answered: the claim is off, play on."). If the backend's update hasn't
-  come 2 s after the deadline, the page rereads the game. The last accept
-  finishes the board.
+  ("South's claim is off. Play on: no claim until the next card.") and
+  play goes on; so does a claim nobody answered in time ("Nobody answered:
+  the claim is off. Play on: no claim until the next card."). Until the
+  next card is played nobody at the table may claim: **Claim** stays,
+  disabled, with "The claim was refused: play a card before claiming
+  again." under it, and comes back with the next card. If the backend's
+  update hasn't come 2 s after the deadline, the page rereads the game.
+  The last accept finishes the board.
 - **finished**: the result at a glance (#100), written the way it is at
   the table: one big row with the contract and how it went on the left
   (**2♣ by West +2**, **4♠X by South −1**, **3NT by North =**, or
@@ -510,7 +515,7 @@ Start once the table is full again).
 
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
-bb#40 (next board; bb#74 dropped its `everyone`; bb#97 deals it by itself), bb#43 (results), bb#59 (claims), bb#96 (claims expire),
+bb#40 (next board; bb#74 dropped its `everyone`; bb#97 deals it by itself), bb#43 (results), bb#59 (claims), bb#96 (claims expire), bb#115 (claims answered at once, the claim lock),
 bb#75 (sets of four boards), bb#76 (away mid-set and the forfeit), bb#100 (alerts), bb#101 (board chat).
 
 ## My boards — `/history`

@@ -174,6 +174,10 @@ export interface PublicPlaying {
   dummy_hand: Card[] | null;
   // Non-null only while a claim waits for its answers: no card is played then.
   claim: Claim | null;
+  // True from a claim ending without being accepted (rejected, withdrawn or
+  // expired) until the next card is played: nobody may claim meanwhile
+  // (409, bb#115). False otherwise, also while `waiting`.
+  claim_locked: boolean;
   result: BoardResult | null;
   deal: Record<Seat, Card[]> | null;
   ready: Seat[] | null;

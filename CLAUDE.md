@@ -485,7 +485,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   a claim appearing or going away always counts as newer, since a reject
   or withdrawal leaves the cards unchanged. `src/utils/claim.ts` holds the
   hints (`canClaim`, `claimAction`: withdraw/answer/null,
-  `claimWaitingFor`, `claimText`); `ClaimSheet.vue` is the sheet (one button per number, then
+  `claimWaitingFor`, `claimText`); both answerers get Accept / Reject at
+  once, neither waits for the other. **Claim lock** (#120, bb#115): a
+  claim that ends unaccepted (rejected, withdrawn, expired) sets the
+  state's `claim_locked` (HTTP and compact `PlayingUpdated` alike,
+  `expandPlaying` passes it through) until the next card clears it;
+  `canClaim` is false then, `claimLocked(state, seat)` says who would
+  claim but for it, and the play page keeps Claim disabled with
+  `CLAIM_LOCKED_TEXT` under it (the sheet closes through `mayClaim`); a
+  409 for it toasts and reloads like any other. `ClaimSheet.vue` is the sheet (one button per number, then
   "Claim N tricks"; Concede sends 0; a line quotes `CLAIM_SECONDS`),
   `ClaimPanel.vue` the pending-claim banner with its buttons. A claim
   going away mid-play toasts (`claimOffText`); the last accept lands in
@@ -497,8 +505,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   `claimClockText`: "Answer within 0:07" / "Waiting for East and West ·
   0:07" / "Time is up…", reusing `secondsLeft`/`formatClock` from
   `away.ts`) and disables its buttons at 0 (`claimExpired`); a claim gone
-  at or after its deadline toasts "Nobody answered: the claim is off, play
-  on.". `src/composables/useStaleDeadline.ts` rereads the game
+  at or after its deadline toasts "Nobody answered: the claim is off.",
+  before it "South's claim is off.", each followed by "Play on: no claim
+  until the next card." (`claimOffText`). `src/composables/useStaleDeadline.ts` rereads the game
   (`game.load()`, errors ignored) if the claim is still shown 2 s after
   `expires_at` (a lost update, bb#95), once per deadline and only while
   the view is active (the play page uses it for `next_board_at` too). A
