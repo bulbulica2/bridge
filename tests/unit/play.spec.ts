@@ -387,6 +387,43 @@ describe('BridgeTable turn slot', () => {
   })
 })
 
+describe("BridgeTable's time for the set", () => {
+  const PLAYERS = {
+    N: { id: 1, name: 'Ann', username: 'ann', description: null },
+    E: { id: 2, name: 'R', username: 'robot-1', description: null, is_robot: true },
+  }
+
+  test("each human seat shows its bank: the running one marked, red under a minute; robots none", () => {
+    const wrapper = mount(BridgeTable, {
+      props: {
+        players: PLAYERS,
+        mySeat: 'S',
+        board: null,
+        turn: 'N',
+        banks: {
+          N: { seconds: 59, running: true, low: true },
+          S: { seconds: 812, running: false, low: false },
+        },
+      },
+    })
+
+    const north = wrapper.get('.side-top .seat-bank')
+    expect(north.text()).toBe('0:59')
+    expect(north.classes()).toEqual(expect.arrayContaining(['seat-bank-running', 'seat-bank-low']))
+    expect(north.attributes('aria-label')).toBe("North's time for the set: 0:59")
+    const south = wrapper.get('.side-bottom .seat-bank')
+    expect(south.text()).toBe('13:32')
+    expect(south.classes()).not.toContain('seat-bank-running')
+    expect(south.classes()).not.toContain('seat-bank-low')
+    expect(wrapper.find('.side-right .seat-bank').exists()).toBe(false)
+  })
+
+  test('none without banks', () => {
+    const wrapper = mount(BridgeTable, { props: { players: PLAYERS, mySeat: 'S', board: null, turn: 'N' } })
+    expect(wrapper.find('.seat-bank').exists()).toBe(false)
+  })
+})
+
 describe('BridgeTable suit order', () => {
   const PLAYERS = {}
   const HAND = cards('SQ', 'H3', 'D5', 'C9')

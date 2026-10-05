@@ -44,6 +44,10 @@ export interface BroadcastTable {
   // may remove them, the first human to sit down runs the table, and the
   // backend deletes it after UNATTENDED_MINUTES. Null at every other table.
   unattended_since: string | null;
+  // Each player's time for a whole set at this table, in minutes (the set
+  // clock, bb#131): the next set's while one is going on, which keeps its
+  // own (`set.minutes`). A manager changes it between sets (updateTable).
+  set_minutes: SetMinutes;
   created_at: string;
   updated_at: string;
   seats: TableSeat[];
@@ -68,6 +72,22 @@ export interface CreateTablePayload {
   // Robots take the other three seats. Nothing is dealt until the creator
   // presses Start, which then deals at once (robots are always ready).
   robots?: boolean;
+  // Each player's time for a set; the backend's default when left out.
+  set_minutes?: SetMinutes;
+}
+
+// The lengths a set clock may have (Table::SET_MINUTES): each player's time
+// for the 4 boards of a set, like a chess clock (bridge_backend docs/API.md,
+// The set clock), and BRIDGE_SET_MINUTES' default.
+export const SET_MINUTES = [8, 12, 16, 20] as const;
+
+export type SetMinutes = (typeof SET_MINUTES)[number];
+
+export const DEFAULT_SET_MINUTES: SetMinutes = 16;
+
+// What a manager may change about a table.
+export interface TableSettings {
+  set_minutes: SetMinutes;
 }
 
 // BRIDGE_UNATTENDED_TABLE_MINUTES' default: how long a table with only robots
@@ -91,6 +111,15 @@ export const CREATOR_SEAT: Seat = 'S';
 export async function createTable(payload: CreateTablePayload): Promise<Table> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.post<ApiResponse<Table>>('/tables', { seat: CREATOR_SEAT, ...payload });
+  return data.data;
+}
+
+// A manager changes the table's settings. 403 for anyone else, 409 while a
+// set is going on (a set copies `set_minutes` when it opens, so a change only
+// ever affects the next one).
+export async function updateTable(tableId: number, settings: TableSettings): Promise<Table> {
+  await http.get('/sanctum/csrf-cookie');
+  const { data } = await http.patch<ApiResponse<Table>>(`/tables/${tableId}`, settings);
   return data.data;
 }
 

@@ -217,6 +217,13 @@ describe('set helpers', () => {
     expect(replacedText({ seat: 'S', reason: 'moved' })).toBe('South moved to another table: a robot took their seat.')
     expect(replacedText({ seat: 'W', reason: 'kicked' })).toBe('West was removed while away: a robot took their seat.')
     expect(replacedText({ seat: 'W', reason: 'kicked' }, true)).toBe('You were removed while away: a robot took your seat.')
+    // Their time for the set ran out (bb#131).
+    expect(replacedText({ seat: 'E', reason: 'set_time' })).toBe(
+      'East ran out of time for the set: a robot took their seat.',
+    )
+    expect(replacedText({ seat: 'E', reason: 'set_time' }, true)).toBe(
+      'You ran out of time for the set: a robot took your seat.',
+    )
     expect(replacedFromText({ seat: 'E', reason: 'turn_timeout', number: 3 })).toBe(
       "You didn't play in time: a robot took your seat. You may sit down at that table again once set 3 is over.",
     )
@@ -358,6 +365,33 @@ describe('SetResultsPanel', () => {
     const wrapper = mount(SetResultsPanel, { props: { set: results({ boards: [row] }), mySeat: 'N' } })
 
     expect(wrapper.get('.set-row-contract').text()).toBe('4♠X by N −1 · by claim')
+  })
+})
+
+describe("SetResultsPanel's time used", () => {
+  test("each human's time used of their time for the set", () => {
+    const set = results({
+      minutes: 16,
+      time_left: { N: 312, E: 0, S: 405, W: null },
+      time_used: { N: 648, E: 960, S: 555, W: null },
+      replaced: [{ seat: 'E', user_id: bo.id, reason: 'set_time' }],
+    })
+    const wrapper = mount(SetResultsPanel, { props: { set, mySeat: 'S' } })
+
+    expect(wrapper.get('.set-time-title').text()).toBe('Time used · 16 minutes each')
+    expect(wrapper.findAll('.set-time-row').map((r) => r.text())).toEqual([
+      'North · ann10:48 of 16:00',
+      'East · bo16:00 of 16:00',
+      'South (you)9:15 of 16:00',
+    ])
+    expect(wrapper.findAll('.set-replaced').map((r) => r.text())).toEqual([
+      'East ran out of time for the set: a robot took their seat.',
+    ])
+  })
+
+  test('nothing for a set from before the clock', () => {
+    const wrapper = mount(SetResultsPanel, { props: { set: results(), mySeat: 'S' } })
+    expect(wrapper.find('.set-time').exists()).toBe(false)
   })
 })
 

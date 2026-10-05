@@ -14,7 +14,9 @@
        room the hand took as dealt). A seat whose player is away mid-set is
        dashed and tagged "away". Dummy's and a robot declarer's cards read
        trumps first (`trump`, see suitOrder); the claimer's and the deal
-       keep bridge order. -->
+       keep bridge order. Each human's time for the set (`banks`) shows
+       under their name, the running one counting down, red under a
+       minute; robots and admins have none. -->
   <div class="bridge-table">
     <div
       v-for="side in SIDES"
@@ -51,6 +53,14 @@
       <AdminBadge v-if="players[seatOn[side]]?.is_admin" />
 
       <span v-if="side === 'bottom' && mySeat" class="seat-you">you</span>
+      <span
+        v-if="banks[seatOn[side]]"
+        class="seat-bank"
+        :class="{ 'seat-bank-running': banks[seatOn[side]]!.running, 'seat-bank-low': banks[seatOn[side]]!.low }"
+        :aria-label="bankLabel(seatOn[side], banks[seatOn[side]]!)"
+      >
+        {{ formatClock(banks[seatOn[side]]!.seconds) }}
+      </span>
       <span v-if="away.includes(seatOn[side])" class="seat-away-tag">away</span>
       <span v-if="dummy && dummy.seat === seatOn[side] && side !== 'bottom'" class="seat-dummy">
         dummy
@@ -129,7 +139,10 @@ import type { Board, Card, Strain } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES } from '@/utils/auction';
+import { formatClock } from '@/utils/away';
 import { isVulnerable, longestSuit, seatAt, suitOrder, vulnerabilityLabel } from '@/utils/cards';
+import { bankLabel } from '@/utils/setClock';
+import type { SeatBank } from '@/utils/setClock';
 import type { ScreenSide } from '@/utils/cards';
 
 const props = withDefaults(
@@ -174,6 +187,9 @@ const props = withDefaults(
     // Seats whose players are away mid-set (their seat held; the page's
     // AwayNotice says so, the turn clock counts down).
     away?: Seat[];
+    // Each human's time for the set (utils/setClock), none for a robot or
+    // an admin.
+    banks?: Partial<Record<Seat, SeatBank>>;
     busy?: boolean;
     sendingId?: number | null;
   }>(),
@@ -192,6 +208,7 @@ const props = withDefaults(
     replay: false,
     reserve: null,
     away: () => [],
+    banks: () => ({}),
     busy: false,
     sendingId: null,
   },
@@ -387,6 +404,23 @@ function turnLabel(side: ScreenSide): string {
   font-size: 0.7rem;
   text-transform: uppercase;
   color: var(--ion-color-primary);
+}
+
+/* A player's time for the set: the running one in bold, red under a
+   minute. */
+.seat-bank {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ion-color-medium);
+}
+
+.seat-bank-running {
+  font-weight: 700;
+  color: var(--ion-text-color, #000);
+}
+
+.seat-bank-low {
+  color: var(--ion-color-danger, #c5000f);
 }
 
 /* One line of the label's size, empty or not. */

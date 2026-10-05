@@ -208,7 +208,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   non-managers, 409 for a taken seat or a user seated anywhere, never a move,
   and `POST /tables/{id}/seats/robots` `{seat}` that seats a robot: 403 for
   non-managers, 409 for a taken seat, and `POST`/`DELETE /tables/{id}/start`,
-  see Start below)
+  see Start below, and the manager-only `PATCH /tables/{id}`
+  `{set_minutes}` (`updateTable`, the store's `updateSettings`): 403 for
+  non-managers, 409 mid-set, see the set clock below)
   and `src/stores/tables.ts` keeps both the list (`tables`) and the table the detail
   page is showing (`currentTable`), syncing a changed table into both.
   `create` seeds `currentTable`, and `openTable(id)` (the detail and play
@@ -259,7 +261,8 @@ The user's standing rule (#91): **no task may leave code coverage under
 - **Robots** (bb#65, backend `docs/ROBOTS.md`): users with `is_robot: true`
   (on every `PublicUser`; `GET /users?search=` never returns them) that
   fill seats nobody else takes. `createTable({robots: true})` (the
-  Tables page's "Play with robots" toggle, on by default) seats three
+  Tables page's "Play with robots" toggle, on by default; the same form's
+  `SetMinutesPicker` sends `set_minutes`) seats three
   but deals nothing, so the page goes to `/tables/:id`, where the
   creator's Start deals (robots are always ready); a manager adds one
   with the store's `seatRobot(id, seat)` ("Add robot" on the detail page).
@@ -590,9 +593,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   `board` (this board's place / boards dealt), `of`, `finished`, `ended`
   `completed|abandoned` (no `forfeit` since bb#120), `replaced`
   `SetReplacement[]` `{seat, user_id, reason}`, reason
-  `turn_timeout|away|moved|kicked`) is on `PublicPlaying` and
+  `turn_timeout|set_time|away|moved|kicked`, `minutes`, `time_left`
+  (the set clock, below)) is on `PublicPlaying` and
   `BroadcastTable` (null before the first Start); `SetResults` has
-  `replaced` too, and `players` has the robot in a replaced seat.
+  `replaced`, `minutes`, `time_left` and `time_used` too, and `players`
+  has the robot in a replaced seat.
   A board finishing sends no `TableUpdated` and a set broken off between
   boards sends only that, so read it through `currentSet(table, playing)` in
   `src/utils/sets.ts`, which merges both copies (a higher id wins; the
@@ -633,12 +638,34 @@ The user's standing rule (#91): **no task may leave code coverage under
   rest of the set (`set.replaced`), the board goes on; sets are never
   forfeited, and `forfeit_at` is gone from `TableSeat`.
   `src/utils/turnClock.ts`: `turnDeadline(state)` (auction/play only),
-  `turnClock(state, me, now)` (`{seconds, mine, seat}`, the acting user's
-  seat from `players`, else `turn`), `turnClockText` ("Your turn · 0:42" /
-  "Waiting for East · 0:42" / `TIME_UP_TEXT` "Time is up…"), `turnUrgent`
-  (mine and ≤ `TURN_URGENT_SECONDS` 15), `turnTitle`.
+  `actingSeat`, `turnClock(state, me, now)` (`{seconds, mine, seat, by}`,
+  the acting user's seat from `players`, else `turn`; `by` =
+  `turn_deadline_by` ?? `'move'`), `turnClockText` ("Your turn · 0:42" /
+  "Waiting for East · 0:42" / with `by: 'set'` "Your time for the set:
+  0:42" / "East's time for the set: 0:42" / `TIME_UP_TEXT` "Time is
+  up…"), `turnUrgent` (mine and ≤ `TURN_URGENT_SECONDS` 15), `turnTitle`.
+  **The set clock** (#143, bb#131, backend `docs/API.md` The set clock):
+  each human's time bank for the set, the table's `set_minutes`
+  (`SET_MINUTES` 8/12/16/20, `DEFAULT_SET_MINUTES` 16 in
+  `src/services/tables.ts`; `BroadcastTable.set_minutes`, sent by
+  `createTable`, changed by a manager between sets on the detail page,
+  whose `SetMinutesPicker` shows only while `can_manage` and no set runs,
+  a refusal toasted, the table reloaded and the picker re-keyed; else
+  `setClockText`), copied as `set.minutes`; `set.time_left` (seat →
+  seconds or null for a robot/admin) is as of the state's
+  `turn_started_at` (HTTP and compact alike; with `turn_deadline_by`
+  `move|set`; `PlayingReview` omits all three). `turn_deadline` is the
+  earlier of the move's minute and the bank's end. `src/utils/setClock.ts`:
+  `bankLeft`, `setBanks(state, now)` (only `actingSeat`'s runs, and only
+  while `turnDeadline` is set; `{seconds, running, low}`, `low` under
+  `SET_LOW_SECONDS` 60), `bankLabel`, `setClockText`, `timeUsedText`,
+  `timeUsedRows` (`SetResultsPanel`'s "Time used"). Running out is a
+  replacement with reason `set_time` ("East ran out of time for the set:
+  a robot took their seat.", `REPLACED_WHY` in `sets.ts`; stats' reason
+  "out of time for the set").
   `src/composables/useTurnClock.ts` (`useNow` while a deadline runs →
-  `clock`, `text`, `urgent`) feeds the play page's `.turn-clock` line
+  `clock`, `text`, `urgent`, `banks` = `setBanks`, `BridgeTable`'s `banks`
+  prop: `.seat-bank` under the name, `-running` bold, `-low` red) feeds the play page's `.turn-clock` line
   (over `.status`, rendered all through auction/play, empty without a
   clock, `turn-clock-mine`/`turn-clock-urgent`; the urgent cue is the
   class `turn-urgent` on `HandView` (playing from it) and `BiddingBox`),

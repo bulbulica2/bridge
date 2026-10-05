@@ -800,6 +800,30 @@ describe('TablePlayPage turn clock', () => {
     expect(wrapper.get('.bidding-box').classes()).toContain('turn-urgent')
   })
 
+  test("our time for the set ending first: the line says so, and each seat's bank shows", async () => {
+    const set = { id: 8, number: 1, board: 2, of: 4, finished: false, ended: null, replaced: [], minutes: 8 }
+    const wrapper = await mountPage(
+      auction({
+        set: { ...set, time_left: { N: 300, E: 200, S: 42, W: null } },
+        turn_started_at: inSeconds(0),
+        turn_deadline: inSeconds(42),
+        turn_deadline_by: 'set',
+      }),
+    )
+
+    expect(wrapper.get('.turn-clock').text()).toBe('Your time for the set: 0:42')
+    const mine = () => wrapper.get('.side-bottom .seat-bank')
+    expect(mine().text()).toBe('0:42')
+    expect(mine().classes()).toEqual(expect.arrayContaining(['seat-bank-running', 'seat-bank-low']))
+    expect(wrapper.get('.side-top .seat-bank').text()).toBe('5:00')
+
+    vi.advanceTimersByTime(2000)
+    await flushPromises()
+    expect(mine().text()).toBe('0:40')
+    expect(wrapper.get('.turn-clock').text()).toBe('Your time for the set: 0:40')
+    expect(wrapper.get('.side-top .seat-bank').text()).toBe('5:00')
+  })
+
   test('in the play, our own hand is ringed when we play from it', async () => {
     const wrapper = await mountPage(
       auction({

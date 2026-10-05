@@ -213,6 +213,18 @@ describe('game store', () => {
     expect(game.playing?.phase).toBe('auction')
   })
 
+  test('a robot taking a seat over when the time for the set ran out: told once', async () => {
+    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, replaced: [] }
+    const game = await loaded({ ...fullState(), set })
+    const replaced = { ...set, replaced: [{ seat: 'E' as Seat, user_id: 2, reason: 'set_time' as const }] }
+
+    game.applyPlayingUpdate(5, publicState({ set: replaced, auction: auction(PASS), turn: 'W', acting_user_id: 4 }))
+    game.applyTableUpdate({ ...makeTable(['N', 'E', 'S', 'W'], 7), set: replaced })
+
+    expect(showToast).toHaveBeenCalledTimes(1)
+    expect(showToast).toHaveBeenCalledWith('East ran out of time for the set: a robot took their seat.', 'warning')
+  })
+
   test('the board update may bring a replacement first', async () => {
     const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, replaced: [] }
     const game = await loaded({ ...fullState(), set })

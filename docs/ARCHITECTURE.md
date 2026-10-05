@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/84-double-dummy-unavailable-wording`._
+_Status as of branch `bulbulica2/85-set-clock`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -35,8 +35,8 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved) |
-| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), a player's stats in words (`stats.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board and each seat's time for the set, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved) |
+| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), the set clock (`setClock.ts`), a player's stats in words (`stats.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
@@ -227,7 +227,7 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 | Store | Holds | Main actions |
 |---|---|---|
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
-| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `replacedFrom` (a set a robot took your seat over in) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissReplaced`, `clear` (on logout); owns the table channel and the heartbeat |
+| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `replacedFrom` (a set a robot took your seat over in) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `updateSettings` (a manager's time for a set), `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissReplaced`, `clear` (on logout); owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned` / `AuctionAlertsShown`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
 | `chat` | the chat of the board the play page shows: `tableId`, `playingId`, `messages`, `open` (the panel), `about` (the call a message is about), `unread` | `follow` (the play page's board: read, emptied for a new board, read again once finished), `load`, `receive`, `send`, `setOpen`, `askAbout`, `clear`; see [Board chat](#board-chat) |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, double dummy tables per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadDoubleDummy`, `loadSet`, `loadReview` |
@@ -285,7 +285,7 @@ so every extra request on the way in delays the one the page needs:
 | Service | Endpoints (see [backend `API.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)) |
 |---|---|
 | `auth.ts` | `/sanctum/csrf-cookie`, `POST /login`, `/register`, `/logout`, `/forgot-password`, `/reset-password`, `GET` / `PATCH /api/user` |
-| `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
+| `tables.ts` | `GET` / `POST /tables`, `GET` / `PATCH /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
 | `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `GET /cards`, `POST /tables/{id}/calls`, `POST /tables/{id}/calls/{index}/question`, `PUT /tables/{id}/calls/{index}/explanation`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
 | `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /boards/{id}/double-dummy`, `GET /playings/{id}`, `GET /sets/{id}` |
 | `users.ts` | `GET /users/{id}`, `GET /users?search=`, `POST` / `DELETE /users/{id}/ban`, `GET /users/{id}/stats` (`getUserStats`), `GET /api/user/stats` (`getMyStats`) |
@@ -613,7 +613,7 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   board. If the backend marks you away while this client still beats (a
   lost beat), it beats at once.
 - **A robot takes a seat over** (`set.replaced`: `{seat, user_id,
-  reason}`, reason `turn_timeout`, `away`, `moved` or `kicked`): the game
+  reason}`, reason `turn_timeout`, `set_time`, `away`, `moved` or `kicked`): the game
   store toasts it once per seat, whichever of `TableUpdated` and
   `PlayingUpdated` brings it first ("East didn't play in time: a robot
   took their seat.", worded by `replacedText()` in `sets.ts`); the ones
@@ -625,6 +625,26 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   the middle of is kept in `localStorage` (`bridge.setInProgress`), so a
   replacement that happened while the tab was closed is found on the next
   visit (`GET /sets/{id}` from `load()`).
+- **The set clock** (#143, bb#131, backend
+  [`API.md`, The set clock](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)):
+  each human also has a **time bank for the whole set**, like a chess
+  clock: the table's `set_minutes` (8, 12, 16 or 20, 16 by default),
+  picked in the create-table form (`POST /tables`) and changed by a
+  manager between sets on the table's page (`PATCH /tables/{id}`, the
+  tables store's `updateSettings`; a 409 mid-set is toasted). A set copies
+  it as `set.minutes`; `set.time_left` holds each seat's seconds left as
+  of the game state's `turn_started_at` (null for a robot or an admin).
+  Only the bank of the player the board waits for runs, so
+  `src/utils/setClock.ts` (`setBanks`, run by `useTurnClock` on the turn
+  clock's tick) counts that one down from `turn_started_at` and leaves the
+  others standing; `BridgeTable` shows each under the player's name,
+  bold while it runs, red under a minute. `turn_deadline` is whichever
+  runs out first, and `turn_deadline_by: "set"` makes the turn clock's
+  line read "Your time for the set: 0:42" ("East's time for the set: …"
+  for the others). Running out is a replacement like a turn timeout,
+  with reason `set_time`: "East ran out of time for the set: a robot took
+  their seat." / "You ran out of time for the set: …". The set's results
+  list each human's time used (`time_used`, `SetResultsPanel`).
 - **Leave and move confirmations** say what is at stake (`stakeOf(table)`
   → `setAtStake` in `utils/away.ts`, `held` when a Leave would hold the
   seat): a Leave "If you aren't back to play within 60 seconds of your
@@ -644,7 +664,7 @@ arrives, and the app falls back to what each request returns.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
+| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, each human's time for the set (`banks`: the running one bold, red under a minute, none for a robot or an admin), whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
 | `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
 | `AwayNotice` | who is away mid-set, with no countdown (the turn clock is the play page's only one): an away admin on a line of their own (the table waits for them), the others in one line; with `held`, your own held seat (detail page, Tables, Home) |
 | `HandView` + `PlayingCard` | your hand, always ♥ ♣ ♦ ♠ (or the suits in `order`); playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses; each card shows at least 44 px of itself, the part a tap reaches, and the hand keeps the height it had as dealt while its cards go (`useSteadyHeight`); see [Card size](#card-size) |
@@ -660,7 +680,8 @@ arrives, and the app falls back to what each request returns.
 | `BoardResultPanel`, `NextBoardBox` | the result once a board is finished, at a glance: one big row with the contract in table notation ("2♣ by West +2") and your score (N-S's, tagged, for someone who didn't play it), the tricks ("10 tricks · by claim"), then, at the table, one double dummy line ("Double dummy: 4♠ by South makes 10") with **Review**, then the set's position and the board's matchpoints for your side when known, and the countdown to the set's next board ("Next board in 0:08", then "Dealing the next board…") with the optional **Deal now** and, once pressed, the humans who haven't yet |
 | `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the review and the results page, or a note while it is being solved; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
-| `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, whom a robot replaced and why ("you" for the viewer it replaced), each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score) |
+| `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, whom a robot replaced and why ("you" for the viewer it replaced), each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score), then each human's time used of their time for the set |
+| `SetMinutesPicker` | the time for a set, 8 / 12 / 16 / 20 minutes, as an `ion-segment` (`v-model`): the create-table form and a manager on the table's page |
 | `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead), plus, with `manage`, **Seat a player** / **Add robot** per empty seat (`seatPlayer` / `addRobot` events; the play page runs them, #117), **Remove** on each seat in `removable` (`remove` event) and, with `canLeave`, **Leave the table** (`leave` event): the play page's way off the seat between sets (#121) |
 | `RobotBadge` | the "robot" mark next to a robot's name (also on Home, Tables, Table detail and the profile sheet) |
 | `AdminBadge` | the "admin" mark next to an admin's name, wherever `RobotBadge` goes, plus `StartBox` and the User profile page |
@@ -710,7 +731,9 @@ game phase and by what is at stake in the set, and whether only robots
 would be left), `away.ts` (who is away and what it costs once the turn
 reaches them, the clock formatting, what leaving would put at stake),
 `turnClock.ts` (the turn clock: whose, the seconds left, its wording, red
-in the last 15 s, the tab title), `start.ts` (whether
+in the last 15 s, the tab title), `setClock.ts` (each seat's time for the
+set at a moment, red under a minute, the time used over a set),
+`start.ts` (whether
 the next board waits for Start, and who for), `sets.ts` (where the table is
 in its set, the set's winner and matchpoints from your side, a robot
 replacing a player, worded for the others and for them, the history

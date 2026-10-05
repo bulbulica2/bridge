@@ -174,6 +174,11 @@
                   <p class="toggle-hint">Robots take the other three seats</p>
                 </ion-toggle>
               </ion-item>
+              <!-- Each player's time for a set of 4 boards (the set clock):
+                   the backend's default unless picked. -->
+              <ion-item>
+                <SetMinutesPicker v-model="setMinutes" label-id="create-set-minutes" />
+              </ion-item>
             </ion-list>
 
             <ion-text v-if="createError" color="danger">
@@ -223,11 +228,12 @@ import AwayNotice from '@/components/AwayNotice.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import AdminBadge from '@/components/AdminBadge.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
+import SetMinutesPicker from '@/components/SetMinutesPicker.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
-import { seatsOf } from '@/services/tables';
-import type { Seat, Table } from '@/services/tables';
+import { DEFAULT_SET_MINUTES, seatsOf } from '@/services/tables';
+import type { Seat, SetMinutes, Table } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { banText } from '@/utils/ban';
 import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
@@ -261,6 +267,7 @@ const creating = ref(false);
 const createError = ref('');
 const name = ref('');
 const withRobots = ref(true);
+const setMinutes = ref<SetMinutes>(DEFAULT_SET_MINUTES);
 // The seated player whose profile sheet is open.
 const player = ref<PublicUser | null>(null);
 
@@ -374,6 +381,7 @@ function closeCreate() {
   createError.value = '';
   name.value = '';
   withRobots.value = true;
+  setMinutes.value = DEFAULT_SET_MINUTES;
 }
 
 async function submitCreate() {
@@ -381,7 +389,11 @@ async function submitCreate() {
   creating.value = true;
   try {
     // The name is optional; an empty field means an unnamed table.
-    const table = await tablesStore.create({ name: name.value.trim() || null, robots: withRobots.value });
+    const table = await tablesStore.create({
+      name: name.value.trim() || null,
+      robots: withRobots.value,
+      set_minutes: setMinutes.value,
+    });
     closeCreate();
     // The creator sits there already: off to the table's page, where Start,
     // the seats and Seat a player / Add robot are (with robots the table is

@@ -204,6 +204,30 @@ describe('expandPlaying', () => {
     expect(expandPlaying(compactOf(inPlay()), CARDS, BIDS).turn_deadline).toBeNull()
   })
 
+  test('carries the set clock as it came: when the turn began, which deadline, each bank', () => {
+    const started = '2026-09-22T10:19:31.000000Z'
+    const set = {
+      id: 5, number: 1, board: 2, of: 4, finished: false, ended: null, replaced: [],
+      minutes: 16, time_left: { N: 812, E: 905, S: 774, W: null },
+    }
+    const clocked = {
+      ...compactOf(inPlay()),
+      set,
+      turn_started_at: started,
+      turn_deadline: '2026-09-22T10:20:31.000000Z',
+      turn_deadline_by: 'set' as const,
+    }
+
+    const state = expandPlaying(clocked, CARDS, BIDS)
+
+    expect(state.turn_started_at).toBe(started)
+    expect(state.turn_deadline_by).toBe('set')
+    expect(state.set).toEqual(set)
+    const quiet = expandPlaying({ ...compactOf(inPlay()), turn_started_at: null, turn_deadline_by: null }, CARDS, BIDS)
+    expect(quiet.turn_started_at).toBeNull()
+    expect(quiet.turn_deadline_by).toBeNull()
+  })
+
   test('carries claim_locked as it came', () => {
     expect(expandPlaying(compactOf(locked()), CARDS, BIDS).claim_locked).toBe(true)
     expect(expandPlaying(compactOf(inPlay()), CARDS, BIDS).claim_locked).toBe(false)

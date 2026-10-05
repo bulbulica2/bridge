@@ -152,14 +152,15 @@ export async function getDoubleDummy(boardId: number): Promise<DoubleDummy> {
 
 // One finished playing after the fact: exactly the live game state once
 // `finished` (auction, contract, every trick, result and the deal as
-// dealt), less `ready`, `next_board_at` and `turn_deadline` and without anybody's own `hand`. A board that ended
+// dealt), less `ready`, `next_board_at` and the turn's clock (`turn_started_at`,
+// `turn_deadline`, `turn_deadline_by`) and without anybody's own `hand`. A board that ended
 // by a claim has only the tricks up to it (the unfinished one in
 // `current_trick`); a passed-out one has its four passes and no play.
 // Playings finished before the backend kept them come back with an empty
 // `auction` and `tricks`.
 export interface PlayingReview extends Omit<
   PublicPlaying,
-  'ready' | 'next_board_at' | 'turn_deadline' | 'players' | 'set'
+  'ready' | 'next_board_at' | 'turn_started_at' | 'turn_deadline' | 'turn_deadline_by' | 'players' | 'set'
 > {
   // From the seat snapshot; null only if that player's account is gone.
   players: Record<Seat, PublicUser | null>;
@@ -212,6 +213,14 @@ export interface SetResults {
   // The four who play its seats (a robot where it took one over); null only
   // if that account is gone.
   players: Record<Seat, PublicUser | null>;
+  // The set clock (bb#131), as the game state's `set`: each player's time
+  // for the set, and the seconds left on each seat's.
+  minutes: number;
+  time_left: Record<Seat, number | null>;
+  // The seconds each seat's human used of it: for a seat a robot took over,
+  // the human it replaced, up to then (all of it for `set_time`). Null for a
+  // seat a robot or an admin played from the start.
+  time_used: Record<Seat, number | null>;
   boards: SetBoardRow[];
   totals: {
     score: { ns: number; ew: number };

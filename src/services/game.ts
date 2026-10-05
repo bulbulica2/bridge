@@ -143,9 +143,9 @@ export type SetEnding = 'completed' | 'abandoned';
 
 // Why a robot took a player's seat over mid-set (bridge_backend docs/API.md,
 // Away mid-set): their turn clock ran out (`turn_timeout`, or `away` if they
-// were away then), they moved to another table, or they were kicked while
-// away or banned.
-export type ReplacementReason = 'turn_timeout' | 'away' | 'moved' | 'kicked';
+// were away then), their time for the set did (`set_time`, bb#131), they
+// moved to another table, or they were kicked while away or banned.
+export type ReplacementReason = 'turn_timeout' | 'set_time' | 'away' | 'moved' | 'kicked';
 
 // One player a robot took a seat over from, for the rest of the set.
 export interface SetReplacement {
@@ -170,7 +170,17 @@ export interface SetPosition {
   // The players a robot took a seat over from, in seat order; [] while the
   // four who opened the set are all still there.
   replaced: SetReplacement[];
+  // The set clock (bb#131): each player's time for the whole set, and the
+  // seconds left on each seat's as of the game state's `turn_started_at`
+  // (null for a robot or an admin, who have none). Only the acting seat's
+  // runs: count it down from `turn_started_at` (utils/setClock).
+  minutes: number;
+  time_left: Record<Seat, number | null>;
 }
+
+// Which clock `turn_deadline` is: the turn's minute, or the end of the
+// acting player's time for the set when that comes first.
+export type DeadlineBy = 'move' | 'set';
 
 // What every player at the table may see: the `PlayingUpdated` payload.
 // While `waiting`, everything but `phase` is null.
@@ -183,13 +193,21 @@ export interface PublicPlaying {
   players: Record<Seat, PublicUser> | null;
   turn: Seat | null;
   acting_user_id: number | null;
+  // When the board began waiting for `acting_user_id` (ISO 8601): the deal,
+  // the previous call or card, a claim made or cleared. `set.time_left` is
+  // as of then. Null while `waiting`.
+  turn_started_at: string | null;
   // When the turn clock of `acting_user_id` runs out (ISO 8601),
   // BRIDGE_TURN_SECONDS (60) after the board began waiting for them; past
   // it a robot takes their seat for the rest of the set (bb#120). Only a
   // call, a card or a claim action moves it. Null whenever nobody's clock
   // runs: `waiting`, `finished`, a claim pending, a robot or an admin on
-  // turn. Count down from it, never from when the state arrived.
+  // turn. Count down from it, never from when the state arrived. The
+  // earlier of that minute and the end of their time for the set
+  // (`turn_deadline_by`, bb#131).
   turn_deadline: string | null;
+  // Null whenever `turn_deadline` is.
+  turn_deadline_by: DeadlineBy | null;
   auction: AuctionCall[] | null;
   contract: Contract | null;
   tricks: Trick[] | null;

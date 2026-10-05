@@ -743,6 +743,14 @@ export const useTablesStore = defineStore('tables', () => {
     return table;
   }
 
+  // A manager changes the table's settings (its time for a set) between
+  // sets; the broadcast tells the rest of the table. 409 mid-set.
+  async function updateSettings(tableId: number, settings: tablesService.TableSettings) {
+    const table = await tablesService.updateTable(tableId, settings);
+    syncTable(table);
+    return table;
+  }
+
   // Our Start: the board is dealt once the table is full and every human has
   // pressed it. The answer that deals carries our game state, which goes to
   // the game store first, so the board_id it brings takes the page to /play
@@ -801,6 +809,7 @@ export const useTablesStore = defineStore('tables', () => {
     removePlayer,
     seatUser,
     seatRobot,
+    updateSettings,
     start,
     cancelStart,
     forget,

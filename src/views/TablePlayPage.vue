@@ -211,6 +211,7 @@
             :claim="pendingClaim ? { seat: pendingClaim.claim.seat, cards: pendingClaim.claim.hand } : null"
             :deal="playing.phase === 'finished' ? playing.deal : null"
             :away="awayMarks"
+            :banks="turnClock.banks.value"
             :busy="sendingCard !== null"
             :sending-id="sendingCard"
             @select="player = $event"
@@ -250,7 +251,9 @@
           <AwayNotice :table="table" :me="me" />
 
           <!-- The turn clock (turn_deadline, bb#120): "Your turn · 0:42",
-               red in its last seconds, or "Waiting for East · 0:42". One
+               red in its last seconds, or "Waiting for East · 0:42"; "Your
+               time for the set: 0:42" when the set clock ends first
+               (turn_deadline_by, bb#131). One
                line, there all through the auction and the play (empty when
                no clock runs: a robot or an admin on turn, a claim), so
                nothing moves when it comes and goes. -->
@@ -553,7 +556,8 @@ const me = computed(() => auth.user?.id ?? null);
 const playing = computed(() => (game.tableId === tableId.value ? game.playing : null));
 
 // The turn clock of the board on show (bb#120): ours, or whoever's turn it
-// is, counted down from `turn_deadline`.
+// is, counted down from `turn_deadline`; and each seat's time for the set
+// (bb#131), the acting one's counted down from `turn_started_at`.
 const turnClock = useTurnClock(
   () => playing.value,
   () => me.value,

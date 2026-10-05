@@ -225,13 +225,15 @@ describe('stats wording', () => {
   test('says why for every reason a set was left', () => {
     const stats = statsOf(3, {
       leaving: {
-        abandoned: 6,
-        abandoned_by_reason: { turn_timeout: 2, away: 1, moved: 1, kicked: 1, left: 1 },
+        abandoned: 9,
+        abandoned_by_reason: { turn_timeout: 2, set_time: 3, away: 1, moved: 1, kicked: 1, left: 1 },
         left_rate: 0.3333,
       },
     })
 
-    expect(leavingReasons(stats)).toBe('2 out of time · 1 away · 1 moved table · 1 removed · 1 left')
+    expect(leavingReasons(stats)).toBe(
+      '2 out of time · 3 out of time for the set · 1 away · 1 moved table · 1 removed · 1 left',
+    )
   })
 
   test('a reason the answer leaves out counts as none', () => {

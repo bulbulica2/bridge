@@ -45,6 +45,7 @@ export function leavingLine(stats: UserStats): string {
 
 const REASON_TEXT: Record<AbandonReason, string> = {
   turn_timeout: 'out of time',
+  set_time: 'out of time for the set',
   away: 'away',
   moved: 'moved table',
   kicked: 'removed',

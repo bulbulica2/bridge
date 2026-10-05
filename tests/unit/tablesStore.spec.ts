@@ -22,6 +22,7 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   removePlayer: vi.fn(),
   seatUser: vi.fn(),
   seatRobot: vi.fn(),
+  updateTable: vi.fn(),
   sendHeartbeat: vi.fn(),
 }))
 
@@ -479,6 +480,25 @@ describe('tables store', () => {
       expect(table.board_id).toBe(11)
       expect(store.tables).toEqual([dealt])
       expect(store.watchedTableId).toBe(3)
+    })
+
+    test("updateSettings changes the table's time for a set everywhere we hold it", async () => {
+      logInAs(1)
+      const before = { ...makeTable(1, { N: 'ana' }), can_manage: true, set_minutes: 16 as const }
+      const after = { ...before, set_minutes: 8 as const }
+      vi.mocked(tablesService.listTables).mockResolvedValue([before])
+      vi.mocked(tablesService.getTable).mockResolvedValue(before)
+      vi.mocked(tablesService.updateTable).mockResolvedValue(after)
+
+      const store = useTablesStore()
+      await store.load()
+      await store.loadTable(1)
+      const result = await store.updateSettings(1, { set_minutes: 8 })
+
+      expect(tablesService.updateTable).toHaveBeenCalledWith(1, { set_minutes: 8 })
+      expect(result).toEqual(after)
+      expect(store.tables).toEqual([after])
+      expect(store.currentTable).toEqual(after)
     })
 
     test('seatRobot replaces the table in the list and the open page', async () => {
@@ -1268,7 +1288,7 @@ describe('tables store', () => {
     })
 
     // The update that hands our seat (East) to a robot for `reason`.
-    function replacedBy(reason: 'turn_timeout' | 'away' | 'moved' | 'kicked'): Table {
+    function replacedBy(reason: 'turn_timeout' | 'set_time' | 'away' | 'moved' | 'kicked'): Table {
       const after = midSet()
       const east = after.seats.find((s) => s.seat === 'E')!
       east.user_id = 100
@@ -1291,6 +1311,20 @@ describe('tables store', () => {
 
       store.dismissReplaced()
       expect(store.replacedFrom).toBeNull()
+    })
+
+    test('our time for the set ran out: told the same way, once', async () => {
+      const store = await seatedMidSet()
+
+      pushUpdate(broadcastOf(replacedBy('set_time')))
+      pushUpdate(broadcastOf(replacedBy('set_time')))
+
+      expect(store.replacedFrom).toEqual({ id: 5, number: 3, seat: 'E', reason: 'set_time', tableId: 1 })
+      expect(showToast).toHaveBeenCalledTimes(1)
+      expect(showToast).toHaveBeenCalledWith(
+        'You ran out of time for the set: a robot took your seat. You may sit down at that table again once set 3 is over.',
+        'warning',
+      )
     })
 
     test('a kick while away is told the same way; logging out forgets it', async () => {
