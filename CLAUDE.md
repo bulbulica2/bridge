@@ -394,7 +394,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   2♥:" chip + textarea, Enter sends, the page owns `v-model:draft` and
   sending: cleared on success, kept and toasted on any refusal, 401 →
   login) in the content's `slot="fixed"` aside from 1100 px
-  (`useMediaQuery`), else an `ion-modal` sheet (breakpoint 0.5, page
+  (`useMediaQuery`; `.play.with-chat-side` reserves its 328 px as
+  content-box padding, stepped to 0 by a `clamp()` where the page-centred
+  board already clears it, #114; the aside's `data-right-edge` is the
+  right edge for `usePopover`), else an `ion-modal` sheet (breakpoint 0.5, page
   padded); leaving the view closes it. `ChatMessageList.vue` (sender
   "You"/username, seat, "to opponents"/"to table", `chatTime`, the call
   as a `CallLabel` chip, `white-space: pre-wrap`) is also the review's
