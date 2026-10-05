@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/74-claim-answers-and-lock`._
+_Status as of branch `bulbulica2/80-menu-your-table-entry`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -43,7 +43,9 @@ back, and the browser remembers which. On a phone it slides in as before.
 While the user holds a seat, every page's header has a **Your table**
 button (the table's name and a dot: green for a board in progress, blue
 for your turn, amber for an away seat) and the menu lists **Your table**
-first with the same status. One tap goes to Play once a board is dealt,
+first with the same status as a badge; the menu is 320 px wide so the
+entry stays on one row and the same size whatever the badge says (#134),
+a long table name ending in "…". One tap goes to Play once a board is dealt,
 else to Table detail. On pages that load no table (My boards, a profile,
 a review…) the router asks `GET /tables` once to find the seat. See
 [`ARCHITECTURE.md`](ARCHITECTURE.md#app-shell).

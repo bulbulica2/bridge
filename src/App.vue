@@ -31,9 +31,10 @@ import { menuPinned, PINNED_FROM } from '@/utils/menu';
   z-index: 1000;
 }
 
-/* A few short entries: no need for Ionic's 270 px minimum. */
+/* Wide enough for the "Your table" entry on one row: icon, the table's
+   name and its longest status, "Board in progress" (AppMenu.vue). */
 ion-split-pane {
-  --side-min-width: 220px;
-  --side-max-width: 260px;
+  --side-min-width: 320px;
+  --side-max-width: 320px;
 }
 </style>

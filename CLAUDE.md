@@ -135,7 +135,14 @@ The user's standing rule (#91): **no task may leave code coverage under
   `md` (768 px) up the menu stays beside the page (#99); the split pane's
   `when` is `PINNED_FROM` or `false` from `menuPinned` in
   `src/utils/menu.ts` (`localStorage` `bridge.menuPinned`, try/catch,
-  default open). `AppHeader`'s menu button is `toggleMenu()`, not
+  default open). The menu is 320 px wide (#134): the split pane's
+  `--side-min-width`/`--side-max-width` in `App.vue`, the overlay's
+  `--width` on `ion-menu::part(container)` in `AppMenu.vue` (Ionic's own
+  264 px below 341 px sits there; `--max-width: calc(100vw - 40px)`), so
+  the Your table entry fits on one row; its badge sits in
+  `.menu-table-status`, a grid cell sized by an invisible
+  `.menu-table-sizer` badge holding the longest `STATUS_TEXT`, and the
+  label's lines are `nowrap` + ellipsis (the name's `title` holds it whole). `AppHeader`'s menu button is `toggleMenu()`, not
   `ion-menu-button` (which hides beside a pinned menu): from `md` up it
   flips `menuPinned`, below it `menuController.toggle()` (the overlay, as
   before). `ion-menu-toggle` stays: Ionic ignores it for a menu shown in a

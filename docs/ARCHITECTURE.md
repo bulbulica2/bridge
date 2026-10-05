@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/74-claim-answers-and-lock`._
+_Status as of branch `bulbulica2/80-menu-your-table-entry`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -69,6 +69,16 @@ collapsed), kept in `localStorage` (`bridge.menuPinned`, read and written
 in try/catch); a browser that never chose, or whose storage refuses, gets
 it open. On a phone the menu is the overlay whatever was chosen.
 
+**The menu is 320 px wide** (#134), pinned or as the overlay: the split
+pane's `--side-min-width`/`--side-max-width` in `App.vue`, the overlay's
+`--width` on the menu's `container` part in `AppMenu.vue` (Ionic sets its
+own 264 px there below 341 px), less a 40 px strip of the page on a phone
+narrower than 360 px. That fits the **Your table** entry on one row: icon,
+"YOUR TABLE" over the table's name, and the longest status badge, **Board
+in progress**. Beside the pinned menu the page still has 448 px at
+768 px; the play page's column only has a `max-width` and works from a
+phone's width up, chat aside included (1100 px leaves it 420 px).
+
 The menu depends on the auth state: **Home** always, **Login** for guests,
 **Tables** and **My boards** once logged in, with the page on screen
 highlighted (`aria-current="page"`). Other pages are reached from buttons,
@@ -85,7 +95,12 @@ held after a Leave mid-set, or marked away), **Your turn**
 (`turnNotice()` on the board the game store holds for that table, or a
 Start the table waits for), **Board in progress**; the header draws it as
 a coloured dot (spelled out in the button's `aria-label`), the menu as a
-badge. On the page it leads to, the button is marked current and leads
+badge. The menu's badge sits at the end of the row in a cell as wide as
+an invisible copy of the longest status, so the entry keeps its size
+whatever the status says, or with none; "YOUR TABLE" and the name never
+wrap, and a long name (up to 50 characters) ends in "…" with the whole
+name in its `title`. The header's button needs none of this: its name is
+capped at 10em with an ellipsis and its status is the dot. On the page it leads to, the button is marked current and leads
 nowhere; on the table's other page it is highlighted and leads to the
 first. Nothing is shown to a guest, a banned user or somebody not seated.
 
