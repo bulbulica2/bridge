@@ -17,6 +17,20 @@
         <RobotBadge v-if="held?.user.is_robot" />
         <AdminBadge v-if="held?.user.is_admin" />
         <span class="sr-only">{{ !held ? '' : isReady(held) ? 'ready' : 'not yet' }}</span>
+        <!-- A manager takes a player (a robot, say) out from here too. -->
+        <ion-button
+          v-if="held && removable.includes(seat)"
+          size="small"
+          fill="clear"
+          color="danger"
+          class="start-remove"
+          :aria-label="`Remove ${held.user.username}`"
+          :disabled="busy || fillingSeat !== null"
+          @click="emit('remove', seat)"
+        >
+          <ion-spinner v-if="fillingSeat === seat" name="crescent" />
+          <span v-else>Remove</span>
+        </ion-button>
       </li>
     </ul>
 
@@ -72,6 +86,20 @@
       <ion-spinner v-if="busy" name="crescent" />
       <span v-else>Cancel</span>
     </ion-button>
+
+    <!-- Between sets (or before the first) nothing is at stake: the way off
+         the seat, for a page that has no Leave of its own (#121). -->
+    <ion-button
+      v-if="canLeave"
+      fill="outline"
+      color="medium"
+      size="small"
+      class="start-leave"
+      :disabled="busy || fillingSeat !== null"
+      @click="emit('leave')"
+    >
+      Leave the table
+    </ion-button>
   </section>
 </template>
 
@@ -96,13 +124,25 @@ const props = withDefaults(
     // The viewer manages the table (`can_manage`): with the seats shown,
     // each empty one offers Seat a player and Add robot.
     manage?: boolean;
-    // The empty seat being filled, while that request is on its way.
+    // The seat being filled or emptied, while that request is on its way.
     fillingSeat?: Seat | null;
+    // With the seats shown: the taken ones the viewer may empty
+    // (`canRemove`), each with a Remove.
+    removable?: Seat[];
+    // A Leave of its own, for the play page.
+    canLeave?: boolean;
   }>(),
-  { showSeats: false, busy: false, manage: false, fillingSeat: null },
+  { showSeats: false, busy: false, manage: false, fillingSeat: null, removable: () => [], canLeave: false },
 );
 
-const emit = defineEmits<{ start: []; cancel: []; seatPlayer: [seat: Seat]; addRobot: [seat: Seat] }>();
+const emit = defineEmits<{
+  start: [];
+  cancel: [];
+  seatPlayer: [seat: Seat];
+  addRobot: [seat: Seat];
+  remove: [seat: Seat];
+  leave: [];
+}>();
 
 const seats = computed(() =>
   SEATS.map((seat) => ({ seat, held: props.table.seats.find((s) => s.seat === seat) ?? null })),
@@ -205,6 +245,20 @@ const waiting = computed(() => startWaiting(props.table, props.me));
 
 .start-cancel {
   margin-top: 4px;
+}
+
+.start-remove {
+  --padding-start: 4px;
+  --padding-end: 4px;
+  height: 1.6em;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.start-leave {
+  display: block;
+  width: fit-content;
+  margin: 12px auto 0;
 }
 
 .sr-only {

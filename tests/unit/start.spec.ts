@@ -280,6 +280,58 @@ describe('StartBox.vue', () => {
       expect(wrapper.find('.start-fill').exists()).toBe(false)
     }
   })
+
+  // The play page's way off the seat, and a manager's Remove, between sets
+  // (#121): StartBox replaces the board's own Leave once a set is over.
+  test('Leave the table, only when the page asks for it', async () => {
+    const table = makeTable({ N: 'robot-1', E: 'robot-2', S: 'ana', W: 'robot-3' })
+    const plain = mount(StartBox, { props: { table, me: 1, showSeats: true } })
+    const leaving = mount(StartBox, { props: { table, me: 1, showSeats: true, canLeave: true } })
+
+    expect(plain.find('.start-leave').exists()).toBe(false)
+    expect(leaving.get('.start-leave').text()).toBe('Leave the table')
+    await leaving.get('.start-leave').trigger('click')
+    expect(leaving.emitted('leave')).toHaveLength(1)
+  })
+
+  test('a Remove on each seat the page names, never on an empty one', async () => {
+    const wrapper = mount(StartBox, {
+      props: {
+        table: makeTable({ N: 'robot-1', E: 'robot-2', S: 'ana' }),
+        me: 1,
+        showSeats: true,
+        removable: ['N', 'E', 'W'] as Seat[],
+      },
+    })
+
+    const seats = wrapper.findAll('.start-seats li').filter((li) => li.find('.start-remove').exists())
+    expect(seats.map((li) => li.attributes('data-seat'))).toEqual(['N', 'E'])
+    expect(wrapper.get('[data-seat="N"] .start-remove').attributes('aria-label')).toBe('Remove robot-1')
+
+    await wrapper.get('[data-seat="E"] .start-remove').trigger('click')
+    expect(wrapper.emitted('remove')).toEqual([['E']])
+  })
+
+  test('a seat being emptied spins its Remove and holds Leave', () => {
+    const wrapper = mount(StartBox, {
+      props: {
+        table: makeTable({ N: 'robot-1', E: 'robot-2', S: 'ana' }),
+        me: 1,
+        showSeats: true,
+        removable: ['N', 'E'] as Seat[],
+        fillingSeat: 'N' as Seat,
+        canLeave: true,
+      },
+    })
+
+    expect(wrapper.get('[data-seat="N"] .start-remove').find('ion-spinner').exists()).toBe(true)
+    expect(wrapper.get('[data-seat="E"] .start-remove').text()).toBe('Remove')
+    const buttons = wrapper
+      .findAllComponents(IonButton)
+      .filter((b) => b.classes('start-remove') || b.classes('start-leave'))
+    expect(buttons).toHaveLength(3)
+    expect(buttons.every((b) => b.props('disabled'))).toBe(true)
+  })
 })
 
 describe('tables store start', () => {

@@ -1,12 +1,14 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { AxiosError, AxiosHeaders } from 'axios'
 import { IonToggle } from '@ionic/vue'
 import TablesPage from '@/views/TablesPage.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useGameStore } from '@/stores/game'
 import { useTablesStore } from '@/stores/tables'
 import * as tablesService from '@/services/tables'
-import { confirmMove } from '@/utils/seatMove'
+import { confirmLeave, confirmMove } from '@/utils/seatMove'
 import { showToast } from '@/utils/toast'
 import type { Seat, Table } from '@/services/tables'
 
@@ -20,6 +22,7 @@ vi.mock('@/services/tables', async (importOriginal) => ({
 vi.mock('@/utils/seatMove', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/utils/seatMove')>()),
   confirmMove: vi.fn(),
+  confirmLeave: vi.fn(),
 }))
 vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
 vi.mock('@/services/echo', () => ({
@@ -37,6 +40,13 @@ vi.mock('@ionic/vue', async (importOriginal) => ({
 }))
 
 const ana = { id: 1, name: 'Ana', username: 'ana', email: 'ana@example.com' }
+
+function axiosError(status: number): AxiosError {
+  const config = { headers: new AxiosHeaders() }
+  const error = new AxiosError('Request failed', 'ERR_BAD_REQUEST', config)
+  error.response = { status, data: { message: 'Unauthenticated.' }, statusText: '', headers: {}, config }
+  return error
+}
 
 // Seats are given as seat -> username; `robot-…` usernames are robots.
 function makeTable(id: number, seats: Partial<Record<Seat, string>>, extra: Partial<Table> = {}): Table {
@@ -79,7 +89,9 @@ function mountWith(tables: Table[]) {
   const store = useTablesStore()
   store.tables = tables
   store.loaded = true
-  return mount(TablesPage, { global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } } })
+  return mount(TablesPage, {
+    global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub, 'router-link': RouterLinkStub } },
+  })
 }
 
 describe('TablesPage.vue with robots', () => {
@@ -222,5 +234,110 @@ describe('TablesPage.vue taking a seat', () => {
     expect(navigate).not.toHaveBeenCalled()
     // The seats are free to tap again.
     expect(isDisabled(seatButton(wrapper, 1, 'E'))).toBe(false)
+  })
+})
+
+// Leaving the table's pages keeps the seat; the list says where we sit and
+// offers the same Leave as the table's pages (#121).
+describe('TablesPage.vue leaving your table', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.resetAllMocks()
+    useAuthStore().user = ana
+  })
+
+  afterEach(() => vi.restoreAllMocks())
+
+  const mine = () => makeTable(1, { S: 'ana', N: 'robot-1', E: 'robot-2', W: 'robot-3' }, { board_id: 18 })
+
+  async function leave(wrapper: ReturnType<typeof mountWith>) {
+    await wrapper.get('.seated-leave').trigger('click')
+    await flushPromises()
+  }
+
+  test('says where you sit, with Leave, only while you sit somewhere', () => {
+    const seated = mountWith([mine()])
+    const free = mountWith([makeTable(2, { N: 'bob' })])
+
+    expect(seated.get('.seated-at').text()).toContain('You sit at')
+    expect(seated.get('.seated-at').text()).toContain('Table 1')
+    expect(seated.getComponent(RouterLinkStub).props('to')).toBe('/tables/1')
+    expect(seated.get('.seated-leave').text()).toBe('Leave')
+    expect(free.find('.seated-at').exists()).toBe(false)
+  })
+
+  test('a held seat has Come back instead', async () => {
+    const wrapper = mountWith([mine()])
+    useTablesStore().heldTableId = 1
+    await flushPromises()
+
+    expect(wrapper.find('.seated-at').exists()).toBe(false)
+    expect(wrapper.get('.held').text()).toContain('Come back to Table 1')
+  })
+
+  test.each([
+    [{ tableDeleted: false, held: false }, 'You left the table.', 'success'],
+    [{ tableDeleted: true, held: false }, 'You left the table. Nobody was left, so it was deleted.', 'success'],
+  ])('Leave asks first, then frees the seat (%o)', async (answer, message, color) => {
+    const wrapper = mountWith([mine()])
+    const store = useTablesStore()
+    const left = vi.spyOn(store, 'leave').mockResolvedValue(answer)
+    vi.mocked(confirmLeave).mockResolvedValue(true)
+
+    await leave(wrapper)
+
+    expect(confirmLeave).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 1, null, null, null)
+    expect(left).toHaveBeenCalledWith(1)
+    expect(showToast).toHaveBeenCalledWith(message, color)
+  })
+
+  test('mid-set the seat is held, and the board this table had is dropped', async () => {
+    const wrapper = mountWith([mine()])
+    const game = useGameStore()
+    game.tableId = 1
+    game.playing = { phase: 'play', board: { id: 18, number: 2 } } as unknown as typeof game.playing
+    const clear = vi.spyOn(game, 'clear')
+    vi.spyOn(useTablesStore(), 'leave').mockResolvedValue({ tableDeleted: false, held: true })
+    vi.mocked(confirmLeave).mockResolvedValue(true)
+
+    await leave(wrapper)
+
+    expect(confirmLeave).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 1, 'play', 2, null)
+    expect(clear).toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Your seat is held'), 'warning')
+  })
+
+  test('nothing is sent when the user cancels', async () => {
+    const wrapper = mountWith([mine()])
+    const left = vi.spyOn(useTablesStore(), 'leave')
+    vi.mocked(confirmLeave).mockResolvedValue(false)
+
+    await leave(wrapper)
+
+    expect(left).not.toHaveBeenCalled()
+  })
+
+  test('a failure is told, logged and the list read again', async () => {
+    const wrapper = mountWith([mine()])
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(confirmLeave).mockRejectedValue(new TypeError('no overlay'))
+    vi.mocked(tablesService.listTables).mockResolvedValue([mine()])
+
+    await leave(wrapper)
+
+    expect(showToast).toHaveBeenCalledWith('Could not leave the table. Please try again.', 'danger')
+    expect(logged).toHaveBeenCalledWith(expect.any(TypeError))
+    expect(tablesService.listTables).toHaveBeenCalled()
+  })
+
+  test('an expired session goes to log in', async () => {
+    const wrapper = mountWith([mine()])
+    vi.spyOn(useTablesStore(), 'leave').mockRejectedValue(axiosError(401))
+    vi.mocked(confirmLeave).mockResolvedValue(true)
+
+    await leave(wrapper)
+
+    expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
+    expect(showToast).not.toHaveBeenCalled()
   })
 })

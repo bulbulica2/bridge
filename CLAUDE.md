@@ -328,6 +328,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   `StartBox.vue` shows it on the detail page (whose compass marks ready
   seats) and on the play page (`showSeats`), in `waiting` and in place of
   `NextBoardBox` for a finished board with new players or a set over.
+  There (#121) it also carries the play page's only way off the seat
+  (`canLeave` → `leave`) and a manager's Remove per seat (`removable` =
+  the seats `canRemove` allows → `remove`, run by the page's `removeSeat`
+  with `fillingSeat` as its busy mark), since `NextBoardBox`'s Leave is
+  gone once a set is over.
 - **Bidding**: calls go out as a `bid_id`, and the ids aren't pinned to the
   rank, so they come from the public `GET /bids` (`getBids`, the 38 calls in
   `auction[].bid`'s shape), which the game store's `loadBids()` reads once;
@@ -776,7 +781,14 @@ The user's standing rule (#91): **no task may leave code coverage under
   status to branch on and `fieldErrors(e)` for a 422's first message per field
   (shown under each input). Three envelopes reach the SPA: the game endpoints'
   `{status, message, data}`, Laravel's 422 `{message, errors}`, and a bare
-  `{message}` from auth/policy failures.
+  `{message}` from auth/policy failures. `logUnexpected(e)` logs a
+  non-HTTP error to the console. Leave and Remove (detail, play and
+  Tables pages, #121) keep their confirmation (`confirmLeave`,
+  `confirmRemove` + `removeCost` in `seatMove.ts`) inside the request's
+  `try`, so a failure before any request is toasted and logged, never
+  silent, and close the page's own sheets/modals (`closeSheets` /
+  `closeOverlays`, then `nextTick`) before asking. The Tables page shows
+  "You sit at <table> · Leave" for an unheld seat (`seatedAt`).
 - **Dev server port is 3000 on purpose** (`vite.config.ts`, `strictPort`): the
   backend's CORS `allowed_origins` defaults to `http://localhost:3000` and that
   host is a Sanctum stateful domain. Keep `VITE_API_BASE_URL` on `localhost`

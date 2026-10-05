@@ -5,6 +5,7 @@ import { AxiosError, AxiosHeaders } from 'axios'
 import { IonRefresher } from '@ionic/vue'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import BiddingBox from '@/components/BiddingBox.vue'
+import BoardReviewModal from '@/components/BoardReviewModal.vue'
 import ClaimPanel from '@/components/ClaimPanel.vue'
 import NextBoardBox from '@/components/NextBoardBox.vue'
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue'
@@ -14,11 +15,12 @@ import * as tablesService from '@/services/tables'
 import type { Bid, Card, Playing, Seat, Suit } from '@/services/game'
 import type { Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 import { useGameStore } from '@/stores/game'
 import { useTablesStore } from '@/stores/tables'
 import { OFFLINE_GRACE_MS } from '@/composables/useLiveStatus'
 import { resetLiveStatus, setConnection, setSubscribed } from '@/services/liveStatus'
-import { confirmLeave } from '@/utils/seatMove'
+import { confirmLeave, confirmRemove } from '@/utils/seatMove'
 import { showToast } from '@/utils/toast'
 
 // The play page's ways out and its failure paths; the game itself (bidding,
@@ -44,6 +46,7 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   seatRobot: vi.fn(),
   seatUser: vi.fn(),
   joinSeat: vi.fn(),
+  removePlayer: vi.fn(),
 }))
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
@@ -57,6 +60,7 @@ vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
 vi.mock('@/utils/seatMove', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/utils/seatMove')>()),
   confirmLeave: vi.fn(),
+  confirmRemove: vi.fn(),
 }))
 const { navigate, route } = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -512,15 +516,18 @@ describe('TablePlayPage leaving between boards', () => {
     expect(navigate).toHaveBeenCalledWith('/tables', 'back', 'replace')
   })
 
-  test('a failed leave toasts the reason and reloads', async () => {
+  test('a failed leave toasts the reason, logs it and reloads', async () => {
     const wrapper = await mountPage(finished())
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(useTablesStore(), 'leave').mockRejectedValue(new Error('offline'))
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
     await emitFrom(wrapper, NextBoardBox, 'leave')
 
     expect(showToast).toHaveBeenCalledWith('Could not leave the table. Please try again.', 'danger')
+    expect(logged).toHaveBeenCalledWith(new Error('offline'))
     expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+    logged.mockRestore()
   })
 
   test('an expired session on leaving goes to log in', async () => {
@@ -529,6 +536,190 @@ describe('TablePlayPage leaving between boards', () => {
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
     await emitFrom(wrapper, NextBoardBox, 'leave')
+
+    expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
+    expect(showToast).not.toHaveBeenCalled()
+  })
+})
+
+// #121: a set of four boards with robots played to the end. Its last board
+// is still on show, the set is over (only the board's copy says so: a board
+// finishing sends no TableUpdated), and Start replaces the board's Leave.
+describe('TablePlayPage after a set', () => {
+  const robot = (id: number, n: number) => ({
+    id,
+    name: `Robot ${n}`,
+    username: `robot-${n}`,
+    description: null,
+    is_robot: true,
+  })
+  const ROBOTS = { N: robot(101, 1), E: robot(102, 2), W: robot(103, 3) }
+  const running = { id: 8, number: 8, board: 4, of: 4, finished: false, ended: null, forfeited_by: null }
+
+  // Cy (the user, South) manages it, with robots in the other three seats.
+  function robotTable(): Table {
+    const table = makeTable({ moderated_by: 3, can_manage: true, set: running })
+    return {
+      ...table,
+      seats: table.seats.map((s) =>
+        s.seat === 'S' ? s : { ...s, user_id: ROBOTS[s.seat as 'N'].id, user: ROBOTS[s.seat as 'N'], ready: true },
+      ),
+    }
+  }
+
+  function lastBoard(): Playing {
+    return {
+      ...finished(),
+      players: { ...ROBOTS, S: PLAYERS.S },
+      set: { ...running, finished: true, ended: 'completed' },
+      next_board_at: null,
+    } as Playing
+  }
+
+  afterEach(() => vi.restoreAllMocks())
+
+  test('Start offers Leave, and Remove on each robot, in place of the next board', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+
+    expect(wrapper.findComponent(NextBoardBox).exists()).toBe(false)
+    const box = wrapper.findComponent(StartBox)
+    expect(box.props('canLeave')).toBe(true)
+    expect(box.props('removable')).toEqual(['N', 'E', 'W'])
+  })
+
+  test('nobody but a manager gets Remove', async () => {
+    const wrapper = await mountPage(lastBoard(), { ...robotTable(), can_manage: false })
+
+    expect(wrapper.findComponent(StartBox).props('removable')).toEqual([])
+  })
+
+  test('Leave asks with nothing at stake, frees the seat and goes to the list', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+    const leave = vi.spyOn(useTablesStore(), 'leave').mockResolvedValue({ tableDeleted: false, held: false })
+    vi.mocked(confirmLeave).mockResolvedValue(true)
+
+    await emitFrom(wrapper, StartBox, 'leave')
+
+    expect(confirmLeave).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }), 3, 'finished', 7, null)
+    expect(leave).toHaveBeenCalledWith(5)
+    expect(showToast).toHaveBeenCalledWith('You left the table.', 'success')
+    expect(navigate).toHaveBeenCalledWith('/tables', 'back', 'replace')
+  })
+
+  test('the chat and the review close before the confirmation', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+    const chat = useChatStore()
+    chat.setOpen(true)
+    await wrapper.get('.review-and-export').trigger('click')
+    expect(wrapper.findComponent(BoardReviewModal).props('open')).toBe(true)
+    let openWhenAsked: unknown[] = []
+    vi.mocked(confirmLeave).mockImplementation(async () => {
+      openWhenAsked = [chat.open, wrapper.findComponent(BoardReviewModal).props('open')]
+      return false
+    })
+
+    await emitFrom(wrapper, StartBox, 'leave')
+
+    expect(openWhenAsked).toEqual([false, false])
+  })
+
+  test('a confirmation that fails is told and logged, never silent', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const leave = vi.spyOn(useTablesStore(), 'leave')
+    vi.mocked(confirmLeave).mockRejectedValue(new TypeError('no overlay'))
+
+    await emitFrom(wrapper, StartBox, 'leave')
+
+    expect(leave).not.toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith('Could not leave the table. Please try again.', 'danger')
+    expect(logged).toHaveBeenCalledWith(expect.any(TypeError))
+  })
+
+  test('Remove asks, takes the robot out and says so', async () => {
+    const table = robotTable()
+    const wrapper = await mountPage(lastBoard(), table)
+    vi.mocked(confirmRemove).mockResolvedValue(true)
+    vi.mocked(tablesService.removePlayer).mockResolvedValue({
+      ...table,
+      seats: table.seats.filter((s) => s.seat !== 'N'),
+      free_seats: ['N'],
+    })
+
+    await emitFrom(wrapper, StartBox, 'remove', 'N')
+
+    expect(confirmRemove).toHaveBeenCalledWith(ROBOTS.N, 'N', '')
+    expect(tablesService.removePlayer).toHaveBeenCalledWith(5, 101)
+    expect(showToast).toHaveBeenCalledWith('robot-1 was removed from the table.', 'success')
+    expect(wrapper.findComponent(StartBox).props('removable')).toEqual(['E', 'W'])
+  })
+
+  test('a Remove called off sends nothing, nor one for an empty seat', async () => {
+    const table = robotTable()
+    const wrapper = await mountPage(lastBoard(), { ...table, seats: table.seats.filter((s) => s.seat !== 'W') })
+    vi.mocked(confirmRemove).mockResolvedValue(false)
+
+    await emitFrom(wrapper, StartBox, 'remove', 'N')
+    await emitFrom(wrapper, StartBox, 'remove', 'W')
+
+    expect(confirmRemove).toHaveBeenCalledTimes(1)
+    expect(tablesService.removePlayer).not.toHaveBeenCalled()
+  })
+
+  test('one seat at a time', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+    vi.mocked(confirmRemove).mockResolvedValue(true)
+    vi.mocked(tablesService.removePlayer).mockReturnValue(new Promise(() => {}))
+
+    await emitFrom(wrapper, StartBox, 'remove', 'N')
+    expect(wrapper.findComponent(StartBox).props('fillingSeat')).toBe('N')
+    await emitFrom(wrapper, StartBox, 'remove', 'E')
+
+    expect(tablesService.removePlayer).toHaveBeenCalledTimes(1)
+  })
+
+  test('a refused Remove is told and the table read again', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+    vi.mocked(confirmRemove).mockResolvedValue(true)
+    vi.mocked(tablesService.removePlayer).mockRejectedValue(axiosError(403, 'You do not manage this table.'))
+    vi.mocked(tablesService.getTable).mockClear()
+
+    await emitFrom(wrapper, StartBox, 'remove', 'E')
+
+    expect(showToast).toHaveBeenCalledWith('You do not manage this table.', 'danger')
+    expect(tablesService.getTable).toHaveBeenCalledWith(5)
+  })
+
+  test('a Remove whose reread fails too leaves the page as it was', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+    vi.mocked(confirmRemove).mockResolvedValue(true)
+    vi.mocked(tablesService.removePlayer).mockRejectedValue(axiosError(404, 'Gone.'))
+    vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
+
+    await emitFrom(wrapper, StartBox, 'remove', 'E')
+
+    expect(showToast).toHaveBeenCalledWith('Gone.', 'danger')
+    expect(wrapper.findComponent(StartBox).props('fillingSeat')).toBeNull()
+  })
+
+  test('a failed Remove confirmation is told and logged', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(confirmRemove).mockRejectedValue(new TypeError('no overlay'))
+
+    await emitFrom(wrapper, StartBox, 'remove', 'E')
+
+    expect(tablesService.removePlayer).not.toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith('Could not remove that player. Please try again.', 'danger')
+    expect(logged).toHaveBeenCalledWith(expect.any(TypeError))
+  })
+
+  test('an expired session on Remove goes to log in', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+    vi.mocked(confirmRemove).mockResolvedValue(true)
+    vi.mocked(tablesService.removePlayer).mockRejectedValue(axiosError(401))
+
+    await emitFrom(wrapper, StartBox, 'remove', 'E')
 
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
     expect(showToast).not.toHaveBeenCalled()

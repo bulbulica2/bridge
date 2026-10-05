@@ -3,14 +3,19 @@ import { alertController } from '@ionic/vue'
 import {
   confirmLeave,
   confirmMove,
+  confirmRemove,
   heldNotice,
   leaveMessage,
   leaveNote,
   leaveWarning,
   moveConsequences,
+  removeCost,
+  removeMessage,
   whoIsLeft,
 } from '@/utils/seatMove'
+import { setAtStake } from '@/utils/away'
 import type { SetAtStake } from '@/utils/away'
+import type { PublicPlaying, SetPosition } from '@/services/game'
 import type { Seat, Table } from '@/services/tables'
 
 // The alert answers with whichever role the test picks.
@@ -258,5 +263,118 @@ describe('confirmation alerts', () => {
 
     await confirmLeave(makeTable({ N: 1, E: 2, S: 3, W: 4 }), 1, 'play', 2, { ...stake, forfeits: false })
     expect(lastAlert().buttons[1].text).toBe('Leave')
+  })
+})
+
+// A set of four boards with robots, played to the end (#121): its last board
+// finished and still on show. A board finishing sends no TableUpdated, so the
+// table's own copy of the set may still say it runs; the board's knows.
+describe('after the last board of a set', () => {
+  const running: SetPosition = { id: 8, number: 8, board: 4, of: 4, finished: false, ended: null, forfeited_by: null }
+  const over: SetPosition = { ...running, finished: true, ended: 'completed' }
+
+  // The admin (1) at S with three robots, board 18 still on the table.
+  function afterSet(tableSet: SetPosition = running): Table {
+    return { ...makeTable({ S: 1, W: 101, N: 102, E: 103 }, { boardId: 18 }), set: tableSet }
+  }
+
+  const lastBoard = {
+    phase: 'finished',
+    set: over,
+    board: { id: 18, number: 4, dealer: 'W', vulnerable: '' },
+    next_board_at: null,
+  } as unknown as PublicPlaying
+
+  test('nothing is at stake, whichever copy of the set says it is over', () => {
+    expect(setAtStake(afterSet(), lastBoard, 1, true)).toBeNull()
+    expect(setAtStake(afterSet(), lastBoard, 1, false)).toBeNull()
+    expect(setAtStake(afterSet(over), null, 1)).toBeNull()
+  })
+
+  test('Leave frees the seat at once, with no word of a set', () => {
+    const stake = setAtStake(afterSet(), lastBoard, 1, true)
+
+    expect(leaveWarning('finished', 4, stake)).toBe('Board 4 is over, so leaving abandons nothing: its score is kept.')
+    expect(leaveMessage(afterSet(), 1, 'finished', 4, stake)).toBe(
+      'Board 4 is over, so leaving abandons nothing: its score is kept. Your seat will be freed. Only robots are left: the table waits 10 minutes for somebody to take it over, then it is deleted.',
+    )
+    expect(leaveMessage(afterSet(), 1, 'finished', 4, stake)).not.toMatch(/set|held/i)
+  })
+
+  test('the confirmation is a plain Leave', async () => {
+    vi.mocked(alertController.create).mockClear()
+    dismissedWith = 'destructive'
+
+    await expect(
+      confirmLeave(afterSet(), 1, 'finished', 4, setAtStake(afterSet(), lastBoard, 1, true)),
+    ).resolves.toBe(true)
+    const alert = vi.mocked(alertController.create).mock.calls[0][0] as { header: string; buttons: { text: string }[] }
+    expect(alert.header).toBe('Leave this table?')
+    expect(alert.buttons[1].text).toBe('Leave')
+  })
+
+  test('removing a robot costs nothing, nor anybody once the set is over', () => {
+    const table = { ...afterSet(), seats: afterSet().seats.map((s) => ({ ...s, forfeit_at: null })) }
+
+    expect(removeCost(table, lastBoard, 'W')).toBe('')
+    expect(removeCost({ ...makeTable({ S: 1, N: 2 }, { boardId: 18 }), set: over }, null, 'N')).toBe('')
+  })
+
+  test('a confirmation that fails to open rejects, for the page to tell', async () => {
+    vi.mocked(alertController.create).mockRejectedValueOnce(new Error('no overlay'))
+
+    await expect(confirmLeave(afterSet(), 1, 'finished', 4)).rejects.toThrow('no overlay')
+  })
+})
+
+describe('removing a player', () => {
+  const running: SetPosition = { id: 3, number: 3, board: 2, of: 4, finished: false, ended: null, forfeited_by: null }
+
+  function midSet(forfeitAt: string | null): Table {
+    const table = { ...makeTable({ N: 1, E: 2, S: 3, W: 4 }, { boardId: 7 }), set: running }
+    return { ...table, seats: table.seats.map((s) => ({ ...s, forfeit_at: s.seat === 'E' ? forfeitAt : null })) }
+  }
+
+  test('mid-set, kicking a player away loses the set for their side', () => {
+    expect(removeCost(midSet('2026-10-05T12:03:00Z'), null, 'E')).toBe('They are away, so E-W lose set 3 by forfeit.')
+  })
+
+  test('mid-set, kicking a player who is there only ends the set', () => {
+    expect(removeCost(midSet(null), null, 'E')).toBe('Set 3 ends with no winner.')
+  })
+
+  test('outside a set, or for an empty seat, it costs nothing', () => {
+    expect(removeCost(makeTable({ N: 1, E: 2 }), null, 'E')).toBe('')
+    expect(removeCost({ ...midSet(null), seats: [] }, null, 'E')).toBe('')
+  })
+
+  test('the message says what becomes of the seat, and of the set', () => {
+    expect(removeMessage({ username: 'robot-1', is_robot: true }, 'W')).toBe(
+      'The robot leaves seat W, which becomes free.',
+    )
+    expect(removeMessage({ username: 'bob', is_robot: false }, 'E')).toBe(
+      'bob loses seat E. They can sit down again afterwards.',
+    )
+    expect(removeMessage({ username: 'bob', is_robot: false }, 'E', 'Set 3 ends with no winner.')).toBe(
+      'bob loses seat E. They can sit down again afterwards. Set 3 ends with no winner.',
+    )
+  })
+
+  test('confirmRemove asks first and says yes only on Remove', async () => {
+    vi.mocked(alertController.create).mockClear()
+    dismissedWith = 'destructive'
+
+    await expect(confirmRemove({ username: 'robot-1', is_robot: true }, 'W')).resolves.toBe(true)
+    expect(alertController.create).toHaveBeenCalledWith({
+      header: 'Remove robot-1?',
+      message: 'The robot leaves seat W, which becomes free.',
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        { text: 'Remove', role: 'destructive' },
+      ],
+    })
+
+    dismissedWith = 'cancel'
+    await expect(confirmRemove({ username: 'bob', is_robot: false }, 'E')).resolves.toBe(false)
   })
 })

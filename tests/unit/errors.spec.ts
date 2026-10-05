@@ -1,6 +1,6 @@
 import { AxiosError, AxiosHeaders } from 'axios'
-import { describe, expect, test } from 'vitest'
-import { errorMessage, fieldErrors, statusOf } from '@/utils/errors'
+import { describe, expect, test, vi } from 'vitest'
+import { errorMessage, fieldErrors, logUnexpected, statusOf } from '@/utils/errors'
 
 function axiosError(status: number, data: unknown): AxiosError {
   const config = { headers: new AxiosHeaders() }
@@ -85,5 +85,20 @@ describe('fieldErrors', () => {
     expect(fieldErrors(axiosError(401, { message: 'Unauthenticated.' }))).toEqual({})
     expect(fieldErrors(networkError())).toEqual({})
     expect(fieldErrors(new Error('boom'))).toEqual({})
+  })
+})
+
+describe('logUnexpected', () => {
+  test('logs what did not come from the backend, and only that', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const bug = new TypeError('no overlay')
+
+    logUnexpected(bug)
+    logUnexpected(axiosError(409, { message: 'Taken.' }))
+    logUnexpected(networkError())
+
+    expect(logged).toHaveBeenCalledTimes(1)
+    expect(logged).toHaveBeenCalledWith(bug)
+    logged.mockRestore()
   })
 })

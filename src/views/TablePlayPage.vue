@@ -187,10 +187,14 @@
             :busy="asking"
             :manage="table.can_manage"
             :filling-seat="fillingSeat"
+            :removable="removable"
+            can-leave
             @start="start"
             @cancel="cancelStart"
             @seat-player="seatingAt = $event"
             @add-robot="addRobot"
+            @remove="removeSeat"
+            @leave="leave"
           />
 
           <BridgeTable
@@ -384,7 +388,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   IonPage,
@@ -431,7 +435,7 @@ import { useChatStore } from '@/stores/chat';
 import { useGameStore } from '@/stores/game';
 import { useHistoryStore } from '@/stores/history';
 import { useTablesStore } from '@/stores/tables';
-import { seatsOf } from '@/services/tables';
+import { canRemove, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { ChatTo } from '@/services/chat';
 import type { AlertDraft, Bid, Card, Claim, PlayedCard, Playing, Trick } from '@/services/game';
@@ -448,11 +452,11 @@ import {
   legalCards,
   playsForDeclarer,
 } from '@/utils/play';
-import { errorMessage, statusOf } from '@/utils/errors';
+import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
 import { playingExtras } from '@/utils/export';
 import { resultSummary } from '@/utils/result';
 import { awaySeats } from '@/utils/away';
-import { confirmLeave, heldNotice } from '@/utils/seatMove';
+import { confirmLeave, confirmRemove, heldNotice, removeCost } from '@/utils/seatMove';
 import { currentSet, forfeitedSeat, setLabel } from '@/utils/sets';
 import { reviewChoices } from '@/utils/review';
 import type { SeenBoard } from '@/utils/review';
@@ -784,6 +788,15 @@ const showStart = computed(
     table.value.seats.some((s) => s.user_id === me.value) &&
     startNeeded(table.value, playing.value),
 );
+
+// The taken seats the viewer may empty from StartBox (a manager's robots,
+// say, once a set is over): the same rule as the table's page.
+const removable = computed(() => {
+  const current = table.value;
+  return current
+    ? current.seats.filter((s) => canRemove(current, s.user, auth.user)).map((s) => s.seat)
+    : [];
+});
 
 // The set the table is on (or ended last): the board's own `set`, updated
 // by the table's events (a forfeit comes as a TableUpdated only).
@@ -1428,26 +1441,73 @@ async function fillSeat(seat: Seat, request: () => Promise<unknown>, done: strin
   }
 }
 
-// Leaving between boards: free, since the board is over, unless the set
-// goes on: then the seat is held for a few minutes, and not coming back
-// loses the set for our side.
+// Our own sheets and modals go before a confirmation, so nothing of the
+// page's stands over the alert (#121): closed, and drawn closed.
+async function closeOverlays() {
+  reviewOpen.value = false;
+  claimOpen.value = false;
+  explainIndex.value = null;
+  seatingAt.value = null;
+  chat.setOpen(false);
+  await nextTick();
+}
+
+// A manager takes a player out from StartBox (a robot, once a set is over),
+// as on the table's page. The confirmation is inside the try, so nothing
+// fails unseen (#121).
+async function removeSeat(seat: Seat) {
+  const current = table.value;
+  const user = current?.seats.find((s) => s.seat === seat)?.user;
+  if (!current || !user || fillingSeat.value !== null) {
+    return;
+  }
+  try {
+    await closeOverlays();
+    if (!(await confirmRemove(user, seat, removeCost(current, playing.value, seat)))) {
+      return;
+    }
+    fillingSeat.value = seat;
+    // We still sit here, so the table lives on.
+    await tablesStore.removePlayer(tableId.value, user.id);
+    showToast(`${user.username} was removed from the table.`, 'success');
+  } catch (e) {
+    if (statusOf(e) === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+      return;
+    }
+    // 403: we no longer manage the table. 404: they already left.
+    logUnexpected(e);
+    showToast(errorMessage(e, 'Could not remove that player. Please try again.'), 'danger');
+    await tablesStore.loadTable(tableId.value).catch(() => {
+      // The next update or refresh says how the seats stand.
+    });
+  } finally {
+    fillingSeat.value = null;
+  }
+}
+
+// Leaving between boards (NextBoardBox) or sets (StartBox): free, since the
+// board is over, unless the set goes on: then the seat is held for a few
+// minutes, and not coming back loses the set for our side. The
+// confirmation is inside the try, so nothing fails unseen (#121).
 async function leave() {
   if (asking.value) {
     return;
   }
-  const stake = table.value ? tablesStore.stakeOf(table.value) : null;
-  const confirmed = await confirmLeave(
-    table.value,
-    me.value,
-    playing.value?.phase ?? null,
-    playing.value?.board?.number ?? null,
-    stake,
-  );
-  if (!confirmed) {
-    return;
-  }
-  asking.value = true;
   try {
+    await closeOverlays();
+    const stake = table.value ? tablesStore.stakeOf(table.value) : null;
+    const confirmed = await confirmLeave(
+      table.value,
+      me.value,
+      playing.value?.phase ?? null,
+      playing.value?.board?.number ?? null,
+      stake,
+    );
+    if (!confirmed) {
+      return;
+    }
+    asking.value = true;
     const { tableDeleted, held } = await tablesStore.leave(tableId.value);
     game.clear();
     let message = 'You left the table.';
@@ -1462,6 +1522,7 @@ async function leave() {
     if (statusOf(e) === 401) {
       ionRouter.navigate('/login', 'root', 'replace');
     } else {
+      logUnexpected(e);
       await showToast(errorMessage(e, 'Could not leave the table. Please try again.'), 'danger');
       await load();
     }

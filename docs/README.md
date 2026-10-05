@@ -33,7 +33,10 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/72-suit-order-trumps-left` (after
+> branch `bulbulica2/75-leave-and-remove-after-a-set` (after
+> #121, Leave and Remove work once a set is over: the play page's Start
+> box has them, the Tables page says where you sit with a Leave, and a
+> failed confirmation is toasted and logged; after
 > #118, your own hand always reads ♥ ♣ ♦ ♠ and dummy's (or a robot
 > declarer's) cards trumps first; after
 > #116, only the away player the board waits for has a forfeit
