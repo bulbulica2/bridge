@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/84-double-dummy-unavailable-wording`._
+_Status as of branch `bulbulica2/85-set-clock`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -161,7 +161,7 @@ stats with bb#121.
 **Logged in**, menu item **Tables**. Built by #8; seat moves by #22;
 profile sheet by #24; robots by #53; a seat opening the table by #67;
 Start by #68; held seat by #74; banned users by #75; your seat with Leave
-by #121.
+by #121; the time for a set by #143.
 
 The list of open tables, each with its four seats (robots carry a
 **robot** badge). Tap an empty seat to sit (or **move here** at your own
@@ -175,8 +175,9 @@ spinner and the disabled seat buttons stay until the page has changed. A
 cancelled move or a seat taken meanwhile (409, toasted) keeps you on the
 list. A table only robots sit at (`unattended_since` set: its last
 person left) reads **Robots only — sit down to take over**. **Create
-table** opens a modal with an optional name and **Play with robots**, on
-by default. You sit **South** at the new table, and the page goes to its
+table** opens a modal with an optional name, **Play with robots**, on
+by default, and **Time for a set, each**: 8, 12, 16 or 20 minutes per
+player for a set of 4 boards (the set clock, 16 unless picked). You sit **South** at the new table, and the page goes to its
 page as soon as it exists (the modal closes first, #55; #132): with robots
 they take North, East and West and your **Start** deals the first board
 (robots are always ready); without them the other three seats are free
@@ -201,19 +202,19 @@ there is no **Open**.
 | Calls | Endpoint |
 |---|---|
 | `tables.load()` | `GET /tables` |
-| `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` (`seat: 'S'`, `robots: true` by default) |
+| `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` (`seat: 'S'`, `robots: true` by default, `set_minutes`) |
 | `tables.join()` | `GET /sanctum/csrf-cookie`, `POST /tables/{id}/seats`, then `GET /tables` after a move |
 | `tables.leave()` (You sit at … · Leave) | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 
 Backend: bb#9 (create table, 3 active per creator), bb#12 (join a seat),
 bb#25 (joining elsewhere moves you), bb#65 (robots), bb#73 (nothing is
-dealt before Start), bb#77 (bans).
+dealt before Start), bb#77 (bans), bb#131 (`set_minutes`).
 
 ## Table detail — `/tables/:id`
 
 **Logged in.** Built by #15; manager Remove by #16; live updates by #21;
 moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
-robots by #53; Start by #68; the set line by #73; away mid-set by #74 (a robot takes the seat instead of a forfeit by #130); admins' seats by #77; Leave and Remove after a set by #121. Reached from a table's **Open** button, by
+robots by #53; Start by #68; the set line by #73; away mid-set by #74 (a robot takes the seat instead of a forfeit by #130); admins' seats by #77; Leave and Remove after a set by #121; the time for a set by #143. Reached from a table's **Open** button, by
 taking a seat, or from **Create table**.
 
 The four seats as a compass (N/E/S/W), robots and admins badged. Sit, move or
@@ -248,6 +249,15 @@ sent to the set's results. Removing a player mid-set says what it costs:
 a robot takes the seat of a player who is away, while removing one who is
 there ends the set with no winner.
 
+**Time for a set** (#143, bb#131). Under the compass: each player's time
+for a set at this table ("16 minutes each for a set of 4 boards"). A
+manager gets the 8 / 12 / 16 / 20 minutes picker instead while no set is
+going on; a change is toasted ("Each player now has 8 minutes for a
+set."), and a refusal (409 once a set has started meanwhile, 403) is
+toasted with the backend's reason and the table read again. Mid-set the
+manager reads it with "You can change it once this set is over." A set
+keeps the time it opened with.
+
 **After a set** (#121). Once the set's last board is finished nothing is
 at stake: **Leave** says only that the board is over and what becomes of
 the table, and frees the seat at once (a toast says so); a manager's
@@ -280,6 +290,7 @@ is taken to `/play`, the one whose Start dealt it included.
 | `tables.removePlayer()` | `DELETE /tables/{id}/seats/{user}` |
 | `tables.seatUser()` (Seat a player sheet) | `GET /users?search=`, `POST /tables/{id}/seats/users` |
 | `tables.seatRobot()` (Add robot) | `POST /tables/{id}/seats/robots` |
+| `tables.updateSettings()` (time for a set) | `PATCH /tables/{id}` |
 | `tables.start()`, `tables.cancelStart()` (Start box) | `POST /tables/{id}/start`, `DELETE /tables/{id}/start` |
 | `game.load()` (when seated at a dealt table) | `GET /tables/{id}/playing` |
 | heartbeat, while seated | `POST /tables/{id}/heartbeat` every 30 s |
@@ -289,7 +300,8 @@ Backend: bb#10 and bb#11 (seat others, kick or quit), bb#22
 (Reverb), bb#25 (moves), bb#41 (idle seats, heartbeat), bb#44 (user
 search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
 (Start), bb#76 (away mid-set, Leave holds the seat), bb#120 (a robot takes the seat of a player who walks out), bb#78
-(only an admin removes an admin; `is_admin` public on every seat).
+(only an admin removes an admin; `is_admin` public on every seat), bb#131
+(the set clock, `PATCH /tables/{id}`).
 
 ## Play — `/tables/:id/play`
 
@@ -298,7 +310,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #96 (claims expire after 10 s, needs bb#96), #120 (both answer a claim at once, and a refused claim locks claims until the next card, needs bb#115), #98 (the next board by itself, needs bb#97), #53 (robots), #57 (forced cards play themselves), #56 (last trick
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
-mid-set), #130 (the turn clock, needs bb#120), #95 (you play a robot partner's contract, needs bb#94),
+mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
 #101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
@@ -367,6 +379,19 @@ robot, and partner plays the set out with it. You get a toast ("You
 didn't play in time: a robot took your seat. You may sit down at that
 table again once set 3 is over."), the page goes to the set's results,
 and Home keeps a card until dismissed.
+
+**The set clock** (#143, bb#131). Each person also has a time bank for
+the whole set (the table's 8 / 12 / 16 / 20 minutes, like a chess clock),
+shown under their name at their seat as **13:32**. Only the bank of the
+player the board waits for runs, counted down from the game state's
+`turn_started_at` (in bold); the others stand still, and one turns red
+under a minute. Robots and admins have none. When the bank would run out
+before the move's minute (`turn_deadline_by: "set"`), the turn clock's
+line reads **Your time for the set: 0:42** (**East's time for the set:
+0:42** for the others). Running out is like letting the turn clock run
+out: a robot takes the seat for the rest of the set, told once ("East ran
+out of time for the set: a robot took their seat." / "You ran out of time
+for the set: a robot took your seat. …").
 
 **Away mid-set** (#74, bb#76). A player quiet for a minute mid-set is
 tagged **away** at their seat, and a notice above the turn clock says
@@ -604,14 +629,16 @@ it, else N-S's, also when a robot finished it for you), whom a robot
 replaced and why, each board opening its review (contract in
 table notation, your side's score and matchpoints), and the set's
 matchpoints for your side ("62 %", with "5 of 8") instead of a summed
-score, or "No other table has played these boards yet." (#100). A 403 or
-404 shows as a reason on the page.
+score, or "No other table has played these boards yet." (#100). Under it,
+**Time used**: each person's time used of their time for the set ("10:48
+of 16:00"; for a seat a robot took over, its player's up to then, #143). A
+403 or 404 shows as a reason on the page.
 
 | Calls | Endpoint |
 |---|---|
 | `history.loadSet()` | `GET /sets/{id}` |
 
-Backend: bb#75.
+Backend: bb#75, bb#131 (`time_used`).
 
 ## Board results — `/boards/:id/results`
 

@@ -138,6 +138,24 @@
             </div>
           </div>
 
+          <!-- Each player's time for a set here (the set clock, bb#131). A
+               manager changes it between sets: a set copies it when it
+               opens, so the backend refuses a change mid-set (409). -->
+          <section class="set-clock">
+            <SetMinutesPicker
+              v-if="isManager && !runningSet"
+              :key="minutesKey"
+              :model-value="tableMinutes"
+              :disabled="savingMinutes"
+              label-id="table-set-minutes"
+              @update:model-value="changeMinutes"
+            />
+            <p v-else class="set-clock-text">{{ setClockText(tableMinutes) }}</p>
+            <p v-if="isManager && runningSet" class="set-clock-note">
+              You can change it once this set is over.
+            </p>
+          </section>
+
           <!-- We left in the middle of the set: the seat waits for us a few
                minutes, and coming back is one tap (or opening the game). -->
           <div v-if="held" class="held">
@@ -226,12 +244,13 @@ import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import AdminBadge from '@/components/AdminBadge.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
+import SetMinutesPicker from '@/components/SetMinutesPicker.vue';
 import StartBox from '@/components/StartBox.vue';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
-import { UNATTENDED_MINUTES, canRemove, seatsOf } from '@/services/tables';
-import type { Seat } from '@/services/tables';
+import { DEFAULT_SET_MINUTES, UNATTENDED_MINUTES, canRemove, seatsOf } from '@/services/tables';
+import type { Seat, SetMinutes } from '@/services/tables';
 import type { PublicUser, SearchedUser } from '@/services/users';
 import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
 import { awaySeats } from '@/utils/away';
@@ -243,6 +262,7 @@ import {
   leaveWarning,
   removeCost,
 } from '@/utils/seatMove';
+import { setClockText } from '@/utils/setClock';
 import { currentSet, setLabel } from '@/utils/sets';
 import { isReady, startNeeded } from '@/utils/start';
 import { showToast } from '@/utils/toast';
@@ -267,6 +287,10 @@ const seatingAt = ref<Seat | null>(null);
 const starting = ref(false);
 // "Come back" to a held seat on its way.
 const comingBack = ref(false);
+// A manager's change of the time for a set on its way, and the picker's
+// key, bumped to put it back on the table's value after a refusal.
+const savingMinutes = ref(false);
+const minutesKey = ref(0);
 
 // Only trust the store's current table when it is the one this route asks for,
 // otherwise moving from one table to another flashes the previous one. Coming
@@ -320,6 +344,8 @@ const awayMarks = computed(() =>
 );
 // What leaving would put at stake: the set going on here, if any.
 const stake = computed(() => (table.value && mySeat.value ? store.stakeOf(table.value) : null));
+// Each player's time for a set at this table.
+const tableMinutes = computed<SetMinutes>(() => table.value?.set_minutes ?? DEFAULT_SET_MINUTES);
 const readySeats = computed(() => table.value?.seats.filter(isReady).map((s) => s.seat) ?? []);
 const managerName = computed(() => {
   const current = table.value;
@@ -606,6 +632,25 @@ async function addRobot(seat: Seat) {
   }
 }
 
+// A manager picks another time for a set. A set started meanwhile (409) or
+// a role gone (403) leaves the page stale: the refusal is toasted, the
+// table read again and the picker put back.
+async function changeMinutes(minutes: SetMinutes) {
+  savingMinutes.value = true;
+  try {
+    await store.updateSettings(tableId.value, { set_minutes: minutes });
+    await showToast(`Each player now has ${minutes} minutes for a set.`, 'success');
+  } catch (e) {
+    if (!handleExpiredSession(e)) {
+      minutesKey.value++;
+      await showToast(errorMessage(e, 'Could not change the time for a set. Please try again.'), 'danger');
+      await load();
+    }
+  } finally {
+    savingMinutes.value = false;
+  }
+}
+
 // Our Start. The answer that deals brings the board, and its board_id takes
 // us to the game (the watch above); otherwise the box waits for the others.
 async function start() {
@@ -824,6 +869,22 @@ function handleExpiredSession(e: unknown): boolean {
 
 .table-yours {
   color: var(--ion-color-primary);
+}
+
+.set-clock {
+  margin: 0 0 16px;
+  text-align: center;
+}
+
+.set-clock-text {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.set-clock-note {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--ion-color-medium);
 }
 
 .unattended {

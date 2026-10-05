@@ -107,6 +107,7 @@ export function replacementsOf(set: Pick<SetPosition, 'replaced'> | null | undef
 // said of somebody else and of the viewer.
 const REPLACED_WHY: Record<ReplacementReason, { them: string; you: string }> = {
   turn_timeout: { them: "didn't play in time", you: "didn't play in time" },
+  set_time: { them: 'ran out of time for the set', you: 'ran out of time for the set' },
   away: { them: 'was away on their turn', you: 'were away on your turn' },
   moved: { them: 'moved to another table', you: 'moved to another table' },
   kicked: { them: 'was removed while away', you: 'were removed while away' },
@@ -114,6 +115,7 @@ const REPLACED_WHY: Record<ReplacementReason, { them: string; you: string }> = {
 
 // "East didn't play in time: a robot took their seat.", or for the player
 // it replaced, `mine`: "You didn't play in time: a robot took your seat."
+// Out of time for the set: "East ran out of time for the set: a robot took…"
 export function replacedText(entry: Pick<SetReplacement, 'seat' | 'reason'>, mine = false): string {
   const why = REPLACED_WHY[entry.reason];
   return mine

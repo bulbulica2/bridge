@@ -89,7 +89,7 @@ export async function liftBan(id: number): Promise<UserBan> {
 
 // Why a robot took a player's seat mid-set (`SetReplacement.reason`), plus
 // `left`: a set that ended abandoned as they left, with no robot to step in.
-export type AbandonReason = 'turn_timeout' | 'away' | 'moved' | 'kicked' | 'left';
+export type AbandonReason = 'turn_timeout' | 'set_time' | 'away' | 'moved' | 'kicked' | 'left';
 
 // How a user plays (bridge_backend docs/API.md, GET /users/{user}/stats),
 // worked out on every read since matchpoints change as more tables finish a

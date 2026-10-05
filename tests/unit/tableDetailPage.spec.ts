@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { IonButton, IonRefresher, alertController } from '@ionic/vue'
 import TableDetailPage from '@/views/TableDetailPage.vue'
+import SetMinutesPicker from '@/components/SetMinutesPicker.vue'
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue'
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue'
 import * as tablesService from '@/services/tables'
@@ -67,6 +68,9 @@ vi.mock('@ionic/vue', async (importOriginal) => {
     },
   }
 })
+
+// ion-segment scrolls its checked button into view; jsdom has no scrolling.
+Element.prototype.scrollTo ??= () => {}
 
 function axiosError(status: number, message = 'Conflict'): AxiosError {
   const config = { headers: new AxiosHeaders() }
@@ -512,12 +516,69 @@ describe('TableDetailPage manager controls', () => {
     expect(showToast).toHaveBeenCalledWith('Bob already sits at a table.', 'danger')
   })
 
+  test("shows the time for a set, which a manager changes between sets", async () => {
+    const wrapper = await mountPage(managed({ N: 'ana' }, { set_minutes: 16 }))
+    const updateSettings = vi
+      .spyOn(useTablesStore(), 'updateSettings')
+      .mockResolvedValue(managed({ N: 'ana' }, { set_minutes: 8 }))
+    const picker = wrapper.findComponent(SetMinutesPicker)
+    expect(picker.props('modelValue')).toBe(16)
+
+    picker.vm.$emit('update:modelValue', 8)
+    await wrapper.vm.$nextTick()
+    expect(picker.props('disabled')).toBe(true)
+    await flushPromises()
+
+    expect(updateSettings).toHaveBeenCalledWith(5, { set_minutes: 8 })
+    expect(showToast).toHaveBeenCalledWith('Each player now has 8 minutes for a set.', 'success')
+    expect(wrapper.findComponent(SetMinutesPicker).props('disabled')).toBe(false)
+  })
+
+  test('a change refused mid-set toasts the reason and reads the table again', async () => {
+    const wrapper = await mountPage(managed({ N: 'ana' }, { set_minutes: 16 }))
+    vi.spyOn(useTablesStore(), 'updateSettings').mockRejectedValue(
+      axiosError(409, 'A set is going on at this table: change its settings once it is over.'),
+    )
+
+    wrapper.findComponent(SetMinutesPicker).vm.$emit('update:modelValue', 20)
+    await flushPromises()
+
+    expect(showToast).toHaveBeenCalledWith(
+      'A set is going on at this table: change its settings once it is over.',
+      'danger',
+    )
+    expect(tablesService.getTable).toHaveBeenCalledTimes(2)
+    // Back on the table's own value.
+    expect(wrapper.findComponent(SetMinutesPicker).props('modelValue')).toBe(16)
+  })
+
+  test('mid-set a manager only reads it, and when it may change', async () => {
+    const set = { id: 8, number: 2, board: 2, of: 4, finished: false, ended: null, replaced: [] }
+    const wrapper = await mountPage(managed({ N: 'ana' }, { set_minutes: 12, board_id: 30, set }))
+
+    expect(wrapper.findComponent(SetMinutesPicker).exists()).toBe(false)
+    expect(wrapper.get('.set-clock-text').text()).toBe('12 minutes each for a set of 4 boards')
+    expect(wrapper.get('.set-clock-note').text()).toBe('You can change it once this set is over.')
+  })
+
+  test('anyone else reads it, the default for a table that never said', async () => {
+    const wrapper = await mountPage(makeTable({ N: 'bob', E: 'ana' }))
+
+    expect(wrapper.findComponent(SetMinutesPicker).exists()).toBe(false)
+    expect(wrapper.get('.set-clock-text').text()).toBe('16 minutes each for a set of 4 boards')
+    expect(wrapper.find('.set-clock-note').exists()).toBe(false)
+  })
+
   test('an expired session on a manager action goes to log in', async () => {
     const wrapper = await mountPage(managed({ N: 'ana' }))
     vi.spyOn(useTablesStore(), 'seatRobot').mockRejectedValue(axiosError(401))
+    vi.spyOn(useTablesStore(), 'updateSettings').mockRejectedValue(axiosError(401))
 
     await click(wrapper, 'E', 'Add robot')
+    wrapper.findComponent(SetMinutesPicker).vm.$emit('update:modelValue', 8)
+    await flushPromises()
 
+    expect(navigate).toHaveBeenCalledTimes(2)
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
     expect(showToast).not.toHaveBeenCalled()
   })

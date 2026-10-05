@@ -2,7 +2,8 @@ import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonToggle } from '@ionic/vue'
+import { IonSegment, IonToggle } from '@ionic/vue'
+import SetMinutesPicker from '@/components/SetMinutesPicker.vue'
 import TablesPage from '@/views/TablesPage.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
@@ -80,6 +81,9 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>>, extra: Part
   }
 }
 
+// ion-segment scrolls its checked button into view; jsdom has no scrolling.
+Element.prototype.scrollTo ??= () => {}
+
 // IonModal only renders its content once presented, which jsdom never does.
 const modalStub = { template: '<div><slot /></div>' }
 
@@ -132,12 +136,35 @@ describe('TablesPage.vue with robots', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true })
+    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true, set_minutes: 16 })
     expect(navigate).toHaveBeenCalledWith('/tables/3', 'forward', 'push')
     // The table page draws from this copy rather than fetching the table again.
     expect(useTablesStore().currentTable).toEqual(full)
     // The form is free again at once: nothing waits for the game page to be up.
     expect(wrapper.find('form ion-spinner').exists()).toBe(false)
+  })
+
+  test('the form offers 8, 12, 16 or 20 minutes for a set, 16 unless picked', async () => {
+    vi.mocked(tablesService.createTable).mockResolvedValue(makeTable(3, { S: 'ana' }))
+    const wrapper = mountWith([])
+
+    expect(wrapper.findAll('ion-segment-button').map((b) => b.text())).toEqual([
+      '8 min',
+      '12 min',
+      '16 min',
+      '20 min',
+    ])
+    expect(wrapper.findComponent(SetMinutesPicker).props('modelValue')).toBe(16)
+
+    wrapper.findComponent(IonSegment).vm.$emit('ionChange', { detail: { value: '12' } })
+    await flushPromises()
+    expect(wrapper.findComponent(SetMinutesPicker).props('modelValue')).toBe(12)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true, set_minutes: 12 })
+    // The next table starts from the default again.
+    expect(wrapper.findComponent(SetMinutesPicker).props('modelValue')).toBe(16)
   })
 
   test('creating without robots goes to the table too, the other three seats free', async () => {
@@ -149,7 +176,7 @@ describe('TablesPage.vue with robots', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: false })
+    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: false, set_minutes: 16 })
     expect(navigate).toHaveBeenCalledWith('/tables/3', 'forward', 'push')
     expect(useTablesStore().currentTable).toEqual(created)
     expect(useTablesStore().tables.map((t) => t.id)).toEqual([3])

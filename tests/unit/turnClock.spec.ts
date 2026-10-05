@@ -56,8 +56,8 @@ describe('the turn clock', () => {
   })
 
   test("the player on turn sees their own, the others whose it is", () => {
-    expect(turnClock(state(), 2, NOW)).toEqual({ seconds: 42, mine: true, seat: 'E' })
-    expect(turnClock(state(), 3, NOW)).toEqual({ seconds: 42, mine: false, seat: 'E' })
+    expect(turnClock(state(), 2, NOW)).toEqual({ seconds: 42, mine: true, seat: 'E', by: 'move' })
+    expect(turnClock(state(), 3, NOW)).toEqual({ seconds: 42, mine: false, seat: 'E', by: 'move' })
     expect(turnClock(state(), null, NOW)?.mine).toBe(false)
     expect(turnClock(state({ turn_deadline: null }), 2, NOW)).toBeNull()
     expect(turnClock(null, 2, NOW)).toBeNull()
@@ -67,7 +67,7 @@ describe('the turn clock', () => {
     // North is dummy; South (3) declares and plays North's card.
     const dummyTurn = state({ phase: 'play', turn: 'N', acting_user_id: 3 })
 
-    expect(turnClock(dummyTurn, 3, NOW)).toEqual({ seconds: 42, mine: true, seat: 'S' })
+    expect(turnClock(dummyTurn, 3, NOW)).toEqual({ seconds: 42, mine: true, seat: 'S', by: 'move' })
     expect(turnClock(dummyTurn, 2, NOW)?.seat).toBe('S')
     // Without the players, the turn's own seat.
     expect(turnClock({ ...dummyTurn, players: null }, 2, NOW)?.seat).toBe('N')
@@ -79,6 +79,18 @@ describe('the turn clock', () => {
     expect(turnClockText({ seconds: 61, mine: false, seat: null })).toBe('Waiting · 1:01')
     expect(turnClockText({ seconds: 0, mine: true, seat: 'E' })).toBe(TIME_UP_TEXT)
     expect(TIME_UP_TEXT).toBe('Time is up…')
+  })
+
+  test("says which clock it is: the move's, or the time for the set", () => {
+    expect(turnClock(state({ turn_deadline_by: 'set' }), 2, NOW)?.by).toBe('set')
+    expect(turnClock(state({ turn_deadline_by: 'move' }), 2, NOW)?.by).toBe('move')
+    // An older payload without the field: the move's.
+    expect(turnClock(state(), 2, NOW)?.by).toBe('move')
+
+    expect(turnClockText({ seconds: 42, mine: true, seat: 'E', by: 'set' })).toBe('Your time for the set: 0:42')
+    expect(turnClockText({ seconds: 42, mine: false, seat: 'E', by: 'set' })).toBe("East's time for the set: 0:42")
+    expect(turnClockText({ seconds: 42, mine: false, seat: null, by: 'set' })).toBe('The time for the set: 0:42')
+    expect(turnClockText({ seconds: 0, mine: true, seat: 'E', by: 'set' })).toBe(TIME_UP_TEXT)
   })
 
   test('only our own clock turns red, in its last 15 s', () => {
@@ -128,6 +140,28 @@ describe('useTurnClock', () => {
     expect(clock.clock.value).toBeNull()
     expect(clock.text.value).toBe('')
     expect(clock.urgent.value).toBe(false)
+    scope.stop()
+  })
+
+  test("counts the acting seat's time for the set down on the same tick", async () => {
+    const set = { id: 5, number: 1, board: 1, of: 4, finished: false, ended: null, replaced: [], minutes: 16 }
+    const shown = ref<PublicPlaying | null>(
+      state({
+        set: { ...set, time_left: { N: 300, E: 70, S: 600, W: null } },
+        turn_started_at: new Date(NOW).toISOString(),
+      }),
+    )
+    const scope = effectScope()
+    const clock = scope.run(() => useTurnClock(() => shown.value, () => 3))!
+
+    expect(clock.banks.value.E).toEqual({ seconds: 70, running: true, low: false })
+    expect(clock.banks.value.N).toEqual({ seconds: 300, running: false, low: false })
+    expect(clock.banks.value.W).toBeUndefined()
+
+    vi.advanceTimersByTime(11_000)
+    await nextTick()
+    expect(clock.banks.value.E).toEqual({ seconds: 59, running: true, low: true })
+    expect(clock.banks.value.N?.seconds).toBe(300)
     scope.stop()
   })
 })
