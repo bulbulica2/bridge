@@ -474,7 +474,12 @@ The user's standing rule (#91): **no task may leave code coverage under
   stay on screen):
   mouse hover opens it and leaving closes it (`pointerType === 'mouse'`
   only), a click toggles it, a pointerdown outside or Escape closes it.
-  The centre keeps the trick in progress meanwhile. One card is in flight
+  The centre keeps the trick in progress meanwhile. Nothing changes height
+  from card to card (#133): `BridgeTable` gives every seat a `.turn-slot`
+  while `turn` is set (the label only on the seat on turn), the page's
+  `.status` is rendered for all of `auction`/`play` (empty during a claim)
+  two lines tall, and `.trick-foot` stacks the caption over `.trick-peek`,
+  the 22 px pill row kept without the pill. One card is in flight
   at a time; a 409 toasts and reloads, as for calls.
 - **Claims**: during `play` any player but dummy (except a robot
   declarer's human dummy, who claims, answers and withdraws for

@@ -33,7 +33,10 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/78-create-opens-the-table` (after
+> branch `bulbulica2/79-steady-play-layout-2` (after
+> #133, the play page no longer jumps from card to card: every seat keeps
+> room for the turn label, the status line keeps two lines, and the
+> trick's foot keeps its height with or without **Last trick**; after
 > #132, **Create table** always opens the new table's page, with or
 > without robots, and seats you South; after
 > #134, the side menu is 320 px wide and its **Your table** entry stays on
