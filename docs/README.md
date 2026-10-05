@@ -33,7 +33,11 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/83-claim-all-by-default` (after
+> branch `bulbulica2/82-bigger-cards` (after
+> #136, the cards are twice as large by default, with a **Card size**
+> setting on the Account page (Normal / Large / Extra large), every card in
+> your hand at least 44 px to tap, and the hand wrapping two suits a row
+> on a phone; after
 > #137, the claim sheet opens with every remaining trick picked, so one
 > tap claims them all; after
 > #133, the play page no longer jumps from card to card: every seat keeps

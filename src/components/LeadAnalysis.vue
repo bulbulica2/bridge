@@ -5,7 +5,7 @@
        green. Then the same in words. -->
   <section class="lead-analysis" aria-label="Opening lead">
     <h3 class="lead-title">Opening lead · {{ SEAT_NAMES[leader] }}</h3>
-    <div class="leads">
+    <div class="leads" :style="{ '--card-w': cardWidthCss, '--card-step': cardStep }">
       <div v-for="group in groups" :key="group.suit" class="lead-suit">
         <div
           v-for="item in group.leads"
@@ -39,6 +39,7 @@ import type { LeadTricks } from '@/services/history';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
 import { SUIT_NAMES, rankLabel } from '@/utils/cards';
+import { MIN_TARGET_PX, cardWidthCss } from '@/utils/cardSize';
 import { bestLeads, leadSummary, leadsInHandOrder } from '@/utils/doubleDummy';
 
 const props = defineProps<{
@@ -51,6 +52,9 @@ const props = defineProps<{
 }>();
 
 const ordered = computed(() => leadsInHandOrder(props.leads));
+
+// As in HandView: how much of each card shows before the next covers it.
+const cardStep = `max(${MIN_TARGET_PX}px, calc(var(--card-w) * 0.46))`;
 
 const groups = computed(() => {
   const out: { suit: Suit; leads: LeadTricks[] }[] = [];
@@ -103,12 +107,19 @@ function spoken(item: LeadTricks): string {
   font-weight: 700;
 }
 
-/* Like HandView: overlapping runs per suit, whole suits wrapping. */
+/* Like HandView: overlapping runs per suit, whole suits wrapping, the
+   card size setting's cards (1.5 times the old ones on a phone). */
 .leads {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 6px;
   padding-top: 10px;
+}
+
+@media (max-width: 575px) {
+  .leads {
+    --card-max: 72px;
+  }
 }
 
 .lead-suit {
@@ -125,12 +136,12 @@ function spoken(item: LeadTricks): string {
 /* Each card covers most of the one before it, leaving rank and suit (and
    the number under them) showing. */
 .lead + .lead {
-  margin-left: -27px;
+  margin-left: calc(var(--card-step) - var(--card-w));
 }
 
 .lead-tricks {
-  width: 21px;
-  font-size: 0.85rem;
+  width: var(--card-step);
+  font-size: 1rem;
   font-weight: 600;
   text-align: center;
   font-variant-numeric: tabular-nums;
