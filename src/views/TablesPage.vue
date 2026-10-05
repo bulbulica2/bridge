@@ -349,7 +349,7 @@ async function leave(table: Table) {
     const { tableDeleted, held } = await tablesStore.leave(table.id);
     if (held) {
       game.clear();
-      await showToast(heldNotice(stake), 'warning');
+      await showToast(heldNotice(), 'warning');
     } else {
       await showToast(
         tableDeleted ? 'You left the table. Nobody was left, so it was deleted.' : 'You left the table.',

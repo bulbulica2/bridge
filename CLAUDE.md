@@ -155,14 +155,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   whenever the auth store says somebody is logged in (icon only below
   576 px while Your table shows), and `BanBanner.vue` under the toolbar
   while the user is banned). `App.vue` also holds `BanNotice.vue` (see
-  Bans). `AppMenu.vue` is auth-aware too: "Login" while logged out,
+  Bans) and runs `useTurnTitle()` (see Away mid-set and the turn clock). `AppMenu.vue` is auth-aware too: "Login" while logged out,
   "Tables" and "My boards" once logged in, the current page marked
   `aria-current`. **Your table** (#99): `src/composables/useYourTable.ts`
   (header button + the menu's first entry) reads the tables store's
   `myTable` (nothing for a guest, a banned user or nobody seated): target
   `/tables/:id/play` if `board_id` or the seat is held/away, else
   `/tables/:id`; status `away` > `turn` (`turnNotice` on the game store's
-  board for that table, `startNeeded` for a Start) > `board`; `current`
+  board for that table, `startNeeded` for a Start; `statusText` "Your
+  turn · 0:42" while our turn clock runs, `useTurnClock`) > `board`; `current`
   when the route is the target, `atTable` on either table page. `myTable`
   on every page: the router's `afterEach` calls the store's `findSeat()`
   (one `GET /tables`, deduped, skipped once anything held says where we
@@ -577,11 +578,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   set. `set`
   (`SetPosition` in `src/services/game.ts`: `id`, `number` at the table,
   `board` (this board's place / boards dealt), `of`, `finished`, `ended`
-  `completed|forfeit|abandoned`, `forfeited_by` `NS|EW`) is on
-  `PublicPlaying` and `BroadcastTable` (null before the first Start).
-  A board finishing sends no `TableUpdated` and a forfeit between boards
-  sends only that, so read it through `currentSet(table, playing)` in
-  `src/utils/sets.ts`, which merges both copies (a higher id wins). The
+  `completed|abandoned` (no `forfeit` since bb#120), `replaced`
+  `SetReplacement[]` `{seat, user_id, reason}`, reason
+  `turn_timeout|away|moved|kicked`) is on `PublicPlaying` and
+  `BroadcastTable` (null before the first Start); `SetResults` has
+  `replaced` too, and `players` has the robot in a replaced seat.
+  A board finishing sends no `TableUpdated` and a set broken off between
+  boards sends only that, so read it through `currentSet(table, playing)` in
+  `src/utils/sets.ts`, which merges both copies (a higher id wins; the
+  longer `replaced`). The
   play page shows `setLabel` ("Board 2 of 4 · Set 3") at the top, the
   detail page while a set runs. `getSet(id)` (`GET /sets/{id}`, in
   `src/services/history.ts`: finished `boards` with `matchpoints`/`top`,
@@ -593,8 +598,13 @@ The user's standing rule (#91): **no task may leave code coverage under
   over (`endedSet`), shows `SetResultsPanel.vue` instead of the board
   result (also in `waiting` for a set ended mid-board), with `StartBox`
   below. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
-  side, "by forfeit"), `forfeitedSeat` (the forfeiting side's seat whose
-  player is no longer at the table) + `forfeitText`, `setTotals`
+  side), `replacementsOf` (`?? []`), `replacedText(entry, mine)` ("East
+  didn't play in time: a robot took their seat." / "You didn't play in
+  time: a robot took your seat."; `SetResultsPanel` lists one per
+  `replaced`, "you" for `mySeat`), `seatInSet` (the viewer's seat, or the
+  one a robot took over from them: `SetResultsPage`'s `mySeat`),
+  `replacementOf(set, userId)` (never a `moved` one: the mover knows),
+  `ReplacedFrom` + `replacedFromText`, `setTotals`
   (the viewer's side's matchpoints and percent: **no summed score**
   anywhere, #100; we play matchpoints, not rubber, so `SetResultsPanel`'s
   total is the matchpoints % or "No other table has played these boards
@@ -602,45 +612,71 @@ The user's standing rule (#91): **no task may leave code coverage under
   `history.sets`, else nothing) and
   `groupBySet` (history runs of one set, with the owner's `seat`),
   `runningSet` (the set a table is in the middle of, else null).
-- **Away mid-set and the forfeit** (#74, bb#76, backend `docs/API.md` Away
-  mid-set): a seat has `away_since`/`forfeit_at` (`TableSeat`, on payloads
-  and `TableUpdated`); the backend's `tables:check-away` marks a quiet
-  player away after a minute; the clock runs **only for the away player
-  the board waits for** (on turn, #116, bb#113): only that seat has
-  `forfeit_at` (3 minutes from when the board began waiting for them),
-  every other away seat `forfeit_at: null` until the turn reaches it.
-  `src/utils/away.ts`: `awaySeats`, `myAwaySeat`, `secondsLeft`/
-  `formatClock`, `awayText(seat, now, waits)` (clock: "East is away. E-W
-  lose the set in 2:41 unless they come back."; none: "… if they aren't
-  back within 3:00 of their turn."; `waits`: "The table waits for
-  them."), `awayTogetherText` ("South and West are away. …"), `heldText`
-  (own held seat, same split), `forfeitSuspended(table)` (an away seat's
-  `user.is_admin`: nobody forfeits, the `waits` case), `setAtStake` (side
-  + `forfeits`, false for an admin viewer or while `forfeitSuspended`;
-  never read from a null `forfeit_at`), `lostSetText`,
-  `SET_FORFEIT_MINUTES` (quoted in confirmations and the no-clock lines;
-  countdowns read `forfeit_at`). `AwayNotice.vue` (`useNow` ticks it,
-  `held` for the own seat; the clocked seat first with `away-clock`, the
-  others one plain line each or `awayTogetherText`, never two
-  countdowns) on the play page above the status, the detail page, Tables
-  and Home; `BridgeTable`'s `away` prop and
-  the detail compass tag seats. The tables store: `leave()` returns
-  `held: true` on the 202 (still seated) and sets `heldTableId`, which
-  `shouldBeat()` excludes; `watchTable(id, away)` also holds a seat found
-  away when we weren't watching (`followSeat`); `comeBack(id)` (the play
-  page after every load, the detail page's Come back) beats + `catchUp`;
-  a `TableUpdated`/`loadTable` clearing our own `away_since` toasts
-  `WELCOME_BACK` and reloads the game; marked away while beating, it beats
-  at once; freed with `set.ended: forfeit` by our side sets `lostSet`
-  (`{id, number, side, tableId}`), and the table pages go to `/sets/:id`.
-  `rememberSet` keeps the running set in `localStorage`
-  (`bridge.setInProgress`), `checkLostSet` (from `load()`) reads
+- **Away mid-set and the turn clock** (#74, #130, bb#76, bb#120, backend
+  `docs/API.md` Away mid-set, and the turn clock): the human the board
+  waits for (`acting_user_id`) has `BRIDGE_TURN_SECONDS` (60) to call,
+  play or act on a claim: `turn_deadline` on `PublicPlaying` (HTTP and
+  compact `PlayingUpdated` alike, `expandPlaying` passes it through; not
+  in a review), null between boards, while a claim is pending, for a
+  robot or an admin. Only a move resets it. Past it the backend's
+  `tables:check-away` (every 10 s) **hands the seat to a robot** for the
+  rest of the set (`set.replaced`), the board goes on; sets are never
+  forfeited, and `forfeit_at` is gone from `TableSeat`.
+  `src/utils/turnClock.ts`: `turnDeadline(state)` (auction/play only),
+  `turnClock(state, me, now)` (`{seconds, mine, seat}`, the acting user's
+  seat from `players`, else `turn`), `turnClockText` ("Your turn · 0:42" /
+  "Waiting for East · 0:42" / `TIME_UP_TEXT` "Time is up…"), `turnUrgent`
+  (mine and ≤ `TURN_URGENT_SECONDS` 15), `turnTitle`.
+  `src/composables/useTurnClock.ts` (`useNow` while a deadline runs →
+  `clock`, `text`, `urgent`) feeds the play page's `.turn-clock` line
+  (over `.status`, rendered all through auction/play, empty without a
+  clock, `turn-clock-mine`/`turn-clock-urgent`; the urgent cue is the
+  class `turn-urgent` on `HandView` (playing from it) and `BiddingBox`),
+  `useYourTable`'s `statusText`, and `useTurnTitle` (`App.vue`: while
+  `document.visibilityState` is hidden and the game store's board waits
+  for us, `document.title` = "● Your turn (0:42) – Bridge", put back once
+  the turn is taken or the page shows; `index.html`'s title is
+  "Bridge"). The play page's `useStaleDeadline` rereads the game 2 s
+  after `turn_deadline` (`viewActive` only), as for claims and
+  `next_board_at`. **Away**: a seat has `away_since` (`TableSeat`, on
+  payloads and `TableUpdated`); `tables:check-away` marks a quiet player
+  away after a minute; an away seat costs nothing until the turn reaches
+  it. `src/utils/away.ts`: `TURN_SECONDS` (60, quoted in the lines and
+  confirmations; countdowns read `turn_deadline`), `awaySeats`,
+  `myAwaySeat`, `secondsLeft`/`formatClock`, `adminAway(table)`,
+  `awayText(seat)` ("East is away. If they don't play within 1:00 of
+  their turn, a robot takes their seat."; an admin: "The table waits for
+  them."), `awayTogetherText`, `heldText` (own held seat), `setAtStake`
+  (`{number, seat, side, held}`, `held` false for an admin viewer or
+  while `adminAway`). `AwayNotice.vue` (no countdown at all, never a
+  second clock next to the turn clock: away admins a line each, the
+  others one line or `awayTogetherText`; `held` for the own seat) on the
+  play page above the turn clock, the detail page, Tables and Home;
+  `BridgeTable`'s `away` prop and the detail compass tag seats. The
+  tables store: `leave()` returns `held: true` on the 202 (still seated)
+  and sets `heldTableId`, which `shouldBeat()` excludes;
+  `watchTable(id, away)` also holds a seat found away when we weren't
+  watching (`followSeat`); `comeBack(id)` (the play page after every
+  load, the detail page's Come back) beats + `catchUp`; a
+  `TableUpdated`/`loadTable` clearing our own `away_since` toasts
+  `WELCOME_BACK` and reloads the game; marked away while beating, it
+  beats at once; unseated by an update whose `set.replaced` names us
+  (`replacementOf`, not `moved`) sets `replacedFrom` (`{id, number, seat,
+  reason, tableId}`), toasts `replacedFromText`, and the table pages go
+  to `/sets/:id`. `rememberSet` keeps the running set in `localStorage`
+  (`bridge.setInProgress`), `checkReplaced` (from `load()`) reads
   `GET /sets/{id}` for it once we no longer sit there; Home shows
-  `lostSet` until `dismissLostSet`. `stakeOf(table)` feeds
-  `confirmLeave`/`leaveMessage`/`leaveWarning`/`heldNotice` and
-  `confirmMove`/`moveConsequences` in `seatMove.ts`. The game store toasts
-  a forfeit once (`forfeitToldFor`). `User.is_admin` (own record) is read
-  only for `setAtStake` and `canBan` (Bans).
+  `replacedFrom` until `dismissReplaced`. The game store's
+  `noteReplacements` toasts each other player's replacement once
+  (`replacementsKnown`, `set:seat:user`, from `applyTableUpdate` and
+  `applyPlayingUpdate`; `hold()` notes an HTTP state's silently).
+  `stakeOf(table)` feeds `confirmLeave`/`leaveMessage`/`leaveWarning` and
+  `confirmMove`/`moveConsequences` in `seatMove.ts` (`robotTakesOver`:
+  `held` and another human left there; else the set ends with no
+  winner); `heldNotice()` and `removeCost` (an away player: a robot takes
+  the seat, unless nobody else human is left) word the rest.
+  `User.is_admin` (own record) is read only for `setAtStake` and `canBan`
+  (Bans).
 - **Results and history**: `src/services/history.ts` also wraps
   `GET /users/{id}/playings`, `GET /boards/{id}/double-dummy` (see Double
   dummy) and `GET /boards/{id}/results` (every table's
@@ -826,14 +862,14 @@ The user's standing rule (#91): **no task may leave code coverage under
   for as long as it watches a table (`watchTable`/`unwatchTable` start and
   stop it, so leave, kick, move and logout end it too), never for a held
   seat. It pauses while `document.visibilityState` is hidden, except
-  mid-set (`midSet`, bb#76: going quiet there loses the set; a beat that
+  mid-set (`midSet`, bb#76: going quiet there marks us away; a beat that
   finds the set over while hidden stops it); on return it beats at once, refetches
   the table and the game state, and a seat lost meanwhile (or a 403/404 from
   a beat) is told as `IDLE_NOTICE` and sets `kickedFrom`. A removal noticed
   while hidden keeps its toast until the page shows again.
   Running it needs `php artisan reverb:start` and `queue:work` on the backend
-  (bridge_backend `docs/RUNNING.md`, Realtime), and away/forfeit need
-  `schedule:work` (`tables:check-away` every 10 s).
+  (bridge_backend `docs/RUNNING.md`, Realtime), and away marks and the
+  turn clock's robot need `schedule:work` (`tables:check-away` every 10 s).
 - **Error handling**: `src/utils/errors.ts` is the one axios-error reader —
   `errorMessage(e, fallback)` for the text to show, `statusOf(e)` for the
   status to branch on and `fieldErrors(e)` for a 422's first message per field

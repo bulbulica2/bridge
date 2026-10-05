@@ -63,7 +63,6 @@ function makeTable(
       seat,
       ready: true,
       away_since: null,
-      forfeit_at: null,
       user: { id: ids[username], name: username, username, description: null, is_robot: false },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
@@ -395,6 +394,35 @@ describe('the menu', () => {
 
     expect(badge(wrapper)!.text()).toBe('Your turn')
     expect(badge(wrapper)!.props('color')).toBe('tertiary')
+  })
+
+  test('our turn with a clock running counts it down', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.parse('2026-10-05T12:00:00Z'))
+    try {
+      seatAt(makeTable(7, full, { board_id: 3 }))
+      const game = useGameStore()
+      game.tableId = 7
+      game.playing = {
+        phase: 'auction',
+        acting_user_id: ana.id,
+        board: { id: 3 },
+        turn_deadline: '2026-10-05T12:00:42Z',
+      } as unknown as Playing
+      const wrapper = await mountMenu()
+
+      expect(badge(wrapper)!.text()).toBe('Your turn · 0:42')
+      vi.advanceTimersByTime(2000)
+      await flushPromises()
+      expect(badge(wrapper)!.text()).toBe('Your turn · 0:40')
+
+      // Somebody else's clock is not ours to show.
+      game.playing = { ...game.playing, acting_user_id: 99 } as Playing
+      await flushPromises()
+      expect(badge(wrapper)!.text()).toBe('Board in progress')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test('an away seat is a warning badge', async () => {

@@ -1,6 +1,6 @@
 <template>
   <!-- A set's results as the backend adds them up (GET /sets/{id}): who won,
-       turned to the viewer's side, a forfeit's reason, each finished board
+       turned to the viewer's side, whom a robot replaced, each finished board
        (opening its review) with the viewer's side's score and matchpoints,
        and the matchpoints over the set. Scores aren't summed: each board is
        compared with the other tables that played it. The play page shows it
@@ -8,7 +8,7 @@
   <section class="set-results" aria-live="polite">
     <p class="set-title">{{ setTitle(set) }}</p>
     <p v-if="winner" class="set-winner" :class="wonClass">{{ winner }}</p>
-    <p v-if="forfeit" class="set-forfeit">{{ forfeit }}</p>
+    <p v-for="line in replaced" :key="line" class="set-replaced">{{ line }}</p>
 
     <p v-if="set.boards.length === 0" class="set-empty">No board of this set was finished.</p>
     <ion-list v-else class="set-boards" lines="full">
@@ -72,23 +72,21 @@ import {
   percentText,
   scoreFor,
 } from '@/utils/result';
-import { forfeitText, setTitle, setTotals, setWinnerText, setWon } from '@/utils/sets';
+import { replacedText, replacementsOf, setTitle, setTotals, setWinnerText, setWon } from '@/utils/sets';
 
-const props = withDefaults(
-  defineProps<{
-    set: SetResults;
-    // The viewer's seat in the set, if they played it: scores are turned to
-    // their side (N-S otherwise).
-    mySeat: Seat | null;
-    // The seat whose player cost their side the set, when the page can tell.
-    gone?: Seat | null;
-  }>(),
-  { gone: null },
-);
+const props = defineProps<{
+  set: SetResults;
+  // The viewer's seat in the set, if they played it (or a robot took it
+  // over from them): scores are turned to their side (N-S otherwise).
+  mySeat: Seat | null;
+}>();
 
 const totals = computed(() => setTotals(props.set, props.mySeat));
 const winner = computed(() => setWinnerText(props.set, props.mySeat));
-const forfeit = computed(() => forfeitText(props.set, props.gone));
+// "East didn't play in time: a robot took their seat.", one per robot.
+const replaced = computed(() =>
+  replacementsOf(props.set).map((entry) => replacedText(entry, entry.seat === props.mySeat)),
+);
 const wonClass = computed(() => {
   const won = setWon(props.set, props.mySeat);
   return won === null ? '' : won ? 'score-plus' : 'score-minus';
@@ -132,7 +130,7 @@ function tone(score: number): string {
   text-align: center;
 }
 
-.set-results .set-forfeit,
+.set-results .set-replaced,
 .set-results .set-empty {
   margin-top: 4px;
   font-size: 0.9rem;

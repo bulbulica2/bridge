@@ -7,6 +7,7 @@ import type {
   Card,
   PublicPlaying,
   SetEnding,
+  SetReplacement,
   SideCode,
   Strain,
 } from './game';
@@ -151,12 +152,15 @@ export async function getDoubleDummy(boardId: number): Promise<DoubleDummy> {
 
 // One finished playing after the fact: exactly the live game state once
 // `finished` (auction, contract, every trick, result and the deal as
-// dealt), less `ready` and `next_board_at` and without anybody's own `hand`. A board that ended
+// dealt), less `ready`, `next_board_at` and `turn_deadline` and without anybody's own `hand`. A board that ended
 // by a claim has only the tricks up to it (the unfinished one in
 // `current_trick`); a passed-out one has its four passes and no play.
 // Playings finished before the backend kept them come back with an empty
 // `auction` and `tricks`.
-export interface PlayingReview extends Omit<PublicPlaying, 'ready' | 'next_board_at' | 'players' | 'set'> {
+export interface PlayingReview extends Omit<
+  PublicPlaying,
+  'ready' | 'next_board_at' | 'turn_deadline' | 'players' | 'set'
+> {
   // From the seat snapshot; null only if that player's account is gone.
   players: Record<Seat, PublicUser | null>;
   // The board's whole chat, oldest first: every message, the opponents-only
@@ -189,7 +193,7 @@ export interface SetBoardRow extends BoardResult {
 
 // A set's results: its finished boards in order, the totals per side and
 // the winner (the higher total score; null while it goes on, on a tie and
-// for an abandoned set; a forfeit gives it to the other side).
+// for an abandoned set; a side a robot finished the set for can win it too).
 export interface SetResults {
   id: number;
   number: number;
@@ -202,8 +206,11 @@ export interface SetResults {
   finished_at: string | null;
   finished: boolean;
   ended: SetEnding | null;
-  forfeited_by: SideCode | null;
-  // The four who played it; null only if that account is gone.
+  // The players a robot took a seat over from (as the game state's `set`):
+  // `players` has the robot in their seat.
+  replaced: SetReplacement[];
+  // The four who play its seats (a robot where it took one over); null only
+  // if that account is gone.
   players: Record<Seat, PublicUser | null>;
   boards: SetBoardRow[];
   totals: {

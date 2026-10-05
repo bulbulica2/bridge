@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/82-bigger-cards`._
+_Status as of branch `bulbulica2/76-turn-timer`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -43,7 +43,8 @@ back, and the browser remembers which. On a phone it slides in as before.
 While the user holds a seat, every page's header has a **Your table**
 button (the table's name and a dot: green for a board in progress, blue
 for your turn, amber for an away seat) and the menu lists **Your table**
-first with the same status as a badge; the menu is 320 px wide so the
+first with the same status as a badge ("Your turn · 0:42" while your
+turn clock runs, #130); the menu is 320 px wide so the
 entry stays on one row and the same size whatever the badge says (#134),
 a long table name ending in "…". One tap goes to Play once a board is dealt,
 else to Table detail. On pages that load no table (My boards, a profile,
@@ -53,19 +54,21 @@ a review…) the router asks `GET /tables` once to find the seat. See
 ## Home — `/home`
 
 **Everyone.** Built by #3 (menu + home) and #25 (the real home page);
-held seat and lost set by #74.
+held seat by #74; a robot taking your seat by #130.
 
 - **Guest**: an intro to the app with **Log in** and **Create account**.
 - **Logged in**: a greeting and either a **Your table** card (the table you
   sit at, from the tables store's `myTable`, robots badged) or **Find a
-  table**, plus a short how-to-play. After a Leave mid-set the card counts
-  down ("Your seat is held. N-S lose the set in 2:41 unless you come
-  back.") and its button reads **Come back** (it opens the game, which
-  brings you back).
-- **Set N lost by forfeit**: a card when your side lost a set because you
-  were away too long, whether seen live or found on this visit (the set
-  you were in the middle of is remembered in the browser), with **See the
-  set** (`/sets/:id`) and **Dismiss**.
+  table**, plus a short how-to-play. After a Leave mid-set the card says
+  so ("Your seat is held. If you aren't back to play within 1:00 of your
+  turn, a robot takes it for the rest of the set.") and its button reads
+  **Come back** (it opens the game, which brings you back).
+- **Set N: a robot took your seat**: a card when your turn clock ran out
+  (or you were removed while away) and a robot took your seat for the rest
+  of the set, whether seen live or found on this visit (the set you were
+  in the middle of is remembered in the browser): "You didn't play in
+  time: a robot took your seat. You may sit down at that table again once
+  set 3 is over.", with **See the set** (`/sets/:id`) and **Dismiss**.
 
 | Calls | Endpoint |
 |---|---|
@@ -176,9 +179,10 @@ they take North, East and West and your **Start** deals the first board
 for players to take, or for you to fill with **Seat a player** / **Add
 robot**. Moving to another table asks first, because
 leaving your seat can abandon a board there; in the middle of a set it
-says **Your side loses the set now** (the backend forfeits it at once,
-bb#76). After a Leave mid-set a notice at the top says your seat is held
-(counting down to the forfeit once the board waits for you, #116), with
+says a robot takes your seat there for the rest of the set and you can't
+sit down there again until it is over (bb#120). After a Leave mid-set a
+notice at the top says your seat is held (and that a robot takes it if
+you aren't back to play within a minute of your turn, #130), with
 **Come back to …** (opens the game). Otherwise, while you sit
 somewhere, a line at the top says so: **You sit at Club · Leave** (the
 table's name links to its page). Going to another page never gets you up
@@ -205,7 +209,7 @@ dealt before Start), bb#77 (bans).
 
 **Logged in.** Built by #15; manager Remove by #16; live updates by #21;
 moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
-robots by #53; Start by #68; the set line by #73; away and the forfeit by #74; admins' seats by #77; Leave and Remove after a set by #121. Reached from a table's **Open** button, by
+robots by #53; Start by #68; the set line by #73; away mid-set by #74 (a robot takes the seat instead of a forfeit by #130); admins' seats by #77; Leave and Remove after a set by #121. Reached from a table's **Open** button, by
 taking a seat, or from **Create table**.
 
 The four seats as a compass (N/E/S/W), robots and admins badged. Sit, move or
@@ -225,21 +229,20 @@ once they have been off for 5 s (Reverb down, the channel refused, or a
 table you don't sit at, which has no channel) a note says **Live updates
 are off. Refresh to see the latest.** above a **Refresh** button (#76).
 
-**Away mid-set** (#74, bb#76). A player quiet for a minute in the middle
-of a set is marked **away** on the compass. The one the board waits for
-(on turn) gets a countdown from their seat's `forfeit_at`: "East is away.
-E-W lose the set in 2:41 unless they come back."; any other away player a
-plain line with no clock until the turn reaches them ("South is away. N-S
-lose the set if they aren't back within 3:00 of their turn.", #116,
-bb#113). It clears the moment they are back. **Leave** mid-set is
-confirmed more sternly ("N-S lose the set if you aren't back within 3
-minutes of your turn."): the backend holds the seat (202), the page goes to `/tables`
-with a toast, and the store stops the heartbeat. Opening this page again
-shows your held seat counting down, with **Come back** (no Leave or seat
-buttons meanwhile). Not back in time, your side forfeits: the seat is
-freed and you are sent to the set's results. Removing a player mid-set
-says what it costs: a player who is away loses the set for their side,
-one who is there only ends it with no winner.
+**Away mid-set** (#74, bb#76; #130, bb#120). A player quiet for a minute
+in the middle of a set is marked **away** on the compass, with a plain
+line, no countdown: "East is away. If they don't play within 1:00 of
+their turn, a robot takes their seat." (an admin: "The table waits for
+them."). It clears the moment they are back. **Leave** mid-set is
+confirmed more sternly ("If you aren't back to play within 60 seconds of
+your turn, a robot takes your seat for the rest of the set."): the
+backend holds the seat (202), the page goes to `/tables` with a toast,
+and the store stops the heartbeat. Opening this page again shows your
+held seat, with **Come back** (no Leave or seat buttons meanwhile). Not
+back in time, a robot takes your seat for the rest of the set and you are
+sent to the set's results. Removing a player mid-set says what it costs:
+a robot takes the seat of a player who is away, while removing one who is
+there ends the set with no winner.
 
 **After a set** (#121). Once the set's last board is finished nothing is
 at stake: **Leave** says only that the board is over and what becomes of
@@ -281,7 +284,7 @@ is taken to `/play`, the one whose Start dealt it included.
 Backend: bb#10 and bb#11 (seat others, kick or quit), bb#22
 (Reverb), bb#25 (moves), bb#41 (idle seats, heartbeat), bb#44 (user
 search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
-(Start), bb#76 (away mid-set, the forfeit, Leave holds the seat), bb#78
+(Start), bb#76 (away mid-set, Leave holds the seat), bb#120 (a robot takes the seat of a player who walks out), bb#78
 (only an admin removes an admin; `is_admin` public on every seat).
 
 ## Play — `/tables/:id/play`
@@ -291,7 +294,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #96 (claims expire after 10 s, needs bb#96), #120 (both answer a claim at once, and a refused claim locks claims until the next card, needs bb#115), #98 (the next board by itself, needs bb#97), #53 (robots), #57 (forced cards play themselves), #56 (last trick
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
-and the forfeit), #95 (you play a robot partner's contract, needs bb#94),
+mid-set), #130 (the turn clock, needs bb#120), #95 (you play a robot partner's contract, needs bb#94),
 #101 (bid alerts, needs bb#100), #102 (board chat, needs bb#101);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
@@ -342,30 +345,41 @@ board** boards 2 to 4, and after the fourth the set is over. A line at the
 top says where the table is: **Board 2 of 4 · Set 3** (**· set over** once
 it is).
 
-**Going away costs the set** (#74, bb#76). A player quiet for a minute
-mid-set is tagged **away** at their seat, and a notice above the status
-line shows **one countdown at a time** (#116, bb#113): the player the
-board waits for (on turn), first and in bold, from their seat's
-`forfeit_at`: "East is away. E-W lose the set in 2:41 unless they come
-back." (the last minute in red). Any other away player gets a plain line
-with no clock ("South is away. N-S lose the set if they aren't back
-within 3:00 of their turn.", or "South and West are away. …" for two);
-when the turn reaches them their countdown starts at 3:00. While an admin
-is away, nobody forfeits: "The table waits for them." It clears the
-moment they are back. Opening this page is coming back: a seat held after
-a Leave, or marked away, is yours again, with a **Welcome back. The set
-goes on.** toast and the board reloaded. Mid-set the heartbeat keeps going
-while the tab is hidden, so switching tabs is not going away. Not back
-within 3 minutes of their turn, their side **forfeits**: a toast ("bob is gone: E-W lose set 2
-by forfeit."), the board in progress is abandoned, and the set's results
-show (below). If it was you, your seat is freed and the page goes to the
-set's results. **Leave the table** mid-set (in the next-board box) is
-confirmed more sternly, as on the detail page. Between sets, and before
-the first, the Start box has its own **Leave the table**, and a manager
-gets **Remove** on each other seat there (a robot, say), so finishing a
-set is no dead end (#121). Leave and Remove close the review, the chat
-and any sheet before asking; a failure is toasted and logged, never
-silent.
+**The turn clock** (#130, bb#120). The player the board waits for has
+**one minute** to call, play or act on a claim. A line over the status
+counts it down from the game state's `turn_deadline`: **Your turn ·
+0:42** for you (in red for the last 15 s, when your hand or the bidding
+box is ringed in red too), **Waiting for East · 0:42** for everyone else,
+and **Time is up…** at 0 until the backend acts (if nothing has arrived
+2 s after the deadline, the page rereads the game). Nothing shows while a
+robot or an admin is on turn, between boards or while a claim is
+pending; the line keeps its place so nothing moves. While the tab is
+hidden on your turn its title becomes **● Your turn (0:42) – Bridge**,
+back to **Bridge** once you have played or look again; the header's
+**Your table** counts down too. Let the clock run out and a **robot takes
+your seat** for the rest of the set: the others get a toast ("East didn't
+play in time: a robot took their seat."), the board goes on with the
+robot, and partner plays the set out with it. You get a toast ("You
+didn't play in time: a robot took your seat. You may sit down at that
+table again once set 3 is over."), the page goes to the set's results,
+and Home keeps a card until dismissed.
+
+**Away mid-set** (#74, bb#76). A player quiet for a minute mid-set is
+tagged **away** at their seat, and a notice above the turn clock says
+so, with no countdown of its own ("East is away. If they don't play
+within 1:00 of their turn, a robot takes their seat.", "South and West
+are away. …" for several; an admin, who has no clock: "The table waits
+for them."). It clears the moment they are back. Opening this page is
+coming back: a seat held after a Leave, or marked away, is yours again,
+with a **Welcome back. The set goes on.** toast and the board reloaded.
+Mid-set the heartbeat keeps going while the tab is hidden, so switching
+tabs is not going away (but the turn clock runs either way). **Leave the
+table** mid-set (in the next-board box) is confirmed more sternly, as on
+the detail page. Between sets, and before the first, the Start box has
+its own **Leave the table**, and a manager gets **Remove** on each other
+seat there (a robot, say), so finishing a set is no dead end (#121).
+Leave and Remove close the review, the chat and any sheet before asking;
+a failure is toasted and logged, never silent.
 
 What it shows by phase:
 - **waiting**: who's seated, and the same Start box as on the detail page
@@ -373,7 +387,7 @@ What it shows by phase:
   end. The last Start deals the board right here. A manager (`can_manage`)
   also gets **Seat a player** and **Add robot** in the box for each empty
   seat, as on the detail page (#117): left alone after the others were
-  freed or the set forfeited, they fill the table without leaving the
+  freed or the set broken off, they fill the table without leaving the
   game, and get **Remove** on each other seat (#121). Everyone sees
   **Leave the table** under Start.
 - **auction**: your hand (always ♥ ♣ ♦ ♠, red and black alternating), the auction grid, and on your turn the bidding
@@ -460,17 +474,17 @@ What it shows by phase:
   the countdown ends, the page rereads the game. If one of
   the four has left or been replaced since, the Start box takes the
   next-board box's place: the next board waits for every person's Start.
-- **set over** (after the fourth board, or earlier when a side forfeits
+- **set over** (after the fourth board, or earlier when it is broken off
   between boards): the set's results take the board result's place: who
-  won, from your side ("You won the set.", "You lost the set by
-  forfeit."), a forfeit's reason ("N-S forfeited, East didn't come back in
-  time."), the four boards (number, contract and declarer, result, your
+  won, from your side ("You won the set.", "You lost the set."), whom a
+  robot replaced and why ("East didn't play in time: a robot took their
+  seat."), the four boards (number, contract and declarer, result, your
   side's score and matchpoint %, each opening its review) and the totals.
   Below it the Start box: everyone's Start opens the next set, **Board 1
-  of 4 · Set 4**. A set that ended mid-board (a forfeit, or a player taken
-  out of it) shows its results the same way once the table is back to
-  waiting. They update live for all four: the set ending arrives with the
-  last card's `PlayingUpdated` (or a forfeit's `TableUpdated`), and the
+  of 4 · Set 4**. A set that ended mid-board (a player taken out of it)
+  shows its results the same way once the table is back to waiting. They
+  update live for all four: the set ending arrives with the last card's
+  `PlayingUpdated` (or the `TableUpdated` that broke it off), and the
   page then reads the set again.
 
 **Board chat** (#102): from the first deal on, the header's **Chat**
@@ -533,7 +547,7 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
-| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a forfeit), `PlayingUpdated`; `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer), `CallQuestioned` (a question about your call), `BoardMessageSent` (a chat message you may read) |
+| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a robot taking a seat over), `PlayingUpdated` (with `turn_deadline`); `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer), `CallQuestioned` (a question about your call), `BoardMessageSent` (a chat message you may read) |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
 reloads (after a set's last board, Deal now 409s: "The set is over: press Start
@@ -544,7 +558,7 @@ Start once the table is full again).
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
 bb#40 (next board; bb#74 dropped its `everyone`; bb#97 deals it by itself), bb#43 (results), bb#59 (claims), bb#96 (claims expire), bb#115 (claims answered at once, the claim lock),
-bb#75 (sets of four boards), bb#76 (away mid-set and the forfeit), bb#100 (alerts), bb#101 (board chat).
+bb#75 (sets of four boards), bb#76 (away mid-set), bb#120 (the turn clock, a robot taking the seat of a player who walks out), bb#100 (alerts), bb#101 (board chat).
 
 ## My boards — `/history`
 
@@ -579,7 +593,8 @@ still going on (with the boards finished so far).
 
 The table and when the set finished (or started), the two pairs, and the
 same set view as on the play page: who won (from your side if you played
-it, else N-S's), a forfeit, each board opening its review (contract in
+it, else N-S's, also when a robot finished it for you), whom a robot
+replaced and why, each board opening its review (contract in
 table notation, your side's score and matchpoints), and the set's
 matchpoints for your side ("62 %", with "5 of 8") instead of a summed
 score, or "No other table has played these boards yet." (#100). A 403 or
@@ -699,7 +714,7 @@ Any player but themselves, another admin or a robot has **Ban** (**Ban
 again** while banned, which replaces the ban): a form with the number of
 days (1–365, quick picks 1, 7 and 30) and a required reason (at most 500
 characters), which the player is shown. Sending it toasts the backend's **User banned until …**;
-the player is taken off their table (mid-set their side loses the set)
+the player is taken off their table (mid-set a robot takes their seat)
 and logged out at once. The profile sheet has the same **Ban** form and
 shows the ban, but lifting it is only here.
 
@@ -727,5 +742,5 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans).
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | `SetResultsPanel` | Play (set over), Set results | none (given the set from `history.loadSet`) |
-| `AwayNotice` | Play, Table detail (who is away, counting down); Table detail, Tables, Home (your held seat) | none (reads `away_since` / `forfeit_at` from the table) |
+| `AwayNotice` | Play, Table detail (who is away, no countdown); Table detail, Tables, Home (your held seat) | none (reads `away_since` from the table) |
 | route progress bar, boot bar, toasts | the app shell | none (#18) |

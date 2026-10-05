@@ -172,7 +172,7 @@ const props = withDefaults(
     // the cards go.
     reserve?: Record<Seat, Card[]> | null;
     // Seats whose players are away mid-set (their seat held; the page's
-    // AwayNotice counts down to the forfeit).
+    // AwayNotice says so, the turn clock counts down).
     away?: Seat[];
     busy?: boolean;
     sendingId?: number | null;

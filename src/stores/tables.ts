@@ -6,11 +6,10 @@ import { leaveTable, listenToTable, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
 import { useHistoryStore } from '@/stores/history';
-import { lostSetText, myAwaySeat, setAtStake } from '@/utils/away';
-import type { LostSet } from '@/utils/away';
+import { myAwaySeat, setAtStake } from '@/utils/away';
 import { statusOf } from '@/utils/errors';
-import { sideOf } from '@/utils/result';
-import { runningSet, sideOfCode } from '@/utils/sets';
+import { replacedFromText, replacementOf, runningSet } from '@/utils/sets';
+import type { ReplacedFrom } from '@/utils/sets';
 import { showToast } from '@/utils/toast';
 
 // How often a seated player tells the backend they are still there. It frees
@@ -28,9 +27,10 @@ export const CAN_MANAGE_RETRIES = 3;
 
 export const WELCOME_BACK = 'Welcome back. The set goes on.';
 
-// The set the user was last in the middle of, kept across visits: if their
-// side forfeited it while they were gone (the tab closed), the next visit
-// says so. Browser storage may be missing or refuse; then it just isn't told.
+// The set the user was last in the middle of, kept across visits: if a robot
+// took their seat in it while they were gone (the tab closed, their turn
+// clock ran out), the next visit says so. Browser storage may be missing or
+// refuse; then it just isn't told.
 const SET_MEMORY_KEY = 'bridge.setInProgress';
 
 interface SetMemory {
@@ -56,7 +56,7 @@ function writeSetMemory(memory: SetMemory | null) {
       localStorage.removeItem(SET_MEMORY_KEY);
     }
   } catch {
-    // Not kept: a forfeit while away is then only told live.
+    // Not kept: a replacement while away is then only told live.
   }
 }
 
@@ -84,16 +84,17 @@ export const useTablesStore = defineStore('tables', () => {
   // for it, since one would bring us back behind the user's back; the play
   // page, or the detail page's "Come back", does that (comeBack).
   const heldTableId = ref<number | null>(null);
-  // A set our side lost by forfeit while we were away from it, told on Home
-  // until dismissed (and the pages showing that table go to its results).
-  const lostSet = ref<LostSet | null>(null);
+  // A set a robot took our seat over in (our turn clock ran out, or a kick
+  // while away), told on Home until dismissed (and the pages showing that
+  // table go to its results).
+  const replacedFrom = ref<ReplacedFrom | null>(null);
   // Our own seat requests in flight. Their broadcast can beat the HTTP
   // response, and an update that unseats us then is our own doing, not a kick.
   let ownSeatRequests = 0;
   // The heartbeat for the watched table: running while the page is visible,
   // paused while it is hidden (a closed or backgrounded app is exactly what
   // the backend should see as idle), except in the middle of a set, where
-  // three quiet minutes lose the set: switching tabs while partner thinks
+  // being marked away holds the seat: switching tabs while partner thinks
   // isn't leaving (bridge_backend docs/API.md, POST /tables/{table}/heartbeat).
   let heartbeat: ReturnType<typeof setInterval> | null = null;
   // How many updates of the watched table have come over the channel. A
@@ -164,7 +165,7 @@ export const useTablesStore = defineStore('tables', () => {
     currentTable.value = null;
     loaded.value = false;
     kickedFrom.value = null;
-    lostSet.value = null;
+    replacedFrom.value = null;
     canManageDue.clear();
   }
 
@@ -485,23 +486,19 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
-  // Our seat was freed because our side forfeited the set: we were away too
-  // long (or kicked while away). From the update that freed us, and the seat
-  // we held before it.
-  function lostSetFrom(table: BroadcastTable, seat: Seat | undefined): LostSet | null {
+  // Our seat went to a robot for the rest of the set: our turn clock ran
+  // out (or we were kicked while away). From the update that freed us.
+  function replacedFromUpdate(table: BroadcastTable): ReplacedFrom | null {
     const set = table.set;
-    if (!seat || !set || set.ended !== 'forfeit' || !set.forfeited_by) {
-      return null;
-    }
-    const side = sideOf(seat);
-    return sideOfCode(set.forfeited_by) === side
-      ? { id: set.id, number: set.number, side, tableId: table.id }
+    const replaced = replacementOf(set, auth.user?.id);
+    return set && replaced
+      ? { id: set.id, number: set.number, seat: replaced.seat, reason: replaced.reason, tableId: table.id }
       : null;
   }
 
   // A later visit: the set we were in the middle of, at a table we no longer
-  // sit at. If our side forfeited it meanwhile, say so (GET /sets/{id}).
-  async function checkLostSet() {
+  // sit at. If a robot took our seat in it meanwhile, say so (GET /sets/{id}).
+  async function checkReplaced() {
     const memory = readSetMemory();
     const me = auth.user?.id;
     if (!memory || !me) {
@@ -525,19 +522,20 @@ export const useTablesStore = defineStore('tables', () => {
       return;
     }
     writeSetMemory(null);
-    const seat = tablesService.SEATS.find((s) => set.players[s]?.id === me);
-    if (seat && set.ended === 'forfeit' && set.forfeited_by && sideOfCode(set.forfeited_by) === sideOf(seat)) {
-      lostSet.value = {
+    const replaced = replacementOf(set, me);
+    if (replaced) {
+      replacedFrom.value = {
         id: memory.setId,
         number: set.number,
-        side: sideOf(seat),
+        seat: replaced.seat,
+        reason: replaced.reason,
         tableId: memory.tableId,
       };
     }
   }
 
-  function dismissLostSet() {
-    lostSet.value = null;
+  function dismissReplaced() {
+    replacedFrom.value = null;
   }
 
   // What walking out of `table` now would put at stake (utils/away), with
@@ -565,7 +563,6 @@ export const useTablesStore = defineStore('tables', () => {
     const me = auth.user?.id ?? null;
     const before = heldTable(update.id);
     const wasAway = !!before && !!myAwaySeat(before, me);
-    const mySeat = before?.seats.find((s) => s.user_id === me)?.seat;
     const table = withCanManage(update);
     syncTable(table);
     useGameStore().applyTableUpdate(table);
@@ -584,11 +581,11 @@ export const useTablesStore = defineStore('tables', () => {
     unwatchTable();
     if (ownSeatRequests === 0) {
       kickedFrom.value = table.id;
-      const lost = lostSetFrom(table, mySeat);
-      if (lost) {
-        lostSet.value = lost;
+      const replaced = replacedFromUpdate(table);
+      if (replaced) {
+        replacedFrom.value = replaced;
         writeSetMemory(null);
-        announceRemoval(lostSetText(lost));
+        announceRemoval(replacedFromText(replaced));
         return;
       }
       announceRemoval(
@@ -625,7 +622,7 @@ export const useTablesStore = defineStore('tables', () => {
     } else {
       unwatchTable();
     }
-    checkLostSet();
+    checkReplaced();
   }
 
   async function loadTable(tableId: number) {
@@ -677,8 +674,8 @@ export const useTablesStore = defineStore('tables', () => {
     const table = await ownSeatRequest(() => tablesService.joinSeat(tableId, seat));
     syncTable(table);
     if (movedFrom !== null && movedFrom !== tableId) {
-      // Walked out on any set there (forfeited at once mid-set, as the move
-      // was confirmed): nothing to tell on a later visit.
+      // Walked out on any set there (a robot took the seat at once mid-set,
+      // as the move was confirmed): nothing to tell on a later visit.
       writeSetMemory(null);
     }
     followSeat(table);
@@ -791,7 +788,7 @@ export const useTablesStore = defineStore('tables', () => {
     watchedTableId,
     kickedFrom,
     heldTableId,
-    lostSet,
+    replacedFrom,
     load,
     loadTable,
     openTable,
@@ -811,7 +808,7 @@ export const useTablesStore = defineStore('tables', () => {
     unwatchTable,
     applyTableUpdate,
     comeBack,
-    dismissLostSet,
+    dismissReplaced,
     stakeOf,
   };
 });

@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/82-bigger-cards`._
+_Status as of branch `bulbulica2/76-turn-timer`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -29,14 +29,14 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | Folder | What lives there |
 |---|---|
 | `src/main.ts` | creates the app: Ionic, Pinia, the router, Ionic's CSS, dark mode |
-| `src/App.vue` | the shell: split pane with the side menu and the router outlet, route progress bar, the ban notice |
+| `src/App.vue` | the shell: split pane with the side menu and the router outlet, route progress bar, the ban notice, and the tab title while your turn waits in a hidden tab (`useTurnTitle`) |
 | `src/router/` | `index.ts` (routes + guard + prefetch of the page chunks and the bid and card lists), `loading.ts` (the progress bar flag, `navigateAndSettle`) |
 | `src/views/` | one `*Page.vue` per route |
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a claim's or the next board's deadline passes with no update), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved) |
-| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved) |
+| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
@@ -93,7 +93,8 @@ Home's card does), else to `/tables/:id`, the same rule as taking a seat
 on Tables (#67). Its status, most pressing first: **Away** (the seat is
 held after a Leave mid-set, or marked away), **Your turn**
 (`turnNotice()` on the board the game store holds for that table, or a
-Start the table waits for), **Board in progress**; the header draws it as
+Start the table waits for; "Your turn · 0:42" while your turn clock
+runs), **Board in progress**; the header draws it as
 a coloured dot (spelled out in the button's `aria-label`), the menu as a
 badge. The menu's badge sits at the end of the row in a cell as wide as
 an invisible copy of the longest status, so the entry keeps its size
@@ -226,7 +227,7 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 | Store | Holds | Main actions |
 |---|---|---|
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
-| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `lostSet` (a set your side forfeited while you were away) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissLostSet`, `clear` (on logout); owns the table channel and the heartbeat |
+| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `replacedFrom` (a set a robot took your seat over in) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissReplaced`, `clear` (on logout); owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
 | `chat` | the chat of the board the play page shows: `tableId`, `playingId`, `messages`, `open` (the panel), `about` (the call a message is about), `unread` | `follow` (the play page's board: read, emptied for a new board, read again once finished), `load`, `receive`, `send`, `setOpen`, `askAbout`, `clear`; see [Board chat](#board-chat) |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, double dummy tables per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadDoubleDummy`, `loadSet`, `loadReview` |
@@ -330,9 +331,10 @@ A few backend rules the stores rely on:
   set is over (then **Deal now** is refused: everyone presses Start again
   for the next set), a seat is empty or the players changed (both Start). The game state
   and the table payload both carry `set` (`{id, number, board, of,
-  finished, ended, forfeited_by}`, typed `SetPosition` in
-  `services/game.ts`). A board finishing sends no `TableUpdated`, while a
-  forfeit between boards comes only as one, so `currentSet()` in
+  finished, ended, replaced}`, typed `SetPosition` in
+  `services/game.ts`; `replaced` lists whom a robot took a seat over
+  from). A board finishing sends no `TableUpdated`, while a set broken
+  off between boards comes only as one, so `currentSet()` in
   `src/utils/sets.ts` merges the two copies; `startNeeded()` says Start
   once it is `finished`. A set's results (each board with its
   matchpoints, the totals, the winner) come from `GET /sets/{id}`, read by
@@ -343,7 +345,8 @@ A few backend rules the stores rely on:
   (`SetResultsPanel`) once the set is done. Scores are never summed over
   a set (#100): its total is the matchpoints (`setTotals()`), shown as a
   percentage when there is anything to compare. `sets.ts` also words the
-  winner from your side, a forfeit, and groups the history by set
+  winner from your side, whom a robot replaced and why, and groups the
+  history by set
   (`groupBySet()`, with the owner's seat so a header can show
   `setPercent()` from a set already read).
 - **Robots** are users with `is_robot: true` (on every public profile). They
@@ -462,10 +465,11 @@ doesn't send the XSRF header Sanctum wants.
   load.
 - A `TableUpdated` that no longer seats you (and wasn't your own request)
   means a manager removed you: a toast, the channel is dropped, and the
-  detail page goes back to `/tables` (to the set's results when your side
-  forfeited it, see Away mid-set below).
-- Mid-set, `TableUpdated` also says who is away (`away_since`,
-  `forfeit_at` per seat), who is back, and a forfeit (`set.ended`).
+  detail page goes back to `/tables` (to the set's results when a robot
+  took your seat over, see Away mid-set below).
+- Mid-set, `TableUpdated` also says who is away (`away_since` per seat),
+  who is back, and a robot taking a seat over (the seat's new `user`,
+  `set.replaced`).
 - `PlayingUpdated` comes **compact**: every card and call is an id, so a
   whole finished board fits in a broadcast's 10 KB
   ([`API.md`, Event `PlayingUpdated`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md#event-playingupdated)).
@@ -551,26 +555,38 @@ and refetches the table and the game; if the seat was lost in the
 meantime, the user sees a "removed after being inactive" toast (an admin,
 whom no timer frees, a plain "removed" one) and goes back to `/tables`.
 
-**Away mid-set and the forfeit** (#74, bb#76, backend
-[`API.md`, Away mid-set](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)).
-The backend marks a player with no sign of life for a minute **away**:
-their seat gets `away_since`, sent in every table payload and
-`TableUpdated`. The forfeit clock runs **only for the away player the
-board is waiting for** (on turn, #116, bb#113): only that seat gets
-`forfeit_at` (when their side loses the set unless they are back), three
-minutes from when the board began waiting for them, so at most one
-countdown shows at a time. The SPA only shows it and never keeps a clock
-of its own: `AwayNotice` puts the seat with a clock first, highlighted,
-and counts down from its `forfeit_at` ("East is away. E-W lose the set in
-2:41 unless they come back."; `useNow` redraws it every second). Any
-other away seat (`forfeit_at: null`, not their turn yet) gets one plain
-line, or one line together: "South is away. N-S lose the set if they
-aren't back within 3:00 of their turn." / "South and West are away. …".
-When the turn reaches them, the backend sets their `forfeit_at` and the
-countdown starts at 3:00. While an away seat's user `is_admin`
-(`forfeitSuspended` in `utils/away.ts`) nobody forfeits and no clock
-runs: "The table waits for them." `BridgeTable` and the detail page's
-compass tag every away seat **away**, clock or not.
+**Away mid-set and the turn clock** (#74, #130, bb#76, bb#120, backend
+[`API.md`, Away mid-set, and the turn clock](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)).
+The player the board waits for (`acting_user_id`: declarer on dummy's
+turn) has **one minute** to call, play or act on a claim: the game state's
+`turn_deadline` (null when no clock runs: between boards, a claim
+pending, a robot or an admin on turn). Only a move resets it, never a
+heartbeat. Past it, the backend's check (every 10 s) takes them out and a
+**robot takes their seat** for the rest of the set; the board goes on and
+their partner plays it out with the robot. Sets are never forfeited any
+more. The SPA never keeps a clock of its own, it only reads the deadline
+(`src/utils/turnClock.ts`, `useTurnClock`):
+- **The play page's turn clock**: a line over the status, "Your turn ·
+  0:42" for the player on turn (red in the last 15 s, when their hand or
+  the bidding box is ringed too), "Waiting for East · 0:42" for the
+  others, "Time is up…" at 0 until the backend's update lands. The line
+  is there through the auction and the play, empty with no clock, so
+  nothing moves. 2 s after the deadline with the same turn still shown,
+  `useStaleDeadline` rereads the game once.
+- **The ping**: while the tab is hidden and the board the game store
+  holds waits for you, `useTurnTitle` (run by `App.vue`) sets the tab's
+  title to "● Your turn (0:42) – Bridge", and puts it back once the turn
+  is taken or the tab shows. The **Your table** shortcut counts it down
+  too.
+- **Away**: the backend marks a player with no sign of life for a minute
+  away (`away_since` on the seat, in every table payload and
+  `TableUpdated`). A seat has no clock of its own (`forfeit_at` is gone),
+  so `AwayNotice` only says who is away ("East is away. If they don't
+  play within 1:00 of their turn, a robot takes their seat.", several in
+  one line; an admin, whom no clock runs for: "The table waits for
+  them.") and never shows a second countdown next to the turn clock.
+  `BridgeTable` and the detail page's compass tag every away seat
+  **away**.
 - **Leave mid-set** answers 202 and *holds* the seat: you stay seated,
   away. The store then sets `heldTableId` and stops beating (a beat would
   bring you back). It also holds a seat it finds away on a fresh load (the
@@ -580,21 +596,28 @@ compass tag every away seat **away**, clock or not.
   `away_since` toasts **Welcome back. The set goes on.** and reloads the
   board. If the backend marks you away while this client still beats (a
   lost beat), it beats at once.
-- **Forfeit**: the set ends `forfeit` with `forfeited_by`; the game store
-  toasts it once ("bob is gone: E-W lose set 2 by forfeit.") and the play
-  page shows the set's results. If it freed *your* seat, the store sets
-  `lostSet`, toasts "You were away too long…", the table pages go to
+- **A robot takes a seat over** (`set.replaced`: `{seat, user_id,
+  reason}`, reason `turn_timeout`, `away`, `moved` or `kicked`): the game
+  store toasts it once per seat, whichever of `TableUpdated` and
+  `PlayingUpdated` brings it first ("East didn't play in time: a robot
+  took their seat.", worded by `replacedText()` in `sets.ts`); the ones
+  already there when a board is read aren't news. If it was *your* seat
+  (not a move you made), the tables store sets `replacedFrom`, toasts
+  "You didn't play in time: a robot took your seat. You may sit down at
+  that table again once set 3 is over.", the table pages go to
   `/sets/:id`, and Home shows a card until dismissed. The set you are in
   the middle of is kept in `localStorage` (`bridge.setInProgress`), so a
-  forfeit that happened while the tab was closed is found on the next
+  replacement that happened while the tab was closed is found on the next
   visit (`GET /sets/{id}` from `load()`).
 - **Leave and move confirmations** say what is at stake (`stakeOf(table)`
-  → `setAtStake` in `utils/away.ts`): a Leave "N-S lose the set if you
-  aren't back within 3 minutes of your turn." (leaving when it isn't your
-  turn starts no clock), a move "Your side loses the set now." An admin,
-  or anyone while an admin is away (read from the away seats' `is_admin`,
-  not from a missing `forfeit_at`), can't forfeit: then leaving or moving
-  just ends the set with no winner.
+  → `setAtStake` in `utils/away.ts`, `held` when a Leave would hold the
+  seat): a Leave "If you aren't back to play within 60 seconds of your
+  turn, a robot takes your seat for the rest of the set.", a move "A robot
+  takes your seat there for the rest of set 3, and you can't sit down
+  there again until it is over." (`robotTakesOver()` in `seatMove.ts`). An
+  admin, or anyone while an admin there is away, or a move that leaves
+  only robots, just ends the set with no winner. Removing an away player
+  mid-set hands their seat to a robot too (`removeCost()`).
 
 Without Reverb and a queue worker running on the backend, none of this
 arrives, and the app falls back to what each request returns.
@@ -607,7 +630,7 @@ arrives, and the app falls back to what each request returns.
 |---|---|
 | `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
 | `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
-| `AwayNotice` | who is away mid-set: first and highlighted the one the board waits for, with the time left before their side loses the set, then the other away seats in a plain line, never more than one countdown (also on the detail page); with `held`, your own held seat (detail page, Tables, Home) |
+| `AwayNotice` | who is away mid-set, with no countdown (the turn clock is the play page's only one): an away admin on a line of their own (the table waits for them), the others in one line; with `held`, your own held seat (detail page, Tables, Home) |
 | `HandView` + `PlayingCard` | your hand, always ♥ ♣ ♦ ♠ (or the suits in `order`); playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses; each card shows at least 44 px of itself, the part a tap reaches, and the hand keeps the height it had as dealt while its cards go (`useSteadyHeight`); see [Card size](#card-size) |
 | `BiddingBox` | the call grid, on your turn during the auction, under the **Alert** field for the next call (an explanation for the opponents and an Alert toggle, both owned by the page) |
 | `AuctionHistory` + `AuctionCallCell` + `CallLabel` | the calls so far, four columns rotated like the table; an alerted call in amber with a "!", its explanation in a pop-up (`usePopover`), and with `live` an **Ask** and **Ask in the chat** on the opponents' calls and an **Answer** on yours when asked |
@@ -621,7 +644,7 @@ arrives, and the app falls back to what each request returns.
 | `BoardResultPanel`, `NextBoardBox` | the result once a board is finished, at a glance: one big row with the contract in table notation ("2♣ by West +2") and your score (N-S's, tagged, for someone who didn't play it), the tricks ("10 tricks · by claim"), then, at the table, one double dummy line ("Double dummy: 4♠ by South makes 10") with **Review**, then the set's position and the board's matchpoints for your side when known, and the countdown to the set's next board ("Next board in 0:08", then "Dealing the next board…") with the optional **Deal now** and, once pressed, the humans who haven't yet |
 | `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the review and the results page, or a note while it is being solved; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
-| `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, a forfeit's reason, each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score) |
+| `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, whom a robot replaced and why ("you" for the viewer it replaced), each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score) |
 | `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead), plus, with `manage`, **Seat a player** / **Add robot** per empty seat (`seatPlayer` / `addRobot` events; the play page runs them, #117), **Remove** on each seat in `removable` (`remove` event) and, with `canLeave`, **Leave the table** (`leave` event): the play page's way off the seat between sets (#121) |
 | `RobotBadge` | the "robot" mark next to a robot's name (also on Home, Tables, Table detail and the profile sheet) |
 | `AdminBadge` | the "admin" mark next to an admin's name, wherever `RobotBadge` goes, plus `StartBox` and the User profile page |
@@ -631,7 +654,9 @@ arrives, and the app falls back to what each request returns.
 "Thinking…" instead of "To act", and the status line under the table says
 "robot-1 is thinking…". That status line is rendered for the whole auction
 and play (empty while a claim is pending) in a box two lines tall, so the
-hand below never moves with what it says (#133).
+hand below never moves with what it says (#133). The turn clock's line
+above it (see Away mid-set and the turn clock) is there just as long, one
+line, empty when no clock runs.
 
 When you are declarer (or a robot declarer's dummy, playing both hands)
 and the hand you play from (your own, dummy's or declarer's) has
@@ -666,11 +691,14 @@ the claim's wording, its countdown and how it ended: `claimClockText`,
 / "=" / "−1", `doubledMark()` for X / XX, `resultSummary()` for "2♣ W +2 ·
 −130" in toasts and the text export, `percentText()`), `seatMove.ts` (wording for leaving or moving by
 game phase and by what is at stake in the set, and whether only robots
-would be left), `away.ts` (who is away, the countdown's wording, what
-leaving would put at stake), `start.ts` (whether
+would be left), `away.ts` (who is away and what it costs once the turn
+reaches them, the clock formatting, what leaving would put at stake),
+`turnClock.ts` (the turn clock: whose, the seconds left, its wording, red
+in the last 15 s, the tab title), `start.ts` (whether
 the next board waits for Start, and who for), `sets.ts` (where the table is
-in its set, the set's winner and matchpoints from your side, a forfeit's
-wording, the history grouped by set), `review.ts` (a replay's table after N cards: hands left, the
+in its set, the set's winner and matchpoints from your side, a robot
+replacing a player, worded for the others and for them, the history
+grouped by set), `review.ts` (a replay's table after N cards: hands left, the
 trick shown, tricks won, the trick-by-trick steps; which boards the play page's review offers),
 `turn.ts` (what the game waits for you to do, told in that review), `doubleDummy.ts` (the double dummy line, the leads in hand order, the best ones and the lead in words, the table for the exports), `export.ts` (a finished
 board as text, PBN and JSON, and the pieces the printout uses). These are the

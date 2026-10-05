@@ -1,17 +1,13 @@
 <template>
-  <!-- Who is away mid-set (bridge_backend docs/API.md, Away mid-set). Only
-       the away player the board waits for (on turn) has a clock, the seat's
-       forfeit_at, which this redraws every second: that line comes first,
-       highlighted. Any other away seat gets one plain line, or one line
-       together, until the turn reaches it. With `held`, the viewer's own
-       held seat instead, seen away from the table. -->
+  <!-- Who is away mid-set (bridge_backend docs/API.md, Away mid-set). No
+       countdown here: a seat has no clock of its own, and the one clock
+       that runs, the player on turn's, is the play page's status line
+       (turn_deadline, bb#120). Each away admin gets a line of their own
+       (the table waits for them), the others one line, or one together.
+       With `held`, the viewer's own held seat instead, seen away from the
+       table. -->
   <div v-if="lines.length > 0" class="away-notice" role="status" aria-live="polite">
-    <p
-      v-for="line in lines"
-      :key="line.key"
-      class="away-line"
-      :class="{ 'away-clock': line.clock, 'away-urgent': line.urgent }"
-    >
+    <p v-for="line in lines" :key="line.key" class="away-line">
       {{ line.text }}
     </p>
   </div>
@@ -19,17 +15,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useNow } from '@/composables/useNow';
 import type { BroadcastTable } from '@/services/tables';
-import {
-  awaySeats,
-  awayText,
-  awayTogetherText,
-  forfeitSuspended,
-  heldText,
-  myAwaySeat,
-  secondsLeft,
-} from '@/utils/away';
+import { awaySeats, awayText, awayTogetherText, heldText, myAwaySeat } from '@/utils/away';
 
 const props = withDefaults(
   defineProps<{
@@ -41,57 +28,29 @@ const props = withDefaults(
   { held: false },
 );
 
-const seats = computed(() => {
+interface Line {
+  key: string;
+  text: string;
+}
+
+const lines = computed<Line[]>(() => {
   const table = props.table;
   if (!table) {
     return [];
   }
   if (props.held) {
     const mine = myAwaySeat(table, props.me);
-    return mine ? [mine] : [];
+    return mine ? [{ key: mine.seat, text: heldText(mine) }] : [];
   }
-  return awaySeats(table, props.me);
-});
-
-const waits = computed(() => !!props.table && forfeitSuspended(props.table));
-
-// The backend runs one clock at a time; should two ever show, the nearest
-// deadline comes first.
-const clocked = computed(() =>
-  seats.value
-    .filter((s) => !!s.forfeit_at)
-    .sort((a, b) => Date.parse(a.forfeit_at as string) - Date.parse(b.forfeit_at as string)),
-);
-const waiting = computed(() => seats.value.filter((s) => !s.forfeit_at));
-
-const now = useNow(() => clocked.value.length > 0);
-
-interface Line {
-  key: string;
-  text: string;
-  clock: boolean;
-  urgent: boolean;
-}
-
-// The last minute is urgent.
-const lines = computed<Line[]>(() => {
-  const tell = props.held ? heldText : awayText;
-  const out: Line[] = clocked.value.map((seat) => ({
-    key: seat.seat,
-    text: tell(seat, now.value, waits.value),
-    clock: true,
-    urgent: secondsLeft(seat.forfeit_at as string, now.value) <= 60,
-  }));
-  if (waiting.value.length === 1) {
-    const seat = waiting.value[0];
-    out.push({ key: seat.seat, text: tell(seat, now.value, waits.value), clock: false, urgent: false });
-  } else if (waiting.value.length > 1) {
-    out.push({
-      key: waiting.value.map((s) => s.seat).join(''),
-      text: awayTogetherText(waiting.value, waits.value),
-      clock: false,
-      urgent: false,
-    });
+  const seats = awaySeats(table, props.me);
+  const out: Line[] = seats
+    .filter((s) => s.user.is_admin)
+    .map((seat) => ({ key: seat.seat, text: awayText(seat) }));
+  const others = seats.filter((s) => !s.user.is_admin);
+  if (others.length === 1) {
+    out.push({ key: others[0].seat, text: awayText(others[0]) });
+  } else if (others.length > 1) {
+    out.push({ key: others.map((s) => s.seat).join(''), text: awayTogetherText(others) });
   }
   return out;
 });
@@ -109,19 +68,9 @@ const lines = computed<Line[]>(() => {
 .away-line {
   margin: 0;
   font-size: 0.9rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .away-line + .away-line {
   margin-top: 4px;
-}
-
-.away-clock {
-  font-weight: 600;
-}
-
-.away-urgent {
-  font-weight: 600;
-  color: var(--ion-color-danger, #c5000f);
 }
 </style>

@@ -76,7 +76,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useHistoryStore } from '@/stores/history';
 import type { Seat } from '@/services/tables';
 import { errorMessage, statusOf } from '@/utils/errors';
-import { seatOfUser } from '@/utils/result';
+import { seatInSet } from '@/utils/sets';
 
 const route = useRoute();
 const ionRouter = useIonRouter();
@@ -91,8 +91,9 @@ const gone = ref('');
 
 const data = computed(() => store.sets[setId.value] ?? null);
 
-// Scores are turned to the viewer's side when they played the set.
-const mySeat = computed(() => (data.value ? seatOfUser(data.value.players, auth.user?.id) : null));
+// Scores are turned to the viewer's side when they played the set (a robot
+// may have finished it for them).
+const mySeat = computed(() => (data.value ? seatInSet(data.value, auth.user?.id) : null));
 
 const when = computed(() => {
   const at = data.value?.finished_at ?? data.value?.started_at;

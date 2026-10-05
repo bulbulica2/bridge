@@ -33,7 +33,12 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/82-bigger-cards` (after
+> branch `bulbulica2/76-turn-timer` (after
+> #130, the player on turn has a minute: the play page counts it down
+> ("Your turn · 0:42", red in the last 15 s; "Waiting for East · 0:42"
+> for the others), the tab's title pings while hidden, and running out
+> hands the seat to a robot for the rest of the set (no set is forfeited
+> any more), told to the table and on Home; after
 > #136, the cards are twice as large by default, with a **Card size**
 > setting on the Account page (Normal / Large / Extra large), every card in
 > your hand at least 44 px to tap, and the hand wrapping two suits a row
@@ -58,8 +63,8 @@ instead of repeating them. How the robot players bid and play is in
 > failed confirmation is toasted and logged; after
 > #118, your own hand always reads ♥ ♣ ♦ ♠ and dummy's (or a robot
 > declarer's) cards trumps first; after
-> #116, only the away player the board waits for has a forfeit
-> countdown, the others are shown away with no clock; after
+> #116, only the away player the board waits for had a forfeit
+> countdown (replaced by the turn clock in #130); after
 > #115, the board chat is for the whole table during the board too,
 > with **Opponents** for what partner mustn't read; after
 > #114, the board stays centred beside the open chat; after

@@ -3,7 +3,7 @@ import { onScopeDispose, ref, watch } from 'vue';
 /**
  * The time now (ms), ticking every `intervalMs` while `active()` is true, for
  * a countdown on screen. Only the display ticks: the deadline itself comes
- * from the backend (a seat's `forfeit_at`), never from this clock.
+ * from the backend (the game state's `turn_deadline`), never from this clock.
  */
 export function useNow(active: () => boolean, intervalMs = 1000) {
   const now = ref(Date.now());

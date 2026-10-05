@@ -1,9 +1,10 @@
 import { computed, inject } from 'vue';
 import { routeLocationKey } from 'vue-router';
+import { useTurnClock } from '@/composables/useTurnClock';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
 import { useTablesStore } from '@/stores/tables';
-import { myAwaySeat } from '@/utils/away';
+import { formatClock, myAwaySeat } from '@/utils/away';
 import { startNeeded } from '@/utils/start';
 import { turnNotice } from '@/utils/turn';
 
@@ -66,8 +67,20 @@ export function useYourTable() {
     return t ? t.name || `Table #${t.id}` : '';
   });
 
-  // "Your turn" needs the board, which the game store holds once the play
-  // page has read it (or Start dealt it); the table alone tells a Start.
+  // The board we hold of this table: the game store has it once the play
+  // page has read it (or Start dealt it).
+  const playing = computed(() => {
+    const t = table.value;
+    return t && game.tableId === t.id ? game.playing : null;
+  });
+
+  // Our turn clock there, when it runs (bb#120): the turn status counts it.
+  const { clock } = useTurnClock(
+    () => playing.value,
+    () => auth.user?.id ?? null,
+  );
+
+  // "Your turn" needs the board; the table alone tells a Start.
   const status = computed<YourTableStatus>(() => {
     const t = table.value;
     if (!t) {
@@ -76,14 +89,20 @@ export function useYourTable() {
     if (away.value) {
       return 'away';
     }
-    const playing = game.tableId === t.id ? game.playing : null;
-    if (turnNotice(playing, auth.user?.id ?? null, t, startNeeded(t, playing)) !== null) {
+    if (turnNotice(playing.value, auth.user?.id ?? null, t, startNeeded(t, playing.value)) !== null) {
       return 'turn';
     }
     return t.board_id !== null ? 'board' : null;
   });
 
-  const statusText = computed(() => (status.value ? STATUS_TEXT[status.value] : ''));
+  // "Your turn · 0:42" while our clock runs.
+  const statusText = computed(() => {
+    if (!status.value) {
+      return '';
+    }
+    const mine = status.value === 'turn' && clock.value?.mine ? clock.value : null;
+    return mine ? `${STATUS_TEXT.turn} · ${formatClock(mine.seconds)}` : STATUS_TEXT[status.value];
+  });
 
   // For a screen reader: "Your table: Table #3, your turn".
   const ariaLabel = computed(() =>

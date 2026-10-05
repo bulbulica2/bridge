@@ -54,7 +54,7 @@
     </ion-text>
 
     <p class="ban-form-hint">
-      They are taken off their table at once (mid-set their side loses the set) and logged out.
+      They are taken off their table at once (mid-set a robot takes their seat) and logged out.
     </p>
 
     <div class="ban-form-actions">
@@ -113,7 +113,7 @@ async function submit() {
   try {
     const { ban, message } = await store.ban(props.user.id, { days: days.value, reason: reason.value.trim() });
     emit('banned', ban);
-    // "User banned until 12 Oct 2026.", plus the forfeit when it cost a set.
+    // "User banned until 12 Oct 2026."
     await showToast(message || `Banned until ${banDate(ban.until)}.`, 'success');
   } catch (e) {
     serverErrors.value = fieldErrors(e);

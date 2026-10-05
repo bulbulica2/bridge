@@ -195,30 +195,86 @@ describe('game store', () => {
     expect(game.playing?.hand).toBeNull()
   })
 
-  test('a side forfeiting the set mid-board: told once, and back to waiting', async () => {
-    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, forfeited_by: null }
+  test('a robot taking a seat over mid-board: told once, and the board goes on', async () => {
+    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, replaced: [] }
     const game = await loaded({ ...fullState(), set })
-    const table = makeTable(['N', 'S', 'W'], null)
-    table.set = { ...set, finished: true, ended: 'forfeit', forfeited_by: 'EW' }
+    // East's clock ran out: a robot sits in their seat, the board stays.
+    const table = makeTable(['N', 'E', 'S', 'W'], 7)
+    table.seats[1] = { ...table.seats[1], user_id: 100, user: { ...PLAYERS.E, id: 100, username: 'robot-1', is_robot: true } }
+    table.set = { ...set, replaced: [{ seat: 'E', user_id: 2, reason: 'turn_timeout' }] }
 
     game.applyTableUpdate(table)
     game.applyTableUpdate(table)
+    // The same news on the board's own update says nothing more.
+    game.applyPlayingUpdate(5, publicState({ set: table.set, turn: 'W', acting_user_id: 4, auction: auction(PASS) }))
 
     expect(showToast).toHaveBeenCalledTimes(1)
-    expect(showToast).toHaveBeenCalledWith('bob is gone: E-W lose set 2 by forfeit.', 'warning')
-    expect(game.playing?.phase).toBe('waiting')
+    expect(showToast).toHaveBeenCalledWith("East didn't play in time: a robot took their seat.", 'warning')
+    expect(game.playing?.phase).toBe('auction')
   })
 
-  test('a forfeit between boards is told too, and the finished board stays', async () => {
-    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, forfeited_by: null }
-    const game = await loaded({ ...fullState({ phase: 'finished', turn: null }), set })
-    const table = makeTable(['N', 'E', 'S'], 7)
-    table.set = { ...set, finished: true, ended: 'forfeit', forfeited_by: 'EW' }
+  test('the board update may bring a replacement first', async () => {
+    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, replaced: [] }
+    const game = await loaded({ ...fullState(), set })
+
+    game.applyPlayingUpdate(
+      5,
+      publicState({
+        set: { ...set, replaced: [{ seat: 'W', user_id: 4, reason: 'away' }] },
+        auction: auction(PASS),
+        turn: 'W',
+        acting_user_id: 100,
+      }),
+    )
+
+    expect(showToast).toHaveBeenCalledWith('West was away on their turn: a robot took their seat.', 'warning')
+  })
+
+  test('replacements already there when the board is read are not news', async () => {
+    const set = {
+      id: 8,
+      number: 2,
+      board: 3,
+      of: 4,
+      finished: false,
+      ended: null,
+      replaced: [{ seat: 'E' as Seat, user_id: 2, reason: 'moved' as const }],
+    }
+    const game = await loaded({ ...fullState(), set })
+
+    game.applyTableUpdate({ ...makeTable(['N', 'E', 'S', 'W'], 7), set })
+    game.applyPlayingUpdate(5, publicState({ set, auction: auction(PASS), turn: 'W', acting_user_id: 4 }))
+
+    expect(showToast).not.toHaveBeenCalled()
+  })
+
+  test('our own replacement is told by the tables store, not here', async () => {
+    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, replaced: [] }
+    const game = await loaded({ ...fullState(), set })
+
+    game.applyPlayingUpdate(
+      5,
+      publicState({
+        set: { ...set, replaced: [{ seat: 'S', user_id: 3, reason: 'turn_timeout' }] },
+        auction: auction(PASS),
+        turn: 'W',
+        acting_user_id: 4,
+      }),
+    )
+
+    expect(showToast).not.toHaveBeenCalled()
+  })
+
+  test('a set broken off mid-board: the board is abandoned', async () => {
+    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, replaced: [] }
+    const game = await loaded({ ...fullState(), set })
+    const table = makeTable(['N', 'S', 'W'], null)
+    table.set = { ...set, finished: true, ended: 'abandoned' }
 
     game.applyTableUpdate(table)
 
-    expect(showToast).toHaveBeenCalledWith('di is gone: E-W lose set 2 by forfeit.', 'warning')
-    expect(game.playing?.phase).toBe('finished')
+    expect(showToast).toHaveBeenCalledWith('bob left, the board was abandoned.', 'warning')
+    expect(game.playing?.phase).toBe('waiting')
   })
 
   test('a seat change that keeps the board says nothing', async () => {

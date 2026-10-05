@@ -114,14 +114,9 @@
           <!-- The board is over (13 tricks, or passed out): its score, then
                moving on. The deal lies face up on the table below. -->
           <template v-else-if="playing.phase === 'finished' && playing.result">
-            <!-- After the set's last board (or a forfeit between boards):
-                 the whole set in place of the board, then everyone's Start. -->
-            <SetResultsPanel
-              v-if="endedSet"
-              :set="endedSet"
-              :my-seat="mySeat"
-              :gone="forfeitedSeat(endedSet, table)"
-            />
+            <!-- After the set's last board: the whole set in place of the
+                 board, then everyone's Start. -->
+            <SetResultsPanel v-if="endedSet" :set="endedSet" :my-seat="mySeat" />
             <BoardResultPanel
               v-else
               :result="playing.result"
@@ -168,13 +163,12 @@
             />
           </template>
 
-          <!-- A set that ended mid-board (a forfeit, or a player taken out of
-               it): no board is left on the table, but its results are. -->
+          <!-- A set that ended mid-board (a player taken out of it): no
+               board is left on the table, but its results are. -->
           <SetResultsPanel
             v-if="playing.phase === 'waiting' && endedSet"
             :set="endedSet"
             :my-seat="mySeat"
-            :gone="forfeitedSeat(endedSet, table)"
           />
 
           <!-- No board yet (or a finished one with new players): the same
@@ -251,9 +245,23 @@
             </template>
           </BridgeTable>
 
-          <!-- Somebody away mid-set: the time left before their side loses
-               the set, from their seat's forfeit_at. -->
+          <!-- Somebody away mid-set: who, with no clock of their own (the
+               turn clock below is the only countdown). -->
           <AwayNotice :table="table" :me="me" />
+
+          <!-- The turn clock (turn_deadline, bb#120): "Your turn · 0:42",
+               red in its last seconds, or "Waiting for East · 0:42". One
+               line, there all through the auction and the play (empty when
+               no clock runs: a robot or an admin on turn, a claim), so
+               nothing moves when it comes and goes. -->
+          <p
+            v-if="playing.phase === 'auction' || playing.phase === 'play'"
+            class="turn-clock"
+            :class="{ 'turn-clock-mine': turnClock.clock.value?.mine, 'turn-clock-urgent': turnClock.urgent.value }"
+            role="timer"
+          >
+            {{ turnClock.text.value }}
+          </p>
 
           <!-- Whose move it is, always there (empty while a claim's panel
                says it) and two lines tall during the auction and the play,
@@ -296,6 +304,7 @@
               :busy="sendingCard !== null"
               :sending-id="sendingCard"
               :forced-id="playFrom === 'own' ? (autoPlay.card.value?.id ?? null) : null"
+              :class="{ 'turn-urgent': playFrom === 'own' && turnClock.urgent.value }"
               @play="playCard"
             />
             <div v-else class="dealing">
@@ -329,6 +338,7 @@
               :auction="playing.auction ?? []"
               :seat="mySeat!"
               :busy="calling"
+              :class="{ 'turn-urgent': turnClock.urgent.value }"
               @call="makeCall"
             />
             <div v-else class="bids-missing">
@@ -446,6 +456,7 @@ import { useDoubleDummy } from '@/composables/useDoubleDummy';
 import { useForcedPlay } from '@/composables/useForcedPlay';
 import { useMediaQuery } from '@/composables/useMediaQuery';
 import { useStaleDeadline } from '@/composables/useStaleDeadline';
+import { useTurnClock } from '@/composables/useTurnClock';
 import { useAuthStore } from '@/stores/auth';
 import { useChatStore } from '@/stores/chat';
 import { useGameStore } from '@/stores/game';
@@ -473,11 +484,12 @@ import { playingExtras } from '@/utils/export';
 import { resultSummary } from '@/utils/result';
 import { awaySeats } from '@/utils/away';
 import { confirmLeave, confirmRemove, heldNotice, removeCost } from '@/utils/seatMove';
-import { currentSet, forfeitedSeat, setLabel } from '@/utils/sets';
+import { currentSet, setLabel } from '@/utils/sets';
 import { reviewChoices } from '@/utils/review';
 import type { SeenBoard } from '@/utils/review';
 import { startNeeded } from '@/utils/start';
 import { turnNotice } from '@/utils/turn';
+import { turnDeadline } from '@/utils/turnClock';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
@@ -537,6 +549,13 @@ const me = computed(() => auth.user?.id ?? null);
 
 // The game store holds one table's board; only trust it for this route's table.
 const playing = computed(() => (game.tableId === tableId.value ? game.playing : null));
+
+// The turn clock of the board on show (bb#120): ours, or whoever's turn it
+// is, counted down from `turn_deadline`.
+const turnClock = useTurnClock(
+  () => playing.value,
+  () => me.value,
+);
 
 const table = computed(() => {
   if (tablesStore.currentTable?.id === tableId.value) {
@@ -817,7 +836,8 @@ const removable = computed(() => {
 });
 
 // The set the table is on (or ended last): the board's own `set`, updated
-// by the table's events (a forfeit comes as a TableUpdated only).
+// by the table's events (a set broken off between boards comes as a
+// TableUpdated only).
 const shownSet = computed(() => currentSet(table.value, playing.value));
 
 // Its results as far as they go (GET /sets/{id}), once read: the running
@@ -861,7 +881,7 @@ const endedSet = computed(() => {
   if (!shownSet.value?.finished || !results?.finished) {
     return null;
   }
-  return results.boards.length > 0 || results.ended === 'forfeit' ? results : null;
+  return results.boards.length > 0 ? results : null;
 });
 
 // The finished boards the review modal offers: the running set's, else the
@@ -983,14 +1003,14 @@ watch(
 );
 
 // Kicked (the tables store has already said so in a toast): nothing to see.
-// Freed because our side forfeited the set: its results instead.
+// Replaced by a robot (our turn clock ran out): the set's results instead.
 watch(
   () => tablesStore.kickedFrom,
   (kicked) => {
     if (kicked !== null && kicked === tableId.value) {
       tablesStore.kickedFrom = null;
-      const lost = tablesStore.lostSet;
-      ionRouter.navigate(lost?.tableId === kicked ? `/sets/${lost.id}` : '/tables', 'back', 'replace');
+      const replaced = tablesStore.replacedFrom;
+      ionRouter.navigate(replaced?.tableId === kicked ? `/sets/${replaced.id}` : '/tables', 'back', 'replace');
     }
   },
 );
@@ -1059,6 +1079,15 @@ useStaleDeadline(
 // its `next_board_at`, the deal (or its HandDealt) may have been lost.
 useStaleDeadline(
   () => (viewActive.value && playing.value?.phase === 'finished' ? (playing.value.next_board_at ?? null) : null),
+  reloadQuietly,
+);
+
+// And for the turn clock: still on the same turn 2 s after `turn_deadline`,
+// the robot that took the seat over (or the move that beat the clock) may
+// have been lost. The backend checks every 10 s, so "Time is up…" may show
+// a little longer; the TableUpdated that replaces the player ends it.
+useStaleDeadline(
+  () => (viewActive.value ? turnDeadline(playing.value) : null),
   reloadQuietly,
 );
 
@@ -1521,8 +1550,8 @@ async function removeSeat(seat: Seat) {
 }
 
 // Leaving between boards (NextBoardBox) or sets (StartBox): free, since the
-// board is over, unless the set goes on: then the seat is held for a few
-// minutes, and not coming back loses the set for our side. The
+// board is over, unless the set goes on: then the seat is held, and not
+// coming back to play once the turn reaches us hands it to a robot. The
 // confirmation is inside the try, so nothing fails unseen (#121).
 async function leave() {
   if (asking.value) {
@@ -1546,7 +1575,7 @@ async function leave() {
     game.clear();
     let message = 'You left the table.';
     if (held) {
-      message = heldNotice(stake);
+      message = heldNotice();
     } else if (tableDeleted) {
       message = 'You left the table. Nobody was left, so it was deleted.';
     }
@@ -1701,6 +1730,50 @@ async function refresh(event: CustomEvent) {
 .status-mine {
   font-weight: 600;
   color: var(--ion-color-warning-shade, #e0ac08);
+}
+
+/* The turn clock, one line over the status whatever it says. */
+.turn-clock {
+  min-height: 1.4em;
+  margin: 12px 0 -4px;
+  font-size: 1rem;
+  line-height: 1.4;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--ion-color-medium);
+}
+
+.turn-clock-mine {
+  font-weight: 700;
+  color: var(--ion-text-color, #000);
+}
+
+.turn-clock-urgent {
+  color: var(--ion-color-danger, #c5000f);
+}
+
+/* Our hand or the bidding box in our clock's last seconds: ringed in red,
+   pulsing unless motion is reduced. */
+.turn-urgent {
+  border-radius: 8px;
+  outline: 2px solid var(--ion-color-danger, #c5000f);
+  outline-offset: 4px;
+  animation: turn-urgent-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes turn-urgent-pulse {
+  from {
+    outline-color: var(--ion-color-danger, #c5000f);
+  }
+  to {
+    outline-color: rgba(var(--ion-color-danger-rgb, 197, 0, 15), 0.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-urgent {
+    animation: none;
+  }
 }
 
 .my-hand {
