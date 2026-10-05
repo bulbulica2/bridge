@@ -4,7 +4,9 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 // auction's alerted calls open theirs: a mouse hovering opens it and moving
 // away closes it; a tap or a key (touch has no hover) opens it until a tap
 // outside, the button again, or Escape. It stays clear of the screen's
-// edges (`nudge`, in px sideways from under the button's centre).
+// edges (`nudge`, in px sideways from under the button's centre); a panel
+// pinned on the right marked `data-right-edge` (the chat beside the table)
+// counts as the right edge.
 //
 // Bind `root` on the element wrapping both button and pop-up (with
 // `hover(true|false, $event)` on its pointerenter/pointerleave), `button` on
@@ -69,6 +71,11 @@ export function usePopover() {
     document[method]('keydown', onKeyDown as EventListener);
   }
 
+  function rightEdge() {
+    const panel = document.querySelector('[data-right-edge]')?.getBoundingClientRect();
+    return panel?.width ? panel.left : document.documentElement.clientWidth;
+  }
+
   // Centred on the button, unless that would cross an edge of the screen.
   async function keepOnScreen() {
     nudge.value = 0;
@@ -77,7 +84,7 @@ export function usePopover() {
     if (!box || box.width === 0) {
       return;
     }
-    const right = document.documentElement.clientWidth - EDGE;
+    const right = rightEdge() - EDGE;
     if (box.left < EDGE) {
       nudge.value = EDGE - box.left;
     } else if (box.right > right) {

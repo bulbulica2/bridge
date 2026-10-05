@@ -70,6 +70,34 @@ describe('usePopover keeps the pop-up on screen', () => {
     expect((await opened()).vm.nudge).toBe(-12)
   })
 
+  test('moved left off a panel pinned on the right, such as the chat', async () => {
+    const panel = document.createElement('aside')
+    panel.setAttribute('data-right-edge', '')
+    document.body.appendChild(panel)
+    layOut(100, 200, 1000)
+    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue({ left: 280, width: 320 } as DOMRect)
+
+    try {
+      expect((await opened()).vm.nudge).toBe(-28)
+    } finally {
+      panel.remove()
+    }
+  })
+
+  test('a panel not laid out counts for nothing', async () => {
+    const panel = document.createElement('aside')
+    panel.setAttribute('data-right-edge', '')
+    document.body.appendChild(panel)
+    layOut(250, 200)
+    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue({ left: 0, width: 0 } as DOMRect)
+
+    try {
+      expect((await opened()).vm.nudge).toBe(-58)
+    } finally {
+      panel.remove()
+    }
+  })
+
   test('nothing laid out yet: left where it is', async () => {
     layOut(-30, 0)
 

@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/66-board-chat`._
+_Status as of branch `bulbulica2/68-centre-board-beside-chat`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -405,7 +405,9 @@ What it shows by phase:
 **Board chat** (#102): from the first deal on, the header's **Chat**
 button (with a red badge counting the others' messages since you last
 looked) opens the board's chat: beside the table on a screen 1100 px wide
-or more, as a half-height sheet on a phone (the page stays usable above
+or more (the board stays centred in the room left of the chat, menu
+pinned or not, and doesn't move at all where it already clears the chat;
+#114), as a half-height sheet on a phone (the page stays usable above
 it, and scrolls the bidding box and your hand clear of it). Each message
 shows who wrote it and their seat, who reads it ("to opponents", "to
 table"), the time, and the call it is about as a chip; the text is plain

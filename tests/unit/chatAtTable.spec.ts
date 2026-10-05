@@ -195,6 +195,8 @@ describe('the Chat button', () => {
     expect(wrapper.find('.chat-badge').exists()).toBe(false)
     expect(wrapper.get('.chat-toggle').attributes('aria-label')).toBe('Chat')
     expect(wrapper.get('.play').classes()).toContain('with-chat-sheet')
+    // The room beside the table is only for the chat at its side.
+    expect(wrapper.get('.play').classes()).not.toContain('with-chat-side')
     expect(wrapper.findAll('.board-chat .chat-message')).toHaveLength(3)
 
     await openChat(wrapper)
@@ -303,9 +305,15 @@ describe('the chat panel', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.find('.chat-sheet').exists()).toBe(false)
+    expect(wrapper.get('.play').classes()).not.toContain('with-chat-side')
     await openChat(wrapper)
     expect(wrapper.get('.chat-side').find('.board-chat').exists()).toBe(true)
+    expect(wrapper.get('.chat-side').attributes()).toHaveProperty('data-right-edge')
     expect(wrapper.get('.play').classes()).toContain('with-chat-side')
+    expect(wrapper.get('.play').classes()).not.toContain('with-chat-sheet')
+
+    await wrapper.get('.chat-close').trigger('click')
+    expect(wrapper.get('.play').classes()).not.toContain('with-chat-side')
   })
 })
 

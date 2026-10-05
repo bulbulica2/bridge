@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/66-board-chat`._
+_Status as of branch `bulbulica2/68-centre-board-beside-chat`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -35,7 +35,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a claim's or the next board's deadline passes with no update), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a claim's or the next board's deadline passes with no update), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
@@ -688,7 +688,13 @@ their own words. **Partner never reads it during the board**:
   and the hand); the same question asked with **Ask** (`CallQuestioned`)
   isn't told twice within 10 s.
 - **Panel**: on a screen 1100 px wide or more (`useMediaQuery`) the chat
-  sits in the content's `fixed` slot beside the table, which moves over; on
+  sits in the content's `fixed` slot beside the table. The board's column
+  reserves the chat's room as right padding, so it is centred in what the
+  chat leaves; a CSS `clamp()` drops that padding once the content (menu
+  pinned or not) is wide enough for the page-centred board to clear the
+  chat, so opening the chat doesn't move it (#114). The panel carries
+  `data-right-edge`, which `usePopover` treats as the screen's right edge,
+  so the auction's and the last trick's pop-ups stay off it. On
   a phone it is a bottom sheet (`ion-modal`, half height, the page usable
   above it and padded so the bidding box and the hand can scroll clear).
   A refused message (409, 422, 429) is told in a toast and keeps its text.

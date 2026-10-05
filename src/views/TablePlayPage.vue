@@ -32,9 +32,10 @@
         <ion-refresher-content />
       </ion-refresher>
 
-      <!-- On a wide screen the chat sits beside the table, which moves over
-           to make room; on a phone it is a bottom sheet (below). -->
-      <aside v-if="chatSide" slot="fixed" class="chat-side">
+      <!-- On a wide screen the chat sits beside the table, which stays
+           centred in the room left of it; on a phone it is a bottom sheet
+           (below). Pop-ups treat the panel as the screen's right edge. -->
+      <aside v-if="chatSide" slot="fixed" class="chat-side" data-right-edge>
         <BoardChat v-bind="chatProps" v-model:draft="chatDraft" v-on="chatEvents" />
       </aside>
 
@@ -1415,9 +1416,17 @@ async function refresh(event: CustomEvent) {
   margin: 0 auto;
 }
 
-/* Room for the chat beside the table on a wide screen. */
+/* Room for the chat beside the table on a wide screen. The chat panel
+   (`.chat-side`) takes 8 + 320 px from the right of the content, which pads
+   16 px, so reserving 328 px of padding (outside `max-width`, hence
+   content-box) centres the column in what the chat leaves, as far from the
+   chat as from the left edge. Where the column centred on the whole content
+   already clears the chat by that much (100 % >= 520 + 2 x 328 px), the
+   clamp() steps the padding down to 0, so opening the chat doesn't move the
+   board. 100 % is the content's width, with or without the side menu. */
 .play.with-chat-side {
-  margin-right: 340px;
+  box-sizing: content-box;
+  padding-right: calc(328px - clamp(0px, (100% - 1176px) * 1000, 328px));
 }
 
 /* Room to scroll the bidding box and the hand above a phone's chat sheet. */
