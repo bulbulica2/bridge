@@ -130,8 +130,8 @@ beforeEach(() => {
 
 describe('chat helpers', () => {
   test('who a message may go to, by phase', () => {
-    expect(chatRecipients('auction')).toEqual(['opponents'])
-    expect(chatRecipients('play')).toEqual(['opponents'])
+    expect(chatRecipients('auction')).toEqual(['table', 'opponents'])
+    expect(chatRecipients('play')).toEqual(['table', 'opponents'])
     expect(chatRecipients('finished')).toEqual(['table', 'opponents'])
     expect(chatRecipients('waiting')).toEqual([])
     expect(chatRecipients(null)).toEqual([])
@@ -526,32 +526,56 @@ describe('BoardChat', () => {
     document.body.innerHTML = ''
   })
 
-  test('mid-board it goes to the opponents only, and says partner can’t see it', () => {
-    const wrapper = mountChat()
-
-    expect(wrapper.find('.chat-to-option').exists()).toBe(false)
-    expect(wrapper.get('.chat-to-fixed').text()).toBe('To the opponents')
-    expect(wrapper.get('.chat-to-note').text()).toBe("Your partner can't see this.")
-    expect(wrapper.get('.chat-message').text()).toContain('Message 1')
-  })
-
-  test('between boards the table too, the table first', async () => {
-    const wrapper = mountChat({ phase: 'finished', draft: 'Thanks' })
+  test('mid-board it goes to the table or the opponents, the table first', async () => {
+    const wrapper = mountChat({ draft: 'Good luck' })
     const options = wrapper.findAll('.chat-to-option')
 
     expect(options.map((o) => o.text())).toEqual(['Table', 'Opponents'])
     expect(options[0].attributes('aria-pressed')).toBe('true')
     expect(wrapper.get('.chat-to-note').text()).toBe('Everyone at the table sees this.')
+    expect(wrapper.get('.chat-message').text()).toContain('Message 1')
+    await wrapper.get('.chat-send').trigger('click')
+    expect(wrapper.emitted('send')).toEqual([['table']])
 
     await options[1].trigger('click')
-    expect(wrapper.get('.chat-to-note').text()).toBe('Only the opponents see this.')
-    await wrapper.get('.chat-send').trigger('click')
-    expect(wrapper.emitted('send')).toEqual([['opponents']])
-
-    // A new board goes back to the opponents.
-    await wrapper.setProps({ phase: 'auction' })
+    expect(options[1].attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('.chat-to-note').text()).toBe('Only the opponents see this, not your partner.')
     await wrapper.get('.chat-send').trigger('click')
     expect(wrapper.emitted('send')![1]).toEqual(['opponents'])
+
+    // The pick holds as the board goes on, and into the next one.
+    await wrapper.setProps({ phase: 'play' })
+    await wrapper.setProps({ phase: 'finished' })
+    await wrapper.setProps({ phase: 'auction' })
+    await wrapper.get('.chat-send').trigger('click')
+    expect(wrapper.emitted('send')![2]).toEqual(['opponents'])
+  })
+
+  test('between boards the same, the table first', async () => {
+    const wrapper = mountChat({ phase: 'finished', draft: 'Thanks' })
+    const options = wrapper.findAll('.chat-to-option')
+
+    expect(options.map((o) => o.text())).toEqual(['Table', 'Opponents'])
+    expect(options[0].attributes('aria-pressed')).toBe('true')
+    await wrapper.get('.chat-send').trigger('click')
+    expect(wrapper.emitted('send')).toEqual([['table']])
+  })
+
+  test('no chat before the first deal; the first deal opens it on the table', async () => {
+    const wrapper = mountChat({ phase: 'waiting', draft: 'Hi' })
+    expect(wrapper.find('.chat-to-option').exists()).toBe(false)
+
+    await wrapper.setProps({ phase: 'auction' })
+    expect(wrapper.findAll('.chat-to-option')[0].attributes('aria-pressed')).toBe('true')
+    await wrapper.get('.chat-send').trigger('click')
+    expect(wrapper.emitted('send')).toEqual([['table']])
+  })
+
+  test('the empty chat invites both', () => {
+    const wrapper = mountChat({ messages: [] })
+    expect(wrapper.get('.chat-empty').text()).toBe(
+      'No messages yet. Say hello to the table, or ask the opponents about their calls.',
+    )
   })
 
   test('before the first deal there is nothing to write on', () => {
@@ -576,21 +600,26 @@ describe('BoardChat', () => {
     await input.trigger('keydown', { key: 'Enter', shiftKey: true })
     expect(wrapper.emitted('send')).toBeUndefined()
     await input.trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('send')).toEqual([['opponents']])
+    expect(wrapper.emitted('send')).toEqual([['table']])
 
     await wrapper.setProps({ busy: true })
     await input.trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('send')).toHaveLength(1)
   })
 
-  test('a call attached shows as “About 2♥:”, focuses the input and can be taken off', async () => {
-    const wrapper = mountChat()
+  test('a call attached shows as “About 2♥:”, asks the opponents, focuses the input and can be taken off', async () => {
+    const wrapper = mountChat({ draft: 'What is it?' })
     expect(wrapper.find('.chat-about').exists()).toBe(false)
+    expect(wrapper.get('.chat-to-note').text()).toBe('Everyone at the table sees this.')
 
     await wrapper.setProps({ about: 2 })
     await flushPromises()
     expect(wrapper.get('.chat-about').text()).toContain('About 2♥:')
     expect(document.activeElement).toBe(wrapper.get('.chat-input').element)
+    expect(wrapper.findAll('.chat-to-option')[1].attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('.chat-to-note').text()).toBe('Only the opponents see this, not your partner.')
+    await wrapper.get('.chat-send').trigger('click')
+    expect(wrapper.emitted('send')).toEqual([['opponents']])
 
     await wrapper.get('.chat-about-clear').trigger('click')
     expect(wrapper.emitted('clear-about')).toHaveLength(1)

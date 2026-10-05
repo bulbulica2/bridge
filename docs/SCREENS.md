@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/68-centre-board-beside-chat`._
+_Status as of branch `bulbulica2/69-table-chat-during-the-board`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -411,12 +411,14 @@ pinned or not, and doesn't move at all where it already clears the chat;
 it, and scrolls the bidding box and your hand clear of it). Each message
 shows who wrote it and their seat, who reads it ("to opponents", "to
 table"), the time, and the call it is about as a chip; the text is plain
-(no HTML, links not clickable). While the board is bid or played a
-message goes **to the opponents only** ("Your partner can't see this"):
-you never read partner's messages to them, nor they yours. Between boards
-the **Table** (everyone, the default) or the **Opponents** can be picked.
-**Ask in the chat** in an opponent's call pop-up opens it with the call
-attached ("About 2♥:"); a robot answers such a question at once, and
+(no HTML, links not clickable). In every phase (#115) a message goes to
+the **Table** (the default: "Everyone at the table sees this.", for a
+greeting, "good luck" or "sorry") or to the **Opponents** ("Only the
+opponents see this, not your partner."): while the board is on you never
+read partner's messages to the opponents, nor they yours. There is no
+partner-only message. **Ask in the chat** in an opponent's call pop-up
+opens it with the call attached ("About 2♥:") and the switch on
+**Opponents**; a robot answers such a question at once, and
 the **Ask what it means** question and its answer show in the chat too.
 Sending is disabled while a message is on its way and clears the text
 once sent; a refusal (409, 422, 429 too many at once) is toasted at the

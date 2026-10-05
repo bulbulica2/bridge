@@ -1245,7 +1245,7 @@ async function refused(e: unknown, fallback: string, on422?: () => Promise<void>
 }
 
 // Our chat message, to `to`, about the call attached if any. Refused (409
-// to the table mid-board, 422, 429 for too many at once…), it is said in a
+// before the first deal, 422, 429 for too many at once…), it is said in a
 // toast and the text stays, to send again.
 async function sendChat(to: ChatTo) {
   const body = chatDraft.value.trim();

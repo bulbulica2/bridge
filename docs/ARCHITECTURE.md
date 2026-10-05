@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/68-centre-board-beside-chat`._
+_Status as of branch `bulbulica2/69-table-chat-during-the-board`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -652,15 +652,20 @@ own reads "You alerted: …".
 
 A chat per board (#102, bb#101;
 [`API.md`, Chat](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md#chat)),
-so the opponents can ask what a call means and the bidder can answer in
-their own words. **Partner never reads it during the board**:
+for everyone at the table (#115): partners who just met can greet each
+other or say "sorry, my mistake" mid-board, and the opponents can ask what
+a call means and the bidder answer in their own words. A message goes to
+the **table** (all four) or to the **opponents** only, which **partner
+never reads during the board**; there is no partner-only message:
 
 - `src/services/chat.ts`: `getMessages(tableId)` (`GET
   /tables/{id}/messages`: the current board's `playing_id` and the messages
   you may read) and `sendMessage(tableId, {body, to, call_index})`
   (`POST`). `to` is `opponents` (you and your two opponents) or `table`
-  (all four); mid-board only `opponents` is allowed (`chatRecipients()` in
-  `utils/chat.ts`), between boards both. A body is 1–500 characters
+  (all four); both are allowed from the first deal on, the table first
+  (`chatRecipients()` in `utils/chat.ts`; nothing before the first deal).
+  A message about a call (Ask in the chat) is a question for the
+  opponents: attaching a call switches `BoardChat` to Opponents. A body is 1–500 characters
   (`CHAT_MAX`), plain text.
 - Live, each message comes as `BoardMessageSent` on the user channel of
   every human who may read it, yours included, never on the table channel.
