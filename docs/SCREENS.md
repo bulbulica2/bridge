@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/75-leave-and-remove-after-a-set`._
+_Status as of branch `bulbulica2/73-double-dummy`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -407,7 +407,10 @@ What it shows by phase:
   (**2♣ by West +2**, **4♠X by South −1**, **3NT by North =**, or
   **Passed out**) and your score on the right in green or red (**−130**;
   N-S's, tagged "N-S", if you didn't play it), then a small line
-  ("10 tricks · by claim"). Below it, where the set stands ("Set 2 · 3 of
+  ("10 tricks · by claim"), and one double dummy line (#119): "Double
+  dummy: 4♠ by South makes 10" with **Review** (the board review at the
+  table, where the whole table is), or "Double dummy analysis is being
+  worked out…" while the backend solves it. Below it, where the set stands ("Set 2 · 3 of
   4 boards played", read from the set) and, once another table has played
   the board, its matchpoints for your side ("Matchpoints 75 %"). Scores
   are never added up over a set: each board is compared with the other
@@ -491,7 +494,8 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `tables.seatRobot()`, `tables.seatUser()` (managers, Start box, #117) | `POST /tables/{id}/seats/robots`, `GET /users?search=` + `POST /tables/{id}/seats/users` (picking yourself is `tables.join()`, `POST /tables/{id}/seats`); a refusal toasts and rereads the table |
 | `game.load()` 2 s after a claim's or the next board's deadline with no update | `GET /tables/{id}/playing` |
 | `history.loadSet()` (after each finished board, when the set ends, and on entry mid-set) | `GET /sets/{id}` |
-| `history.loadReview()` (the board review) | `GET /playings/{id}`, once per board per session |
+| `history.loadReview()` (the board review) | `GET /playings/{id}`, once per board per session (again while its double dummy analysis is pending) |
+| `history.loadDoubleDummy()` (once a board is finished; once more 5 s later if pending) | `GET /boards/{id}/double-dummy` |
 | `history.loadHistory()` (on entry, only when no board to review is known but one may have been finished here) | `GET /api/user/playings` |
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
@@ -561,15 +565,20 @@ Built by #30. Reached from a board's review or **Compare with other tables**.
 
 The same board at every table, best N-S score first, each with its
 contract, declarer, score and matchpoints. The tables you sat at are
-highlighted with your side's matchpoint percentage. Tapping a row opens
-that table's [review](#board-review--playingsid). A 403 or 404 shows as a
-reason on the page, not as an error.
+highlighted with your side's matchpoint percentage. Above the list, the
+board's double dummy table (#119): the tricks each declarer (N E S W) makes
+in each strain (♣ ♦ ♥ ♠ NT) with every card in view and best play on both
+sides, your contract marked, so every result can be held up against what
+was possible ("being worked out…" while the backend solves it). Tapping a
+row opens that table's [review](#board-review--playingsid). A 403 or 404
+shows as a reason on the page, not as an error.
 
 | Calls | Endpoint |
 |---|---|
 | `history.loadResults()` | `GET /boards/{id}/results` |
+| `history.loadDoubleDummy()` (after the results; once more 5 s later if pending) | `GET /boards/{id}/double-dummy` |
 
-Backend: bb#43.
+Backend: bb#43, bb#114 (double dummy).
 
 ## Board review — `/playings/:id`
 
@@ -590,8 +599,18 @@ cards as they go but keep the room they took as dealt, so the buttons stay
 in the same place at every step (#59). The line saying where you are
 (trick and card) sits under the buttons. The result panel shows once the
 replay reaches the end, and **Results** (header) / **Results at every
-table** go back to the board's results. A passed-out board has only its
-auction, the deal and the result; a board that ended by a claim stops where
+table** go back to the board's results.
+
+Under the result, what was possible double dummy (#119): the board's double
+dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks
+not levels) with this contract's cell marked, then the **opening lead**:
+the leader's cards as the hand is held, each with the tricks declarer makes
+after that lead, the lead made raised, the best leads (fewest tricks for
+declarer) ringed green, and in words ("Your lead ♠K: declarer can make 10.
+Best was ♥2: 9."). While the backend is still solving it the page says
+"Double dummy analysis is being worked out…" and reads the board once more
+5 s later. A passed-out board has only its
+auction, the deal, the result and the double dummy table; a board that ended by a claim stops where
 the claim was made.
 
 Boards finished before the backend kept their calls and cards (before
@@ -606,12 +625,14 @@ only the deal and the result.
   lead, one line per trick (leader, the four cards in the order played,
   winner), the alerts and the chat under the auction, where a claim ended the play and how the tricks left went, the
   result and, if you opened the board's results this session, the
-  matchpoints.
+  matchpoints; then the double dummy table and the opening lead in words,
+  once solved.
 - **Download .txt**: the same text as a file.
 - **Download .pbn**: the board in Portable Bridge Notation 2.1 (export
   format), for other bridge software: deal, auction (each alert a note,
   `=1=` and `[Note "1:…"]`), play (a claim ends it with `*`), contract,
-  result and score.
+  result and score, plus the double dummy table as `OptimumResultTable`
+  once solved.
 - **Download .json**: the review exactly as the backend sent it, for
   debugging and for work on the robots.
 - **Print / Save as PDF**: the browser's print dialog with a paper layout
@@ -625,9 +646,9 @@ in the native app the menu only offers Copy as text.
 
 | Calls | Endpoint |
 |---|---|
-| `history.loadReview()` | `GET /playings/{id}` (once per session: a finished playing never changes) |
+| `history.loadReview()` | `GET /playings/{id}` (once per session: a finished playing never changes; read again while its double dummy analysis is pending) |
 
-Backend: bb#60, bb#101 (the chat).
+Backend: bb#60, bb#101 (the chat), bb#114 (double dummy).
 
 ## User profile — `/users/:id`
 

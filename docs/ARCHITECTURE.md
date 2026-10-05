@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/75-leave-and-remove-after-a-set`._
+_Status as of branch `bulbulica2/73-double-dummy`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -35,7 +35,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a claim's or the next board's deadline passes with no update), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the away, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a claim's or the next board's deadline passes with no update), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
@@ -214,7 +214,7 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `lostSet` (a set your side forfeited while you were away) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissLostSet`, `clear` (on logout); owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
 | `chat` | the chat of the board the play page shows: `tableId`, `playingId`, `messages`, `open` (the panel), `about` (the call a message is about), `unread` | `follow` (the play page's board: read, emptied for a new board, read again once finished), `load`, `receive`, `send`, `setOpen`, `askAbout`, `clear`; see [Board chat](#board-chat) |
-| `history` | finished boards per owner (`null` = you, a number = another user), results per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadSet`, `loadReview` |
+| `history` | finished boards per owner (`null` = you, a number = another user), results per board, double dummy tables per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadDoubleDummy`, `loadSet`, `loadReview` |
 | `users` | public profiles by id (with `ban`/`bans` for an admin) | `load`, `ban`, `liftBan` |
 
 A table changed by any answer or broadcast is written into both `tables`
@@ -253,7 +253,7 @@ so every extra request on the way in delays the one the page needs:
 | `auth.ts` | `/sanctum/csrf-cookie`, `POST /login`, `/register`, `/logout`, `/forgot-password`, `/reset-password`, `GET` / `PATCH /api/user` |
 | `tables.ts` | `GET` / `POST /tables`, `GET /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
 | `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `GET /cards`, `POST /tables/{id}/calls`, `POST /tables/{id}/calls/{index}/question`, `PUT /tables/{id}/calls/{index}/explanation`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
-| `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /playings/{id}`, `GET /sets/{id}` |
+| `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /boards/{id}/double-dummy`, `GET /playings/{id}`, `GET /sets/{id}` |
 | `users.ts` | `GET /users/{id}`, `GET /users?search=`, `POST` / `DELETE /users/{id}/ban` |
 | `echo.ts` | the websocket, and `POST /broadcasting/auth` to sign private channels |
 
@@ -589,7 +589,8 @@ arrives, and the app falls back to what each request returns.
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat, in `order` (bridge order ♠ ♥ ♦ ♣ by default; dummy trumps first); given `rows`, every suit column keeps room for that many cards |
 | `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left (a tap picks, **Claim N tricks** sends), and **Concede the rest**; says the others have 10 s to answer and that no answer counts as no; `forSeat` names a robot declarer's seat claimed for |
 | `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw**, and the countdown to its `expires_at` ("Answer within 0:07", "Waiting for East and West · 0:07", ticked by `useNow`); the buttons disable at 0, so a late tap can't earn a 409; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
-| `BoardResultPanel`, `NextBoardBox` | the result once a board is finished, at a glance: one big row with the contract in table notation ("2♣ by West +2") and your score (N-S's, tagged, for someone who didn't play it), the tricks ("10 tricks · by claim"), then the set's position and the board's matchpoints for your side when known, and the countdown to the set's next board ("Next board in 0:08", then "Dealing the next board…") with the optional **Deal now** and, once pressed, the humans who haven't yet |
+| `BoardResultPanel`, `NextBoardBox` | the result once a board is finished, at a glance: one big row with the contract in table notation ("2♣ by West +2") and your score (N-S's, tagged, for someone who didn't play it), the tricks ("10 tricks · by claim"), then, at the table, one double dummy line ("Double dummy: 4♠ by South makes 10") with **Review**, then the set's position and the board's matchpoints for your side when known, and the countdown to the set's next board ("Next board in 0:08", then "Dealing the next board…") with the optional **Deal now** and, once pressed, the humans who haven't yet |
+| `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the review and the results page, or a note while it is being solved; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, a forfeit's reason, each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score) |
 | `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead), plus, with `manage`, **Seat a player** / **Add robot** per empty seat (`seatPlayer` / `addRobot` events; the play page runs them, #117), **Remove** on each seat in `removable` (`remove` event) and, with `canLeave`, **Leave the table** (`leave` event): the play page's way off the seat between sets (#121) |
@@ -639,7 +640,7 @@ the next board waits for Start, and who for), `sets.ts` (where the table is
 in its set, the set's winner and matchpoints from your side, a forfeit's
 wording, the history grouped by set), `review.ts` (a replay's table after N cards: hands left, the
 trick shown, tricks won, the trick-by-trick steps; which boards the play page's review offers),
-`turn.ts` (what the game waits for you to do, told in that review), `export.ts` (a finished
+`turn.ts` (what the game waits for you to do, told in that review), `doubleDummy.ts` (the double dummy line, the leads in hand order, the best ones and the lead in words, the table for the exports), `export.ts` (a finished
 board as text, PBN and JSON, and the pieces the printout uses). These are the
 best-tested parts of the app. For the rules
 themselves see [`GAME-RULES.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/GAME-RULES.md).
@@ -760,6 +761,39 @@ rest of the store. Playings finished before the backend kept their calls
 and cards come back with an empty `auction`; the page then shows only the
 deal and the result.
 
+### Double dummy
+
+Once a board is over, the backend's solver says what was possible on it
+(#119, bb#114; [`GAME-RULES.md` §6, Double dummy](https://github.com/bulbulica2/bridge_backend/blob/main/docs/GAME-RULES.md)):
+the **double dummy table**, how many tricks each declarer makes in each
+strain with all four hands in view and best play on both sides, and, for
+a playing's contract, the tricks declarer makes after each possible
+**opening lead**. Both are solved in the backend's queue, so an answer can
+be `pending` (or `unavailable` on a server without the solver); like a
+board's results they are refused (403) until you have finished the board.
+
+- `GET /boards/{id}/double-dummy` (`getDoubleDummy` in
+  `src/services/history.ts`) is the table alone. The `history` store's
+  `loadDoubleDummy` caches it by board id: a `ready` one is never asked
+  for again (it depends on the deal only), a pending one is, and a 403/404
+  drops it.
+- The review (`GET /playings/{id}`) carries `double_dummy`: the table plus
+  `leads` (null on a passed-out board). `loadReview` reads a review again
+  if its analysis was still pending.
+- **Pending** shows "Double dummy analysis is being worked out…" and is read
+  **once** more 5 s later (`DOUBLE_DUMMY_REREAD_MS`): `useDoubleDummy` for
+  the table, `BoardReview` itself for a review. No polling loop; a refresh or
+  another visit asks afresh.
+
+Where it shows: `BoardReview` (the review page and the play page's review
+modal) has `DoubleDummyTable`, the contract played marked, and
+`LeadAnalysis`; `BoardResultsPage` has the table above the results, your
+contract marked; the play page, once a board is `finished`, reads the table
+and `BoardResultPanel` gives one line, "Double dummy: 4♠ by South makes 10",
+with **Review** opening the review modal. The text export adds the table and
+the lead in words; the PBN export adds the optional `OptimumResultTable`
+tag. Par isn't built by the backend, so none is shown.
+
 ### Reviewing at the table
 
 The play page reviews the table's finished boards without leaving it
@@ -796,8 +830,11 @@ Bridge Notation 2.1 in export format: the 15 mandatory tags, then the
 auction, play and `Score`; the play lines keep fixed seat columns starting
 with the opening leader, and a claim leaves `-` for the unplayed cards and
 ends the section with `*`; an alerted call carries a note reference, `2C =1=`,
-with `[Note "1:Stayman"]` after the auction) and `boardJson()`. The text lists
-the alerts and then the board's chat under the auction, and the printout marks the alerts. They reuse `cards.ts`,
+with `[Note "1:Stayman"]` after the auction; once solved, the double dummy
+table as an `OptimumResultTable` between the auction and the play) and
+`boardJson()`. The text lists
+the alerts and then the board's chat under the auction, ends with the
+double dummy table and the opening lead in words once solved, and the printout marks the alerts. They reuse `cards.ts`,
 `auction.ts` and `result.ts` for labels. The review doesn't say who claimed,
 so a claim is told from declarer's side ("declarer took 2 of the last 5").
 Matchpoints are added (and shown under the review's result) when the

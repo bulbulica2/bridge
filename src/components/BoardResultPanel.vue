@@ -4,7 +4,9 @@
        how it went ("2♣ by West +2") and the score from the viewer's side
        (N-S's, tagged, for someone who didn't play it), the tricks under it,
        then where the board stands in its set and, once other tables have
-       played it, its matchpoints. Scores aren't added up over a set: each
+       played it, its matchpoints. At the table, given `doubleDummy`, one
+       line says what the contract makes double dummy, with a way to the
+       review (the whole grid is there). Scores aren't added up over a set: each
        board is compared with the other tables. -->
   <section class="result" aria-live="polite">
     <div class="result-head">
@@ -22,6 +24,18 @@
       </p>
     </div>
     <p v-if="detail" class="result-detail">{{ detail }}</p>
+    <p v-if="ddLine" class="result-dd">
+      <span>{{ ddLine }}</span>
+      <ion-button
+        v-if="reviewable"
+        fill="clear"
+        size="small"
+        class="result-dd-review"
+        @click="emit('review')"
+      >
+        Review
+      </ion-button>
+    </p>
 
     <p v-if="setLine || percent !== null" class="result-set">
       <span v-if="setLine">{{ setLine }}</span>
@@ -33,11 +47,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { IonButton } from '@ionic/vue';
 import CallLabel from '@/components/CallLabel.vue';
 import type { BoardResult } from '@/services/game';
-import type { SetResults } from '@/services/history';
+import type { DoubleDummy, SetResults } from '@/services/history';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
+import { doubleDummyLine } from '@/utils/doubleDummy';
 import type { ExportExtras } from '@/utils/export';
 import {
   doubledMark,
@@ -57,9 +73,15 @@ const props = withDefaults(
     setSoFar?: SetResults | null;
     // Its matchpoints against the other tables, when known.
     extras?: ExportExtras;
+    // The board's double dummy table, at the table only: one line from it.
+    doubleDummy?: DoubleDummy | null;
+    // Offer the review, where the whole analysis is (`review` event).
+    reviewable?: boolean;
   }>(),
-  { setSoFar: null, extras: () => ({}) },
+  { setSoFar: null, extras: () => ({}), doubleDummy: null, reviewable: false },
 );
+
+const emit = defineEmits<{ review: [] }>();
 
 const contract = computed(() => (props.result.declarer ? props.result.contract : null));
 // The viewer's side, or N-S for someone who didn't play the board.
@@ -73,6 +95,8 @@ const detail = computed(() => {
   }
   return `${tricks} trick${tricks === 1 ? '' : 's'}${props.result.claimed ? ' · by claim' : ''}`;
 });
+// "Double dummy: 4♠ by South makes 10", or the note while it is solved.
+const ddLine = computed(() => doubleDummyLine(props.doubleDummy, props.result));
 // "Set 2 · 3 of 4 boards played".
 const setLine = computed(() => {
   const set = props.setSoFar;
@@ -152,6 +176,19 @@ function tone(value: number): string {
   margin-top: 4px;
   font-size: 0.9rem;
   color: var(--ion-color-medium);
+}
+
+.result .result-dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 4px;
+  margin-top: 4px;
+  font-size: 0.9rem;
+}
+
+.result-dd-review {
+  margin: 0;
 }
 
 .result .result-set {

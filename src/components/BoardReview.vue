@@ -1,8 +1,8 @@
 <template>
   <!-- One finished playing replayed (GET /playings/{playing}): the contract,
        the deal on the table, the card-by-card stepper, the result at its
-       last step and the auction. The review page and the play page's review
-       modal both show it; `step` (cards played) is all it holds, and a new
+       last step, what was possible double dummy and the auction. The review
+       page and the play page's review modal both show it; `step` (cards played) is all it holds, and a new
        playing starts again before the opening lead. -->
   <div class="board-review">
     <!-- The contract, and the tricks each side has won at this step. -->
@@ -111,6 +111,19 @@
       :extras="extras"
     />
 
+    <!-- What was possible (bb#114): the double dummy table with this
+         contract marked, and how good each opening lead was. The backend
+         solves them in its queue; while it hasn't, a note, and the
+         playing is read once more. -->
+    <DoubleDummyTable :analysis="doubleDummy" :highlight="played" />
+    <LeadAnalysis
+      v-if="leads && review.contract"
+      :leads="leads"
+      :leader="nextSeat(review.contract.declarer)"
+      :lead="openingLead(review)"
+      :my-seat="mySeat"
+    />
+
     <AuctionHistory
       v-if="recorded && review.auction"
       :auction="review.auction"
@@ -134,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { IonButton, IonIcon } from '@ionic/vue';
 import {
   chevronBack,
@@ -149,12 +162,17 @@ import BoardResultPanel from '@/components/BoardResultPanel.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
 import ChatMessageList from '@/components/ChatMessageList.vue';
+import DoubleDummyTable from '@/components/DoubleDummyTable.vue';
+import LeadAnalysis from '@/components/LeadAnalysis.vue';
 import TrickArea from '@/components/TrickArea.vue';
+import { DOUBLE_DUMMY_REREAD_MS } from '@/composables/useDoubleDummy';
 import { useAuthStore } from '@/stores/auth';
+import { useHistoryStore } from '@/stores/history';
 import type { PlayingReview } from '@/services/history';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES, doubledSuffix } from '@/utils/auction';
+import { nextSeat, openingLead } from '@/utils/export';
 import type { ExportExtras } from '@/utils/export';
 import { seatOfUser } from '@/utils/result';
 import {
@@ -179,6 +197,7 @@ const props = withDefaults(
 const emit = defineEmits<{ select: [player: PublicUser] }>();
 
 const auth = useAuthStore();
+const history = useHistoryStore();
 
 // How many cards have been played at the point shown.
 const step = ref(0);
@@ -213,6 +232,50 @@ const position = computed(() => {
   const ended = step.value === total.value && props.review.result?.claimed ? ' · the rest by claim' : '';
   return `Trick ${trickNumber} of ${tricks} · card ${trick.length} of 4${ended}`;
 });
+
+const doubleDummy = computed(() => props.review.double_dummy ?? null);
+
+// The contract's cell in the double dummy table.
+const played = computed(() => {
+  const contract = props.review.contract;
+  return contract?.bid.strain ? { declarer: contract.declarer, strain: contract.bid.strain } : null;
+});
+
+// Every possible opening lead with its tricks, once solved (never on a
+// passed-out board).
+const leads = computed(() => {
+  const analysis = doubleDummy.value;
+  return analysis?.status === 'ready' && analysis.leads?.length ? analysis.leads : null;
+});
+
+// Still being solved: read the playing once more a little later (the
+// history store asks again for a pending one), never in a loop.
+let rereadFor: number | null = null;
+let rereadTimer: ReturnType<typeof setTimeout> | null = null;
+watch(
+  () => (doubleDummy.value?.status === 'pending' ? props.review.playing_id : null),
+  (id) => {
+    if (id === null || id === rereadFor) {
+      return;
+    }
+    rereadFor = id;
+    stopReread();
+    rereadTimer = setTimeout(() => {
+      rereadTimer = null;
+      history.loadReview(id).catch(() => {});
+    }, DOUBLE_DUMMY_REREAD_MS);
+  },
+  { immediate: true },
+);
+
+function stopReread() {
+  if (rereadTimer) {
+    clearTimeout(rereadTimer);
+    rereadTimer = null;
+  }
+}
+
+onBeforeUnmount(stopReread);
 
 // "North (ann)", or "North (you)".
 function who(seat: Seat): string {

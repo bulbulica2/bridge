@@ -616,7 +616,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   a forfeit once (`forfeitToldFor`). `User.is_admin` (own record) is read
   only for `setAtStake` and `canBan` (Bans).
 - **Results and history**: `src/services/history.ts` also wraps
-  `GET /users/{id}/playings` and `GET /boards/{id}/results` (every table's
+  `GET /users/{id}/playings`, `GET /boards/{id}/double-dummy` (see Double
+  dummy) and `GET /boards/{id}/results` (every table's
   finished playing of a board, best N-S first, with `matchpoints` `{ns, ew}`
   out of `top`; 403 unless the user has finished that board, 404 for an
   unknown one). Both read the playings' seat snapshots, so they outlive a
@@ -670,6 +671,35 @@ The user's standing rule (#91): **no task may leave code coverage under
   banner in the modal with "To the table" (closes it). `reviewOpen` nulls
   `useForcedPlay`'s key; `onIonViewWillLeave` and entering another table
   close it.
+- **Double dummy** (#119, bb#114, backend `docs/API.md`
+  `GET /boards/{board}/double-dummy` and `GAME-RULES.md` §6): solved in
+  the backend's queue, refused (403) before the viewer finished the board.
+  `getDoubleDummy(boardId)` in `src/services/history.ts` → `DoubleDummy`
+  `{status: ready|pending|unavailable, table}` (`DoubleDummyTable` =
+  seat → strain `C D H S NT` → tricks); the review's optional
+  `double_dummy` is `PlayingDoubleDummy` (+ `leads: LeadTricks[]`
+  `{card, tricks}`, null on a passed-out board). No par: the backend
+  doesn't build it. The history store's `loadDoubleDummy` caches by board
+  id (a `ready` one never refetched, a pending one is, 403/404 drop it);
+  `loadReview` refetches a cached review whose analysis is pending.
+  Pending is read **once** more after `DOUBLE_DUMMY_REREAD_MS` (5 s), no
+  loop: `src/composables/useDoubleDummy.ts` (`analysis`, `load()`; failures
+  quiet) for the table, `BoardReview`'s own timer for a review.
+  `src/utils/doubleDummy.ts`: `doubleDummyLine` ("Double dummy: 4♠ by
+  South makes 10" / `DOUBLE_DUMMY_PENDING`), `leadsInHandOrder`
+  (`HAND_SUITS`), `bestLeads`, `leadSummary` ("Your lead ♠K: declarer can
+  make 10. Best was ♥2: 9."), `doubleDummyLines` (text export),
+  `pbnOptimumResultTable`. `DoubleDummyTable.vue` (N E S W down, ♣ ♦ ♥ ♠
+  NT across, `highlight` {declarer, strain} + `highlightNote`, the pending
+  / unavailable note, nothing while `analysis` is null) and
+  `LeadAnalysis.vue` (`PlayingCard`s with tricks under them, `led` raised,
+  `best` ringed) sit in `BoardReview` under the result; `BoardResultsPage`
+  shows the table above the list (read after `loadResults` succeeds, the
+  viewer's contract marked); the play page reads it once `finished`
+  (`finishedBoardId`) and `BoardResultPanel`'s `doubleDummy` +
+  `reviewable` give one line with **Review** (`review` event → the
+  review modal). Play page specs that mock `@/services/history` keep
+  `getDoubleDummy` never settling.
 - **Export** (#71): the review page's header "Export" (and the review
   modal's) opens an `ion-action-sheet`, all of it in
   `src/composables/useBoardExport.ts` (`open`, `buttons`, `printing`,
@@ -678,14 +708,16 @@ The user's standing rule (#91): **no task may leave code coverage under
   as PDF (only Copy on a native platform, `Capacitor.isNativePlatform()`:
   WebViews ignore `download` links and `window.print()`).
   `src/utils/export.ts` is pure: `boardText(review, extras)` (the chat
-  after the alerts via `chatLines`; the alerts
+  after the alerts via `chatLines`; the double dummy table and
+  `leadSummary` at the end once ready; the alerts
   listed under the auction via `alertLines`; matchpoints
   in `extras` when `history.results[boardId]` or a cached set's `boards`
   holds this playing's row; `BoardResultPanel`'s `extras` shows them too),
   `boardPbn(review)` (PBN 2.1 export format: the 15 mandatory tags in
   order, unknown ones `?`, a passed-out board's Declarer/Result empty and
   Contract `Pass`; then Auction (an alerted call `2C =1=`, then a
-  `[Note "1:…"]` per alert), Play, Score; play lines in fixed seat
+  `[Note "1:…"]` per alert), `OptimumResultTable` (once the double dummy
+  table is ready), Play, Score; play lines in fixed seat
   columns from the opening leader, a claim leaves `-` and ends with `*`;
   CRLF line ends), `boardJson`, `trickRows`, `claimNote` (the review
   doesn't say who claimed: told from declarer's side), `exportFileName`.

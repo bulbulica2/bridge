@@ -1,6 +1,15 @@
 import http from './http';
 import type { BoardMessage } from './chat';
-import type { Bid, Board, BoardResult, PublicPlaying, SetEnding, SideCode } from './game';
+import type {
+  Bid,
+  Board,
+  BoardResult,
+  Card,
+  PublicPlaying,
+  SetEnding,
+  SideCode,
+  Strain,
+} from './game';
 import type { Seat } from './tables';
 import type { PublicUser } from './users';
 
@@ -102,6 +111,44 @@ export async function getBoardResults(boardId: number): Promise<BoardResults> {
   return data.data;
 }
 
+// A board's double dummy table: the tricks each declarer makes in each
+// strain with all four hands in view and both sides at their best. It
+// depends on the deal alone, so it is the same at every table.
+export type DoubleDummyTable = Record<Seat, Record<Strain, number>>;
+
+// `ready` with the numbers; `pending` until the backend's queue has solved
+// it; `unavailable` when the server has no solver.
+export type DoubleDummyStatus = 'ready' | 'pending' | 'unavailable';
+
+export interface DoubleDummy {
+  status: DoubleDummyStatus;
+  // Null unless `ready`.
+  table: DoubleDummyTable | null;
+}
+
+// One card the opening leader held, with the tricks declarer makes after
+// it is led and both sides play their best from there.
+export interface LeadTricks {
+  card: Card;
+  tricks: number;
+}
+
+// A playing's double dummy analysis: the board's table plus, for its
+// contract, every possible opening lead (in hand order). `leads` is null
+// until solved and always on a passed-out board, which is `ready` with its
+// table alone.
+export interface PlayingDoubleDummy extends DoubleDummy {
+  leads: LeadTricks[] | null;
+}
+
+// The board's double dummy table. Like its results, 403 (a bare {message})
+// unless the caller has finished the board, 404 for an unknown board. See
+// bridge_backend docs/API.md, GET /boards/{board}/double-dummy.
+export async function getDoubleDummy(boardId: number): Promise<DoubleDummy> {
+  const { data } = await http.get<ApiResponse<DoubleDummy>>(`/boards/${boardId}/double-dummy`);
+  return data.data;
+}
+
 // One finished playing after the fact: exactly the live game state once
 // `finished` (auction, contract, every trick, result and the deal as
 // dealt), less `ready` and `next_board_at` and without anybody's own `hand`. A board that ended
@@ -115,6 +162,9 @@ export interface PlayingReview extends Omit<PublicPlaying, 'ready' | 'next_board
   // The board's whole chat, oldest first: every message, the opponents-only
   // ones too, since the board is over (bb#101). Empty when nobody wrote.
   messages?: BoardMessage[];
+  // The board's double dummy table and this contract's opening leads
+  // (bb#114).
+  double_dummy?: PlayingDoubleDummy | null;
 }
 
 // Any finished playing of a board the caller has finished themselves, even

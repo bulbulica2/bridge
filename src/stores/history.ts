@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import * as historyService from '@/services/history';
 import type {
   BoardResults,
+  DoubleDummy,
   PlayingHistoryEntry,
   PlayingReview,
   SetResults,
@@ -27,14 +28,15 @@ function keyOf(owner: HistoryOwner): string {
 }
 
 // Finished boards after the fact: players' histories (paged in for an
-// infinite scroll), boards' results at every table, sets' results and single
-// playings to review. All come from the playings' seat snapshots, so none
+// infinite scroll), boards' results at every table and double dummy
+// tables, sets' results and single playings to review. All come from the playings' seat snapshots, so none
 // loses anything when a table goes.
 export const useHistoryStore = defineStore('history', () => {
   const lists = ref<Record<string, HistoryList>>({});
   const results = ref<Record<number, BoardResults>>({});
   const reviews = ref<Record<number, PlayingReview>>({});
   const sets = ref<Record<number, SetResults>>({});
+  const doubleDummy = ref<Record<number, DoubleDummy>>({});
 
   function listOf(owner: HistoryOwner): HistoryList | null {
     return lists.value[keyOf(owner)] ?? null;
@@ -121,11 +123,34 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
+  // A board's double dummy table. Once solved it never changes, so a ready
+  // copy is served without asking again; one still pending (or with no
+  // solver) is read afresh. A 403 or 404 drops a cached copy, as for its
+  // results.
+  async function loadDoubleDummy(boardId: number): Promise<DoubleDummy> {
+    const cached = doubleDummy.value[boardId];
+    if (cached?.status === 'ready') {
+      return cached;
+    }
+    try {
+      const analysis = await historyService.getDoubleDummy(boardId);
+      doubleDummy.value[boardId] = analysis;
+      return analysis;
+    } catch (e) {
+      const status = statusOf(e);
+      if (status === 403 || status === 404) {
+        delete doubleDummy.value[boardId];
+      }
+      throw e;
+    }
+  }
+
   // One finished playing, by its id. Unlike a board's results it never
-  // changes once finished, so a cached copy is served without asking again.
+  // changes once finished, so a cached copy is served without asking again,
+  // unless its double dummy analysis was still being worked out.
   async function loadReview(playingId: number): Promise<PlayingReview> {
     const cached = reviews.value[playingId];
-    if (cached) {
+    if (cached && cached.double_dummy?.status !== 'pending') {
       return cached;
     }
     const review = await historyService.getPlayingReview(playingId);
@@ -139,6 +164,7 @@ export const useHistoryStore = defineStore('history', () => {
     results.value = {};
     reviews.value = {};
     sets.value = {};
+    doubleDummy.value = {};
   }
 
   return {
@@ -146,6 +172,7 @@ export const useHistoryStore = defineStore('history', () => {
     results,
     reviews,
     sets,
+    doubleDummy,
     listOf,
     hasMore,
     loadHistory,
@@ -153,6 +180,7 @@ export const useHistoryStore = defineStore('history', () => {
     loadResults,
     loadReview,
     loadSet,
+    loadDoubleDummy,
     clear,
   };
 });

@@ -6,6 +6,7 @@ import type { PublicUser } from '@/services/users';
 import { alertLines, alertText } from '@/utils/alerts';
 import { auctionRows, callLabel, contractLabel, SEAT_NAMES } from '@/utils/auction';
 import { chatLines } from '@/utils/chat';
+import { doubleDummyLines, leadSummary, pbnOptimumResultTable } from '@/utils/doubleDummy';
 import { rankLabel, sortHand, SUIT_SYMBOLS, SUITS, vulnerabilityLabel } from '@/utils/cards';
 import {
   matchpointPercent,
@@ -237,6 +238,14 @@ export function boardText(review: PlayingReview, extras: ExportExtras = {}): str
   if (matchpoints) {
     lines.push(`Matchpoints: ${matchpoints}`);
   }
+  const analysis = review.double_dummy;
+  if (analysis?.status === 'ready' && analysis.table) {
+    lines.push('', 'Double dummy (tricks declarer makes)', ...doubleDummyLines(analysis.table));
+    const leads = analysis.leads ? leadSummary(analysis.leads, openingLead(review), null) : null;
+    if (leads) {
+      lines.push(leads);
+    }
+  }
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
@@ -298,6 +307,7 @@ function tag(name: string, value: string): string {
 // order (unknown ones "?", the passed-out ones empty), then the auction and
 // play sections, then Score. An alerted call carries a note reference
 // ("2C =1="), its explanation a Note tag after the auction ("1:Stayman").
+// The double dummy table, once solved, is an OptimumResultTable.
 // The play lines keep fixed columns, starting
 // with the opening leader's; a claim leaves "-" for the unplayed cards of
 // the trick it stopped and ends the section with "*".
@@ -336,7 +346,8 @@ export function boardPbn(review: PlayingReview): string {
     tag('Result', result?.declarer && result.tricks_won !== null ? String(result.tricks_won) : ''),
   ];
 
-  // Supplemental tags follow in alphabetical order: Auction, Play, Score.
+  // Supplemental tags follow in alphabetical order: Auction,
+  // OptimumResultTable, Play, Score.
   if (isRecorded(review)) {
     lines.push(tag('Auction', dealer));
     const notes: string[] = [];
@@ -351,7 +362,15 @@ export function boardPbn(review: PlayingReview): string {
       lines.push(calls.slice(i, i + 4).join(' '));
     }
     lines.push(...notes.map((note) => tag('Note', note)));
+  }
 
+  // What each declarer makes in each strain, double dummy (optional).
+  const table = review.double_dummy?.status === 'ready' ? review.double_dummy.table : null;
+  if (table) {
+    lines.push(...pbnOptimumResultTable(table));
+  }
+
+  if (isRecorded(review)) {
     if (contract) {
       const leader = nextSeat(contract.declarer);
       const order = clockwiseFrom(leader);

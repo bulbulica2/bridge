@@ -36,7 +36,7 @@ vi.mock('@/services/game', () => ({
   playCard: vi.fn(),
   nextBoard: vi.fn(),
 }))
-vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn(), getSet: vi.fn() }))
+vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn(), getSet: vi.fn(), getDoubleDummy: vi.fn() }))
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   getTable: vi.fn(),
@@ -442,6 +442,8 @@ describe('TablePlayPage between boards', () => {
     logIn(3, 'Cy')
     vi.mocked(gameService.getBids).mockResolvedValue([])
     vi.mocked(historyService.getSet).mockResolvedValue(setSoFar())
+    // The double dummy table has its own specs: it never answers here.
+    vi.mocked(historyService.getDoubleDummy).mockReturnValue(new Promise(() => {}))
   })
 
   test('shows the result, the whole deal and the next board coming', async () => {
@@ -464,6 +466,32 @@ describe('TablePlayPage between boards', () => {
     // And the same board at the other tables is one tap away.
     const compare = wrapper.findAllComponents({ name: 'IonButton' }).find((b) => b.classes('compare'))
     expect(compare?.props('routerLink')).toMatch(/^\/boards\/\d+\/results$/)
+  })
+
+  test('one double dummy line under the result, the review a tap away', async () => {
+    vi.mocked(historyService.getDoubleDummy).mockResolvedValue({
+      status: 'ready',
+      table: {
+        N: { C: 7, D: 5, H: 6, S: 10, NT: 6 },
+        E: { C: 5, D: 7, H: 6, S: 3, NT: 6 },
+        S: { C: 7, D: 5, H: 6, S: 10, NT: 6 },
+        W: { C: 5, D: 7, H: 6, S: 3, NT: 6 },
+      },
+    })
+    const wrapper = await mountPage(finished())
+
+    expect(historyService.getDoubleDummy).toHaveBeenCalledWith(7)
+    expect(wrapper.get('.result-dd').text()).toContain('Double dummy: 4♠ by North makes 10')
+    // Not the whole grid: that is in the review.
+    expect(wrapper.find('.dd-table').exists()).toBe(false)
+    await wrapper.get('.result-dd-review').trigger('click')
+    expect(wrapper.findComponent({ name: 'BoardReviewModal' }).props('open')).toBe(true)
+  })
+
+  test('no double dummy asked for before the board is over', async () => {
+    await mountPage(newBoard())
+
+    expect(historyService.getDoubleDummy).not.toHaveBeenCalled()
   })
 
   test('"Deal now" asks once, then waits for the others', async () => {
