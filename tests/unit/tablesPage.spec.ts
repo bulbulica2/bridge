@@ -125,7 +125,7 @@ describe('TablesPage.vue with robots', () => {
 
   test('creating with robots (the default) goes to the table, where Start is', async () => {
     // Full, but nothing is dealt until the creator presses Start.
-    const full = makeTable(3, { N: 'ana', E: 'robot-1', S: 'robot-2', W: 'robot-3' })
+    const full = makeTable(3, { N: 'robot-1', E: 'robot-2', S: 'ana', W: 'robot-3' })
     vi.mocked(tablesService.createTable).mockResolvedValue(full)
     const wrapper = mountWith([])
 
@@ -140,8 +140,9 @@ describe('TablesPage.vue with robots', () => {
     expect(wrapper.find('form ion-spinner').exists()).toBe(false)
   })
 
-  test('creating without robots stays on the list', async () => {
-    vi.mocked(tablesService.createTable).mockResolvedValue(makeTable(3, { N: 'ana' }))
+  test('creating without robots goes to the table too, the other three seats free', async () => {
+    const created = makeTable(3, { S: 'ana' })
+    vi.mocked(tablesService.createTable).mockResolvedValue(created)
     const wrapper = mountWith([])
 
     wrapper.findComponent(IonToggle).vm.$emit('update:modelValue', false)
@@ -149,7 +150,8 @@ describe('TablesPage.vue with robots', () => {
     await flushPromises()
 
     expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: false })
-    expect(navigate).not.toHaveBeenCalled()
+    expect(navigate).toHaveBeenCalledWith('/tables/3', 'forward', 'push')
+    expect(useTablesStore().currentTable).toEqual(created)
     expect(useTablesStore().tables.map((t) => t.id)).toEqual([3])
   })
 })

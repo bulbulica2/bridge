@@ -87,9 +87,14 @@ export async function listTables(): Promise<Table[]> {
 // Creates the table and seats the creator; 409 if they already sit somewhere
 // or already have 3 active tables. With `robots` the table is full, but its
 // board_id stays null until the creator presses Start.
+// The creator sits South unless told otherwise (the backend's default is
+// North): the table is drawn from the viewer's seat at the bottom, and South
+// is where the player who sets up the game sits. Robots take N, E and W.
+export const CREATOR_SEAT: Seat = 'S';
+
 export async function createTable(payload: CreateTablePayload): Promise<Table> {
   await http.get('/sanctum/csrf-cookie');
-  const { data } = await http.post<ApiResponse<Table>>('/tables', payload);
+  const { data } = await http.post<ApiResponse<Table>>('/tables', { seat: CREATOR_SEAT, ...payload });
   return data.data;
 }
 

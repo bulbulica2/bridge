@@ -33,7 +33,9 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/80-menu-your-table-entry` (after
+> branch `bulbulica2/78-create-opens-the-table` (after
+> #132, **Create table** always opens the new table's page, with or
+> without robots, and seats you South; after
 > #134, the side menu is 320 px wide and its **Your table** entry stays on
 > one row whatever its status badge says; after
 > #120, both players who must answer a claim get Accept / Reject at once,

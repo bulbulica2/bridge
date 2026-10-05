@@ -1,6 +1,6 @@
 # Running the frontend locally
 
-_Last verified: branch `bulbulica2/62-auto-next-board`._
+_Last verified: branch `bulbulica2/78-create-opens-the-table`._
 
 Requirements: Node.js 18 or newer (Vite 5 needs it; 23 works) with npm
 (`.nvmrc` names 22, the LTS that CI uses; `nvm use` picks it up), and
@@ -93,8 +93,8 @@ is their turn to call at the `Your call` table; see the backend's
 [Seeded data](https://github.com/bulbulica2/bridge_backend/blob/main/docs/RUNNING.md#seeded-data).
 
 To play a whole board alone, create a table with **Play with robots** (on
-by default): robots take the other three seats and the board is dealt at
-once. To play against other people locally you need one session each: use
+by default): you sit South, robots take the other three seats, and your
+**Start** on the table's page deals the board. To play against other people locally you need one session each: use
 separate browser profiles (or one normal and private windows of different
 browsers), since the session cookie is per browser profile.
 

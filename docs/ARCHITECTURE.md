@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/80-menu-your-table-entry`._
+_Status as of branch `bulbulica2/78-create-opens-the-table`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -252,9 +252,12 @@ so every extra request on the way in delays the one the page needs:
   there: the router reads it, and the card list `PlayingUpdated` needs, in
   the background a second after the first logged-in page shows
   (`prefetchGameLists` in `src/router/index.ts`).
-- Create with robots closes the modal and moves to the new table's page
-  as soon as `POST /tables` answers; that page draws the table the store
-  already holds (nothing is dealt until Start, #68).
+- Create (with or without robots, #132) closes the modal and moves to the
+  new table's page as soon as `POST /tables` answers; that page draws the
+  table the store already holds (nothing is dealt until Start, #68). The
+  service seats the creator South (`CREATOR_SEAT`; the backend's default
+  is North), since the table is drawn from the viewer's seat at the
+  bottom; robots take N, E and W.
 - The Start that deals a board answers with the caller's game state.
   `tables.start` hands it to the game store (`adopt`) before applying the
   table, so the `board_id` watch on the detail page moves to `/play` with

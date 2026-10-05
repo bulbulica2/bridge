@@ -154,7 +154,7 @@ describe('tables store', () => {
 
   test('create puts the new table on top of the list', async () => {
     const existing = makeTable(1)
-    const created = makeTable(2, { N: 'ana' })
+    const created = makeTable(2, { S: 'ana' })
     vi.mocked(tablesService.listTables).mockResolvedValue([existing])
     vi.mocked(tablesService.createTable).mockResolvedValue(created)
 
@@ -168,7 +168,7 @@ describe('tables store', () => {
 
   test('create makes the new table the current one, so the next page needs no GET', async () => {
     logInAs(1)
-    const created = makeTable(2, { N: 'ana' })
+    const created = makeTable(2, { S: 'ana' })
     vi.mocked(tablesService.createTable).mockResolvedValue(created)
 
     const store = useTablesStore()
