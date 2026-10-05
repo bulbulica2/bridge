@@ -757,6 +757,17 @@ describe('TablePlayPage claims', () => {
     expect(wrapper.get('.claim-text').text()).toBe('You concede the remaining 5 tricks')
   })
 
+  test('the status line stays, empty, while a claim is pending', async () => {
+    const wrapper = await mountPage(state())
+    expect(wrapper.get('.status').text()).not.toBe('')
+
+    useGameStore().applyPlayingUpdate(5, { ...state({ claim: pending() }) })
+    await flushPromises()
+
+    expect(wrapper.get('.claim-text').text()).toBe('You claim 4 of the remaining 5 tricks')
+    expect(wrapper.get('.status').text()).toBe('')
+  })
+
   test('dummy has no Claim button, and waits on a pending claim', async () => {
     logIn(1)
     const wrapper = await mountPage(state({ my_seat: 'N', hand: NORTH }))

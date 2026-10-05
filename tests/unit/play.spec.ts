@@ -358,6 +358,35 @@ describe("BridgeTable with a robot declarer's hand", () => {
   })
 })
 
+describe('BridgeTable turn slot', () => {
+  const PLAYERS = {
+    N: { id: 1, name: 'Ann', username: 'ann', description: null },
+    E: { id: 2, name: 'R', username: 'robot-1', description: null, is_robot: true },
+  }
+
+  test('every seat keeps a line for the turn, filled on the seat on turn only', () => {
+    const wrapper = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: 'E', thinking: true },
+    })
+
+    expect(wrapper.findAll('.seat .turn-slot')).toHaveLength(4)
+    expect(wrapper.findAll('.turn')).toHaveLength(1)
+    expect(wrapper.get('.side-right .turn-slot .turn').text()).toBe('Thinking…')
+    for (const side of ['top', 'left', 'bottom']) {
+      expect(wrapper.get(`.side-${side} .turn-slot`).text()).toBe('')
+    }
+  })
+
+  test('no slot at all without a turn', () => {
+    const wrapper = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: null },
+    })
+
+    expect(wrapper.find('.turn-slot').exists()).toBe(false)
+    expect(wrapper.find('.turn').exists()).toBe(false)
+  })
+})
+
 describe('BridgeTable suit order', () => {
   const PLAYERS = {}
   const HAND = cards('SQ', 'H3', 'D5', 'C9')
@@ -594,6 +623,40 @@ describe('TablePlayPage card play', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  describe('a steady layout', () => {
+    test("the trick's foot keeps a row for the Last trick pill, shown or not", async () => {
+      const first = await mountPage(state())
+      expect(first.get('.trick-foot .trick-caption').text()).toBe('Trick 1')
+      expect(first.find('.trick-foot .trick-peek').exists()).toBe(true)
+      expect(first.find('.trick-peek .last-trick-button').exists()).toBe(false)
+      first.unmount()
+
+      const second = await mountPage(
+        state({
+          tricks: [{ round: 1, leader: 'W', cards: played('W S2, N SJ, E SK, S S7'), winner: 'E' }],
+          current_trick: played('E S3'),
+        }),
+      )
+      expect(second.get('.trick-foot .trick-caption').text()).toBe('Trick 2')
+      expect(second.get('.trick-foot .trick-peek .last-trick-button').text()).toBe('Last trick')
+    })
+
+    test('the status line is there during the auction and the play, not once the board is over', async () => {
+      const auction = await mountPage(
+        state({ phase: 'auction', contract: null, current_trick: [], dummy_hand: null, turn: 'S' }),
+      )
+      expect(auction.get('.status').text()).toBe('Auction: your turn.')
+      auction.unmount()
+
+      const play = await mountPage(state({ dummy_hand: cards('SQ', 'S4', 'H3') }))
+      expect(play.get('.status').text()).toBe('Play: your turn from dummy (N). Follow suit: spades.')
+      play.unmount()
+
+      const finished = await mountPage(state({ phase: 'finished', turn: null, current_trick: [] }))
+      expect(finished.find('.status').exists()).toBe(false)
+    })
   })
 
   test("in 4♠ declarer's own hand reads ♥ ♣ ♦ ♠ and dummy's ♠ ♥ ♣ ♦", async () => {

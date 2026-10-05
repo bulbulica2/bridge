@@ -56,8 +56,13 @@
         dummy
       </span>
       <span v-if="declarerSide === side" class="seat-dummy">declarer</span>
-      <span v-if="turn === seatOn[side]" class="turn" :class="{ 'turn-thinking': !myTurn && thinking }">
-        <span class="turn-dot" aria-hidden="true" />{{ turnLabel(side) }}
+      <!-- While a board has a turn, every seat keeps a line for the turn
+           label, filled on the seat on turn only: the table keeps its
+           height as the turn goes round. -->
+      <span v-if="turn" class="turn-slot">
+        <span v-if="turn === seatOn[side]" class="turn" :class="{ 'turn-thinking': !myTurn && thinking }">
+          <span class="turn-dot" aria-hidden="true" />{{ turnLabel(side) }}
+        </span>
       </span>
 
       <template v-if="dummySide === side">
@@ -384,11 +389,20 @@ function turnLabel(side: ScreenSide): string {
   color: var(--ion-color-primary);
 }
 
+/* One line of the label's size, empty or not. */
+.turn-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.25em;
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
 .turn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.75rem;
   font-weight: 600;
   color: var(--ion-color-warning-shade, #e0ac08);
 }

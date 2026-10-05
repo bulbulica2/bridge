@@ -241,8 +241,12 @@
               <div class="trick-foot">
                 <p class="trick-caption" aria-live="polite">{{ shownTrick.caption }}</p>
                 <!-- The last trick in a pop-up, so the trick in progress
-                     stays in the middle. -->
-                <LastTrickPopover v-if="peekTrick" :trick="peekTrick" :my-seat="mySeat" />
+                     stays in the middle. Its row stays when it has no pill
+                     (the first trick, a trick held), so the centre keeps its
+                     height. -->
+                <span class="trick-peek">
+                  <LastTrickPopover v-if="peekTrick" :trick="peekTrick" :my-seat="mySeat" />
+                </span>
               </div>
             </template>
           </BridgeTable>
@@ -251,8 +255,12 @@
                the set, from their seat's forfeit_at. -->
           <AwayNotice :table="table" :me="me" />
 
+          <!-- Whose move it is, always there (empty while a claim's panel
+               says it) and two lines tall during the auction and the play,
+               so the hand below doesn't move from call to call or card to
+               card. -->
           <p
-            v-if="status"
+            v-if="playing.phase === 'auction' || playing.phase === 'play'"
             class="status"
             :class="{ 'status-mine': myTurn, 'status-robot': robotActing }"
           >
@@ -1667,8 +1675,20 @@ async function refresh(event: CustomEvent) {
   color: var(--ion-color-medium);
 }
 
+/* Two lines of room whatever it says, set off from the page. */
 .status {
-  margin: 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: calc(2 * 1.35em + 18px);
+  margin: 12px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ion-color-step-150, #e0e0e0);
+  border-radius: 8px;
+  background: var(--ion-color-light, #f4f5f8);
+  font-size: 1.05rem;
+  line-height: 1.35;
   text-align: center;
   color: var(--ion-color-medium);
 }
@@ -1686,13 +1706,22 @@ async function refresh(event: CustomEvent) {
   margin: 8px 0 16px;
 }
 
+/* The caption over the Last trick pill, on two rows wherever it is: a
+   centre cell too narrow for both on one row would wrap only while the
+   pill shows. */
 .trick-foot {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px 8px;
+  gap: 4px;
   margin-top: 4px;
+}
+
+/* The pill's height (LastTrickPopover), with or without it. */
+.trick-peek {
+  display: flex;
+  justify-content: center;
+  height: 22px;
 }
 
 .trick-caption {

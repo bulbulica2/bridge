@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/78-create-opens-the-table`._
+_Status as of branch `bulbulica2/79-steady-play-layout-2`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -309,6 +309,15 @@ one of your own. Forced cards play themselves on both hands, and you claim
 for declarer ("You claim 4 of the remaining 5 tricks for North"). The
 defenders still play by themselves. How they bid and play is in
 [backend `ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
+
+**Nothing jumps from card to card** (#133): while a board has a turn,
+every seat keeps a line for the turn label (**Your turn**, **To act**,
+**Thinking…**), filled only on the seat on turn; the status line under
+the table, in a tinted box, is there for the whole auction and play with
+room for two lines (empty while a claim's panel says what is going on);
+and the trick's caption sits over the **Last trick** button's row, which
+keeps its height while the button is hidden. So the table and your hand
+stay put on a phone as on a desktop.
 
 Like the detail page, it shows **Refresh** (under a note, **Live updates
 are off. Refresh to see the latest.**) only once live updates have been

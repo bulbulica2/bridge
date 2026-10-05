@@ -70,11 +70,14 @@ const caption = computed(() =>
   display: inline-flex;
 }
 
+/* 22px tall: the play page keeps that room for it while it is away. */
 .last-trick-button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
+  box-sizing: border-box;
+  height: 22px;
+  padding: 0 8px;
   border: 1px solid var(--ion-color-primary, #3880ff);
   border-radius: 999px;
   background: var(--ion-background-color, #fff);
