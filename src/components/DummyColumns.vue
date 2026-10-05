@@ -1,11 +1,12 @@
 <template>
-  <!-- A hand as a bridge diagram lays it out: one column per suit, ♠ ♥ ♦ ♣,
+  <!-- A hand as a bridge diagram lays it out: one column per suit, in
+       `order` (♠ ♥ ♦ ♣ by default; trumps first for dummy, see suitOrder),
        high to low down each column. Narrow enough for a side seat: dummy's
        cards for a defender, and every hand of a finished deal. Given `rows`,
        each column keeps room for that many cards, so the hand stays as tall
        as cards go (a replay keeps the height the hand had as dealt). -->
   <div class="dummy-columns" :aria-label="label">
-    <div v-for="suit in SUITS" :key="suit" class="column" :class="{ red: isRed(suit) }">
+    <div v-for="suit in order" :key="suit" class="column" :class="{ red: isRed(suit) }">
       <span class="suit" :aria-label="SUIT_NAMES[suit]">{{ SUIT_SYMBOLS[suit] }}</span>
       <span v-for="card in bySuit[suit]" :key="card.id" class="rank">{{ rankLabel(card.rank) }}</span>
       <span v-if="bySuit[suit].length === 0" class="void" aria-label="none">–</span>
@@ -24,15 +25,15 @@ import { computed } from 'vue';
 import type { Card, Suit } from '@/services/game';
 import { SUITS, SUIT_NAMES, SUIT_SYMBOLS, isRed, rankLabel, sortHand } from '@/utils/cards';
 
-const props = withDefaults(defineProps<{ cards: Card[]; label?: string; rows?: number }>(), {
-  label: "Dummy's hand",
-  rows: 0,
-});
+const props = withDefaults(
+  defineProps<{ cards: Card[]; label?: string; rows?: number; order?: readonly Suit[] }>(),
+  { label: "Dummy's hand", rows: 0, order: () => SUITS },
+);
 
 const bySuit = computed(() => {
-  const sorted = sortHand(props.cards);
+  const sorted = sortHand(props.cards, props.order);
   return Object.fromEntries(
-    SUITS.map((suit) => [suit, sorted.filter((card) => card.suit === suit)]),
+    props.order.map((suit) => [suit, sorted.filter((card) => card.suit === suit)]),
   ) as Record<Suit, Card[]>;
 });
 
@@ -40,7 +41,7 @@ const bySuit = computed(() => {
 const fillers = computed(
   () =>
     Object.fromEntries(
-      SUITS.map((suit) => [suit, Math.max(0, props.rows - Math.max(1, bySuit.value[suit].length))]),
+      props.order.map((suit) => [suit, Math.max(0, props.rows - Math.max(1, bySuit.value[suit].length))]),
     ) as Record<Suit, number>,
 );
 </script>

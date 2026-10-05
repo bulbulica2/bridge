@@ -1,5 +1,6 @@
 <template>
-  <!-- One overlapping run of cards per suit, ♠ ♥ ♦ ♣, high to low. A suit
+  <!-- One overlapping run of cards per suit, in `order` (♥ ♣ ♦ ♠, the
+       viewer's own hand, by default), high to low. A suit
        never splits across lines; on a narrow screen whole suits wrap.
        Given `playable`, the hand is the one being played: every card is a
        button, and the ones that can't legally go now are dimmed. The
@@ -36,8 +37,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import PlayingCard from '@/components/PlayingCard.vue';
-import type { Card } from '@/services/game';
-import { groupBySuit } from '@/utils/cards';
+import type { Card, Suit } from '@/services/game';
+import { groupBySuit, HAND_SUITS } from '@/utils/cards';
 
 const props = withDefaults(
   defineProps<{
@@ -50,13 +51,22 @@ const props = withDefaults(
     sendingId?: number | null;
     // The only legal card, counting down to playing itself.
     forcedId?: number | null;
+    // The suits left to right: trumps first for dummy (see suitOrder).
+    order?: readonly Suit[];
   }>(),
-  { label: 'Your hand', playable: null, busy: false, sendingId: null, forcedId: null },
+  {
+    label: 'Your hand',
+    playable: null,
+    busy: false,
+    sendingId: null,
+    forcedId: null,
+    order: () => HAND_SUITS,
+  },
 );
 
 const emit = defineEmits<{ play: [card: Card] }>();
 
-const groups = computed(() => groupBySuit(props.cards));
+const groups = computed(() => groupBySuit(props.cards, props.order));
 </script>
 
 <style scoped>

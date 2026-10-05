@@ -2,16 +2,19 @@ import { describe, expect, test } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DummyColumns from '@/components/DummyColumns.vue'
 import HandView from '@/components/HandView.vue'
-import type { Card, Suit } from '@/services/game'
+import type { Card, Strain, Suit } from '@/services/game'
 import type { Seat } from '@/services/tables'
 import {
   groupBySuit,
   isVulnerable,
   longestSuit,
+  HAND_SUITS,
   rankLabel,
   screenSide,
   seatAt,
   sortHand,
+  SUITS,
+  suitOrder,
   vulnerabilityLabel,
 } from '@/utils/cards'
 
@@ -42,15 +45,53 @@ describe('sorting a hand', () => {
     expect(groups[1].cards.map((c) => c.rank)).toEqual([12, 3])
   })
 
-  test('HandView shows the cards grouped and sorted, with labels, not numbers', () => {
+  test('sorts and groups in the order given', () => {
+    const hand = [card('S', 4), card('C', 3), card('D', 9), card('H', 15), card('C', 12)]
+
+    expect(sortHand(hand, HAND_SUITS).map((c) => `${c.suit}${rankLabel(c.rank)}`)).toEqual([
+      'HA', 'CJ', 'C3', 'D9', 'S4',
+    ])
+    expect(groupBySuit(hand, suitOrder('D')).map((g) => g.suit)).toEqual(['D', 'S', 'H', 'C'])
+    expect(groupBySuit(hand, suitOrder('D'))[3].cards.map((c) => c.rank)).toEqual([12, 3])
+  })
+
+  test('HandView shows the cards grouped and sorted ♥ ♣ ♦ ♠, with labels, not numbers', () => {
     const wrapper = mount(HandView, {
       props: { cards: [card('D', 12), card('S', 2), card('D', 15), card('H', 10)] },
     })
 
     const groups = wrapper.findAll('.suit-group')
     expect(groups).toHaveLength(3)
-    expect(groups.map((g) => g.findAll('.rank').map((r) => r.text()))).toEqual([['2'], ['10'], ['A', 'J']])
+    expect(groups.map((g) => g.findAll('.rank').map((r) => r.text()))).toEqual([['10'], ['A', 'J'], ['2']])
     expect(wrapper.findAll('.playing-card.red')).toHaveLength(3)
+  })
+
+  test('HandView lays the suits in the order given', () => {
+    const wrapper = mount(HandView, {
+      props: {
+        cards: [card('D', 12), card('S', 2), card('C', 15), card('H', 10)],
+        order: suitOrder('S'),
+      },
+    })
+
+    expect(wrapper.findAll('.suit-group .corner .suit').map((s) => s.text())).toEqual(['♠', '♥', '♣', '♦'])
+  })
+})
+
+describe('suit order', () => {
+  test('your own hand alternates colours: ♥ ♣ ♦ ♠', () => {
+    expect(HAND_SUITS).toEqual(['H', 'C', 'D', 'S'])
+  })
+
+  test.each<[Strain | null, Suit[]]>([
+    ['S', ['S', 'H', 'C', 'D']],
+    ['H', ['H', 'C', 'D', 'S']],
+    ['D', ['D', 'S', 'H', 'C']],
+    ['C', ['C', 'D', 'S', 'H']],
+    ['NT', ['H', 'C', 'D', 'S']],
+    [null, ['H', 'C', 'D', 'S']],
+  ])('trumps %s come first: %j', (trump, order) => {
+    expect(suitOrder(trump)).toEqual(order)
   })
 })
 
@@ -70,6 +111,17 @@ describe('suit columns', () => {
 
     expect(lines(wrapper)).toEqual([3, 1, 1, 1])
     expect(wrapper.find('.filler').exists()).toBe(false)
+  })
+
+  test('lays the columns in the order given, bridge order by default', () => {
+    const symbols = (wrapper: ReturnType<typeof mount>) =>
+      wrapper.findAll('.column .suit').map((s) => s.text())
+
+    expect(symbols(mount(DummyColumns, { props: { cards: hand() } }))).toEqual(['♠', '♥', '♦', '♣'])
+    const diamonds = mount(DummyColumns, { props: { cards: hand(), order: suitOrder('D') } })
+    expect(symbols(diamonds)).toEqual(['♦', '♠', '♥', '♣'])
+    expect(lines(diamonds)).toEqual([1, 3, 1, 1])
+    expect(SUITS).toEqual(['S', 'H', 'D', 'C'])
   })
 
   test('rows pads every column with hidden blanks to the same length', () => {

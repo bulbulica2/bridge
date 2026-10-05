@@ -1,9 +1,23 @@
 import { SEATS } from '@/services/tables';
 import type { Seat } from '@/services/tables';
-import type { Card, Suit, Vulnerability } from '@/services/game';
+import type { Card, Strain, Suit, Vulnerability } from '@/services/game';
 
-// Bridge order: spades, hearts, diamonds, clubs.
+// Bridge order: spades, hearts, diamonds, clubs. Diagrams and exports (PBN
+// requires it) keep it.
 export const SUITS: readonly Suit[] = ['S', 'H', 'D', 'C'];
+
+// The order a hand is held in at the table: hearts, clubs, diamonds,
+// spades, red and black alternating. The viewer's own hand always reads so.
+export const HAND_SUITS: readonly Suit[] = ['H', 'C', 'D', 'S'];
+
+// A hand laid face up for the viewer to see or play (dummy, a robot
+// declarer's cards): trumps on the left, the base order rotated so the
+// colours still alternate (♦ trumps: ♦ ♠ ♥ ♣). No trumps, or no contract
+// yet, keeps the base order.
+export function suitOrder(trump: Strain | null): readonly Suit[] {
+  const start = trump && trump !== 'NT' ? HAND_SUITS.indexOf(trump) : 0;
+  return [...HAND_SUITS.slice(start), ...HAND_SUITS.slice(0, start)];
+}
 
 export const SUIT_SYMBOLS: Record<Suit, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
 
@@ -25,24 +39,27 @@ export function isRed(suit: Suit): boolean {
   return suit === 'H' || suit === 'D';
 }
 
-// Spades first, and high to low within a suit. The backend already sends the
-// hand in this order; sorting again keeps a hand we trimmed ourselves right.
-export function sortHand(cards: Card[]): Card[] {
+// Suits in `order` (bridge order by default), high to low within a suit.
+export function sortHand(cards: Card[], order: readonly Suit[] = SUITS): Card[] {
   return [...cards].sort(
-    (a, b) => SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit) || b.rank - a.rank,
+    (a, b) => order.indexOf(a.suit) - order.indexOf(b.suit) || b.rank - a.rank,
   );
 }
 
-// The hand split into its suits, in bridge order, leaving out empty suits.
-export function groupBySuit(cards: Card[]): { suit: Suit; cards: Card[] }[] {
-  const sorted = sortHand(cards);
-  return SUITS.map((suit) => ({ suit, cards: sorted.filter((c) => c.suit === suit) })).filter(
+// The hand split into its suits, in `order` (bridge order by default),
+// leaving out empty suits.
+export function groupBySuit(
+  cards: Card[],
+  order: readonly Suit[] = SUITS,
+): { suit: Suit; cards: Card[] }[] {
+  const sorted = sortHand(cards, order);
+  return order.map((suit) => ({ suit, cards: sorted.filter((c) => c.suit === suit) })).filter(
     (group) => group.cards.length > 0,
   );
 }
 
 // How many cards the hand's longest suit holds (0 for no cards): the
-// height of its suit columns (see DummyColumns).
+// height of its suit columns (see DummyColumns), whatever their order.
 export function longestSuit(cards: Card[]): number {
   return Math.max(0, ...SUITS.map((suit) => cards.filter((c) => c.suit === suit).length));
 }

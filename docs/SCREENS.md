@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/71-manager-controls-when-left-alone`._
+_Status as of branch `bulbulica2/72-suit-order-trumps-left`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -331,7 +331,7 @@ What it shows by phase:
   seat, as on the detail page (#117): left alone after the others were
   freed or the set forfeited, they fill the table without leaving the
   game. Everyone else sees the empty seats and Start only.
-- **auction**: your hand, the auction grid, and on your turn the bidding
+- **auction**: your hand (always ♥ ♣ ♦ ♠, red and black alternating), the auction grid, and on your turn the bidding
   box. The contract (or "Passed out") is announced when the last call
   arrives. Above the calls, an **Alert** field: "Explain to the opponents
   (optional)", up to 200 characters, and an **Alert** toggle (typing turns
@@ -348,7 +348,9 @@ What it shows by phase:
   pop-up). The grid stays below your hand during the play, where asking
   still works. The pop-up also offers **Ask in the chat** (below).
 - **play**: the contract bar with tricks won, the current trick in the
-  centre, dummy's cards once the opening lead is made. From the second
+  centre, dummy's cards once the opening lead is made, trumps on the left
+  and the colours still alternating (4♠: ♠ ♥ ♣ ♦, 3♦: ♦ ♠ ♥ ♣, NT: ♥ ♣ ♦
+  ♠; a robot declarer's cards, for its dummy, the same way). From the second
   trick on, a **Last trick** button sits under the trick in progress:
   hovering it with a mouse pops up the last trick's four cards (each at its
   seat, turned like the table and tagged N/E/S/W or **You**, spread apart

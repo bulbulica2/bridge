@@ -12,7 +12,9 @@
        the table already). Once the board is over, the whole deal lies face
        up, each hand at its seat (in a replay, what is left of it, in the
        room the hand took as dealt). A seat whose player is away mid-set is
-       dashed and tagged "away". -->
+       dashed and tagged "away". Dummy's and a robot declarer's cards read
+       trumps first (`trump`, see suitOrder); the claimer's and the deal
+       keep bridge order. -->
   <div class="bridge-table">
     <div
       v-for="side in SIDES"
@@ -68,9 +70,10 @@
           :busy="busy"
           :sending-id="sendingId"
           :forced-id="dummyForcedId"
+          :order="trumpOrder"
           @play="emit('play', $event)"
         />
-        <DummyColumns v-else :cards="dummy!.cards" />
+        <DummyColumns v-else :cards="dummy!.cards" :order="trumpOrder" />
       </template>
       <HandView
         v-else-if="declarerSide === side"
@@ -81,6 +84,7 @@
         :busy="busy"
         :sending-id="sendingId"
         :forced-id="declarerForcedId"
+        :order="trumpOrder"
         @play="emit('play', $event)"
       />
       <DummyColumns
@@ -116,11 +120,11 @@ import DummyColumns from '@/components/DummyColumns.vue';
 import HandView from '@/components/HandView.vue';
 import AdminBadge from '@/components/AdminBadge.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
-import type { Board, Card } from '@/services/game';
+import type { Board, Card, Strain } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES } from '@/utils/auction';
-import { isVulnerable, longestSuit, seatAt, vulnerabilityLabel } from '@/utils/cards';
+import { isVulnerable, longestSuit, seatAt, suitOrder, vulnerabilityLabel } from '@/utils/cards';
 import type { ScreenSide } from '@/utils/cards';
 
 const props = withDefaults(
@@ -136,6 +140,9 @@ const props = withDefaults(
     // Whether a robot acts for `turn` (dummy's turn included, when declarer
     // is one): the seat then reads "Thinking…" rather than "To act".
     thinking?: boolean;
+    // The contract's strain: dummy's and a robot declarer's cards put it on
+    // the left (null or NT: the base order).
+    trump?: Strain | null;
     // Dummy's seat and remaining cards, once they are face up.
     dummy?: { seat: Seat; cards: Card[] } | null;
     // Dummy's cards declarer may play now (see HandView), else null.
@@ -168,6 +175,7 @@ const props = withDefaults(
   {
     myTurn: null,
     thinking: false,
+    trump: null,
     dummy: null,
     dummyPlayable: null,
     dummyForcedId: null,
@@ -195,6 +203,8 @@ const seatOn = computed(
       Seat
     >,
 );
+
+const trumpOrder = computed(() => suitOrder(props.trump));
 
 // Where dummy's cards are drawn: nowhere for dummy themselves (their own hand
 // is below the table).

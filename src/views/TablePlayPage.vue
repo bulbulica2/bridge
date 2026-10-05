@@ -200,6 +200,7 @@
             :turn="playing.turn"
             :my-turn="myTurn"
             :thinking="robotActing"
+            :trump="playing.contract?.bid.strain ?? null"
             :dummy="dummy"
             :dummy-playable="playFrom === 'dummy' ? legalIds(playing.dummy_hand) : null"
             :dummy-forced-id="playFrom === 'dummy' ? (autoPlay.card.value?.id ?? null) : null"
