@@ -33,7 +33,9 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/74-claim-answers-and-lock` (after
+> branch `bulbulica2/80-menu-your-table-entry` (after
+> #134, the side menu is 320 px wide and its **Your table** entry stays on
+> one row whatever its status badge says; after
 > #120, both players who must answer a claim get Accept / Reject at once,
 > and a refused claim (rejected, withdrawn or expired) keeps Claim
 > disabled for everyone until the next card; after

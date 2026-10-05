@@ -21,13 +21,22 @@
             :aria-current="atTarget ? 'page' : undefined"
           >
             <ion-icon slot="start" :icon="gridOutline" aria-hidden="true" />
-            <ion-label>
+            <ion-label class="menu-table-label">
               <p class="menu-table-heading">Your table</p>
-              <h2>{{ tableLabel }}</h2>
+              <h2 :title="tableLabel">{{ tableLabel }}</h2>
             </ion-label>
-            <ion-badge v-if="tableStatus" slot="end" :color="STATUS_COLORS[tableStatus]">
-              {{ tableStatusText }}
-            </ion-badge>
+            <!-- As wide as the longest status whatever it says now (or with
+                 none), so the label keeps its width when the turn moves. -->
+            <div slot="end" class="menu-table-status">
+              <ion-badge
+                v-if="tableStatus"
+                class="menu-table-badge"
+                :color="STATUS_COLORS[tableStatus]"
+              >
+                {{ tableStatusText }}
+              </ion-badge>
+              <ion-badge class="menu-table-sizer" aria-hidden="true">{{ LONGEST_STATUS }}</ion-badge>
+            </div>
           </ion-item>
           <ion-item
             v-for="link in links"
@@ -64,6 +73,7 @@ import {
 } from '@ionic/vue';
 import { gridOutline } from 'ionicons/icons';
 import { useYourTable } from '@/composables/useYourTable';
+import { STATUS_TEXT } from '@/composables/useYourTable';
 import type { YourTableStatus } from '@/composables/useYourTable';
 import { useAuthStore } from '@/stores/auth';
 
@@ -72,6 +82,9 @@ const STATUS_COLORS: Record<Exclude<YourTableStatus, null>, string> = {
   turn: 'tertiary',
   board: 'success',
 };
+
+// "Board in progress": the width the status keeps for every status.
+const LONGEST_STATUS = Object.values(STATUS_TEXT).reduce((a, b) => (b.length > a.length ? b : a));
 
 const auth = useAuthStore();
 const {
@@ -100,11 +113,38 @@ const links = computed(() => [
 </script>
 
 <style scoped>
+/* The slide-in overlay below md as wide as the pinned menu (App.vue), but
+   leaving a strip of the page to tap on a narrow phone. Set on the part,
+   since Ionic sets its own 264 px there up to 340 px. */
+ion-menu::part(container) {
+  --width: 320px;
+  --max-width: calc(100vw - 40px);
+}
+
 /* The page on screen. */
 ion-item.current {
   --background: rgba(var(--ion-color-primary-rgb, 56, 128, 255), 0.12);
   --color: var(--ion-color-primary, #3880ff);
   font-weight: 600;
+}
+
+/* Room for the icon next to the label and its status (App.vue widens the
+   menu for them): Ionic's 32 px after a start icon would take it. */
+.menu-table ion-icon[slot='start'] {
+  margin-inline-end: 16px;
+}
+
+/* One line each, whatever the status: a long table name ends in an
+   ellipsis, the whole name in its title. */
+.menu-table-label {
+  min-width: 0;
+}
+
+.menu-table-label p,
+.menu-table-label h2 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .menu-table-heading {
@@ -115,5 +155,23 @@ ion-item.current {
 
 .menu-table h2 {
   font-weight: 600;
+}
+
+/* The badge and an invisible copy of the longest one share one cell, so
+   the cell is as wide as that copy and the badge sits at its end. */
+.menu-table-status {
+  display: grid;
+  justify-items: end;
+  flex-shrink: 0;
+  margin-inline-start: 8px;
+}
+
+.menu-table-status ion-badge {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+}
+
+.menu-table-sizer {
+  visibility: hidden;
 }
 </style>

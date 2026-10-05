@@ -355,6 +355,15 @@ describe('the menu', () => {
     return wrapper.findAllComponents(IonItem).map((item) => item.props('routerLink'))
   }
 
+  // The badge the entry shows, not its invisible sizer.
+  function badge(wrapper: VueWrapper) {
+    return wrapper.findAllComponents(IonBadge).find((b) => b.classes('menu-table-badge'))
+  }
+
+  function sizer(wrapper: VueWrapper) {
+    return wrapper.findAllComponents(IonBadge).find((b) => b.classes('menu-table-sizer'))
+  }
+
   test('puts "Your table" first while seated, with its status', async () => {
     seatAt(makeTable(7, full, { board_id: 3 }))
     const wrapper = await mountMenu()
@@ -363,15 +372,70 @@ describe('the menu', () => {
     const entry = wrapper.findAllComponents(IonItem)[0]
     expect(entry.text()).toContain('Your table')
     expect(entry.text()).toContain('Table 7')
-    expect(entry.findComponent(IonBadge).text()).toBe('Board in progress')
-    expect(entry.findComponent(IonBadge).props('color')).toBe('success')
+    expect(badge(wrapper)!.text()).toBe('Board in progress')
+    expect(badge(wrapper)!.props('color')).toBe('success')
   })
 
-  test('without a status there is no badge', async () => {
+  test('without a status there is no badge, but its room is kept', async () => {
     seatAt(makeTable(7, full))
     const wrapper = await mountMenu()
 
-    expect(wrapper.findAllComponents(IonItem)[0].findComponent(IonBadge).exists()).toBe(false)
+    expect(badge(wrapper)).toBeUndefined()
+    expect(sizer(wrapper)!.text()).toBe('Board in progress')
+    expect(sizer(wrapper)!.attributes('aria-hidden')).toBe('true')
+    expect(wrapper.find('.menu-table-status').attributes('slot')).toBe('end')
+  })
+
+  test('your turn is a tertiary badge', async () => {
+    seatAt(makeTable(7, full, { board_id: 3 }))
+    const game = useGameStore()
+    game.tableId = 7
+    game.playing = { phase: 'auction', acting_user_id: ana.id, board: { id: 3 } } as unknown as Playing
+    const wrapper = await mountMenu()
+
+    expect(badge(wrapper)!.text()).toBe('Your turn')
+    expect(badge(wrapper)!.props('color')).toBe('tertiary')
+  })
+
+  test('an away seat is a warning badge', async () => {
+    seatAt(makeTable(7, full, { board_id: 3 }))
+    useTablesStore().heldTableId = 7
+    const wrapper = await mountMenu()
+
+    expect(badge(wrapper)!.text()).toBe('Away')
+    expect(badge(wrapper)!.props('color')).toBe('warning')
+  })
+
+  test('the status changes in place, the room for it stays the longest', async () => {
+    seatAt(makeTable(7, full))
+    const wrapper = await mountMenu()
+    expect(badge(wrapper)).toBeUndefined()
+
+    useTablesStore().tables = [makeTable(7, full, { board_id: 3 })]
+    await nextTick()
+    expect(badge(wrapper)!.text()).toBe('Board in progress')
+
+    useTablesStore().heldTableId = 7
+    await nextTick()
+    expect(badge(wrapper)!.text()).toBe('Away')
+    expect(sizer(wrapper)!.text()).toBe('Board in progress')
+  })
+
+  test('the table\'s name carries its full text as a title, for when it is cut short', async () => {
+    const name = 'A table whose name runs on to fifty characters, max'
+    seatAt(makeTable(7, full, { name }))
+    const wrapper = await mountMenu()
+
+    const heading = wrapper.find('.menu-table h2')
+    expect(heading.text()).toBe(name)
+    expect(heading.attributes('title')).toBe(name)
+  })
+
+  test('a table without a name goes by its number, in the title too', async () => {
+    seatAt(makeTable(7, full, { name: '' }))
+    const wrapper = await mountMenu()
+
+    expect(wrapper.find('.menu-table h2').attributes('title')).toBe('Table #7')
   })
 
   test('no entry when not seated', async () => {
