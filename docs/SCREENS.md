@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/79-steady-play-layout-2`._
+_Status as of branch `bulbulica2/83-claim-all-by-default`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -399,9 +399,12 @@ What it shows by phase:
   table stops the countdown.
   Anyone but dummy can **Claim** some of the tricks left (or **Concede**
   them): the claim sheet has one button per number, 1 up to the tricks
-  left, wrapping onto a second row; tapping one picks it and the send
-  button then reads **Claim 4 tricks**, which sends it. Nothing is picked
-  when the sheet opens. **Concede the rest** is its own button. The sheet
+  left, wrapping onto a second row. It opens with every remaining trick
+  picked, so the send button reads **Claim 5 tricks** at once and one tap
+  claims them all (#137); tapping another number picks it instead. A trick
+  finishing while it is open moves that default to the new maximum, and
+  keeps a number picked by hand while it is still possible (capped to the
+  new maximum otherwise). **Concede the rest** is its own button. The sheet
   says the others have 10 seconds to answer and that no answer counts as
   no. While a claim is pending, a banner says what is claimed, the
   claimer's cards lie face up at their seat, no card can be played, the

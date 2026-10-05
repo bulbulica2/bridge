@@ -406,12 +406,27 @@ describe('ClaimSheet', () => {
   const picks = (wrapper: ReturnType<typeof mountSheet>) => wrapper.findAll('.trick-pick').map((b) => b.text())
   const isDisabled = (el: { element: Element }) => (el.element as HTMLButtonElement).disabled
 
-  test('one button per trick left, nothing picked and Claim disabled to start with', () => {
+  test('one button per trick left, all of them picked to start with', async () => {
     const wrapper = mountSheet({ remaining: 6 })
 
     expect(picks(wrapper)).toEqual(['1', '2', '3', '4', '5', '6'])
-    expect(wrapper.findAll('.trick-pick.picked')).toHaveLength(0)
-    expect(wrapper.get('.send-claim').text()).toBe('Pick a number')
+    expect(wrapper.findAll('.trick-pick.picked').map((b) => b.text())).toEqual(['6'])
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 6 tricks')
+    expect(wrapper.get('.claim-help').text()).toContain('All of them unless you pick fewer.')
+
+    // One tap claims them all.
+    await wrapper.get('.send-claim').trigger('click')
+    expect(wrapper.emitted('claim')).toEqual([[6]])
+  })
+
+  test('with 1 trick left the send button reads "Claim 1 trick"', () => {
+    expect(mountSheet({ remaining: 1 }).get('.send-claim').text()).toBe('Claim 1 trick')
+  })
+
+  test('with no trick left there is nothing to claim', () => {
+    const wrapper = mountSheet({ remaining: 0 })
+
+    expect(picks(wrapper)).toEqual([])
     expect(isDisabled(wrapper.get('.send-claim'))).toBe(true)
   })
 
@@ -425,7 +440,6 @@ describe('ClaimSheet', () => {
 
     await wrapper.get('[data-tricks="4"]').trigger('click')
     expect(wrapper.emitted('claim')).toBeUndefined()
-    expect(isDisabled(wrapper.get('.send-claim'))).toBe(false)
     expect(wrapper.get('.picked').text()).toBe('4')
     expect(wrapper.get('.send-claim').text()).toBe('Claim 4 tricks')
 
@@ -439,7 +453,7 @@ describe('ClaimSheet', () => {
     expect(wrapper.emitted('claim')).toEqual([[4]])
   })
 
-  test('Concede the rest claims 0 without a pick', async () => {
+  test('Concede the rest claims 0 whatever is picked', async () => {
     const wrapper = mountSheet({ remaining: 6 })
 
     await wrapper.get('.concede').trigger('click')
@@ -465,15 +479,61 @@ describe('ClaimSheet', () => {
     }
   })
 
-  test('reopening the sheet clears the pick', async () => {
+  test('reopening the sheet picks every remaining trick again', async () => {
     const wrapper = mountSheet({ remaining: 6 })
     await wrapper.get('[data-tricks="3"]').trigger('click')
 
     await wrapper.setProps({ open: false })
     await wrapper.setProps({ open: true })
 
-    expect(wrapper.findAll('.picked')).toHaveLength(0)
-    expect(wrapper.get('.send-claim').text()).toBe('Pick a number')
+    expect(wrapper.findAll('.picked').map((b) => b.text())).toEqual(['6'])
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 6 tricks')
+  })
+
+  test('reopening after tricks were played picks the new maximum', async () => {
+    const wrapper = mountSheet({ remaining: 6, open: false })
+
+    await wrapper.setProps({ remaining: 4 })
+    await wrapper.setProps({ open: true })
+
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 4 tricks')
+  })
+
+  test('a trick finishing with the default picked moves it to the new maximum', async () => {
+    const wrapper = mountSheet({ remaining: 5 })
+
+    await wrapper.setProps({ remaining: 4 })
+
+    expect(picks(wrapper)).toEqual(['1', '2', '3', '4'])
+    expect(wrapper.findAll('.picked').map((b) => b.text())).toEqual(['4'])
+    await wrapper.get('.send-claim').trigger('click')
+    expect(wrapper.emitted('claim')).toEqual([[4]])
+  })
+
+  test('a trick finishing keeps a number picked by hand while it is still possible', async () => {
+    const wrapper = mountSheet({ remaining: 5 })
+    await wrapper.get('[data-tricks="3"]').trigger('click')
+
+    await wrapper.setProps({ remaining: 4 })
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 3 tricks')
+
+    await wrapper.setProps({ remaining: 3 })
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 3 tricks')
+
+    // No longer possible: capped to the new maximum.
+    await wrapper.setProps({ remaining: 2 })
+    expect(wrapper.findAll('.picked').map((b) => b.text())).toEqual(['2'])
+    await wrapper.get('.send-claim').trigger('click')
+    expect(wrapper.emitted('claim')).toEqual([[2]])
+  })
+
+  test('the top number picked by hand is capped when a trick finishes', async () => {
+    const wrapper = mountSheet({ remaining: 5 })
+    await wrapper.get('[data-tricks="5"]').trigger('click')
+
+    await wrapper.setProps({ remaining: 4 })
+
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 4 tricks')
   })
 })
 
