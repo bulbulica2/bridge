@@ -8,7 +8,7 @@
       <h1>Board {{ review.board?.number ?? '?' }}</h1>
       <p class="meta">
         Dealer {{ review.board ? SEAT_NAMES[review.board.dealer] : '?' }} ·
-        {{ review.board ? vulnerabilityText(review.board.vulnerable, mySeat).text : 'Vulnerable: ?' }} ·
+        {{ review.board ? vulnerabilityText(review.board.vulnerable, mySeat).text : 'Vul: ?' }} ·
         Playing #{{ review.playing_id ?? '?' }}
       </p>
       <p v-if="review.result" class="meta">

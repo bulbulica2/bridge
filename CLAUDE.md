@@ -316,13 +316,16 @@ The user's standing rule (#91): **no task may leave code coverage under
   `suitOrder(trump)`, that cycle rotated trumps first, #118), rank labels
   (the backend skips 11: `12`=J … `15`=A), seat rotation and
   vulnerability live in `src/utils/cards.ts`. Vulnerability in words
-  (#151): `vulnerabilityText(vulnerable, mySeat)` → `{text, red}`
-  ("Vulnerable: N-S (you)", "Both (you too)", None green), drawn by
-  `VulnerabilityLabel.vue` top left above the table (the play page's
-  `.board-bar`, beside `setLabel`, auction/play/finished; `BoardReview`'s
-  `.board-bar`; `BoardResultsPage`'s `.board-info`), `BridgeTable`'s
-  centre line and `BoardPrintout`'s meta line (its `mySeat` prop, text
-  only); the seat stripes stay. The detail page moves a
+  (#151, #160): `vulnerabilityText(vulnerable, mySeat)` → `{text, red}`
+  ("Nobody vulnerable" green; red "Vul: E-W" for the other side or no
+  seat, "Vulnerable: N-S (you)", "Both (you too)"), drawn by
+  `VulnerabilityLabel.vue` as a pill top left above the table (the play
+  page's `.board-bar`, beside `setLabel`, auction/play/finished, then a
+  `.dealer-pill` "Dealer West" below 1100 px and `BoardTile.vue`, BBO's
+  board tile, from 1100 px; `BoardReview`'s `.board-bar`;
+  `BoardResultsPage`'s `.board-info`), `BridgeTable`'s centre line and
+  `BoardPrintout`'s meta line (its `mySeat` prop, text only); the seat
+  stripes stay (the plate's top edge). The detail page moves a
   seated player to `/play` when `board_id` changes to a new board.
   `Playing.declarer_hand` is a robot declarer's remaining cards, only for
   its human dummy (null otherwise, and once `finished`); the same channel's
@@ -369,15 +372,25 @@ The user's standing rule (#91): **no task may leave code coverage under
   the grid layout. A 409 from the backend is the final word: the page toasts
   its `message` and reloads. On the play page, `BiddingBox.vue` shows only
   on the user's turn during `auction` and stays disabled while a call is in
-  flight. `AuctionHistory.vue` is the four-column grid, rotated like the
+  flight. It is **two taps plus confirm** (#160): `data-level` 1–7, then
+  `data-strain` C D H S NT (or Pass/X/XX, `data-call`), then the
+  `.confirm-call` button ("Bid 2♥" / "Pass" / "Double" / "Redouble",
+  `data-picked`), the only thing that emits `call`; a level with no legal
+  strain and a strain illegal at the picked level are disabled; the pick
+  resets when `auction` changes and when `busy` goes true → false (taken or
+  refused). Tests make calls through `bidWith(wrapper, '2C')` in
+  `tests/unit/biddingBox.ts`. `AuctionHistory.vue` is the four-column grid, rotated like the
   table (the viewer's column last, so South reads W N E S), starting in the
-  dealer's column. `CallLabel.vue` draws one call. The page announces the
+  dealer's column. `CallLabel.vue` draws one call (`chip`: Daylight's
+  chip, grey bid / green Pass / red X / blue XX; the auction grid and
+  `BridgeTable`'s last calls use it). The page announces the
   contract (or "Passed out") and toasts it when the last call arrives live.
 - **Alerts** (#101, #135, bb#100, bb#124, backend `docs/API.md` Alerts):
   a self-alert for the **opponents only** during the auction; partner sees
-  it once the auction is over. `BiddingBox`'s Alert field
+  it once the auction is over. `BiddingBox`'s Alert button and field
   (`v-model:alert` / `v-model:explanation`, owned by the play page's
-  `alertDraft`; typing turns the toggle on, turning it off drops the text;
+  `alertDraft`; the field shows only while `alert` is on, turning it off
+  drops the text;
   `ALERT_MAX` 200 in `src/utils/limits.ts`) goes out with the next call
   as `game.call(bidId, {alert, explanation})` (`makeCall` sends the two
   fields only when alerting), cleared once the call is taken, kept on a
@@ -394,10 +407,13 @@ The user's standing rule (#91): **no task may leave code coverage under
   `withNotes` laid on every state shown; by `playing_id` + call index, a
   newer board starts a new book, an older one's news is dropped).
   `AuctionHistory` draws each call with `AuctionCallCell.vue`: alerted =
-  amber + "!", the pop-up (`src/composables/usePopover.ts`, shared with
+  amber ring + "!", questioned = blue ring + "?", the pop-up (a dark
+  card; `src/composables/usePopover.ts`, shared with
   `LastTrickPopover`: mouse hover, tap toggles, Escape / tap outside)
-  shows `alertText()` ("Alerted, no explanation given." when empty, plain
-  text), "You alerted: …" for your own, "Partner alerted: …" for
+  titled "East alerted 2♦" ("You alerted 2♣" for your own, "Partner
+  alerted 2♣" for partner's, "2♦ by West" / "Your 2♣" unalerted) shows
+  `alertText()` ("Alerted, no explanation given." when empty, plain
+  text) for
   partner's (`isPartner`; `AuctionHistory`'s `bidding`, set by the play
   page during the auction, hides partner's alert even if held); with
   `live` (auction and play) only an opponent's call offers **Ask** (`game.askAboutCall(index)`, `POST
@@ -986,6 +1002,39 @@ The user's standing rule (#91): **no task may leave code coverage under
   structure, typography, plus optional utility CSS). Dark mode is wired via
   `@ionic/vue/css/palettes/dark.system.css` (follows OS setting) — swap this
   import if dark mode behavior needs to change (class-based vs. always-on).
+- **Theme: Daylight** (#160, design canvas linked from the issue): the
+  tokens are `--bridge-*` custom properties in `src/theme/variables.css`
+  (ground, surface, ink, muted, line, control, chip, table/table-inner,
+  on-table, action/on-action/action-text/action-tint, amber, pass/double/
+  redouble bg + text, question, popup, red-suit, card-face/ink/red/border,
+  radii, `--bridge-font` / `--bridge-font-numbers`), mapped onto Ionic's
+  colours (`primary` = the table navy, `success`/`danger`/`warning` =
+  pass/double/amber, `medium` = muted, `tertiary` = the robot blue) plus a
+  custom **`action`** colour (`color="action"`, the one orange primary per
+  screen: StartBox's Start, NextBoardBox's Deal now). Components read
+  tokens, never hex, except what stays white in both modes (card faces,
+  the bidding box's cards, the plates' avatars). Dark mode: the same
+  tokens get the Midnight values under `prefers-color-scheme: dark` on
+  `:root, :root.ios, :root.md` (so they beat `dark.system.css`).
+  `src/theme/daylight.css`: body font, `ion-button` 48 px (not small,
+  toolbar or clear), sentence case, 12 px radius, outline neutral /
+  `color="danger"` outline via `::part(native)`, grey disabled (sets
+  `--ion-color-base` too, since a coloured button ignores `--background`).
+  Fonts are bundled from `@fontsource/atkinson-hyperlegible` (400/700) and
+  `@fontsource/barlow-semi-condensed` (600/700), imported in `main.ts`.
+  `BridgeTable` is the navy panel: top and bottom seats span the grid's
+  width, each seat a `.plate` (`.avatar`, `avatar-robot` with an inline
+  robot icon, `.seat-user`, `AdminBadge` (the amber ADMIN tag),
+  `.plate-sub` seat line, `.seat-bank` pill, `.seat-ready-mark` from the
+  `ready` prop), `.seat-empty` dashed, `.last-call` per seat while `calls`
+  is set (the play page passes the auction during `auction`; partner's
+  alert never marked), side plates upright and 76 px below 576 px; it sets
+  `--playable-ring` amber and white `--call-chip-*` for what lies on it.
+  `TrickArea`'s `trump` rings `winningSoFar()` (`src/utils/play.ts`) and
+  `mySlot` draws a dashed `.my-slot`. Still to come: the turn clock line,
+  the play page's header and phone bar, the claim sheet's scores
+  (`contractScore`) and the claim banner (#161); the finished board,
+  Tables and Home (#162); the side sheets and the wide layout (#163).
 - **Card size** (#136): `src/utils/cardSize.ts` is the setting, `normal`
   (the old 48 px card) / `large` (96 px, the default) / `xlarge` (120 px),
   on the Account page (an `ion-segment` + two preview cards), kept in
@@ -993,8 +1042,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   anything else reads as Large). `cardWidthCss` (`min(<width>px,
   var(--card-max, <width>px))`) is bound as `--card-w` on `PlayingCard`,
   `HandView`, `TrickArea` and `LeadAnalysis`; everything a card draws
-  (height 17/12 of it, corner, rank, pip) and every overlap or slot is a
-  `calc()` of `--card-w`, never a fixed px. `--card-max` caps it where room
+  (height 17/12 of it, the corner: rank 0.38 and suit 0.32 of the width,
+  no pip since #160) and every overlap or slot is a
+  `calc()` of `--card-w`, never a fixed px. Playable cards rise 14 px with
+  a `--playable-ring` (orange, amber on the table); a forced one pulses an
+  amber halo. `--card-max` caps it where room
   is short: 72 px for a hand below 576 px, half the centre's width for the
   trick (`.centre-slot` is `container-type: inline-size`, `100cqi`), the
   screen's width for the spread pop-up. A hand's `--card-step` (the part of

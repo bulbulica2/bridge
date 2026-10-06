@@ -113,7 +113,7 @@ function spoken(item: LeadTricks): string {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 6px;
-  padding-top: 10px;
+  padding-top: 18px;
 }
 
 @media (max-width: 575px) {
@@ -141,25 +141,25 @@ function spoken(item: LeadTricks): string {
 
 .lead-tricks {
   width: var(--card-step);
-  font-size: 1rem;
-  font-weight: 600;
+  font-family: var(--bridge-font-numbers);
+  font-size: 1.1rem;
+  font-weight: 700;
   text-align: center;
   font-variant-numeric: tabular-nums;
   color: var(--ion-color-medium);
 }
 
 .lead.best :deep(.playing-card) {
-  box-shadow: 0 0 0 2px var(--ion-color-success, #2dd36f);
+  box-shadow: 0 0 0 3px var(--ion-color-success);
 }
 
 .lead.best .lead-tricks {
-  font-weight: 800;
-  color: var(--ion-color-success-shade, #28ba62);
+  color: var(--ion-color-success);
 }
 
 .lead.led :deep(.playing-card) {
-  transform: translateY(-10px);
-  outline: 2px solid var(--ion-color-primary);
+  transform: translateY(-14px);
+  outline: 3px solid var(--bridge-action);
   outline-offset: 1px;
 }
 
@@ -175,7 +175,7 @@ function spoken(item: LeadTricks): string {
 }
 
 .legend-best {
-  color: var(--ion-color-success-shade, #28ba62);
+  color: var(--ion-color-success);
   font-weight: 700;
 }
 

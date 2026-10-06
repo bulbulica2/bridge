@@ -67,6 +67,7 @@
     <ion-button
       v-if="!iAmReady"
       expand="block"
+      color="action"
       class="start-button"
       :disabled="busy"
       @click="emit('start')"

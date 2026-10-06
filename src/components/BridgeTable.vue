@@ -1,23 +1,27 @@
 <template>
-  <!-- The viewer is always at the bottom, partner opposite, the opponents on
-       the left and right (see screenSide). Once a board is dealt each seat is
-       striped red when its side is vulnerable and green when it is not.
-       Once dummy is face up its cards lie at its seat: across the top when
-       the viewer is declarer (who plays them from there), in suit columns on
-       a side seat for a defender, and not at all when the viewer is dummy,
-       whose own hand below is the same cards. A robot declarer's dummy, who
-       plays declarer's game, has declarer's cards (`declarer`, theirs alone
-       to see) across the top instead. While a claim is pending, the
-       claimer's cards lie face up at their seat (the viewer's own are below
-       the table already). Once the board is over, the whole deal lies face
-       up, each hand at its seat (in a replay, what is left of it, in the
-       room the hand took as dealt). A seat whose player is away mid-set is
-       dashed and tagged with its clock ("away · 0:42", AwaySeatTag).
-       Dummy's and a robot declarer's cards read trumps first (`trump`, see
-       suitOrder); the claimer's and the deal keep bridge order. Each
-       human's time for the set (`banks`) shows under their name, the
-       running one counting down, red under a minute; robots and admins
-       have none. -->
+  <!-- Daylight's table (#160): a navy panel, the viewer always at the
+       bottom, partner opposite, the opponents on the left and right (see
+       screenSide). Each seat is a plate: avatar (initials, a robot's icon),
+       name, seat and the player's time for the set (`banks`: grey when
+       idle, solid while it runs, red under a minute; robots and admins have
+       none). The seat on turn is ringed orange, an away seat's plate is red
+       with its clock ("away · 0:42", AwaySeatTag), a seat that pressed
+       Start (`ready`) has a green tick and an empty one is dashed. Once a
+       board is dealt each seat is striped red when its side is vulnerable
+       and green when it is not. During the auction each seat's last call
+       sits by its plate (`calls`), an opponent's alerted one with the amber
+       "!". Once dummy is face up its cards lie at its seat: across the top
+       when the viewer is declarer (who plays them from there), in suit
+       columns on a side seat for a defender, and not at all when the viewer
+       is dummy, whose own hand below is the same cards. A robot declarer's
+       dummy, who plays declarer's game, has declarer's cards (`declarer`,
+       theirs alone to see) across the top instead. While a claim is
+       pending, the claimer's cards lie face up at their seat (the viewer's
+       own are below the table already). Once the board is over, the whole
+       deal lies face up, each hand at its seat (in a replay, what is left
+       of it, in the room the hand took as dealt). Dummy's and a robot
+       declarer's cards read trumps first (`trump`, see suitOrder); the
+       claimer's and the deal keep bridge order. -->
   <div class="bridge-table">
     <div
       v-for="side in SIDES"
@@ -31,42 +35,87 @@
           'seat-mine': side === 'bottom' && mySeat,
           'seat-wide': side === 'top' && (dummySide === 'top' || declarerSide === 'top'),
           'seat-away': !!away[seatOn[side]],
+          'seat-ready': ready.includes(seatOn[side]),
         },
       ]"
       :data-seat="seatOn[side]"
     >
-      <span class="seat-head">
-        <span class="seat-name">{{ seatOn[side] }}</span>
-        <span v-if="board?.dealer === seatOn[side]" class="dealer" title="Dealer">D</span>
-      </span>
+      <div class="plate-row">
+        <div v-if="players[seatOn[side]]" class="plate">
+          <span
+            class="avatar"
+            :class="{ 'avatar-robot': players[seatOn[side]]!.is_robot }"
+            :title="players[seatOn[side]]!.is_robot ? 'Robot player' : undefined"
+            aria-hidden="true"
+          >
+            <svg
+              v-if="players[seatOn[side]]!.is_robot"
+              class="robot-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="5" y="8" width="14" height="11" rx="3" />
+              <path d="M12 4v4M9 13h.01M15 13h.01" />
+            </svg>
+            <template v-else>{{ initials(players[seatOn[side]]!.username) }}</template>
+          </span>
+          <span class="plate-text">
+            <span class="plate-name">
+              <button
+                type="button"
+                class="seat-user"
+                :aria-label="profileLabel(players[seatOn[side]]!)"
+                @click="emit('select', players[seatOn[side]]!)"
+              >
+                {{ players[seatOn[side]]!.username }}
+              </button>
+              <AdminBadge v-if="players[seatOn[side]]!.is_admin" />
+            </span>
+            <span class="plate-sub">
+              <span class="seat-name">{{ SEAT_NAMES[seatOn[side]] }}</span>
+              <span v-if="board?.dealer === seatOn[side]" class="dealer" title="Dealer">D</span>
+              <span v-if="side === 'bottom' && mySeat" class="seat-you">you</span>
+              <span v-if="dummy && dummy.seat === seatOn[side] && side !== 'bottom'" class="seat-dummy">
+                dummy
+              </span>
+              <span v-if="declarerSide === side" class="seat-dummy">declarer</span>
+              <AwaySeatTag v-if="away[seatOn[side]]" class="seat-away-tag" :tag="away[seatOn[side]]!" />
+            </span>
+          </span>
+          <span
+            v-if="banks[seatOn[side]]"
+            class="seat-bank"
+            :class="{ 'seat-bank-running': banks[seatOn[side]]!.running, 'seat-bank-low': banks[seatOn[side]]!.low }"
+            :aria-label="bankLabel(seatOn[side], banks[seatOn[side]]!)"
+          >
+            {{ formatClock(banks[seatOn[side]]!.seconds) }}
+          </span>
+          <span v-if="ready.includes(seatOn[side])" class="seat-ready-mark" title="Pressed Start" aria-label="ready">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12l5 5 9-10" />
+            </svg>
+          </span>
+        </div>
+        <span v-else class="seat-empty">Empty · {{ SEAT_NAMES[seatOn[side]] }}</span>
 
-      <button
-        v-if="players[seatOn[side]]"
-        type="button"
-        class="seat-user"
-        :aria-label="`${players[seatOn[side]]!.username}'s profile`"
-        @click="emit('select', players[seatOn[side]]!)"
-      >
-        {{ players[seatOn[side]]!.username }}
-      </button>
-      <span v-else class="seat-empty">Empty</span>
-      <RobotBadge v-if="players[seatOn[side]]?.is_robot" />
-      <AdminBadge v-if="players[seatOn[side]]?.is_admin" />
+        <!-- The seat's last call in the auction, kept in place (empty) until
+             it has one, so nothing moves when it comes. -->
+        <span v-if="calls" class="last-call">
+          <span
+            v-if="lastCalls[seatOn[side]]"
+            class="last-call-chip"
+            :class="{ alerted: lastCallAlerted(seatOn[side]) }"
+          >
+            <CallLabel :bid="lastCalls[seatOn[side]]!.bid" chip />
+            <span v-if="lastCallAlerted(seatOn[side])" class="alert-mark" aria-label="alerted">!</span>
+          </span>
+        </span>
+      </div>
 
-      <span v-if="side === 'bottom' && mySeat" class="seat-you">you</span>
-      <span
-        v-if="banks[seatOn[side]]"
-        class="seat-bank"
-        :class="{ 'seat-bank-running': banks[seatOn[side]]!.running, 'seat-bank-low': banks[seatOn[side]]!.low }"
-        :aria-label="bankLabel(seatOn[side], banks[seatOn[side]]!)"
-      >
-        {{ formatClock(banks[seatOn[side]]!.seconds) }}
-      </span>
-      <AwaySeatTag v-if="away[seatOn[side]]" class="seat-away-tag" :tag="away[seatOn[side]]!" />
-      <span v-if="dummy && dummy.seat === seatOn[side] && side !== 'bottom'" class="seat-dummy">
-        dummy
-      </span>
-      <span v-if="declarerSide === side" class="seat-dummy">declarer</span>
       <!-- While a board has a turn, every seat keeps a line for the turn
            label, filled on the seat on turn only: the table keeps its
            height as the turn goes round. -->
@@ -136,13 +185,14 @@ import DummyColumns from '@/components/DummyColumns.vue';
 import HandView from '@/components/HandView.vue';
 import AdminBadge from '@/components/AdminBadge.vue';
 import AwaySeatTag from '@/components/AwaySeatTag.vue';
-import RobotBadge from '@/components/RobotBadge.vue';
-import type { Board, Card, Strain } from '@/services/game';
+import CallLabel from '@/components/CallLabel.vue';
+import type { AuctionCall, Board, Card, Strain } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES } from '@/utils/auction';
 import { formatClock } from '@/utils/away';
 import type { AwayTag } from '@/utils/away';
+import { isPartner } from '@/utils/alerts';
 import { isVulnerable, longestSuit, seatAt, suitOrder, vulnerabilityText } from '@/utils/cards';
 import { bankLabel } from '@/utils/setClock';
 import type { SeatBank } from '@/utils/setClock';
@@ -193,6 +243,11 @@ const props = withDefaults(
     // Each human's time for the set (utils/setClock), none for a robot or
     // an admin.
     banks?: Partial<Record<Seat, SeatBank>>;
+    // The seats that pressed Start, while a Start is awaited.
+    ready?: Seat[];
+    // The auction so far, while it lasts: each seat's last call by its
+    // plate. Null (the default) shows none.
+    calls?: AuctionCall[] | null;
     busy?: boolean;
     sendingId?: number | null;
   }>(),
@@ -212,6 +267,8 @@ const props = withDefaults(
     reserve: null,
     away: () => ({}),
     banks: () => ({}),
+    ready: () => [],
+    calls: null,
     busy: false,
     sendingId: null,
   },
@@ -258,6 +315,30 @@ const claimSide = computed<ScreenSide | null>(() => {
   return side && side !== 'bottom' ? side : null;
 });
 
+// Each seat's latest call, while the auction lasts.
+const lastCalls = computed(() => {
+  const last: Partial<Record<Seat, AuctionCall>> = {};
+  for (const call of props.calls ?? []) {
+    last[call.seat] = call;
+  }
+  return last;
+});
+
+// An alerted last call shows its "!", but never partner's: alerts are for
+// the opponents during the auction.
+function lastCallAlerted(seat: Seat): boolean {
+  return !!lastCalls.value[seat]?.alert && !isPartner(seat, props.mySeat);
+}
+
+// Two letters for the avatar: "bulbulica" reads BU.
+function initials(username: string): string {
+  return username.slice(0, 2).toUpperCase();
+}
+
+function profileLabel(user: PublicUser): string {
+  return `${user.username}'s profile${user.is_robot ? ', robot' : ''}`;
+}
+
 function turnLabel(side: ScreenSide): string {
   const mine = props.myTurn ?? side === 'bottom';
   if (mine) {
@@ -268,10 +349,21 @@ function turnLabel(side: ScreenSide): string {
 </script>
 
 <style scoped>
+/* The navy panel. Everything on it reads `--bridge-on-table`; a playable
+   card on it is ringed amber (HandView's `--playable-ring`). */
 .bridge-table {
+  --playable-ring: var(--bridge-amber);
+  --bridge-table-slot: #6b8bb5;
+  --call-chip-bg: #fff;
+  --call-chip-ink: #142033;
+  --call-chip-red: #c8102e;
   display: grid;
   grid-template-columns: 1fr 1.1fr 1fr;
-  gap: 8px;
+  gap: 10px 8px;
+  padding: 12px;
+  border-radius: var(--bridge-radius-panel);
+  background: var(--bridge-table);
+  color: var(--bridge-on-table);
 }
 
 .side-top {
@@ -299,9 +391,12 @@ function turnLabel(side: ScreenSide): string {
   grid-row: 3;
 }
 
-/* Dummy across the top, for declarer (or declarer, for a robot declarer's
-   dummy): the whole width, like their own hand. */
-.side-top.seat-wide {
+/* Partner and the viewer take the whole width (their plate and last call
+   side by side, and dummy across the top for declarer, or declarer for a
+   robot declarer's dummy, like the viewer's own hand); the opponents the
+   middle row's sides. */
+.side-top,
+.side-bottom {
   grid-column: 1 / 4;
 }
 
@@ -318,109 +413,244 @@ function turnLabel(side: ScreenSide): string {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-height: 88px;
-  padding: 8px 6px;
+  gap: 6px;
+  min-width: 0;
   text-align: center;
-  border: 1px solid var(--ion-color-step-150, #e0e0e0);
-  border-radius: 8px;
 }
 
-/* The usual convention: red for vulnerable, green for not. */
-.seat.vul {
-  border-top: 5px solid #d32f2f;
+.plate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 8px;
+  max-width: 100%;
 }
 
-.seat.not-vul {
-  border-top: 5px solid #2e7d32;
+/* A seat's plate: avatar, name over seat, the set's clock on the right. */
+.plate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px 6px 6px;
+  border-radius: 14px;
+  background: var(--bridge-table-inner);
+  text-align: left;
 }
 
-.seat-mine {
-  background: rgba(var(--ion-color-primary-rgb, 56, 128, 255), 0.06);
+/* The usual convention, on the plate's top edge: red for a vulnerable
+   side, green for not. */
+.seat.vul .plate {
+  box-shadow: inset 0 3px 0 #e5484d;
 }
 
-.seat-away {
-  border-style: dashed;
-  opacity: 0.75;
+.seat.not-vul .plate {
+  box-shadow: inset 0 3px 0 #3fa45b;
+}
+
+/* On turn: the orange ring (over the stripe). */
+.seat-turn .plate,
+.seat-turn.vul .plate,
+.seat-turn.not-vul .plate {
+  box-shadow: 0 0 0 3px var(--bridge-action);
+}
+
+/* Away mid-set: a red plate with its clock. */
+.seat-away .plate {
+  background: #5a1d1a;
+}
+
+.seat-away .avatar {
+  background: #fde6e4;
+  color: #9f1d17;
+}
+
+.avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #fff;
+  color: #1d3a5f;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.avatar-robot {
+  background: #cfe0ff;
+}
+
+.robot-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.plate-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.plate-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.seat-user {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.seat-user:hover,
+.seat-user:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.seat-user:focus-visible {
+  outline: 2px solid var(--bridge-amber);
+  outline-offset: 2px;
+}
+
+.plate-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  font-size: 0.75rem;
+  color: var(--bridge-on-table-muted);
+}
+
+.seat-away .plate-sub {
+  color: #ffc2bc;
 }
 
 .seat-away-tag {
+  --away-tag-color: #ffc2bc;
+  --away-tag-urgent: #fff;
   font-size: 0.7rem;
-}
-
-.seat-turn {
-  box-shadow: 0 0 0 2px var(--ion-color-warning, #ffc409);
-}
-
-.seat-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.seat-name {
-  font-weight: 700;
-  color: var(--ion-color-medium);
 }
 
 .dealer {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--ion-color-dark, #222);
-  color: var(--ion-color-dark-contrast, #fff);
-  font-size: 0.7rem;
+  background: var(--bridge-amber);
+  color: var(--bridge-on-amber);
+  font-size: 0.65rem;
   font-weight: 700;
 }
 
-.seat-user {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 0.9rem;
-  color: var(--ion-color-primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-
-.seat-empty {
-  font-size: 0.9rem;
-  color: var(--ion-color-medium);
-}
-
-.seat-dummy {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  color: var(--ion-color-medium);
-}
-
+.seat-dummy,
 .seat-you {
   font-size: 0.7rem;
+  font-weight: 700;
   text-transform: uppercase;
-  color: var(--ion-color-primary);
 }
 
-/* A player's time for the set: the running one in bold, red under a
-   minute. */
+/* A player's time for the set: grey while idle, solid while it runs, red
+   under a minute. */
 .seat-bank {
-  font-size: 0.75rem;
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--bridge-on-table-muted);
+  font-family: var(--bridge-font-numbers);
+  font-size: 0.95rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--ion-color-medium);
 }
 
 .seat-bank-running {
-  font-weight: 700;
-  color: var(--ion-text-color, #000);
+  background: #fff;
+  color: #142033;
 }
 
 .seat-bank-low {
-  color: var(--ion-color-danger, #c5000f);
+  background: #b3261e;
+  color: #fff;
+}
+
+.seat-ready-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #2f7a5b;
+  color: #fff;
+}
+
+.seat-ready-mark svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* An empty seat: dashed, waiting for a player. */
+.seat-empty {
+  padding: 10px 14px;
+  border: 2px dashed var(--bridge-action);
+  border-radius: 14px;
+  background: var(--bridge-action-tint);
+  color: var(--bridge-action-text);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+/* The seat's last call, the height of a chip whether it has one or not. */
+.last-call {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+}
+
+.last-call-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 9px;
+}
+
+.last-call-chip.alerted {
+  box-shadow: 0 0 0 2px var(--bridge-amber);
+}
+
+.alert-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--bridge-amber);
+  color: var(--bridge-on-amber);
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 /* One line of the label's size, empty or not. */
@@ -437,12 +667,12 @@ function turnLabel(side: ScreenSide): string {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-weight: 600;
-  color: var(--ion-color-warning-shade, #e0ac08);
+  font-weight: 700;
+  color: #ffb27a;
 }
 
 .turn.turn-thinking {
-  color: var(--ion-color-tertiary, #5260ff);
+  color: #b8c8ff;
 }
 
 .turn-dot {
@@ -459,18 +689,33 @@ function turnLabel(side: ScreenSide): string {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .turn-dot {
+    animation: none;
+  }
+}
+
 .centre {
-  background: var(--ion-color-light, #f4f5f8);
+  min-height: 88px;
+  padding: 8px 6px;
+  border-radius: var(--bridge-radius-card);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* The trick's cards fit the centre's width (TrickArea's `--card-max`). */
 .centre.centre-slot {
   container-type: inline-size;
   padding: 6px 4px;
+  background: none;
 }
 
 .centre p {
   margin: 0;
+}
+
+/* Anything the page lays on the table reads on its navy. */
+.bridge-table :deep(.empty) {
+  color: var(--bridge-on-table-muted);
 }
 
 .board-number {
@@ -479,23 +724,55 @@ function turnLabel(side: ScreenSide): string {
 
 .board-line {
   font-size: 0.8rem;
-  color: var(--ion-color-medium);
+  color: var(--bridge-on-table-muted);
 }
 
-/* A phone: the side seats take only what their name, tags and any hand
-   need, and the centre all the rest, so the trick's cards stay large. */
+/* A phone: the side seats take only what their plate and any hand need,
+   and the centre all the rest, so the trick's cards stay large. Their
+   plates stand upright: avatar over name over seat, a fixed width so a
+   turn label coming and going never moves the centre. */
 @media (max-width: 575px) {
   .bridge-table {
     grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 6px;
+    gap: 8px 6px;
+    padding: 10px 8px;
+    border-radius: 18px;
   }
 
-  .seat {
-    padding: 6px 3px;
+  /* A side seat's last call under its plate. */
+  .side-left .plate-row,
+  .side-right .plate-row {
+    flex-direction: column;
   }
 
-  .seat-user {
-    max-width: 64px;
+  .side-left .plate,
+  .side-right .plate {
+    flex-direction: column;
+    gap: 4px;
+    width: 76px;
+    padding: 6px 4px;
+    text-align: center;
+  }
+
+  .side-left .plate-text,
+  .side-right .plate-text {
+    align-items: center;
+    max-width: 100%;
+  }
+
+  .side-left .plate-sub,
+  .side-right .plate-sub {
+    justify-content: center;
+  }
+
+  .side-left .seat-user,
+  .side-right .seat-user {
+    max-width: 68px;
+  }
+
+  .avatar {
+    width: 30px;
+    height: 30px;
   }
 }
 </style>

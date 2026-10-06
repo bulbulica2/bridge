@@ -325,15 +325,15 @@ describe('BoardReview', () => {
     }
 
     // bo sat East.
-    expect(vul('').text()).toBe('Vulnerable: None')
+    expect(vul('').text()).toBe('Nobody vulnerable')
     expect(vul('').classes()).toContain('vul-label-green')
     expect(vul('E-W').text()).toBe('Vulnerable: E-W (you)')
-    expect(vul('N-S').text()).toBe('Vulnerable: N-S')
+    expect(vul('N-S').text()).toBe('Vul: N-S')
     expect(vul('N-S').classes()).toContain('vul-label-red')
 
     // A board the viewer didn't play: no "(you)".
     useAuthStore().user = { id: 99, name: 'Zed', username: 'zed', email: 'zed@example.com' } as never
-    expect(vul('N-S E-W').text()).toBe('Vulnerable: Both')
+    expect(vul('N-S E-W').text()).toBe('Vul: Both')
   })
 
   test("a player's name is handed up", async () => {
@@ -562,7 +562,7 @@ describe('BoardReviewModal', () => {
     await press(sheet.props('buttons') as Button[], 'Print / Save as PDF')
     expect(window.print).toHaveBeenCalledTimes(1)
     expect(document.querySelector('body > .board-printout')?.textContent).toContain('Board 7')
-    expect(document.querySelector('body > .board-printout .meta')?.textContent).toContain('Vulnerable: None')
+    expect(document.querySelector('body > .board-printout .meta')?.textContent).toContain('Nobody vulnerable')
 
     await wrapper.setProps({ open: false })
     await flushPromises()

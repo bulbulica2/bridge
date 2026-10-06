@@ -2,7 +2,9 @@
   <!-- The auction as players write it down: one column per seat, in the
        table's rotation (the viewer's column last, so South sees W N E S),
        rows of four starting in the dealer's column. Alerted calls stand
-       out, with their explanation a hover or a tap away (AuctionCallCell). -->
+       out, with their explanation a hover or a tap away (AuctionCallCell).
+       Daylight (#160): a white card of chips, the vulnerable side's seats
+       in red, the call awaited a "?" ringed orange. -->
   <section class="auction" aria-label="Auction">
     <table>
       <thead>
@@ -87,66 +89,82 @@ const rows = computed(() =>
 <style scoped>
 .auction {
   margin: 12px 0;
+  padding: 8px;
+  border-radius: var(--bridge-radius-card);
+  background: var(--bridge-surface);
+  box-shadow: 0 1px 0 var(--bridge-line);
 }
 
 table {
   width: 100%;
   table-layout: fixed;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 4px;
   text-align: center;
 }
 
 th {
-  padding: 4px 2px 6px;
-  border-bottom: 1px solid var(--ion-color-step-150, #e0e0e0);
+  padding: 0;
   font-weight: 400;
 }
 
-/* Vulnerable seats in red, like the table's stripes. */
+/* Each seat a pill; the vulnerable side's red. */
 th .seat {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border-radius: 6px;
+  background: var(--bridge-chip);
+  font-size: 0.8rem;
   font-weight: 700;
-  color: var(--ion-color-medium);
+  color: var(--bridge-ink);
 }
 
 th.vul .seat {
-  color: var(--bridge-red-suit, #c62828);
+  background: #c8102e;
+  color: #fff;
 }
 
 th.mine .seat::after {
-  content: ' (you)';
+  content: '· you';
+  margin-left: 4px;
   font-weight: 400;
-  font-size: 0.75rem;
 }
 
 .player {
   display: block;
   overflow: hidden;
+  margin-top: 2px;
   font-size: 0.75rem;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 td {
-  height: 28px;
-  padding: 2px;
+  height: 32px;
+  padding: 0;
   font-size: 1rem;
 }
 
 .next {
-  display: inline-block;
-  min-width: 24px;
-  border-radius: 4px;
-  background: rgba(var(--ion-color-warning-rgb, 255, 196, 9), 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 40px;
+  height: 30px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 2px var(--bridge-action);
   font-weight: 700;
-  color: var(--ion-color-warning-shade, #e0ac08);
+  color: var(--bridge-action-text);
 }
 
 .empty {
   margin: 8px 0 0;
   text-align: center;
   font-size: 0.85rem;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
 }
 </style>

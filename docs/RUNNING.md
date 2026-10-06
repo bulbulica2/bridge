@@ -1,6 +1,6 @@
 # Running the frontend locally
 
-_Last verified: branch `bulbulica2/76-turn-timer`._
+_Last verified: branch `bulbulica2/92-daylight-redesign`._
 
 Requirements: Node.js 18 or newer (Vite 5 needs it; 23 works) with npm
 (`.nvmrc` names 22, the LTS that CI uses; `nvm use` picks it up), and
@@ -24,7 +24,10 @@ committed with working local values (see below).
 
 If Vite later reports a dependency it "could not resolve" after a pull, run
 `npm install` again: an existing `node_modules` can be stale against a
-changed lockfile.
+changed lockfile (since #160 that includes the two typefaces,
+`@fontsource/atkinson-hyperlegible` and `@fontsource/barlow-semi-condensed`,
+which are bundled rather than loaded from Google Fonts, so the app needs no
+network for them, in the browser or the Capacitor build).
 
 ## `.env`
 

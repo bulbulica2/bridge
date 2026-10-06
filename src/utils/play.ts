@@ -1,5 +1,5 @@
 import type { Seat } from '@/services/tables';
-import type { Card, PlayedCard, Playing } from '@/services/game';
+import type { Card, PlayedCard, Playing, Strain } from '@/services/game';
 import { screenSide } from '@/utils/cards';
 import type { ScreenSide } from '@/utils/cards';
 
@@ -102,4 +102,22 @@ export function trickBySide(
     sides[screenSide(seat, mySeat)] = card;
   }
   return sides;
+}
+
+// The seat whose card wins the trick so far (GAME-RULES.md §5): the highest
+// trump played, else the highest card of the suit led. Null for an empty
+// trick. Only a hint for the table's ring: the backend says who won.
+export function winningSoFar(cards: PlayedCard[], trump: Strain | null): Seat | null {
+  if (cards.length === 0) {
+    return null;
+  }
+  let best = cards[0];
+  for (const played of cards.slice(1)) {
+    const ruffs = trump !== null && trump !== 'NT' && played.card.suit === trump && best.card.suit !== trump;
+    const beats = played.card.suit === best.card.suit && played.card.rank > best.card.rank;
+    if (ruffs || beats) {
+      best = played;
+    }
+  }
+  return best.seat;
 }

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import AuctionHistory from '@/components/AuctionHistory.vue'
 import BiddingBox from '@/components/BiddingBox.vue'
+import { bidWith } from './biddingBox'
 import ExplainCallSheet from '@/components/ExplainCallSheet.vue'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import * as gameService from '@/services/game'
@@ -533,8 +534,8 @@ describe('AuctionHistory alerts', () => {
     expect(w.find('.call-popup').exists()).toBe(false)
 
     await c.trigger('pointerenter', { pointerType: 'mouse' })
-    expect(w.get('.call-popup').text()).toContain('2♣ by North')
-    expect(w.get('.alert-text').text()).toBe('Partner alerted: Strong')
+    expect(w.get('.call-popup').text()).toContain('Partner alerted 2♣')
+    expect(w.get('.alert-text').text()).toBe('Strong')
 
     await c.trigger('pointerleave', { pointerType: 'mouse' })
     expect(w.find('.call-popup').exists()).toBe(false)
@@ -568,7 +569,7 @@ describe('AuctionHistory alerts', () => {
 
     await w.get('.call-button').trigger('click')
 
-    expect(w.get('.alert-text').text()).toBe('Partner alerted: <b>Strong</b>')
+    expect(w.get('.alert-text').text()).toBe('<b>Strong</b>')
     expect(w.find('.alert-text b').exists()).toBe(false)
   })
 
@@ -577,8 +578,8 @@ describe('AuctionHistory alerts', () => {
 
     await w.get('.call-button').trigger('click')
 
-    expect(w.get('.call-title').text()).toBe('Your 2♣')
-    expect(w.get('.alert-text').text()).toBe('You alerted: Stayman')
+    expect(w.get('.call-title').text()).toBe('You alerted 2♣')
+    expect(w.get('.alert-text').text()).toBe('Stayman')
   })
 
   test("during the auction partner's call shows no alert, even one held", () => {
@@ -602,14 +603,14 @@ describe('AuctionHistory alerts', () => {
     expect(strong.get('.call-button').classes()).toContain('alerted')
     expect(strong.get('.call-button').attributes('aria-label')).toBe('2 clubs, alerted')
     await strong.get('.call-button').trigger('click')
-    expect(w.get('.call-title').text()).toBe('2♣ by North')
-    expect(w.get('.alert-text').text()).toBe('Partner alerted: Strong')
+    expect(w.get('.call-title').text()).toBe('Partner alerted 2♣')
+    expect(w.get('.alert-text').text()).toBe('Strong')
     expect(w.find('.popup-action.ask').exists()).toBe(false)
     expect(w.find('.popup-action.ask-in-chat').exists()).toBe(false)
     expect(w.find('.popup-action.answer').exists()).toBe(false)
 
     await cell(w, '2♥').get('.call-button').trigger('click')
-    expect(cell(w, '2♥').get('.alert-text').text()).toBe('Partner alerted: Alerted, no explanation given.')
+    expect(cell(w, '2♥').get('.alert-text').text()).toBe('Alerted, no explanation given.')
   })
 
   test("while the board is on, any opponent's call can be asked about", async () => {
@@ -618,6 +619,7 @@ describe('AuctionHistory alerts', () => {
     // East and West only: partner's calls and ours aren't asked about.
     expect(w.findAll('.call-button').map((b) => b.text())).toEqual(['2♣', '2♦'])
     await cell(w, '2♦').get('.call-button').trigger('click')
+    expect(w.get('.call-title').text()).toBe('2♦ by West')
     expect(w.get('.no-alert').text()).toBe('Not alerted.')
     await w.get('.popup-action.ask').trigger('click')
 
@@ -645,6 +647,20 @@ describe('AuctionHistory alerts', () => {
     expect((fresh.get('.popup-action.ask').element as HTMLButtonElement).disabled).toBe(true)
   })
 
+  test("an opponent's alerted call is named in the pop-up's title, asked about ringed blue", async () => {
+    const w = mountAuction(
+      noted('N 1NT, E 2C', { 1: { alert: { explanation: 'Majors' }, question: { asked_by: 'S' } } }),
+      { live: true },
+    )
+
+    const button = cell(w, '2♣').get('.call-button')
+    expect(button.classes()).toEqual(expect.arrayContaining(['alerted', 'questioned']))
+    expect(button.attributes('aria-label')).toBe('2 clubs, alerted, asked about')
+    await button.trigger('click')
+    expect(w.get('.call-title').text()).toBe('East alerted 2♣')
+    expect(w.get('.alert-text').text()).toBe('Majors')
+  })
+
   test('a question about our own call offers Answer', async () => {
     const w = mountAuction(noted('N 1NT, E P, S 2C', { 2: { question: { asked_by: 'E' } } }), {
       live: true,
@@ -666,17 +682,17 @@ describe('BiddingBox alert', () => {
     })
   }
 
-  test('says who sees it, and typing an explanation alerts the call', async () => {
-    const wrapper = mountBox()
+  test('the explanation opens with the alert and says who sees it', async () => {
+    expect(mountBox().find('.alert-input').exists()).toBe(false)
+    const wrapper = mountBox({ alert: true })
 
     expect(wrapper.get('.alert-hint').text()).toBe('Only the opponents see this. Your partner doesn\'t.')
     expect(wrapper.get('.alert-input').attributes('maxlength')).toBe('200')
     await wrapper.get('.alert-input').setValue('  ')
-    expect(wrapper.emitted('update:alert')).toBeUndefined()
     await wrapper.get('.alert-input').setValue('Stayman')
 
     expect(wrapper.emitted('update:explanation')).toEqual([['  '], ['Stayman']])
-    expect(wrapper.emitted('update:alert')).toEqual([[true]])
+    expect(wrapper.emitted('update:alert')).toBeUndefined()
   })
 
   test('the toggle alerts with nothing written; turned off, it drops the text', async () => {
@@ -692,7 +708,7 @@ describe('BiddingBox alert', () => {
   })
 
   test('nothing can be changed while a call is on its way', () => {
-    const wrapper = mountBox({ busy: true })
+    const wrapper = mountBox({ busy: true, alert: true })
 
     expect((wrapper.get('.alert-input').element as HTMLInputElement).disabled).toBe(true)
     expect((wrapper.get('.alert-toggle').element as HTMLButtonElement).disabled).toBe(true)
@@ -788,20 +804,21 @@ describe('TablePlayPage alerts', () => {
     // As if still our turn, to see the box again.
     vi.mocked(gameService.makeCall).mockResolvedValue(state({ auction: noted('N 1NT, E P, S 2C, W P, N 2D, E P') }))
 
+    await w.get('.alert-toggle').trigger('click')
     await w.get('.alert-input').setValue(' Stayman ')
-    await w.get('button[data-call="2C"]').trigger('click')
+    await bidWith(w, '2C')
     await flushPromises()
 
     expect(gameService.makeCall).toHaveBeenCalledWith(5, bid('2C').id, { alert: true, explanation: 'Stayman' })
-    expect((w.get('.alert-input').element as HTMLInputElement).value).toBe('')
+    expect(w.find('.alert-input').exists()).toBe(false)
     expect(w.get('.alert-toggle').attributes('aria-pressed')).toBe('false')
 
     // The toggle alone alerts with nothing said; nothing at all, no alert.
     await w.get('.alert-toggle').trigger('click')
-    await w.get('button[data-call="2NT"]').trigger('click')
+    await bidWith(w, '2NT')
     await flushPromises()
     expect(gameService.makeCall).toHaveBeenLastCalledWith(5, bid('2NT').id, { alert: true, explanation: null })
-    await w.get('button[data-call="3C"]').trigger('click')
+    await bidWith(w, '3C')
     await flushPromises()
     expect(gameService.makeCall).toHaveBeenLastCalledWith(5, bid('3C').id, null)
   })
@@ -810,8 +827,9 @@ describe('TablePlayPage alerts', () => {
     const w = await mountPage(state())
     vi.mocked(gameService.makeCall).mockRejectedValue(failure(409, 'Bid higher than 1NT.'))
 
+    await w.get('.alert-toggle').trigger('click')
     await w.get('.alert-input').setValue('Stayman')
-    await w.get('button[data-call="2C"]').trigger('click')
+    await bidWith(w, '2C')
     await flushPromises()
 
     expect(showToast).toHaveBeenCalledWith('Bid higher than 1NT.', 'danger')
@@ -822,11 +840,13 @@ describe('TablePlayPage alerts', () => {
   test('a new board starts with nothing typed', async () => {
     const w = await mountPage(state())
 
+    await w.get('.alert-toggle').trigger('click')
     await w.get('.alert-input').setValue('Stayman')
     useGameStore().applyPlayingUpdate(5, publicState({ playing_id: 43, auction: [] }))
     await flushPromises()
 
-    expect((w.get('.alert-input').element as HTMLInputElement).value).toBe('')
+    expect(w.find('.alert-input').exists()).toBe(false)
+    expect(w.get('.alert-toggle').attributes('aria-pressed')).toBe('false')
   })
 
   test("an opponent's alert stands out; Ask brings a robot's answer at once", async () => {
@@ -959,6 +979,6 @@ describe('TablePlayPage alerts', () => {
 
     expect(callButton(w, '2♣').classes()).toContain('alerted')
     await callButton(w, '2♣').trigger('click')
-    expect(w.get('.alert-text').text()).toBe('Partner alerted: Strong')
+    expect(w.get('.alert-text').text()).toBe('Strong')
   })
 })

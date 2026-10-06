@@ -26,10 +26,14 @@ defineProps<{ tag: AwayTag }>();
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: var(--ion-color-warning-shade, #e0ac08);
+  font-family: var(--bridge-font);
+  color: var(--away-tag-color, var(--bridge-double-text, #b3261e));
 }
 
+/* The last seconds before the robot: bold red, or white on the red plate. */
 .away-tag-urgent {
-  color: var(--ion-color-danger, #c5000f);
+  color: var(--away-tag-urgent, var(--ion-color-danger, #b3261e));
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 </style>

@@ -282,6 +282,12 @@ describe('TablePlayPage vulnerability label', () => {
     expect(label(wrapper).classes()).toContain('vul-label-red')
     // The table's centre uses the same words.
     expect(wrapper.get('.board-line + .board-line').text()).toBe('Vulnerable: N-S (you)')
+    // The dealer in a pill beside it (a phone), the board tile on a wide
+    // screen (CSS picks one).
+    expect(wrapper.get('.board-bar .dealer-pill').text()).toBe('Dealer South')
+    expect(wrapper.get('.board-bar .board-tile').attributes('aria-label')).toBe(
+      'Board 7, dealer South, vulnerable: N-S',
+    )
   })
 
   test('in the play: the other side, still in red, above the trick', async () => {
@@ -303,7 +309,7 @@ describe('TablePlayPage vulnerability label', () => {
       }),
     )
 
-    expect(label(wrapper).text()).toBe('Vulnerable: E-W')
+    expect(label(wrapper).text()).toBe('Vul: E-W')
     expect(label(wrapper).classes()).toContain('vul-label-red')
   })
 
@@ -313,14 +319,14 @@ describe('TablePlayPage vulnerability label', () => {
       board: { id: 7, number: 7, dealer: 'S', vulnerable: 'N-S E-W' },
     })
 
-    expect(label(wrapper).text()).toBe('Vulnerable: Both (you too)')
+    expect(label(wrapper).text()).toBe('Both (you too)')
   })
 
   test('nobody vulnerable is green, beside the set', async () => {
     const set = { id: 9, number: 1, board: 2, of: 4, finished: false } as Playing['set']
     const wrapper = await mountPage(auction({ set }))
 
-    expect(label(wrapper).text()).toBe('Vulnerable: None')
+    expect(label(wrapper).text()).toBe('Nobody vulnerable')
     expect(label(wrapper).classes()).toContain('vul-label-green')
     expect(wrapper.get('.board-bar .set-bar').text()).toBe('Board 2 of 4 · Set 1')
   })
@@ -329,6 +335,8 @@ describe('TablePlayPage vulnerability label', () => {
     const wrapper = await mountPage(auction({ phase: 'waiting', board: null, turn: null, hand: [] }))
 
     expect(wrapper.find('.vul-label').exists()).toBe(false)
+    expect(wrapper.find('.dealer-pill').exists()).toBe(false)
+    expect(wrapper.find('.board-tile').exists()).toBe(false)
   })
 })
 
@@ -984,5 +992,60 @@ describe('TablePlayPage turn clock', () => {
     await flushPromises()
 
     expect(navigate).toHaveBeenCalledWith('/sets/9', 'back', 'replace')
+  })
+})
+
+describe('TablePlayPage Daylight table', () => {
+  const call = (seat: Seat, code: string, level: number | null, strain: string | null) => ({
+    seat,
+    bid: { id: level ?? 0, call: code, level, strain } as unknown as Bid,
+  })
+
+  test('waiting for Start: the seats that pressed it are ticked', async () => {
+    const table = makeTable({ board_id: null })
+    table.seats[0].ready = true
+    table.seats[2].ready = true
+    const wrapper = await mountPage(
+      auction({ phase: 'waiting', board: null, turn: null, acting_user_id: null, hand: [], players: undefined }),
+      table,
+    )
+
+    expect(wrapper.findAll('.seat-ready-mark')).toHaveLength(2)
+    expect(wrapper.get('.bridge-table [data-seat="N"]').classes()).toContain('seat-ready')
+  })
+
+  test('a board in hand ticks nobody', async () => {
+    const table = makeTable()
+    table.seats[0].ready = true
+    const wrapper = await mountPage(auction(), table)
+
+    expect(wrapper.find('.seat-ready-mark').exists()).toBe(false)
+  })
+
+  test("the auction's last calls sit by the plates, only while it lasts", async () => {
+    const wrapper = await mountPage(
+      auction({ auction: [call('S', '1C', 1, 'C'), call('W', 'P', null, null), call('N', '1H', 1, 'H'), call('E', 'P', null, null)] }),
+    )
+
+    expect(wrapper.get('.bridge-table [data-seat="N"] .last-call').text()).toBe('1♥')
+    expect(wrapper.get('.bridge-table [data-seat="S"] .last-call').text()).toBe('1♣')
+  })
+
+  test('in the play the trick rings the card winning so far, with a place for ours', async () => {
+    const wrapper = await mountPage(
+      auction({
+        phase: 'play',
+        turn: 'S',
+        acting_user_id: 3,
+        contract: { bid: { id: 20, call: '4S', level: 4, strain: 'S' } as unknown as Bid, doubled: 0, declarer: 'N', dummy: 'S' },
+        tricks: [],
+        current_trick: [{ seat: 'E', card: { id: 60, suit: 'C', rank: 10, rank_name: '10' } }],
+        tricks_won: { ns: 0, ew: 0 },
+      }),
+    )
+
+    expect(wrapper.find('.bridge-table [data-seat="N"] .last-call').exists()).toBe(false)
+    expect(wrapper.get('.trick .slot.won').attributes('data-seat')).toBe('E')
+    expect(wrapper.find('.trick .my-slot').exists()).toBe(true)
   })
 })

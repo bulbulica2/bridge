@@ -32,8 +32,17 @@ import '@ionic/vue/css/display.css';
 /* @import '@ionic/vue/css/palettes/dark.class.css'; */
 import '@ionic/vue/css/palettes/dark.system.css';
 
+/* Daylight's typefaces (#160), bundled so they work offline and in the
+   Capacitor build: Atkinson Hyperlegible for the text, Barlow Semi Condensed
+   for card ranks, clocks and every number. */
+import '@fontsource/atkinson-hyperlegible/400.css';
+import '@fontsource/atkinson-hyperlegible/700.css';
+import '@fontsource/barlow-semi-condensed/600.css';
+import '@fontsource/barlow-semi-condensed/700.css';
+
 /* Theme variables */
 import './theme/variables.css';
+import './theme/daylight.css';
 import './theme/toasts.css';
 import './theme/print.css';
 

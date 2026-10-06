@@ -589,10 +589,10 @@ describe('alerts in the exports', () => {
     const meta = (props: Record<string, unknown>) =>
       mount(BoardPrintout, { props: { review: played(), ...props } }).get('.meta').text()
 
-    expect(meta({})).toContain('Dealer North · Vulnerable: E-W · Playing #42')
+    expect(meta({})).toContain('Dealer North · Vul: E-W · Playing #42')
     expect(meta({ mySeat: 'W' })).toContain('Vulnerable: E-W (you)')
-    expect(meta({ mySeat: 'N' })).toContain('Vulnerable: E-W ·')
-    expect(meta({ review: { ...played(), board: null } })).toContain('Dealer ? · Vulnerable: ? ·')
+    expect(meta({ mySeat: 'N' })).toContain('Vul: E-W ·')
+    expect(meta({ review: { ...played(), board: null } })).toContain('Dealer ? · Vul: ? ·')
   })
 })
 

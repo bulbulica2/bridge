@@ -1,0 +1,75 @@
+/* Daylight (#160): what every page shares, on top of the tokens in
+   variables.css. Ionic's own components are reached through their custom
+   properties; nothing here knows about a page. */
+
+body {
+  background: var(--bridge-ground);
+  color: var(--bridge-ink);
+  font-family: var(--bridge-font);
+}
+
+/* Numbers (clocks, scores, percentages, tricks) and card ranks. */
+.bridge-number {
+  font-family: var(--bridge-font-numbers);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+ion-toolbar {
+  --border-color: var(--bridge-line);
+}
+
+ion-modal {
+  --background: var(--bridge-surface);
+}
+
+/* Buttons: 48 px tall on every device, sentence case, the radius of the
+   design. One solid orange `color="action"` per screen (whatever the table
+   waits for), the solid navy primary as the secondary, an outlined neutral,
+   an outlined red danger (`color="danger"`), and a grey disabled. Small
+   buttons and the header's keep Ionic's own sizes. */
+ion-button {
+  --border-radius: var(--bridge-radius-button);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 700;
+}
+
+ion-button:not(.button-small):not(.in-toolbar):not(.button-clear) {
+  height: 48px;
+  font-size: 1rem;
+}
+
+ion-button.button-outline:not(.ion-color) {
+  --border-color: var(--bridge-control);
+  --color: var(--bridge-ink);
+  --background: var(--bridge-surface);
+}
+
+ion-button.button-outline {
+  --border-width: 1.5px;
+}
+
+/* A coloured button draws its border from the colour itself: the danger
+   outline's lighter border goes on the native button. */
+ion-button.button-outline.ion-color-danger::part(native) {
+  border-color: rgba(var(--ion-color-danger-rgb), 0.4);
+  background: var(--bridge-surface);
+}
+
+/* Disabled: grey, not faded. A coloured button reads `--ion-color-base`. */
+ion-button.button-solid.button-disabled {
+  --background: var(--bridge-chip);
+  --color: var(--bridge-disabled-text);
+  --ion-color-base: var(--bridge-chip);
+  --ion-color-contrast: var(--bridge-disabled-text);
+  --box-shadow: none;
+  opacity: 1;
+}
+
+ion-button.button-outline.button-disabled {
+  --border-color: var(--bridge-line);
+  --color: var(--bridge-disabled-text);
+  --ion-color-base: var(--bridge-disabled-text);
+  opacity: 1;
+}

@@ -1,8 +1,11 @@
 <template>
   <!-- The trick in the middle of the table: each card in front of the hand it
        came from, rotated like the table (the viewer's card at the bottom).
-       A finished trick rings its winning card. `spread` (the Last trick
-       pop-up) parts the cards and names each seat. The cards are the card
+       A finished trick rings its winning card in amber; given the
+       contract's `trump`, a trick in progress rings the card winning it so
+       far, and `mySlot` draws a dashed place for the viewer's card until it
+       comes. `spread` (the Last trick pop-up) parts the cards and names
+       each seat. The cards are the card
        size setting's (cardSize.ts), as large as the table's centre allows. -->
   <div
     class="trick"
@@ -15,11 +18,12 @@
       v-for="side in SIDES"
       :key="side"
       class="slot"
-      :class="[`slot-${side}`, { won: winner !== null && seatOn[side] === winner }]"
+      :class="[`slot-${side}`, { won: ringed !== null && seatOn[side] === ringed }]"
       :data-side="side"
       :data-seat="seatOn[side]"
     >
       <PlayingCard v-if="bySide[side]" :card="bySide[side]!" />
+      <span v-else-if="mySlot && side === 'bottom'" class="my-slot" aria-hidden="true" />
       <span v-if="spread" class="seat-tag" aria-hidden="true">
         {{ seatOn[side] === mySeat ? 'You' : seatOn[side] }}
       </span>
@@ -30,12 +34,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import PlayingCard from '@/components/PlayingCard.vue';
-import type { PlayedCard } from '@/services/game';
+import type { PlayedCard, Strain } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import { SUIT_NAMES, rankLabel, seatAt } from '@/utils/cards';
 import { cardWidthCss } from '@/utils/cardSize';
 import type { ScreenSide } from '@/utils/cards';
-import { trickBySide } from '@/utils/play';
+import { trickBySide, winningSoFar } from '@/utils/play';
 
 const props = withDefaults(
   defineProps<{
@@ -46,13 +50,25 @@ const props = withDefaults(
     // Room between the cards, for a pop-up that isn't held to the table's
     // centre cell.
     spread?: boolean;
+    // The contract's strain: the card winning so far is ringed. Left out,
+    // only a finished trick's winner is.
+    trump?: Strain | null;
+    // A dashed place for the viewer's card while it hasn't come.
+    mySlot?: boolean;
   }>(),
-  { winner: null, spread: false },
+  { winner: null, spread: false, trump: undefined, mySlot: false },
 );
 
 const SIDES: ScreenSide[] = ['top', 'left', 'right', 'bottom'];
 
 const bySide = computed(() => trickBySide(props.cards, props.mySeat));
+
+const ringed = computed(() => {
+  if (props.winner !== null || props.trump === undefined) {
+    return props.winner;
+  }
+  return winningSoFar(props.cards, props.trump);
+});
 
 const seatOn = computed(
   () =>
@@ -128,7 +144,19 @@ const label = computed(() => {
 /* The winner keeps its place in that stacking: lifting it would lay its
    ring over a neighbour's index. Its ring goes under the cards above it. */
 .slot.won :deep(.playing-card) {
-  box-shadow: 0 0 0 3px var(--ion-color-success, #2dd36f);
+  box-shadow:
+    0 0 0 3px var(--bridge-amber, #f59e0b),
+    0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Where the viewer's card goes: a dashed outline on the table. */
+.my-slot {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  border: 2px dashed var(--bridge-table-slot, #6b8bb5);
+  border-radius: calc(var(--card-w) * 0.12);
 }
 
 /* Spread: no overlap at all. The side cards sit halfway down, level with
@@ -171,7 +199,7 @@ const label = computed(() => {
 }
 
 .slot.won .seat-tag {
-  color: var(--ion-color-success, #2dd36f);
+  color: var(--ion-color-warning-shade, #b45309);
 }
 
 .slot-top .seat-tag,

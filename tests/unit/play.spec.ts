@@ -396,7 +396,7 @@ describe("BridgeTable's time for the set", () => {
   test("each human seat shows its bank: the running one marked, red under a minute; robots none", () => {
     const wrapper = mount(BridgeTable, {
       props: {
-        players: PLAYERS,
+        players: { ...PLAYERS, S: { id: 3, name: 'Cy', username: 'cy', description: null } },
         mySeat: 'S',
         board: null,
         turn: 'N',
@@ -1096,7 +1096,8 @@ describe('TablePlayPage card play', () => {
 
       // South at the bottom, so East is on the right.
       const east = wrapper.get('.side-right')
-      expect(east.find('.robot-badge').exists()).toBe(true)
+      expect(east.find('.avatar-robot').attributes('title')).toBe('Robot player')
+      expect(east.get('.seat-user').attributes('aria-label')).toBe("robot-1's profile, robot")
       expect(east.get('.turn').text()).toBe('Thinking…')
       expect(wrapper.get('.status').text()).toBe('Play: robot-1 is thinking…')
       expect(wrapper.get('.status').classes()).toContain('status-robot')
@@ -1118,7 +1119,7 @@ describe('TablePlayPage card play', () => {
 
       expect(wrapper.get('.side-right .turn').text()).toBe('To act')
       expect(wrapper.get('.status').text()).toBe('Play: waiting for bob.')
-      expect(wrapper.find('.robot-badge').exists()).toBe(false)
+      expect(wrapper.find('.avatar-robot').exists()).toBe(false)
     })
   })
 })

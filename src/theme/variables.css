@@ -1,14 +1,293 @@
-/* For information on how to create your own theme, please see:
-http://ionicframework.com/docs/theming/ */
+/* Daylight (#160): the app's design tokens, light first, built for phones.
+   Components read the `--bridge-*` tokens (or the Ionic colours mapped onto
+   them below), never a hex value of their own. Dark mode follows the OS
+   (dark.system.css, main.ts) and gives the same tokens the Midnight values.
 
-/* Hearts and diamonds written on the page (the auction, the contract) rather
-   than on a white card face, so the red needs lifting in dark mode. */
+   - ground / surface: the page behind everything, and what sits on it
+     (cards, sheets, the header).
+   - ink / muted: text; muted is as light as secondary text may go (4.5:1).
+   - line / control: dividers, and the border of outlined buttons and inputs.
+   - table: the table's navy panel (inner: a plate on it), the contract chip
+     and the secondary solid button.
+   - action: the one primary action per screen, your turn, the move clock
+     (action-text on the light action-tint).
+   - amber: an alerted call's "!", the trick's winning card, a playable card
+     on the navy table.
+   - pass / double / redouble: the call chips; double is also anything in
+     danger (a vulnerable side, an away seat), redouble a robot's seat.
+   - Card faces stay white in both modes: their red and black don't change. */
 :root {
-  --bridge-red-suit: #c62828;
+  --bridge-font: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bridge-font-numbers: 'Barlow Semi Condensed', var(--bridge-font);
+
+  --bridge-ground: #f3f5f8;
+  --bridge-surface: #ffffff;
+  --bridge-ink: #142033;
+  --bridge-muted: #4b5668;
+  --bridge-line: #e1e5eb;
+  --bridge-control: #c9d0da;
+  --bridge-chip: #eef1f5;
+  --bridge-disabled-text: #8a94a6;
+
+  --bridge-table: #1d3a5f;
+  --bridge-table-inner: #2a4c76;
+  --bridge-on-table: #ffffff;
+  --bridge-on-table-muted: #cfdbeb;
+
+  --bridge-action: #c2410c;
+  --bridge-on-action: #ffffff;
+  --bridge-action-text: #9a3412;
+  --bridge-action-tint: #fff1e8;
+
+  --bridge-amber: #f59e0b;
+  --bridge-on-amber: #2b1700;
+
+  --bridge-pass-bg: #e3f1e6;
+  --bridge-pass-text: #1d6b31;
+  --bridge-double-bg: #fde6e4;
+  --bridge-double-text: #b3261e;
+  --bridge-redouble-bg: #e1ebfd;
+  --bridge-redouble-text: #1e4fc2;
+  --bridge-question: #2563eb;
+
+  /* The dark pop-ups and banners (an alert's explanation, a pending claim). */
+  --bridge-popup: #142033;
+  --bridge-on-popup: #ffffff;
+  --bridge-on-popup-muted: #cfdbeb;
+  --bridge-popup-button: #2a3a55;
+
+  /* Hearts and diamonds written on the page (the auction, the contract);
+     lifted in dark mode. A card face keeps --bridge-card-red. */
+  --bridge-red-suit: #c8102e;
+  --bridge-black-suit: #142033;
+  --bridge-card-face: #ffffff;
+  --bridge-card-ink: #142033;
+  --bridge-card-red: #c8102e;
+  --bridge-card-border: #d5d9e0;
+
+  --bridge-radius-button: 12px;
+  --bridge-radius-card: 16px;
+  --bridge-radius-panel: 20px;
+  --bridge-radius-pill: 999px;
+
+  /* Ionic reads these. */
+  --ion-font-family: var(--bridge-font);
+  --ion-background-color: #f3f5f8;
+  --ion-background-color-rgb: 243, 245, 248;
+  --ion-text-color: #142033;
+  --ion-text-color-rgb: 20, 32, 51;
+  --ion-toolbar-background: var(--bridge-surface);
+  --ion-toolbar-color: var(--bridge-ink);
+  --ion-toolbar-border-color: var(--bridge-line);
+  --ion-item-background: var(--bridge-surface);
+  --ion-card-background: var(--bridge-surface);
+  --ion-border-color: var(--bridge-line);
+  --ion-color-step-150: var(--bridge-line);
+  --ion-color-step-300: var(--bridge-control);
+
+  /* The secondary solid button and links: the table's navy. */
+  --ion-color-primary: #1d3a5f;
+  --ion-color-primary-rgb: 29, 58, 95;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #1a3354;
+  --ion-color-primary-tint: #34506f;
+
+  --ion-color-secondary: #2a4c76;
+  --ion-color-secondary-rgb: 42, 76, 118;
+  --ion-color-secondary-contrast: #ffffff;
+  --ion-color-secondary-contrast-rgb: 255, 255, 255;
+  --ion-color-secondary-shade: #254368;
+  --ion-color-secondary-tint: #3f5e84;
+
+  /* Robots: the redouble blue. */
+  --ion-color-tertiary: #1e4fc2;
+  --ion-color-tertiary-rgb: 30, 79, 194;
+  --ion-color-tertiary-contrast: #ffffff;
+  --ion-color-tertiary-contrast-rgb: 255, 255, 255;
+  --ion-color-tertiary-shade: #1a46ab;
+  --ion-color-tertiary-tint: #3561c8;
+
+  --ion-color-success: #1d6b31;
+  --ion-color-success-rgb: 29, 107, 49;
+  --ion-color-success-contrast: #ffffff;
+  --ion-color-success-contrast-rgb: 255, 255, 255;
+  --ion-color-success-shade: #1a5e2b;
+  --ion-color-success-tint: #347a46;
+
+  --ion-color-warning: #f59e0b;
+  --ion-color-warning-rgb: 245, 158, 11;
+  --ion-color-warning-contrast: #2b1700;
+  --ion-color-warning-contrast-rgb: 43, 23, 0;
+  --ion-color-warning-shade: #b45309;
+  --ion-color-warning-tint: #f6a823;
+
+  --ion-color-danger: #b3261e;
+  --ion-color-danger-rgb: 179, 38, 30;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-contrast-rgb: 255, 255, 255;
+  --ion-color-danger-shade: #9e211a;
+  --ion-color-danger-tint: #bb3c35;
+
+  --ion-color-light: #eef1f5;
+  --ion-color-light-rgb: 238, 241, 245;
+  --ion-color-light-contrast: #142033;
+  --ion-color-light-contrast-rgb: 20, 32, 51;
+  --ion-color-light-shade: #d1d4d8;
+  --ion-color-light-tint: #f0f2f6;
+
+  --ion-color-medium: #4b5668;
+  --ion-color-medium-rgb: 75, 86, 104;
+  --ion-color-medium-contrast: #ffffff;
+  --ion-color-medium-contrast-rgb: 255, 255, 255;
+  --ion-color-medium-shade: #424c5c;
+  --ion-color-medium-tint: #5d6777;
+
+  --ion-color-dark: #142033;
+  --ion-color-dark-rgb: 20, 32, 51;
+  --ion-color-dark-contrast: #ffffff;
+  --ion-color-dark-contrast-rgb: 255, 255, 255;
+  --ion-color-dark-shade: #121c2d;
+  --ion-color-dark-tint: #2b3647;
+
+  /* The one primary action per screen: `color="action"` on an ion-button. */
+  --ion-color-action: #c2410c;
+  --ion-color-action-rgb: 194, 65, 12;
+  --ion-color-action-contrast: #ffffff;
+  --ion-color-action-contrast-rgb: 255, 255, 255;
+  --ion-color-action-shade: #ab390b;
+  --ion-color-action-tint: #c85424;
 }
 
+/* Midnight (board B of the design canvas). `:root.ios` and `:root.md` match
+   the selectors dark.system.css sets its backgrounds with, so these win. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bridge-red-suit: #ff6b6b;
+  :root,
+  :root.ios,
+  :root.md {
+    --bridge-ground: #0c0f15;
+    --bridge-surface: #1b2130;
+    --bridge-ink: #e8ecf3;
+    --bridge-muted: #a7b0c0;
+    --bridge-line: #2c3445;
+    --bridge-control: #3a4457;
+    --bridge-chip: #222a3a;
+    --bridge-disabled-text: #6f7a8e;
+
+    --bridge-table: #161b25;
+    --bridge-table-inner: #222a3a;
+    --bridge-on-table: #e8ecf3;
+    --bridge-on-table-muted: #a7b0c0;
+
+    --bridge-action: #ffb547;
+    --bridge-on-action: #2b1d00;
+    --bridge-action-text: #ffb547;
+    --bridge-action-tint: #2b2210;
+
+    --bridge-pass-bg: #13281b;
+    --bridge-pass-text: #8fdca5;
+    --bridge-double-bg: #3a1418;
+    --bridge-double-text: #ff8a96;
+    --bridge-redouble-bg: #1f2a44;
+    --bridge-redouble-text: #b8c8ff;
+    --bridge-question: #8ea8ff;
+
+    --bridge-popup: #24304a;
+    --bridge-on-popup: #e8ecf3;
+    --bridge-on-popup-muted: #c7cfdc;
+    --bridge-popup-button: #3c4a6b;
+
+    --bridge-red-suit: #ff8a96;
+    --bridge-black-suit: #e8ecf3;
+
+    --ion-background-color: #0c0f15;
+    --ion-background-color-rgb: 12, 15, 21;
+    --ion-text-color: #e8ecf3;
+    --ion-text-color-rgb: 232, 236, 243;
+    --ion-toolbar-background: var(--bridge-surface);
+    --ion-item-background: var(--bridge-surface);
+    --ion-card-background: var(--bridge-surface);
+    --ion-tab-bar-background: var(--bridge-surface);
+
+    /* The Midnight accent. */
+    --ion-color-primary: #8ea8ff;
+    --ion-color-primary-rgb: 142, 168, 255;
+    --ion-color-primary-contrast: #0c0f15;
+    --ion-color-primary-contrast-rgb: 12, 15, 21;
+    --ion-color-primary-shade: #7d94e0;
+    --ion-color-primary-tint: #99b1ff;
+
+    --ion-color-secondary: #c7cfdc;
+    --ion-color-secondary-rgb: 199, 207, 220;
+    --ion-color-secondary-contrast: #0c0f15;
+    --ion-color-secondary-contrast-rgb: 12, 15, 21;
+    --ion-color-secondary-shade: #afb6c2;
+    --ion-color-secondary-tint: #cdd4e0;
+
+    --ion-color-tertiary: #b8c8ff;
+    --ion-color-tertiary-rgb: 184, 200, 255;
+    --ion-color-tertiary-contrast: #0c0f15;
+    --ion-color-tertiary-contrast-rgb: 12, 15, 21;
+    --ion-color-tertiary-shade: #a2b0e0;
+    --ion-color-tertiary-tint: #bfceff;
+
+    --ion-color-success: #8fdca5;
+    --ion-color-success-rgb: 143, 220, 165;
+    --ion-color-success-contrast: #0c0f15;
+    --ion-color-success-contrast-rgb: 12, 15, 21;
+    --ion-color-success-shade: #7ec291;
+    --ion-color-success-tint: #9ae0ae;
+
+    --ion-color-warning: #f5b642;
+    --ion-color-warning-rgb: 245, 182, 66;
+    --ion-color-warning-contrast: #2b1700;
+    --ion-color-warning-contrast-rgb: 43, 23, 0;
+    --ion-color-warning-shade: #f5b642;
+    --ion-color-warning-tint: #f6bd55;
+
+    --ion-color-danger: #ff8a96;
+    --ion-color-danger-rgb: 255, 138, 150;
+    --ion-color-danger-contrast: #0c0f15;
+    --ion-color-danger-contrast-rgb: 12, 15, 21;
+    --ion-color-danger-shade: #e07984;
+    --ion-color-danger-tint: #ff96a1;
+
+    --ion-color-light: #222a3a;
+    --ion-color-light-rgb: 34, 42, 58;
+    --ion-color-light-contrast: #e8ecf3;
+    --ion-color-light-contrast-rgb: 232, 236, 243;
+    --ion-color-light-shade: #1e2533;
+    --ion-color-light-tint: #383f4e;
+
+    --ion-color-medium: #a7b0c0;
+    --ion-color-medium-rgb: 167, 176, 192;
+    --ion-color-medium-contrast: #0c0f15;
+    --ion-color-medium-contrast-rgb: 12, 15, 21;
+    --ion-color-medium-shade: #939ba9;
+    --ion-color-medium-tint: #b0b8c6;
+
+    --ion-color-dark: #e8ecf3;
+    --ion-color-dark-rgb: 232, 236, 243;
+    --ion-color-dark-contrast: #0c0f15;
+    --ion-color-dark-contrast-rgb: 12, 15, 21;
+    --ion-color-dark-shade: #ccd0d6;
+    --ion-color-dark-tint: #eaeef4;
+
+    --ion-color-action: #ffb547;
+    --ion-color-action-rgb: 255, 181, 71;
+    --ion-color-action-contrast: #2b1d00;
+    --ion-color-action-contrast-rgb: 43, 29, 0;
+    --ion-color-action-shade: #e09f3e;
+    --ion-color-action-tint: #ffbc59;
   }
+}
+
+/* Ionic's colour classes for the custom `action` colour. */
+.ion-color-action {
+  --ion-color-base: var(--ion-color-action);
+  --ion-color-base-rgb: var(--ion-color-action-rgb);
+  --ion-color-contrast: var(--ion-color-action-contrast);
+  --ion-color-contrast-rgb: var(--ion-color-action-contrast-rgb);
+  --ion-color-shade: var(--ion-color-action-shade);
+  --ion-color-tint: var(--ion-color-action-tint);
 }
