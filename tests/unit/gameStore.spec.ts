@@ -239,7 +239,50 @@ describe('game store', () => {
       }),
     )
 
-    expect(showToast).toHaveBeenCalledWith('West was away on their turn: a robot took their seat.', 'warning')
+    expect(showToast).toHaveBeenCalledWith('West was away: a robot took their seat.', 'warning')
+  })
+
+  test('several away seats replaced in one update: one toast names them all', async () => {
+    // Logged in as South (3): North, East and West's clocks ran out together.
+    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, replaced: [] }
+    const game = await loaded({ ...fullState(), set })
+    const replaced = {
+      ...set,
+      replaced: (['N', 'E', 'W'] as Seat[]).map((seat) => ({
+        seat,
+        user_id: PLAYERS[seat].id,
+        reason: 'away' as const,
+      })),
+    }
+
+    game.applyTableUpdate({ ...makeTable(['N', 'E', 'S', 'W'], 7), set: replaced })
+    game.applyPlayingUpdate(5, publicState({ set: replaced, auction: auction(PASS), turn: 'W', acting_user_id: 4 }))
+
+    expect(showToast).toHaveBeenCalledTimes(1)
+    expect(showToast).toHaveBeenCalledWith(
+      'North, East and West were away: robots took their seats.',
+      'warning',
+    )
+  })
+
+  test('replaced together for different reasons: still one toast, a sentence each', async () => {
+    const set = { id: 8, number: 2, board: 3, of: 4, finished: false, ended: null, replaced: [] }
+    const game = await loaded({ ...fullState(), set })
+    const replaced = {
+      ...set,
+      replaced: [
+        { seat: 'E' as Seat, user_id: 2, reason: 'away' as const },
+        { seat: 'W' as Seat, user_id: 4, reason: 'set_time' as const },
+      ],
+    }
+
+    game.applyTableUpdate({ ...makeTable(['N', 'E', 'S', 'W'], 7), set: replaced })
+
+    expect(showToast).toHaveBeenCalledTimes(1)
+    expect(showToast).toHaveBeenCalledWith(
+      'East was away: a robot took their seat. West ran out of time for the set: a robot took their seat.',
+      'warning',
+    )
   })
 
   test('replacements already there when the board is read are not news', async () => {

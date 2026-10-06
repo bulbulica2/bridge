@@ -562,7 +562,7 @@ describe('TablePlayPage leaving between boards', () => {
   test.each([
     [{ tableDeleted: false, held: false }, 'You left the table.', 'success'],
     [{ tableDeleted: true, held: false }, 'You left the table. Nobody was left, so it was deleted.', 'success'],
-    [{ tableDeleted: false, held: true }, expect.stringContaining('Your seat is held'), 'warning'],
+    [{ tableDeleted: false, held: true }, expect.stringContaining('Your seat is kept for 2 minutes'), 'warning'],
   ])('leaves (%o), says how and goes to the list', async (answer, message, color) => {
     const wrapper = await mountPage(finished())
     vi.spyOn(useTablesStore(), 'leave').mockResolvedValue(answer)
@@ -909,6 +909,42 @@ describe('TablePlayPage turn clock', () => {
     expect(wrapper.get('.turn-clock').text()).toBe('Waiting for East · 0:05')
     expect(wrapper.get('.turn-clock').classes()).not.toContain('turn-clock-mine')
     expect(wrapper.get('.turn-clock').classes()).not.toContain('turn-clock-urgent')
+  })
+
+  test('an away player on turn: named once, no clock in the text; the seats count down', async () => {
+    // East and West away together: the board waits for East.
+    const table = makeTable()
+    table.seats = table.seats.map((s) =>
+      s.seat === 'E' || s.seat === 'W'
+        ? { ...s, away_since: inSeconds(-30), replace_at: inSeconds(90) }
+        : s,
+    )
+    const wrapper = await mountPage(
+      auction({ turn: 'E', acting_user_id: 2, turn_deadline: inSeconds(90), turn_deadline_by: 'away' }),
+      table,
+    )
+
+    expect(wrapper.get('.turn-clock').text()).toBe('Waiting for East (away)')
+    expect(wrapper.get('.status').text()).toBe('')
+    expect(wrapper.findAll('.away-line').map((l) => l.text())).toEqual([
+      'Away players are replaced by a robot when their clock runs out.',
+    ])
+    const tag = (seat: Seat) => wrapper.get(`[data-seat="${seat}"] .seat-away-tag`)
+    expect(tag('E').text()).toBe('away · 1:30')
+    expect(tag('W').text()).toBe('away · 1:30')
+    expect(tag('E').classes()).not.toContain('away-tag-urgent')
+    expect(wrapper.find('[data-seat="N"] .seat-away-tag').exists()).toBe(false)
+
+    vi.advanceTimersByTime(76_000)
+    await flushPromises()
+    expect(tag('E').text()).toBe('away · 0:14')
+    expect(tag('W').text()).toBe('away · 0:14')
+    expect(tag('W').classes()).toContain('away-tag-urgent')
+    expect(wrapper.get('.turn-clock').text()).toBe('Waiting for East (away)')
+
+    vi.advanceTimersByTime(14_000)
+    await flushPromises()
+    expect(tag('E').text()).toBe('replacing…')
   })
 
   test('no clock (a robot or an admin on turn): the line stays, empty', async () => {

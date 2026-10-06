@@ -9,6 +9,7 @@ import { useGameStore } from '@/stores/game'
 import {
   TIME_UP_TEXT,
   TURN_URGENT_SECONDS,
+  awayOnTurn,
   turnClock,
   turnClockText,
   turnDeadline,
@@ -91,6 +92,21 @@ describe('the turn clock', () => {
     expect(turnClockText({ seconds: 42, mine: false, seat: 'E', by: 'set' })).toBe("East's time for the set: 0:42")
     expect(turnClockText({ seconds: 42, mine: false, seat: null, by: 'set' })).toBe('The time for the set: 0:42')
     expect(turnClockText({ seconds: 0, mine: true, seat: 'E', by: 'set' })).toBe(TIME_UP_TEXT)
+  })
+
+  test("an away player on turn: named once, their seat shows the clock", () => {
+    expect(turnClock(state({ turn_deadline_by: 'away' }), 2, NOW)?.by).toBe('away')
+    const away = { seconds: 42, mine: false, seat: 'E' as const, by: 'away' as const }
+
+    expect(turnClockText(away)).toBe('Waiting for East (away)')
+    expect(turnClockText({ ...away, seconds: 0 })).toBe('Waiting for East (away)')
+    expect(turnClockText({ ...away, seat: null })).toBe('Waiting (away)')
+    expect(awayOnTurn(away)).toBe(true)
+    // Our own (the backend hasn't seen us back yet): our clock as ever.
+    expect(turnClockText({ ...away, mine: true })).toBe('Your turn · 0:42')
+    expect(awayOnTurn({ ...away, mine: true })).toBe(false)
+    expect(awayOnTurn({ ...away, by: 'move' })).toBe(false)
+    expect(awayOnTurn(null)).toBe(false)
   })
 
   test('only our own clock turns red, in its last 15 s', () => {

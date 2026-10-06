@@ -3,12 +3,13 @@ import type { Phase, PublicPlaying } from '@/services/game';
 import { UNATTENDED_MINUTES } from '@/services/tables';
 import type { BroadcastTable, Seat, Table } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
-import { TURN_SECONDS, isAway } from '@/utils/away';
+import { AWAY_REPLACE_SECONDS, isAway } from '@/utils/away';
 import type { SetAtStake } from '@/utils/away';
 import { currentSet } from '@/utils/sets';
 
-// What a held seat costs once the turn reaches it (bb#120).
-const TURN_CLOCK_COST = `If you aren't back to play within ${TURN_SECONDS} seconds of your turn, a robot takes your seat for the rest of the set.`;
+// How long a held seat is kept, whoever's turn it is (bb#138), and what it
+// costs meanwhile.
+const AWAY_COST = `Your seat is kept for ${AWAY_REPLACE_SECONDS / 60} minutes: come back before then, or a robot takes it for the rest of the set. Your time for the set keeps running when it's your turn.`;
 
 function tableLabel(table: Pick<Table, 'id' | 'name'>) {
   return table.name || `table #${table.id}`;
@@ -133,10 +134,10 @@ export async function confirmMove(
  * What leaving costs, by the phase of the table's board: during one it is
  * abandoned for the other three, between boards (`finished`) nothing is lost
  * (bridge_backend docs/API.md, POST /tables/{table}/playing/next). In the
- * middle of a set (`stake`) a Leave only holds the seat, and the turn clock
- * runs once the board waits for the user (at once on their turn): back and
- * played within TURN_SECONDS, play goes on, otherwise a robot takes the seat
- * for the rest of the set (bridge_backend docs/API.md, Away mid-set). Where
+ * middle of a set (`stake`) a Leave only holds the seat, for
+ * AWAY_REPLACE_SECONDS whoever's turn it is: back by then, play goes on,
+ * otherwise a robot takes the seat for the rest of the set (bridge_backend
+ * docs/API.md, Away mid-set). Where
  * the seat isn't held (an admin, or an admin here away), it breaks the set
  * off instead. Empty when there is no board or its phase is unknown, outside
  * a set.
@@ -152,7 +153,7 @@ export function leaveWarning(
     const held = inProgress
       ? `${board} is in progress and set ${stake.number} isn't over: your seat is held, and the board waits for you.`
       : `Set ${stake.number} isn't over: your seat is held for you.`;
-    return `${held} ${TURN_CLOCK_COST}`;
+    return `${held} ${AWAY_COST}`;
   }
   if (stake) {
     return inProgress
@@ -250,8 +251,8 @@ export async function confirmRemove(
   return role === 'destructive';
 }
 
-// The toast after a Leave that held the seat. The clock starts once the
-// board waits for the user, so the time counts from their turn.
+// The toast after a Leave that held the seat: its clock runs from now,
+// whoever's turn it is.
 export function heldNotice(): string {
-  return `You left in the middle of a set. Your seat is held. ${TURN_CLOCK_COST}`;
+  return `You left in the middle of a set. ${AWAY_COST}`;
 }

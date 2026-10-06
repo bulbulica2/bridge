@@ -142,16 +142,16 @@ const STAKE: SetAtStake = { number: 3, seat: 'N', side: 'ns', held: true }
 const NOT_HELD: SetAtStake = { ...STAKE, held: false }
 
 describe('leaving mid-set', () => {
-  test('a Leave only holds the seat, and not playing on hands it to a robot', () => {
+  test("a Leave only holds the seat, for 2 minutes whoever's turn it is", () => {
     const during = leaveWarning('play', 7, STAKE)
     expect(during).toContain("Board 7 is in progress and set 3 isn't over: your seat is held")
     expect(during).toContain(
-      "If you aren't back to play within 60 seconds of your turn, a robot takes your seat for the rest of the set.",
+      'Your seat is kept for 2 minutes: come back before then, or a robot takes it for the rest of the set.',
     )
 
     const between = leaveWarning('finished', 7, STAKE)
     expect(between).toBe(
-      "Set 3 isn't over: your seat is held for you. If you aren't back to play within 60 seconds of your turn, a robot takes your seat for the rest of the set.",
+      "Set 3 isn't over: your seat is held for you. Your seat is kept for 2 minutes: come back before then, or a robot takes it for the rest of the set. Your time for the set keeps running when it's your turn.",
     )
   })
 
@@ -175,9 +175,9 @@ describe('leaving mid-set', () => {
     )
   })
 
-  test("the toast after a held Leave says the time counts from the user's turn", () => {
+  test('the toast after a held Leave says how long the seat is kept', () => {
     expect(heldNotice()).toBe(
-      "You left in the middle of a set. Your seat is held. If you aren't back to play within 60 seconds of your turn, a robot takes your seat for the rest of the set.",
+      "You left in the middle of a set. Your seat is kept for 2 minutes: come back before then, or a robot takes it for the rest of the set. Your time for the set keeps running when it's your turn.",
     )
   })
 })

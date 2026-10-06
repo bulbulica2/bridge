@@ -58,8 +58,9 @@
               <span v-else class="seat-empty">Empty</span>
               <RobotBadge v-if="user?.is_robot" />
               <AdminBadge v-if="user?.is_admin" />
-              <!-- Away mid-set: the seat is held, the notice below counts down. -->
-              <span v-if="awayMarks.includes(seat)" class="seat-away">away</span>
+              <!-- Away mid-set: the seat is held, its tag counts down to the
+                   robot taking it (bb#138). -->
+              <AwaySeatTag v-if="awayTags[seat]" class="seat-away" :tag="awayTags[seat]!" />
               <!-- Before a board: who has pressed Start (robots always have). -->
               <span v-if="showStart && readySeats.includes(seat)" class="seat-ready">
                 ✓ Ready
@@ -156,7 +157,7 @@
             </p>
           </section>
 
-          <!-- We left in the middle of the set: the seat waits for us a few
+          <!-- We left in the middle of the set: the seat waits for us 2
                minutes, and coming back is one tap (or opening the game). -->
           <div v-if="held" class="held">
             <AwayNotice :table="table" :me="me" held />
@@ -166,7 +167,7 @@
             </ion-button>
           </div>
 
-          <!-- Somebody else away mid-set, with the time left. -->
+          <!-- Somebody else away mid-set: what their seats' clocks are for. -->
           <AwayNotice :table="table" :me="me" />
 
           <!-- Only robots sit here since the last person left: they wait for
@@ -239,6 +240,7 @@ import {
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
+import AwaySeatTag from '@/components/AwaySeatTag.vue';
 import OfflineRefresh from '@/components/OfflineRefresh.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import AdminBadge from '@/components/AdminBadge.vue';
@@ -246,6 +248,7 @@ import RobotBadge from '@/components/RobotBadge.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import SetMinutesPicker from '@/components/SetMinutesPicker.vue';
 import StartBox from '@/components/StartBox.vue';
+import { useAwayTags } from '@/composables/useAwayTags';
 import { useTablesStore } from '@/stores/tables';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
@@ -253,7 +256,6 @@ import { DEFAULT_SET_MINUTES, UNATTENDED_MINUTES, canRemove, seatsOf } from '@/s
 import type { Seat, SetMinutes } from '@/services/tables';
 import type { PublicUser, SearchedUser } from '@/services/users';
 import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
-import { awaySeats } from '@/utils/away';
 import {
   confirmLeave,
   confirmMove,
@@ -338,9 +340,10 @@ const runningSet = computed(() => {
 // We left mid-set and our seat here is held for us (the tables store sends
 // no heartbeat for it until we come back).
 const held = computed(() => !!mySeat.value && store.heldTableId === tableId.value);
-// The others' seats marked away mid-set.
-const awayMarks = computed(() =>
-  table.value ? awaySeats(table.value, me.value).map((s) => s.seat) : [],
+// The others' seats marked away mid-set, each with its clock.
+const awayTags = useAwayTags(
+  () => table.value,
+  () => me.value,
 );
 // What leaving would put at stake: the set going on here, if any.
 const stake = computed(() => (table.value && mySeat.value ? store.stakeOf(table.value) : null));
@@ -822,9 +825,6 @@ function handleExpiredSession(e: unknown): boolean {
 
 .seat-away {
   font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--ion-color-warning-shade, #e0ac08);
 }
 
 .held {

@@ -333,7 +333,7 @@ describe('TablesPage.vue leaving your table', () => {
 
     expect(confirmLeave).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 1, 'play', 2, null)
     expect(clear).toHaveBeenCalled()
-    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Your seat is held'), 'warning')
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Your seat is kept for 2 minutes'), 'warning')
   })
 
   test('nothing is sent when the user cancels', async () => {

@@ -16,6 +16,7 @@ import type {
   Playing,
   PublicPlaying,
   SetPosition,
+  SetReplacement,
 } from '@/services/game';
 import type { BroadcastTable, Seat } from '@/services/tables';
 import type { BoardMessageSentEvent } from '@/services/chat';
@@ -34,7 +35,7 @@ import {
 import type { AlertBook } from '@/utils/alerts';
 import { asksAboutMyCall, chatQuestionText } from '@/utils/chat';
 import { expandPlaying } from '@/utils/compact';
-import { replacedText, replacementsOf } from '@/utils/sets';
+import { replacedTogetherText, replacementsOf } from '@/utils/sets';
 import { showToast } from '@/utils/toast';
 
 // What GET /tables/{id}/playing answers for a table without a board.
@@ -174,12 +175,14 @@ export const useGameStore = defineStore('game', () => {
     return (entry?.[0] as Seat | undefined) ?? null;
   }
 
-  // A robot took somebody's seat over mid-set (their turn clock ran out, a
-  // move, a kick while away; bb#120): tell the table once. With `tell`
-  // false (a state read over HTTP, which may be the first we see of the
-  // table) they are only noted. Our own replacement is the tables store's
-  // to tell: it unseats us.
+  // A robot took somebody's seat over mid-set (their turn clock ran out,
+  // their away seat's, a move, a kick while away; bb#120): tell the table
+  // once, in one toast for all those an update brings (away seats' clocks
+  // run out together, bb#138). With `tell` false (a state read over HTTP,
+  // which may be the first we see of the table) they are only noted. Our
+  // own replacement is the tables store's to tell: it unseats us.
   function noteReplacements(set: SetPosition | null | undefined, tell: boolean) {
+    const news: SetReplacement[] = [];
     for (const entry of replacementsOf(set)) {
       const key = `${set!.id}:${entry.seat}:${entry.user_id}`;
       if (replacementsKnown.has(key)) {
@@ -187,8 +190,11 @@ export const useGameStore = defineStore('game', () => {
       }
       replacementsKnown.add(key);
       if (tell && entry.user_id !== auth.user?.id) {
-        showToast(replacedText(entry), 'warning');
+        news.push(entry);
       }
+    }
+    if (news.length > 0) {
+      showToast(replacedTogetherText(news), 'warning');
     }
   }
 

@@ -645,10 +645,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   `history.sets`, else nothing) and
   `groupBySet` (history runs of one set, with the owner's `seat`),
   `runningSet` (the set a table is in the middle of, else null).
-- **Away mid-set and the turn clock** (#74, #130, bb#76, bb#120, backend
+- **Away mid-set and the turn clock** (#74, #130, #150, bb#76, bb#120, bb#138, backend
   `docs/API.md` Away mid-set, and the turn clock): the human the board
-  waits for (`acting_user_id`) has `BRIDGE_TURN_SECONDS` (60) to call,
-  play or act on a claim: `turn_deadline` on `PublicPlaying` (HTTP and
+  waits for (`acting_user_id`), when there, has `BRIDGE_TURN_SECONDS`
+  (60) to call, play or act on a claim (away, their seat's `replace_at`
+  instead): `turn_deadline` on `PublicPlaying` (HTTP and
   compact `PlayingUpdated` alike, `expandPlaying` passes it through; not
   in a review), null between boards, while a claim is pending, for a
   robot or an admin. Only a move resets it. Past it the backend's
@@ -658,10 +659,12 @@ The user's standing rule (#91): **no task may leave code coverage under
   `src/utils/turnClock.ts`: `turnDeadline(state)` (auction/play only),
   `actingSeat`, `turnClock(state, me, now)` (`{seconds, mine, seat, by}`,
   the acting user's seat from `players`, else `turn`; `by` =
-  `turn_deadline_by` ?? `'move'`), `turnClockText` ("Your turn · 0:42" /
-  "Waiting for East · 0:42" / with `by: 'set'` "Your time for the set:
-  0:42" / "East's time for the set: 0:42" / `TIME_UP_TEXT` "Time is
-  up…"), `turnUrgent` (mine and ≤ `TURN_URGENT_SECONDS` 15), `turnTitle`.
+  `turn_deadline_by` ?? `'move'`, `move|away|set`), `turnClockText`
+  ("Your turn · 0:42" / "Waiting for East · 0:42" / with `by: 'set'`
+  "Your time for the set: 0:42" / "East's time for the set: 0:42" /
+  `TIME_UP_TEXT` "Time is up…"; with `by: 'away'` and not ours, "Waiting
+  for East (away)", no clock: `awayOnTurn`, and the play page's `.status`
+  is empty then), `turnUrgent` (mine and ≤ `TURN_URGENT_SECONDS` 15), `turnTitle`.
   **The set clock** (#143, bb#131, backend `docs/API.md` The set clock):
   each human's time bank for the set, the table's `set_minutes`
   (`SET_MINUTES` 8/12/16/20, `DEFAULT_SET_MINUTES` 16 in
@@ -672,7 +675,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   `setClockText`), copied as `set.minutes`; `set.time_left` (seat →
   seconds or null for a robot/admin) is as of the state's
   `turn_started_at` (HTTP and compact alike; with `turn_deadline_by`
-  `move|set`; `PlayingReview` omits all three). `turn_deadline` is the
+  `move|away|set`; `PlayingReview` omits all three). `turn_deadline` is the
   earlier of the move's minute and the bank's end. `src/utils/setClock.ts`:
   `bankLeft`, `setBanks(state, now)` (only `actingSeat`'s runs, and only
   while `turnDeadline` is set; `{seconds, running, low}`, `low` under
@@ -693,21 +696,30 @@ The user's standing rule (#91): **no task may leave code coverage under
   the turn is taken or the page shows; `index.html`'s title is
   "Bridge"). The play page's `useStaleDeadline` rereads the game 2 s
   after `turn_deadline` (`viewActive` only), as for claims and
-  `next_board_at`. **Away**: a seat has `away_since` (`TableSeat`, on
-  payloads and `TableUpdated`); `tables:check-away` marks a quiet player
-  away after a minute; an away seat costs nothing until the turn reaches
-  it. `src/utils/away.ts`: `TURN_SECONDS` (60, quoted in the lines and
-  confirmations; countdowns read `turn_deadline`), `awaySeats`,
-  `myAwaySeat`, `secondsLeft`/`formatClock`, `adminAway(table)`,
-  `awayText(seat)` ("East is away. If they don't play within 1:00 of
-  their turn, a robot takes their seat."; an admin: "The table waits for
-  them."), `awayTogetherText`, `heldText` (own held seat), `setAtStake`
-  (`{number, seat, side, held}`, `held` false for an admin viewer or
-  while `adminAway`). `AwayNotice.vue` (no countdown at all, never a
-  second clock next to the turn clock: away admins a line each, the
-  others one line or `awayTogetherText`; `held` for the own seat) on the
-  play page above the turn clock, the detail page, Tables and Home;
-  `BridgeTable`'s `away` prop and the detail compass tag seats. The
+  `next_board_at`. **Away**: a seat has `away_since` and `replace_at`
+  (`TableSeat`, on payloads and `TableUpdated`, bb#138);
+  `tables:check-away` marks a quiet player (or a Leave) away and sets
+  `replace_at` = `away_since` + 2 minutes, every away seat's running at
+  once whoever's turn it is (null for an admin: the table waits).
+  `src/utils/away.ts`: `TURN_SECONDS` (60), `AWAY_REPLACE_SECONDS` (120,
+  quoted in the Leave confirmations; countdowns read `replace_at`),
+  `awaySeats`, `myAwaySeat`, `secondsLeft`/`formatClock`,
+  `adminAway(table)`, `awayTag(seat, now)` (`AwayTag` `{seconds|null,
+  urgent}`, urgent ≤ `AWAY_URGENT_SECONDS` 15), `awayTags(table, me,
+  now)`, `awayClockRuns`, `awayTagText` ("away · 0:42" / "replacing…" at
+  0 / "away" without a clock), `awayNote` (`AWAY_NOTE` "Away players are
+  replaced by a robot when their clock runs out." / `ADMIN_AWAY_NOTE`
+  when only admins are away / null), `heldText(seat, table, now)` ("You're
+  away from Friday club: a robot takes your seat in 0:42 unless you come
+  back."), `setAtStake` (`{number, seat, side, held}`, `held` false for
+  an admin viewer or while `adminAway`). `src/composables/useAwayTags.ts`
+  (one `useNow` while `awayClockRuns`, so seats away together show the
+  same time) feeds `BridgeTable`'s `away` prop (seat → `AwayTag`) on the
+  play page and the detail compass, both drawn by `AwaySeatTag.vue` (red
+  `away-tag-urgent`; single root, the parent's class lands on it).
+  `AwayNotice.vue` (one line, never a countdown: `awayNote`; `held` for
+  the own seat, counting down with its own `useNow`) on the play page
+  above the turn clock, the detail page, Tables and Home. The
   tables store: `leave()` returns `held: true` on the 202 (still seated)
   and sets `heldTableId`, which `shouldBeat()` excludes;
   `watchTable(id, away)` also holds a seat found away when we weren't
@@ -724,7 +736,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   `replacedFrom` until `dismissReplaced`. The game store's
   `noteReplacements` toasts each other player's replacement once
   (`replacementsKnown`, `set:seat:user`, from `applyTableUpdate` and
-  `applyPlayingUpdate`; `hold()` notes an HTTP state's silently).
+  `applyPlayingUpdate`; `hold()` notes an HTTP state's silently), all
+  those one update brings in a single toast (`replacedTogetherText` in
+  `sets.ts`: "South and West were away: robots took their seats.", mixed
+  reasons a sentence each).
   `stakeOf(table)` feeds `confirmLeave`/`leaveMessage`/`leaveWarning` and
   `confirmMove`/`moveConsequences` in `seatMove.ts` (`robotTakesOver`:
   `held` and another human left there; else the set ends with no

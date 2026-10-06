@@ -16,7 +16,7 @@
         </div>
         <ion-button v-else expand="block" @click="createOpen = true">Create table</ion-button>
 
-        <!-- Left mid-set: the seat waits a few minutes, opening the game
+        <!-- Left mid-set: the seat waits 2 minutes (counted down), opening the game
              comes back to it. -->
         <div v-if="heldTable" class="held">
           <AwayNotice :table="heldTable" :me="me" held />
