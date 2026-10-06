@@ -248,6 +248,29 @@ describe('TableDetailPage loading', () => {
   })
 })
 
+describe('TableDetailPage away seats', () => {
+  test("each away seat's tag counts down; an admin's is a plain away, one line says what for", async () => {
+    const at = (s: number) => new Date(Date.now() + s * 1000).toISOString()
+    const table = makeTable({ N: 'ana', E: 'bob', S: 'cy', W: 'eve' }, { board_id: 7 })
+    table.seats = table.seats.map((s) =>
+      s.seat === 'E' || s.seat === 'S'
+        ? { ...s, away_since: at(-30), replace_at: at(90) }
+        : s.seat === 'W'
+          ? { ...s, away_since: at(-30), replace_at: null }
+          : s,
+    )
+    const wrapper = await mountPage(table)
+
+    expect(wrapper.get('.seat-e .seat-away').text()).toBe('away · 1:30')
+    expect(wrapper.get('.seat-s .seat-away').text()).toBe('away · 1:30')
+    expect(wrapper.get('.seat-w .seat-away').text()).toBe('away')
+    expect(wrapper.find('.seat-n .seat-away').exists()).toBe(false)
+    expect(wrapper.findAll('.away-line').map((l) => l.text())).toEqual([
+      'Away players are replaced by a robot when their clock runs out.',
+    ])
+  })
+})
+
 describe('TableDetailPage sitting down', () => {
   test('takes a free seat', async () => {
     const wrapper = await mountPage(makeTable({ N: 'bob' }))
@@ -318,7 +341,7 @@ describe('TableDetailPage leaving', () => {
     await click(wrapper, 'N', 'Leave')
 
     expect(clear).toHaveBeenCalled()
-    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Your seat is held'), 'warning')
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Your seat is kept for 2 minutes'), 'warning')
     expect(navigate).toHaveBeenCalledWith('/tables', 'back', 'replace')
   })
 

@@ -219,7 +219,7 @@
             :declarer-forced-id="playFrom === 'declarer' ? (autoPlay.card.value?.id ?? null) : null"
             :claim="pendingClaim ? { seat: pendingClaim.claim.seat, cards: pendingClaim.claim.hand } : null"
             :deal="playing.phase === 'finished' ? playing.deal : null"
-            :away="awayMarks"
+            :away="awayTags"
             :banks="turnClock.banks.value"
             :busy="sendingCard !== null"
             :sending-id="sendingCard"
@@ -255,14 +255,17 @@
             </template>
           </BridgeTable>
 
-          <!-- Somebody away mid-set: who, with no clock of their own (the
-               turn clock below is the only countdown). -->
+          <!-- Somebody away mid-set: their seats' tags count down to the
+               robots (bb#138), this says once what for. -->
           <AwayNotice :table="table" :me="me" />
 
           <!-- The turn clock (turn_deadline, bb#120): "Your turn · 0:42",
                red in its last seconds, or "Waiting for East · 0:42"; "Your
                time for the set: 0:42" when the set clock ends first
-               (turn_deadline_by, bb#131). One
+               (turn_deadline_by, bb#131); "Waiting for East (away)" with no
+               clock when the board waits for an away player, whose seat
+               counts down (bb#138), and the status line under it says
+               nothing more. One
                line, there all through the auction and the play (empty when
                no clock runs: a robot or an admin on turn, a claim), so
                nothing moves when it comes and goes. -->
@@ -467,6 +470,7 @@ import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
 import TrickArea from '@/components/TrickArea.vue';
 import VulnerabilityLabel from '@/components/VulnerabilityLabel.vue';
+import { useAwayTags } from '@/composables/useAwayTags';
 import { useDoubleDummy } from '@/composables/useDoubleDummy';
 import { useForcedPlay } from '@/composables/useForcedPlay';
 import { useMediaQuery } from '@/composables/useMediaQuery';
@@ -497,14 +501,13 @@ import {
 import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
 import { playingExtras } from '@/utils/export';
 import { resultSummary } from '@/utils/result';
-import { awaySeats } from '@/utils/away';
 import { confirmLeave, confirmRemove, heldNotice, removeCost } from '@/utils/seatMove';
 import { currentSet, setLabel } from '@/utils/sets';
 import { reviewChoices } from '@/utils/review';
 import type { SeenBoard } from '@/utils/review';
 import { startNeeded } from '@/utils/start';
 import { turnNotice } from '@/utils/turn';
-import { turnDeadline } from '@/utils/turnClock';
+import { awayOnTurn, turnDeadline } from '@/utils/turnClock';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
@@ -607,9 +610,11 @@ const vulnerable = computed<Vulnerability | null>(() =>
   playing.value?.board && playing.value.phase !== 'waiting' ? playing.value.board.vulnerable : null,
 );
 
-// The others' seats marked away mid-set (ours is vouched for while we look).
-const awayMarks = computed(() =>
-  table.value ? awaySeats(table.value, me.value).map((s) => s.seat) : [],
+// The others' seats marked away mid-set, each with its clock (ours is
+// vouched for while we look).
+const awayTags = useAwayTags(
+  () => table.value,
+  () => me.value,
 );
 
 const seatedCount = computed(() => Object.values(players.value).filter(Boolean).length);
@@ -775,6 +780,10 @@ const status = computed(() => {
   const state = playing.value;
   // A finished board: the result panel and the next-board box say it all.
   if (!state || state.phase === 'waiting' || state.phase === 'finished') {
+    return '';
+  }
+  // The board waits for an away player: the turn clock's line names them.
+  if (awayOnTurn(turnClock.clock.value)) {
     return '';
   }
   if (state.phase === 'play') {

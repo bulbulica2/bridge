@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/89-chat-open-by-default`._
+_Status as of branch `bulbulica2/86-away-clocks-on-the-seats`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -571,7 +571,7 @@ and refetches the table and the game; if the seat was lost in the
 meantime, the user sees a "removed after being inactive" toast (an admin,
 whom no timer frees, a plain "removed" one) and goes back to `/tables`.
 
-**Away mid-set and the turn clock** (#74, #130, bb#76, bb#120, backend
+**Away mid-set and the turn clock** (#74, #130, #150, bb#76, bb#120, bb#138, backend
 [`API.md`, Away mid-set, and the turn clock](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)).
 The player the board waits for (`acting_user_id`: declarer on dummy's
 turn) has **one minute** to call, play or act on a claim: the game state's
@@ -585,7 +585,11 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
 - **The play page's turn clock**: a line over the status, "Your turn ·
   0:42" for the player on turn (red in the last 15 s, when their hand or
   the bidding box is ringed too), "Waiting for East · 0:42" for the
-  others, "Time is up…" at 0 until the backend's update lands. The line
+  others, "Time is up…" at 0 until the backend's update lands. For an
+  away player on turn (`turn_deadline_by: "away"`, the deadline being
+  their seat's `replace_at`) it reads "Waiting for East (away)" with no
+  clock, since their seat's tag counts down, and the status line under
+  it says nothing more (`awayOnTurn()`). The line
   is there through the auction and the play, empty with no clock, so
   nothing moves. 2 s after the deadline with the same turn still shown,
   `useStaleDeadline` rereads the game once.
@@ -596,15 +600,23 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   too.
 - **Away**: the backend marks a player with no sign of life for a minute
   away (`away_since` on the seat, in every table payload and
-  `TableUpdated`). A seat has no clock of its own (`forfeit_at` is gone),
-  so `AwayNotice` only says who is away ("East is away. If they don't
-  play within 1:00 of their turn, a robot takes their seat.", several in
-  one line; an admin, whom no clock runs for: "The table waits for
-  them.") and never shows a second countdown next to the turn clock.
-  `BridgeTable` and the detail page's compass tag every away seat
-  **away**.
-- **Leave mid-set** answers 202 and *holds* the seat: you stay seated,
-  away. The store then sets `heldTableId` and stops beating (a beat would
+  `TableUpdated`), and gives the seat its own clock, `replace_at`
+  (`away_since` + 2 minutes, bb#138): it runs whoever's turn it is, every
+  away seat's at once, so players who went together are replaced
+  together. `BridgeTable` and the detail page's compass tag every away
+  seat with it (`AwaySeatTag`: "away · 0:42", red in the last 15 s,
+  "replacing…" at 0 until the `TableUpdated` with the robot lands; a
+  plain "away" for an admin, who has no `replace_at`). The tags come from
+  `useAwayTags(table, me)`, one `useNow` per page, so seats away together
+  show the same time. `AwayNotice` then says it once, whoever and however
+  many are away, with no countdown: "Away players are replaced by a robot
+  when their clock runs out." (only admins away: "An admin is away: the
+  table waits for them.").
+- **Leave mid-set** answers 202 and *holds* the seat for 2 minutes: you
+  stay seated, away, with your seat's `replace_at`. Away from the table
+  (detail page, Tables, Home) `AwayNotice held` counts it down: "You're
+  away from Friday club: a robot takes your seat in 0:42 unless you come
+  back." The store then sets `heldTableId` and stops beating (a beat would
   bring you back). It also holds a seat it finds away on a fresh load (the
   tab was closed). Opening the play page, or **Come back** on the detail
   page, calls `comeBack(id)`: it beats at once and refetches the table.
@@ -616,7 +628,9 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   reason}`, reason `turn_timeout`, `set_time`, `away`, `moved` or `kicked`): the game
   store toasts it once per seat, whichever of `TableUpdated` and
   `PlayingUpdated` brings it first ("East didn't play in time: a robot
-  took their seat.", worded by `replacedText()` in `sets.ts`); the ones
+  took their seat.", worded by `replacedText()` in `sets.ts`), several
+  arriving in one update in a single toast ("South and West were away:
+  robots took their seats.", `replacedTogetherText()`); the ones
   already there when a board is read aren't news. If it was *your* seat
   (not a move you made), the tables store sets `replacedFrom`, toasts
   "You didn't play in time: a robot took your seat. You may sit down at
@@ -647,8 +661,9 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   list each human's time used (`time_used`, `SetResultsPanel`).
 - **Leave and move confirmations** say what is at stake (`stakeOf(table)`
   → `setAtStake` in `utils/away.ts`, `held` when a Leave would hold the
-  seat): a Leave "If you aren't back to play within 60 seconds of your
-  turn, a robot takes your seat for the rest of the set.", a move "A robot
+  seat): a Leave "Your seat is kept for 2 minutes: come back before
+  then, or a robot takes it for the rest of the set. Your time for the
+  set keeps running when it's your turn.", a move "A robot
   takes your seat there for the rest of set 3, and you can't sit down
   there again until it is over." (`robotTakesOver()` in `seatMove.ts`). An
   admin, or anyone while an admin there is away, or a move that leaves
@@ -664,10 +679,11 @@ arrives, and the app falls back to what each request returns.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, each human's time for the set (`banks`: the running one bold, red under a minute, none for a robot or an admin), whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
+| `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, each human's time for the set (`banks`: the running one bold, red under a minute, none for a robot or an admin), whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`) |
 | `VulnerabilityLabel` | who is vulnerable in words (`vulnerabilityText`), a bold red chip (green for None) with "(you)" on the viewer's side, top left above the table on the play page and in `BoardReview`, and on the board results page (#151) |
 | `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
-| `AwayNotice` | who is away mid-set, with no countdown (the turn clock is the play page's only one): an away admin on a line of their own (the table waits for them), the others in one line; with `held`, your own held seat (detail page, Tables, Home) |
+| `AwayNotice` | one line while others are away mid-set, with no countdown (the seats' tags have it): "Away players are replaced by a robot when their clock runs out." (only admins away: the table waits for them); with `held`, your own held seat counting down (detail page, Tables, Home) |
+| `AwaySeatTag` | an away seat's tag: "away · 0:42" to its `replace_at`, red in the last 15 s, "replacing…" at 0, a plain "away" for an admin (`BridgeTable`, the detail page's compass) |
 | `HandView` + `PlayingCard` | your hand, always ♥ ♣ ♦ ♠ (or the suits in `order`); playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses; each card shows at least 44 px of itself, the part a tap reaches, and the hand keeps the height it had as dealt while its cards go (`useSteadyHeight`); see [Card size](#card-size) |
 | `BiddingBox` | the call grid, on your turn during the auction, under the **Alert** field for the next call (an explanation for the opponents and an Alert toggle, both owned by the page) |
 | `AuctionHistory` + `AuctionCallCell` + `CallLabel` | the calls so far, four columns rotated like the table; an alerted call in amber with a "!", its explanation in a pop-up (`usePopover`), and with `live` an **Ask** and **Ask in the chat** on the opponents' calls and an **Answer** on yours when asked |
@@ -731,8 +747,9 @@ the claim's wording, its countdown and how it ended: `claimClockText`,
 / "=" / "−1", `doubledMark()` for X / XX, `resultSummary()` for "2♣ W +2 ·
 −130" in toasts and the text export, `percentText()`), `seatMove.ts` (wording for leaving or moving by
 game phase and by what is at stake in the set, and whether only robots
-would be left), `away.ts` (who is away and what it costs once the turn
-reaches them, the clock formatting, what leaving would put at stake),
+would be left), `away.ts` (who is away, each away seat's clock and tag, the
+one-line note and your held seat's line, the clock formatting, what
+leaving would put at stake),
 `turnClock.ts` (the turn clock: whose, the seconds left, its wording, red
 in the last 15 s, the tab title), `setClock.ts` (each seat's time for the
 set at a moment, red under a minute, the time used over a set),

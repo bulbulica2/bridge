@@ -178,9 +178,10 @@ export interface SetPosition {
   time_left: Record<Seat, number | null>;
 }
 
-// Which clock `turn_deadline` is: the turn's minute, or the end of the
-// acting player's time for the set when that comes first.
-export type DeadlineBy = 'move' | 'set';
+// Which clock `turn_deadline` is: the turn's minute, the away player's
+// seat's `replace_at` (bb#138), or the end of the acting player's time for
+// the set when that comes first.
+export type DeadlineBy = 'move' | 'away' | 'set';
 
 // What every player at the table may see: the `PlayingUpdated` payload.
 // While `waiting`, everything but `phase` is null.
@@ -203,8 +204,9 @@ export interface PublicPlaying {
   // call, a card or a claim action moves it. Null whenever nobody's clock
   // runs: `waiting`, `finished`, a claim pending, a robot or an admin on
   // turn. Count down from it, never from when the state arrived. The
-  // earlier of that minute and the end of their time for the set
-  // (`turn_deadline_by`, bb#131).
+  // earlier of that minute (for a player away, their seat's `replace_at`,
+  // bb#138) and the end of their time for the set (`turn_deadline_by`,
+  // bb#131).
   turn_deadline: string | null;
   // Null whenever `turn_deadline` is.
   turn_deadline_by: DeadlineBy | null;

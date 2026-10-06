@@ -24,10 +24,13 @@ export interface TableSeat {
   ready: boolean;
   // Mid-set only: since when this player has been away (their last sign of
   // life, or their Leave), their seat held for them; null when they are
-  // here. A seat has no clock of its own: how long the board still waits
-  // for the player on turn, away or not, is the game state's `turn_deadline`
-  // (bb#120). See bridge_backend docs/API.md, Away mid-set, and utils/away.
+  // here. See bridge_backend docs/API.md, Away mid-set, and utils/away.
   away_since: string | null;
+  // When a robot takes the away seat for the rest of the set unless its
+  // player comes back first (ISO 8601): `away_since` + 2 minutes, running
+  // whoever's turn it is, every away seat's at once (bb#138). Null when they
+  // are here, and for an admin away, whom the table waits for.
+  replace_at: string | null;
   user: PublicUser;
 }
 

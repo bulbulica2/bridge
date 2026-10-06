@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/89-chat-open-by-default`._
+_Status as of branch `bulbulica2/86-away-clocks-on-the-seats`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -60,8 +60,8 @@ held seat by #74; a robot taking your seat by #130.
 - **Logged in**: a greeting and either a **Your table** card (the table you
   sit at, from the tables store's `myTable`, robots badged) or **Find a
   table**, plus a short how-to-play. After a Leave mid-set the card says
-  so ("Your seat is held. If you aren't back to play within 1:00 of your
-  turn, a robot takes it for the rest of the set.") and its button reads
+  so, counting down ("You're away from Club: a robot takes your seat in
+  1:42 unless you come back.", #150) and its button reads
   **Come back** (it opens the game, which brings you back).
 - **Set N: a robot took your seat**: a card when your turn clock ran out
   (or you were removed while away) and a robot took your seat for the rest
@@ -186,8 +186,9 @@ robot**. Moving to another table asks first, because
 leaving your seat can abandon a board there; in the middle of a set it
 says a robot takes your seat there for the rest of the set and you can't
 sit down there again until it is over (bb#120). After a Leave mid-set a
-notice at the top says your seat is held (and that a robot takes it if
-you aren't back to play within a minute of your turn, #130), with
+notice at the top counts down the 2 minutes your seat is kept ("You're
+away from Club: a robot takes your seat in 1:42 unless you come back.",
+#150), with
 **Come back to …** (opens the game). Otherwise, while you sit
 somewhere, a line at the top says so: **You sit at Club · Leave** (the
 table's name links to its page). Going to another page never gets you up
@@ -234,16 +235,21 @@ once they have been off for 5 s (Reverb down, the channel refused, or a
 table you don't sit at, which has no channel) a note says **Live updates
 are off. Refresh to see the latest.** above a **Refresh** button (#76).
 
-**Away mid-set** (#74, bb#76; #130, bb#120). A player quiet for a minute
-in the middle of a set is marked **away** on the compass, with a plain
-line, no countdown: "East is away. If they don't play within 1:00 of
-their turn, a robot takes their seat." (an admin: "The table waits for
-them."). It clears the moment they are back. **Leave** mid-set is
-confirmed more sternly ("If you aren't back to play within 60 seconds of
-your turn, a robot takes your seat for the rest of the set."): the
-backend holds the seat (202), the page goes to `/tables` with a toast,
-and the store stops the heartbeat. Opening this page again shows your
-held seat, with **Come back** (no Leave or seat buttons meanwhile). Not
+**Away mid-set** (#74, bb#76; #130, bb#120; #150, bb#138). A player
+quiet for a minute in the middle of a set is tagged on the compass with
+their seat's own clock, **away · 1:42**, counting down to the robot
+taking it (red in the last 15 s, **replacing…** at 0; an admin's is a
+plain **away**: the table waits for them). Seats away together count
+down together. Under it one line, however many are away, with no
+countdown: "Away players are replaced by a robot when their clock runs
+out." A tag clears the moment its player is back. **Leave** mid-set is
+confirmed more sternly ("Your seat is kept for 2 minutes: come back
+before then, or a robot takes it for the rest of the set. Your time for
+the set keeps running when it's your turn."): the backend holds the seat
+(202), the page goes to `/tables` with a toast, and the store stops the
+heartbeat. Opening this page again shows your held seat counting down
+("You're away from Club: a robot takes your seat in 1:12 unless you come
+back."), with **Come back** (no Leave or seat buttons meanwhile). Not
 back in time, a robot takes your seat for the rest of the set and you are
 sent to the set's results. Removing a player mid-set says what it costs:
 a robot takes the seat of a player who is away, while removing one who is
@@ -400,12 +406,18 @@ out: a robot takes the seat for the rest of the set, told once ("East ran
 out of time for the set: a robot took their seat." / "You ran out of time
 for the set: a robot took your seat. …").
 
-**Away mid-set** (#74, bb#76). A player quiet for a minute mid-set is
-tagged **away** at their seat, and a notice above the turn clock says
-so, with no countdown of its own ("East is away. If they don't play
-within 1:00 of their turn, a robot takes their seat.", "South and West
-are away. …" for several; an admin, who has no clock: "The table waits
-for them."). It clears the moment they are back. Opening this page is
+**Away mid-set** (#74, bb#76; #150, bb#138). A player quiet for a
+minute mid-set is tagged at their seat with its own clock, **away ·
+0:42**, counting down to the robot taking it, whoever's turn it is (red
+in the last 15 s, **replacing…** at 0 until the robot sits down; an
+admin's is a plain **away**). Several away count down together, and one
+line above the turn clock says what for, with no countdown: "Away
+players are replaced by a robot when their clock runs out." When the
+board waits for one of them the turn clock's line reads **Waiting for
+East (away)**, no clock of its own, and the status under it stays empty.
+Robots taking several seats at once are told in one toast ("South and
+West were away: robots took their seats."). A tag clears the moment its
+player is back. Opening this page is
 coming back: a seat held after a Leave, or marked away, is yours again,
 with a **Welcome back. The set goes on.** toast and the board reloaded.
 Mid-set the heartbeat keeps going while the tab is hidden, so switching
@@ -815,5 +827,6 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans), bb#
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | `SetResultsPanel` | Play (set over), Set results | none (given the set from `history.loadSet`) |
-| `AwayNotice` | Play, Table detail (who is away, no countdown); Table detail, Tables, Home (your held seat) | none (reads `away_since` from the table) |
+| `AwayNotice` | Play, Table detail (one line while others are away, no countdown); Table detail, Tables, Home (your held seat, counting down) | none (reads `away_since` / `replace_at` from the table) |
+| `AwaySeatTag` | Play (`BridgeTable`), Table detail (compass): an away seat's clock | none (`replace_at` via `useAwayTags`) |
 | route progress bar, boot bar, toasts | the app shell | none (#18) |

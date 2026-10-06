@@ -68,7 +68,7 @@
                 <ion-badge v-if="myTable.board_id !== null" color="success" class="board">
                   Board in progress
                 </ion-badge>
-                <!-- Left mid-set: the seat waits a few minutes for us. -->
+                <!-- Left mid-set: the seat waits 2 minutes for us, counted down. -->
                 <AwayNotice v-if="held" :table="myTable" :me="auth.user?.id ?? null" held />
                 <ul class="players">
                   <li v-for="{ seat, user } in seatsOf(myTable)" :key="seat">

@@ -10,7 +10,10 @@ import { formatClock, secondsLeft } from '@/utils/away';
 // the set. The countdown reads the deadline against the time now, never
 // from when the state arrived; nothing is decided here. The deadline is the
 // end of the player's time for the set instead when that comes first
-// (`turn_deadline_by: "set"`, bb#131; their bank, utils/setClock).
+// (`turn_deadline_by: "set"`, bb#131; their bank, utils/setClock). For a
+// player away it is their seat's `replace_at` (`"away"`, bb#138), which
+// the seat's own tag counts down (utils/away), so the line names them
+// without a clock.
 
 // The last seconds, when the player on turn sees the clock in red.
 export const TURN_URGENT_SECONDS = 15;
@@ -24,7 +27,8 @@ export interface TurnClock {
   mine: boolean;
   // The seat whose player the board waits for (declarer on dummy's turn).
   seat: Seat | null;
-  // Which clock it is: the move's minute, or the player's time for the set.
+  // Which clock it is: the move's minute, the away seat's, or the player's
+  // time for the set.
   by: DeadlineBy;
 }
 
@@ -57,8 +61,12 @@ export function turnClock(state: PublicPlaying | null, me: number | null, now: n
 
 // "Your turn · 0:42", "Waiting for East · 0:42", or "Time is up…" until
 // the backend's update lands. When the time for the set runs out first:
-// "Your time for the set: 0:42" or "East's time for the set: 0:42".
+// "Your time for the set: 0:42" or "East's time for the set: 0:42". For a
+// player away: "Waiting for East (away)", their seat showing the clock.
 export function turnClockText(clock: TurnClock): string {
+  if (awayOnTurn(clock)) {
+    return clock.seat ? `Waiting for ${SEAT_NAMES[clock.seat]} (away)` : 'Waiting (away)';
+  }
   if (clock.seconds === 0) {
     return TIME_UP_TEXT;
   }
@@ -71,6 +79,12 @@ export function turnClockText(clock: TurnClock): string {
     return `Your turn · ${time}`;
   }
   return clock.seat ? `Waiting for ${SEAT_NAMES[clock.seat]} · ${time}` : `Waiting · ${time}`;
+}
+
+// The board waits for somebody else who is away: their seat's tag counts
+// down, the status line only names them.
+export function awayOnTurn(clock: TurnClock | null): boolean {
+  return !!clock && clock.by === 'away' && !clock.mine;
 }
 
 // The viewer's own clock in its last seconds: the page shows it in red.

@@ -12,11 +12,12 @@
        the table already). Once the board is over, the whole deal lies face
        up, each hand at its seat (in a replay, what is left of it, in the
        room the hand took as dealt). A seat whose player is away mid-set is
-       dashed and tagged "away". Dummy's and a robot declarer's cards read
-       trumps first (`trump`, see suitOrder); the claimer's and the deal
-       keep bridge order. Each human's time for the set (`banks`) shows
-       under their name, the running one counting down, red under a
-       minute; robots and admins have none. -->
+       dashed and tagged with its clock ("away · 0:42", AwaySeatTag).
+       Dummy's and a robot declarer's cards read trumps first (`trump`, see
+       suitOrder); the claimer's and the deal keep bridge order. Each
+       human's time for the set (`banks`) shows under their name, the
+       running one counting down, red under a minute; robots and admins
+       have none. -->
   <div class="bridge-table">
     <div
       v-for="side in SIDES"
@@ -29,7 +30,7 @@
           'seat-turn': turn === seatOn[side],
           'seat-mine': side === 'bottom' && mySeat,
           'seat-wide': side === 'top' && (dummySide === 'top' || declarerSide === 'top'),
-          'seat-away': away.includes(seatOn[side]),
+          'seat-away': !!away[seatOn[side]],
         },
       ]"
       :data-seat="seatOn[side]"
@@ -61,7 +62,7 @@
       >
         {{ formatClock(banks[seatOn[side]]!.seconds) }}
       </span>
-      <span v-if="away.includes(seatOn[side])" class="seat-away-tag">away</span>
+      <AwaySeatTag v-if="away[seatOn[side]]" class="seat-away-tag" :tag="away[seatOn[side]]!" />
       <span v-if="dummy && dummy.seat === seatOn[side] && side !== 'bottom'" class="seat-dummy">
         dummy
       </span>
@@ -134,12 +135,14 @@ import { computed } from 'vue';
 import DummyColumns from '@/components/DummyColumns.vue';
 import HandView from '@/components/HandView.vue';
 import AdminBadge from '@/components/AdminBadge.vue';
+import AwaySeatTag from '@/components/AwaySeatTag.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import type { Board, Card, Strain } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES } from '@/utils/auction';
 import { formatClock } from '@/utils/away';
+import type { AwayTag } from '@/utils/away';
 import { isVulnerable, longestSuit, seatAt, suitOrder, vulnerabilityText } from '@/utils/cards';
 import { bankLabel } from '@/utils/setClock';
 import type { SeatBank } from '@/utils/setClock';
@@ -184,9 +187,9 @@ const props = withDefaults(
     // hand keeps the height it had as dealt, so the table doesn't shrink as
     // the cards go.
     reserve?: Record<Seat, Card[]> | null;
-    // Seats whose players are away mid-set (their seat held; the page's
-    // AwayNotice says so, the turn clock counts down).
-    away?: Seat[];
+    // Seats whose players are away mid-set, each with its tag (its clock
+    // to the robot taking the seat, utils/away).
+    away?: Partial<Record<Seat, AwayTag>>;
     // Each human's time for the set (utils/setClock), none for a robot or
     // an admin.
     banks?: Partial<Record<Seat, SeatBank>>;
@@ -207,7 +210,7 @@ const props = withDefaults(
     deal: null,
     replay: false,
     reserve: null,
-    away: () => [],
+    away: () => ({}),
     banks: () => ({}),
     busy: false,
     sendingId: null,
@@ -343,9 +346,6 @@ function turnLabel(side: ScreenSide): string {
 
 .seat-away-tag {
   font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--ion-color-warning-shade, #e0ac08);
 }
 
 .seat-turn {

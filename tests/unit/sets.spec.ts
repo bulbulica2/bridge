@@ -17,6 +17,7 @@ import {
   groupBySet,
   replacedFromText,
   replacedText,
+  replacedTogetherText,
   replacementOf,
   seatInSet,
   setLabel,
@@ -212,8 +213,8 @@ describe('set helpers', () => {
     expect(replacedText({ seat: 'E', reason: 'turn_timeout' }, true)).toBe(
       "You didn't play in time: a robot took your seat.",
     )
-    expect(replacedText({ seat: 'N', reason: 'away' })).toBe('North was away on their turn: a robot took their seat.')
-    expect(replacedText({ seat: 'N', reason: 'away' }, true)).toBe('You were away on your turn: a robot took your seat.')
+    expect(replacedText({ seat: 'N', reason: 'away' })).toBe('North was away: a robot took their seat.')
+    expect(replacedText({ seat: 'N', reason: 'away' }, true)).toBe('You were away: a robot took your seat.')
     expect(replacedText({ seat: 'S', reason: 'moved' })).toBe('South moved to another table: a robot took their seat.')
     expect(replacedText({ seat: 'W', reason: 'kicked' })).toBe('West was removed while away: a robot took their seat.')
     expect(replacedText({ seat: 'W', reason: 'kicked' }, true)).toBe('You were removed while away: a robot took your seat.')
@@ -227,6 +228,29 @@ describe('set helpers', () => {
     expect(replacedFromText({ seat: 'E', reason: 'turn_timeout', number: 3 })).toBe(
       "You didn't play in time: a robot took your seat. You may sit down at that table again once set 3 is over.",
     )
+  })
+
+  test('several replaced at once, told in one line', () => {
+    expect(replacedTogetherText([{ seat: 'S', reason: 'away' }])).toBe('South was away: a robot took their seat.')
+    expect(
+      replacedTogetherText([
+        { seat: 'S', reason: 'away' },
+        { seat: 'W', reason: 'away' },
+      ]),
+    ).toBe('South and West were away: robots took their seats.')
+    expect(
+      replacedTogetherText([
+        { seat: 'N', reason: 'turn_timeout' },
+        { seat: 'E', reason: 'turn_timeout' },
+        { seat: 'W', reason: 'turn_timeout' },
+      ]),
+    ).toBe("North, East and West didn't play in time: robots took their seats.")
+    expect(
+      replacedTogetherText([
+        { seat: 'E', reason: 'moved' },
+        { seat: 'W', reason: 'kicked' },
+      ]),
+    ).toBe('East moved to another table: a robot took their seat. West was removed while away: a robot took their seat.')
   })
 
   test("the user's own replacement, but never a move they made themselves", () => {

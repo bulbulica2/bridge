@@ -104,13 +104,17 @@ export function replacementsOf(set: Pick<SetPosition, 'replaced'> | null | undef
 }
 
 // Why a robot took a seat over (bridge_backend docs/API.md, Away mid-set),
-// said of somebody else and of the viewer.
-const REPLACED_WHY: Record<ReplacementReason, { them: string; you: string }> = {
-  turn_timeout: { them: "didn't play in time", you: "didn't play in time" },
-  set_time: { them: 'ran out of time for the set', you: 'ran out of time for the set' },
-  away: { them: 'was away on their turn', you: 'were away on your turn' },
-  moved: { them: 'moved to another table', you: 'moved to another table' },
-  kicked: { them: 'was removed while away', you: 'were removed while away' },
+// said of somebody else, of the viewer, and of several at once.
+const REPLACED_WHY: Record<ReplacementReason, { them: string; you: string; they: string }> = {
+  turn_timeout: { them: "didn't play in time", you: "didn't play in time", they: "didn't play in time" },
+  set_time: {
+    them: 'ran out of time for the set',
+    you: 'ran out of time for the set',
+    they: 'ran out of time for the set',
+  },
+  away: { them: 'was away', you: 'were away', they: 'were away' },
+  moved: { them: 'moved to another table', you: 'moved to another table', they: 'moved to another table' },
+  kicked: { them: 'was removed while away', you: 'were removed while away', they: 'were removed while away' },
 };
 
 // "East didn't play in time: a robot took their seat.", or for the player
@@ -121,6 +125,18 @@ export function replacedText(entry: Pick<SetReplacement, 'seat' | 'reason'>, min
   return mine
     ? `You ${why.you}: a robot took your seat.`
     : `${SEAT_NAMES[entry.seat]} ${why.them}: a robot took their seat.`;
+}
+
+// Several replaced in one update (their clocks ran out together, bb#138),
+// told in one toast: "South and West were away: robots took their seats."
+// For different reasons, each its own sentence.
+export function replacedTogetherText(entries: Pick<SetReplacement, 'seat' | 'reason'>[]): string {
+  if (entries.length === 1 || new Set(entries.map((e) => e.reason)).size > 1) {
+    return entries.map((e) => replacedText(e)).join(' ');
+  }
+  const names = entries.map((e) => SEAT_NAMES[e.seat]);
+  const who = `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${who} ${REPLACED_WHY[entries[0].reason].they}: robots took their seats.`;
 }
 
 // The viewer's seat in a set's results: the seat they play, or the one a
