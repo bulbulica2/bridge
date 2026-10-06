@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { IonActionSheet, IonSegment } from '@ionic/vue'
+import { pickSegment } from './ionEvents'
 import http from '@/services/http'
 import type { PlayingHistoryEntry, PlayingReview, SetBoardRow, SetResults } from '@/services/history'
 import type { Bid, Card, PlayedCard, Playing, Suit } from '@/services/game'
@@ -467,14 +468,13 @@ describe('BoardReviewModal', () => {
     expect(wrapper.findAll('ion-segment-button').map((b) => b.text())).toEqual(['Board 6', 'Board 7'])
 
     answer(review(41, 6))
-    wrapper.findComponent(IonSegment).vm.$emit('ionChange', { detail: { value: '41' } })
-    await flushPromises()
+    await pickSegment(wrapper, '41')
     expect(http.get).toHaveBeenLastCalledWith('/playings/41')
     expect(wrapper.find('ion-title').text()).toBe('Board 6 review')
 
     // Back to one already read: from the store, not asked again.
-    wrapper.findComponent(IonSegment).vm.$emit('ionChange', { detail: { value: '42' } })
-    wrapper.findComponent(IonSegment).vm.$emit('ionChange', { detail: { value: undefined } })
+    await pickSegment(wrapper, '42')
+    wrapper.findComponent(IonSegment).vm.$emit('update:modelValue', undefined)
     await flushPromises()
     expect(http.get).toHaveBeenCalledTimes(2)
     expect(wrapper.find('ion-title').text()).toBe('Board 7 review')
@@ -486,8 +486,7 @@ describe('BoardReviewModal', () => {
     answer(review(41, 6))
     const wrapper = mountModal()
     await flushPromises()
-    wrapper.findComponent(IonSegment).vm.$emit('ionChange', { detail: { value: '41' } })
-    await flushPromises()
+    await pickSegment(wrapper, '41')
 
     await wrapper.setProps({ open: false })
     expect(wrapper.find('.board-review').exists()).toBe(false)

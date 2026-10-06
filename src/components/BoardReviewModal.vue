@@ -39,8 +39,8 @@
             v-if="choices.length > 1"
             scrollable
             class="board-switch"
-            :value="String(shownId)"
-            @ion-change="pick($event.detail.value)"
+            :model-value="String(shownId)"
+            @update:model-value="pick($event)"
           >
             <ion-segment-button
               v-for="choice in choices"

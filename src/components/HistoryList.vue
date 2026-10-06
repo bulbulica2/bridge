@@ -71,7 +71,7 @@
         <p class="error">{{ moreError }}</p>
       </ion-text>
 
-      <ion-infinite-scroll :disabled="!store.hasMore(owner) || loading" @ionInfinite="more($event)">
+      <ion-infinite-scroll :disabled="!store.hasMore(owner) || loading" v-ion-event:ion-infinite="more">
         <ion-infinite-scroll-content loading-text="Loading older boards…" />
       </ion-infinite-scroll>
     </template>
@@ -89,6 +89,7 @@ import {
   IonText,
   useIonRouter,
 } from '@ionic/vue';
+import { vIonEvent } from '@/directives/ionEvent';
 import HistoryEntryItem from '@/components/HistoryEntryItem.vue';
 import { useHistoryStore } from '@/stores/history';
 import type { HistoryOwner } from '@/stores/history';

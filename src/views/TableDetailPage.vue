@@ -6,7 +6,7 @@
       </template>
     </AppHeader>
     <ion-content :fullscreen="true" class="ion-padding">
-      <ion-refresher slot="fixed" @ionRefresh="refresh($event)">
+      <ion-refresher slot="fixed" v-ion-event:ion-refresh="refresh">
         <ion-refresher-content />
       </ion-refresher>
 
@@ -238,6 +238,7 @@ import {
   onIonViewWillEnter,
   useIonRouter,
 } from '@ionic/vue';
+import { vIonEvent } from '@/directives/ionEvent';
 import AppHeader from '@/components/AppHeader.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
 import AwaySeatTag from '@/components/AwaySeatTag.vue';

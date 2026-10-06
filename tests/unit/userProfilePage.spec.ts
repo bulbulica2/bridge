@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonRefresher } from '@ionic/vue'
+import { pullToRefresh } from './ionEvents'
 import UserProfilePage from '@/views/UserProfilePage.vue'
 import { getMyStats, getUser, getUserStats, liftBan } from '@/services/users'
 import type { UserBan, UserStats } from '@/services/users'
@@ -168,7 +168,7 @@ describe('UserProfilePage', () => {
     await flushPromises()
     const complete = vi.fn()
 
-    wrapper.findComponent(IonRefresher).vm.$emit('ionRefresh', { target: { complete } })
+    await pullToRefresh(wrapper, complete)
     await flushPromises()
 
     expect(getUser).toHaveBeenCalledTimes(2)

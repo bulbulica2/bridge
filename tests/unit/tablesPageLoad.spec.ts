@@ -2,7 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonButton, IonRefresher } from '@ionic/vue'
+import { IonButton } from '@ionic/vue'
+import { pullToRefresh } from './ionEvents'
 import TablesPage from '@/views/TablesPage.vue'
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue'
 import * as tablesService from '@/services/tables'
@@ -123,7 +124,7 @@ describe('TablesPage.vue loading', () => {
     const complete = vi.fn()
     vi.mocked(tablesService.listTables).mockReturnValue(new Promise(() => {}))
 
-    wrapper.findComponent(IonRefresher).vm.$emit('ionRefresh', { target: { complete } })
+    await pullToRefresh(wrapper, complete)
     await flushPromises()
 
     expect(wrapper.find('.refreshing').exists()).toBe(true)
@@ -136,7 +137,7 @@ describe('TablesPage.vue loading', () => {
     await flushPromises()
     const complete = vi.fn()
 
-    wrapper.findComponent(IonRefresher).vm.$emit('ionRefresh', { target: { complete } })
+    await pullToRefresh(wrapper, complete)
     await flushPromises()
 
     expect(tablesService.listTables).toHaveBeenCalledTimes(2)

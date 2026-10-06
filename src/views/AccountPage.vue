@@ -100,9 +100,9 @@
           <section class="card-size" aria-labelledby="card-size-title">
             <h2 id="card-size-title" class="card-size-title">Card size</h2>
             <ion-segment
-              :value="cardSize"
+              :model-value="cardSize"
               aria-labelledby="card-size-title"
-              @ion-change="pickCardSize($event.detail.value)"
+              @update:model-value="pickCardSize($event)"
             >
               <ion-segment-button v-for="size in CARD_SIZES" :key="size.value" :value="size.value">
                 <ion-label>{{ size.label }}</ion-label>

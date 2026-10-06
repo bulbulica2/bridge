@@ -5,10 +5,10 @@
   <div class="set-minutes">
     <p :id="labelId" class="set-minutes-label">Time for a set, each</p>
     <ion-segment
-      :value="String(modelValue)"
+      :model-value="String(modelValue)"
       :disabled="disabled"
       :aria-labelledby="labelId"
-      @ion-change="pick($event.detail.value)"
+      @update:model-value="pick($event)"
     >
       <ion-segment-button v-for="minutes in SET_MINUTES" :key="minutes" :value="String(minutes)">
         <ion-label>{{ minutes }} min</ion-label>

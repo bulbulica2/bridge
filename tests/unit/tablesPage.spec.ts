@@ -2,7 +2,8 @@ import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonSegment, IonToggle } from '@ionic/vue'
+import { IonToggle } from '@ionic/vue'
+import { pickSegment } from './ionEvents'
 import SetMinutesPicker from '@/components/SetMinutesPicker.vue'
 import TablesPage from '@/views/TablesPage.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -156,8 +157,7 @@ describe('TablesPage.vue with robots', () => {
     ])
     expect(wrapper.findComponent(SetMinutesPicker).props('modelValue')).toBe(16)
 
-    wrapper.findComponent(IonSegment).vm.$emit('ionChange', { detail: { value: '12' } })
-    await flushPromises()
+    await pickSegment(wrapper, '12')
     expect(wrapper.findComponent(SetMinutesPicker).props('modelValue')).toBe(12)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
