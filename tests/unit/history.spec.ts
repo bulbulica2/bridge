@@ -280,6 +280,9 @@ describe('BoardResultsPage', () => {
     expect(wrapper.find('.summary-value').text()).toBe('0%')
     expect(wrapper.find('.summary-detail').text()).toContain('0 of 2 matchpoints')
     expect(wrapper.find('.summary-detail').text()).toContain('E-W −620')
+    // Both sides vulnerable, bo's too, and who dealt.
+    expect(wrapper.get('.board-info .vul-label').text()).toBe('Vulnerable: Both (you too)')
+    expect(wrapper.get('.board-info').text()).toContain('Dealer South')
   })
 
   test('says there is nothing to compare when only one table has finished', async () => {

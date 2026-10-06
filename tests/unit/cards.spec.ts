@@ -2,7 +2,8 @@ import { describe, expect, test } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DummyColumns from '@/components/DummyColumns.vue'
 import HandView from '@/components/HandView.vue'
-import type { Card, Strain, Suit } from '@/services/game'
+import VulnerabilityLabel from '@/components/VulnerabilityLabel.vue'
+import type { Card, Strain, Suit, Vulnerability } from '@/services/game'
 import type { Seat } from '@/services/tables'
 import {
   groupBySuit,
@@ -16,6 +17,7 @@ import {
   SUITS,
   suitOrder,
   vulnerabilityLabel,
+  vulnerabilityText,
 } from '@/utils/cards'
 
 let nextId = 1
@@ -167,5 +169,56 @@ describe('vulnerability', () => {
     expect(['', 'N-S', 'E-W', 'N-S E-W'].map((v) => vulnerabilityLabel(v as never))).toEqual([
       'None', 'N-S', 'E-W', 'Both',
     ])
+  })
+
+  // What each seat (or nobody: a board the viewer didn't play) reads.
+  const TEXTS: Record<Vulnerability, Record<Seat | 'none', string>> = {
+    '': {
+      N: 'Vulnerable: None',
+      E: 'Vulnerable: None',
+      S: 'Vulnerable: None',
+      W: 'Vulnerable: None',
+      none: 'Vulnerable: None',
+    },
+    'N-S': {
+      N: 'Vulnerable: N-S (you)',
+      E: 'Vulnerable: N-S',
+      S: 'Vulnerable: N-S (you)',
+      W: 'Vulnerable: N-S',
+      none: 'Vulnerable: N-S',
+    },
+    'E-W': {
+      N: 'Vulnerable: E-W',
+      E: 'Vulnerable: E-W (you)',
+      S: 'Vulnerable: E-W',
+      W: 'Vulnerable: E-W (you)',
+      none: 'Vulnerable: E-W',
+    },
+    'N-S E-W': {
+      N: 'Vulnerable: Both (you too)',
+      E: 'Vulnerable: Both (you too)',
+      S: 'Vulnerable: Both (you too)',
+      W: 'Vulnerable: Both (you too)',
+      none: 'Vulnerable: Both',
+    },
+  }
+
+  test.each(Object.keys(TEXTS) as Vulnerability[])('words %j from each seat', (vulnerable) => {
+    for (const seat of ['N', 'E', 'S', 'W', 'none'] as const) {
+      expect(vulnerabilityText(vulnerable, seat === 'none' ? null : seat)).toEqual({
+        text: TEXTS[vulnerable][seat],
+        red: vulnerable !== '',
+      })
+    }
+  })
+
+  test('the label is a red or green chip', () => {
+    const red = mount(VulnerabilityLabel, { props: { vulnerable: 'E-W', mySeat: 'W' } })
+    expect(red.text()).toBe('Vulnerable: E-W (you)')
+    expect(red.find('.vul-label').classes()).toContain('vul-label-red')
+
+    const green = mount(VulnerabilityLabel, { props: { vulnerable: '' } })
+    expect(green.text()).toBe('Vulnerable: None')
+    expect(green.find('.vul-label').classes()).toContain('vul-label-green')
   })
 })

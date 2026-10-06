@@ -271,6 +271,66 @@ describe('TablePlayPage loading', () => {
   })
 })
 
+describe('TablePlayPage vulnerability label', () => {
+  const label = (wrapper: VueWrapper) => wrapper.get('.board-bar .vul-label')
+
+  test('in the auction: our side, in red', async () => {
+    const wrapper = await mountPage(auction({ board: { id: 7, number: 7, dealer: 'S', vulnerable: 'N-S' } }))
+
+    expect(label(wrapper).text()).toBe('Vulnerable: N-S (you)')
+    expect(label(wrapper).classes()).toContain('vul-label-red')
+    // The table's centre uses the same words.
+    expect(wrapper.get('.board-line + .board-line').text()).toBe('Vulnerable: N-S (you)')
+  })
+
+  test('in the play: the other side, still in red, above the trick', async () => {
+    const wrapper = await mountPage(
+      auction({
+        phase: 'play',
+        board: { id: 7, number: 7, dealer: 'S', vulnerable: 'E-W' },
+        turn: 'W',
+        acting_user_id: 4,
+        contract: {
+          bid: { id: 20, call: null, level: 4, strain: 'S' } as unknown as Bid,
+          doubled: 0,
+          declarer: 'S',
+          dummy: 'N',
+        },
+        tricks: [],
+        current_trick: [],
+        tricks_won: { ns: 0, ew: 0 },
+      }),
+    )
+
+    expect(label(wrapper).text()).toBe('Vulnerable: E-W')
+    expect(label(wrapper).classes()).toContain('vul-label-red')
+  })
+
+  test('once finished: both sides, us too', async () => {
+    const wrapper = await mountPage({
+      ...finished(),
+      board: { id: 7, number: 7, dealer: 'S', vulnerable: 'N-S E-W' },
+    })
+
+    expect(label(wrapper).text()).toBe('Vulnerable: Both (you too)')
+  })
+
+  test('nobody vulnerable is green, beside the set', async () => {
+    const set = { id: 9, number: 1, board: 2, of: 4, finished: false } as Playing['set']
+    const wrapper = await mountPage(auction({ set }))
+
+    expect(label(wrapper).text()).toBe('Vulnerable: None')
+    expect(label(wrapper).classes()).toContain('vul-label-green')
+    expect(wrapper.get('.board-bar .set-bar').text()).toBe('Board 2 of 4 · Set 1')
+  })
+
+  test('nothing dealt yet: no label', async () => {
+    const wrapper = await mountPage(auction({ phase: 'waiting', board: null, turn: null, hand: [] }))
+
+    expect(wrapper.find('.vul-label').exists()).toBe(false)
+  })
+})
+
 describe('TablePlayPage refused moves', () => {
   test('a 403 means the seat is gone', async () => {
     const wrapper = await mountPage(auction())

@@ -520,6 +520,8 @@ describe('export on the review page', () => {
     const printout = document.querySelector('body > .board-printout')!
     expect(printout.textContent).toContain('Board 7')
     expect(printout.textContent).toContain('ROBOT-1 @robot-1 (robot)')
+    // Who is vulnerable, in words: bo sat East, on the vulnerable side.
+    expect(printout.querySelector('.meta')!.textContent).toContain('Vulnerable: E-W (you)')
     expect(printout.querySelectorAll('.play tbody tr')).toHaveLength(13)
 
     window.dispatchEvent(new Event('afterprint'))
@@ -581,6 +583,16 @@ describe('alerts in the exports', () => {
       '! 2♠ by South: Alerted, no explanation given.',
     ])
     expect(mount(BoardPrintout, { props: { review: played() } }).find('.alerts').exists()).toBe(false)
+  })
+
+  test("the printout words who is vulnerable, the viewer's side or not", () => {
+    const meta = (props: Record<string, unknown>) =>
+      mount(BoardPrintout, { props: { review: played(), ...props } }).get('.meta').text()
+
+    expect(meta({})).toContain('Dealer North · Vulnerable: E-W · Playing #42')
+    expect(meta({ mySeat: 'W' })).toContain('Vulnerable: E-W (you)')
+    expect(meta({ mySeat: 'N' })).toContain('Vulnerable: E-W ·')
+    expect(meta({ review: { ...played(), board: null } })).toContain('Dealer ? · Vulnerable: ? ·')
   })
 })
 

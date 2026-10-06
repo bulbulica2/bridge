@@ -30,9 +30,11 @@
             <span>Refreshing…</span>
           </div>
 
-          <p class="board-info">
-            Dealer {{ SEAT_NAMES[data.board.dealer] }} · {{ vulnerabilityLabel(data.board.vulnerable) }}
-          </p>
+          <!-- Who is vulnerable, in words (#151), then who dealt. -->
+          <div class="board-info">
+            <VulnerabilityLabel :vulnerable="data.board.vulnerable" :my-seat="mySeat" />
+            <span>Dealer {{ SEAT_NAMES[data.board.dealer] }}</span>
+          </div>
 
           <!-- The viewer's own result(s) on this board, as a matchpoint %. -->
           <section v-for="row in mine" :key="row.result.playing_id" class="summary">
@@ -143,13 +145,13 @@ import {
 import AppHeader from '@/components/AppHeader.vue';
 import CallLabel from '@/components/CallLabel.vue';
 import DoubleDummyTable from '@/components/DoubleDummyTable.vue';
+import VulnerabilityLabel from '@/components/VulnerabilityLabel.vue';
 import { useDoubleDummy } from '@/composables/useDoubleDummy';
 import { useAuthStore } from '@/stores/auth';
 import { useHistoryStore } from '@/stores/history';
 import type { BoardResultRow } from '@/services/history';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
-import { vulnerabilityLabel } from '@/utils/cards';
 import { errorMessage, statusOf } from '@/utils/errors';
 import {
   SIDE_LABELS,
@@ -186,6 +188,10 @@ const myContract = computed(() => {
   return result ? { declarer: result.declarer!, strain: result.contract!.strain! } : null;
 });
 
+// The viewer's seat on the board (the first playing they sat at), for the
+// vulnerability label's "(you)".
+const mySeat = computed<Seat | null>(() => mine.value[0]?.seat ?? null);
+
 // Where the viewer sat on each playing of the board (normally one).
 const mine = computed(() => {
   const board = data.value;
@@ -199,7 +205,7 @@ const mine = computed(() => {
     }
     const side = sideOf(seat);
     const matchpoints = result.matchpoints[side];
-    return [{ result, side, matchpoints, percent: matchpointPercent(matchpoints, board.top) }];
+    return [{ result, seat, side, matchpoints, percent: matchpointPercent(matchpoints, board.top) }];
   });
 });
 
@@ -312,8 +318,11 @@ async function refresh(event: CustomEvent) {
 }
 
 .board-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
   margin: 0 0 12px;
-  text-align: center;
   color: var(--ion-color-medium);
 }
 

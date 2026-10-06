@@ -77,6 +77,7 @@
         v-if="exporter.printing.value && review"
         :review="review"
         :extras="exporter.extras.value"
+        :my-seat="mySeat"
       />
     </Teleport>
   </ion-page>
@@ -103,13 +104,16 @@ import BoardPrintout from '@/components/BoardPrintout.vue';
 import BoardReview from '@/components/BoardReview.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import { useBoardExport } from '@/composables/useBoardExport';
+import { useAuthStore } from '@/stores/auth';
 import { useHistoryStore } from '@/stores/history';
 import type { PublicUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { seatOfUser } from '@/utils/result';
 
 const route = useRoute();
 const ionRouter = useIonRouter();
 const store = useHistoryStore();
+const auth = useAuthStore();
 
 const playingId = ref(0);
 // Counts the entries: each one replays from before the opening lead, even
@@ -122,6 +126,11 @@ const gone = ref('');
 const player = ref<PublicUser | null>(null);
 
 const review = computed(() => store.reviews[playingId.value] ?? null);
+
+// The viewer's seat if they played it, for the printout's "(you)".
+const mySeat = computed(() =>
+  review.value ? seatOfUser(review.value.players, auth.user?.id) : null,
+);
 
 // Export: copy, download, print (the play page's review modal does the same).
 const exporter = useBoardExport(() => review.value);

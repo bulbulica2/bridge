@@ -5,6 +5,11 @@
        page and the play page's review modal both show it; `step` (cards played) is all it holds, and a new
        playing starts again before the opening lead. -->
   <div class="board-review">
+    <!-- Who is vulnerable, in words, top left above the table (#151). -->
+    <div v-if="review.board" class="board-bar">
+      <VulnerabilityLabel :vulnerable="review.board.vulnerable" :my-seat="mySeat" />
+    </div>
+
     <!-- The contract, and the tricks each side has won at this step. -->
     <section class="outcome">
       <template v-if="review.contract">
@@ -165,6 +170,7 @@ import ChatMessageList from '@/components/ChatMessageList.vue';
 import DoubleDummyTable from '@/components/DoubleDummyTable.vue';
 import LeadAnalysis from '@/components/LeadAnalysis.vue';
 import TrickArea from '@/components/TrickArea.vue';
+import VulnerabilityLabel from '@/components/VulnerabilityLabel.vue';
 import { DOUBLE_DUMMY_REREAD_MS } from '@/composables/useDoubleDummy';
 import { useAuthStore } from '@/stores/auth';
 import { useHistoryStore } from '@/stores/history';
@@ -300,6 +306,10 @@ function go(to: number) {
   margin: 0 0 8px;
   font-size: 1rem;
   font-weight: 700;
+}
+
+.board-bar {
+  margin: 0 0 8px;
 }
 
 .outcome {

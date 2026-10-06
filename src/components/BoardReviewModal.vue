@@ -84,6 +84,7 @@
       v-if="exporter.printing.value && review"
       :review="review"
       :extras="exporter.extras.value"
+      :my-seat="mySeat"
     />
   </Teleport>
 </template>
@@ -110,8 +111,10 @@ import { shareOutline } from 'ionicons/icons';
 import BoardPrintout from '@/components/BoardPrintout.vue';
 import BoardReview from '@/components/BoardReview.vue';
 import { useBoardExport } from '@/composables/useBoardExport';
+import { useAuthStore } from '@/stores/auth';
 import { useHistoryStore } from '@/stores/history';
 import { errorMessage } from '@/utils/errors';
+import { seatOfUser } from '@/utils/result';
 import type { ReviewChoice } from '@/utils/review';
 
 const props = withDefaults(
@@ -129,6 +132,7 @@ const props = withDefaults(
 const emit = defineEmits<{ close: [] }>();
 
 const history = useHistoryStore();
+const auth = useAuthStore();
 
 // The board picked in the switcher; null is the latest.
 const picked = ref<number | null>(null);
@@ -142,6 +146,11 @@ const shownId = computed(() => {
 
 // Cached by the history store: a finished playing never changes.
 const review = computed(() => (shownId.value ? (history.reviews[shownId.value] ?? null) : null));
+
+// The viewer's seat if they played it, for the printout's "(you)".
+const mySeat = computed(() =>
+  review.value ? seatOfUser(review.value.players, auth.user?.id) : null,
+);
 
 const title = computed(() =>
   review.value?.board ? `Board ${review.value.board.number} review` : 'Board review',

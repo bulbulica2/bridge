@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/85-set-clock`._
+_Status as of branch `bulbulica2/87-vulnerability-label`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -311,7 +311,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -360,6 +360,13 @@ Play goes in **sets of four boards** (#73): Start deals board 1, **Next
 board** boards 2 to 4, and after the fourth the set is over. A line at the
 top says where the table is: **Board 2 of 4 · Set 3** (**· set over** once
 it is).
+
+**Who is vulnerable, in words** (#151). The same line starts, top left,
+with a bold chip for the whole board (auction, play and once finished):
+**Vulnerable: N-S**, **E-W** or **Both** in red, **Vulnerable: None** in
+green, with **(you)** when it is your side ("Vulnerable: Both (you too)").
+The seats keep their red/green stripes, and the table's centre says the
+same words until the first trick takes its place.
 
 **The turn clock** (#130, bb#120). The player the board waits for has
 **one minute** to call, play or act on a claim. A line over the status
@@ -647,7 +654,9 @@ Built by #30. Reached from a board's review or **Compare with other tables**.
 
 The same board at every table, best N-S score first, each with its
 contract, declarer, score and matchpoints. The tables you sat at are
-highlighted with your side's matchpoint percentage. Above the list, the
+highlighted with your side's matchpoint percentage. At the top, who is
+vulnerable as a red/green chip ("Vulnerable: Both (you too)", #151) and
+who dealt. Above the list, the
 board's double dummy table (#119): the tricks each declarer (N E S W) makes
 in each strain (♣ ♦ ♥ ♠ NT) with every card in view and best play on both
 sides, your contract marked, so every result can be held up against what
@@ -671,7 +680,8 @@ entry (yours or another player's) or a row of Board results; not in the
 menu. The play page shows the same review in a sheet (#97: `BoardReview`
 and `useBoardExport` serve both). It works the same after the table is gone.
 
-One table's playing of a board, replayed: the contract and the tricks each
+One table's playing of a board, replayed: who is vulnerable, top left, as
+on the play page (#151; "(you)" only if you played it), the contract and the tricks each
 side has won so far, the four hands face up (you at the bottom if you
 played it, otherwise South), the trick in the middle, and the auction
 below, with every alert of the board (public once it is over) marked and
@@ -720,7 +730,8 @@ only the deal and the result.
 - **Download .json**: the review exactly as the backend sent it, for
   debugging and for work on the robots.
 - **Print / Save as PDF**: the browser's print dialog with a paper layout
-  of the board (no app menu or header): the board line and result, the
+  of the board (no app menu or header): the board line (dealer and
+  "Vulnerable: E-W (you)" in plain text, black and white) and result, the
   hands round a compass, the auction (alerted calls marked "!" and listed
   under it) and a trick-by-trick table.
 

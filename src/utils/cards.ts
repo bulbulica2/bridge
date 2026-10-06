@@ -95,3 +95,21 @@ export function vulnerabilityLabel(vulnerable: Vulnerability): string {
       return 'None';
   }
 }
+
+// Who is vulnerable, in words, for the label every board carries (#151):
+// "Vulnerable: N-S", with "(you)" when it's the viewer's side and "(you
+// too)" when both are; `red` when anybody is vulnerable, green for None.
+// No seat (a board the viewer didn't play) says nothing about them.
+export function vulnerabilityText(
+  vulnerable: Vulnerability,
+  mySeat: Seat | null,
+): { text: string; red: boolean } {
+  const text = `Vulnerable: ${vulnerabilityLabel(vulnerable)}`;
+  if (vulnerable === '') {
+    return { text, red: false };
+  }
+  if (!mySeat || !isVulnerable(mySeat, vulnerable)) {
+    return { text, red: true };
+  }
+  return { text: `${text} ${vulnerable === 'N-S E-W' ? '(you too)' : '(you)'}`, red: true };
+}

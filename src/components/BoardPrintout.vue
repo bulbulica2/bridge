@@ -8,7 +8,7 @@
       <h1>Board {{ review.board?.number ?? '?' }}</h1>
       <p class="meta">
         Dealer {{ review.board ? SEAT_NAMES[review.board.dealer] : '?' }} ·
-        Vulnerable {{ review.board ? vulnerabilityLabel(review.board.vulnerable) : '?' }} ·
+        {{ review.board ? vulnerabilityText(review.board.vulnerable, mySeat).text : 'Vulnerable: ?' }} ·
         Playing #{{ review.playing_id ?? '?' }}
       </p>
       <p v-if="review.result" class="meta">
@@ -125,7 +125,7 @@ import {
   isRedStrain,
   SEAT_NAMES,
 } from '@/utils/auction';
-import { isRed, isVulnerable, SUIT_SYMBOLS, SUITS, vulnerabilityLabel } from '@/utils/cards';
+import { isRed, isVulnerable, SUIT_SYMBOLS, SUITS, vulnerabilityText } from '@/utils/cards';
 import {
   cardText,
   claimNote,
@@ -140,9 +140,12 @@ import type { ExportExtras, TrickRow } from '@/utils/export';
 import { resultSummary } from '@/utils/result';
 import { isRecorded } from '@/utils/review';
 
-const props = withDefaults(defineProps<{ review: PlayingReview; extras?: ExportExtras }>(), {
-  extras: () => ({}),
-});
+// `mySeat`: the viewer's seat if they played the board, for "(you)" after
+// who is vulnerable.
+const props = withDefaults(
+  defineProps<{ review: PlayingReview; extras?: ExportExtras; mySeat?: Seat | null }>(),
+  { extras: () => ({}), mySeat: null },
+);
 
 const recorded = computed(() => isRecorded(props.review));
 const auction = computed(() =>
