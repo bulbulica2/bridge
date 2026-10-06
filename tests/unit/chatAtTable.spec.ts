@@ -12,13 +12,14 @@ import * as tablesService from '@/services/tables'
 import type { Bid, Playing, Seat } from '@/services/game'
 import type { Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
-import { useChatStore } from '@/stores/chat'
+import { CHAT_OPEN_KEY, useChatStore } from '@/stores/chat'
 import { useGameStore } from '@/stores/game'
 import { showToast } from '@/utils/toast'
 
 // The board chat on the play page: the header's Chat button and its unread
-// badge, the panel (a sheet on a phone, beside the table on a wide screen),
-// sending and its refusals, and Ask in the chat from an opponent's call.
+// badge, the panel (a sheet on a phone, beside the table on a wide screen,
+// on show there until collapsed), sending and its refusals, and Ask in the
+// chat from an opponent's call.
 vi.mock('@/services/chat', () => ({ getMessages: vi.fn(), sendMessage: vi.fn() }))
 vi.mock('@/services/game', () => ({ getPlaying: vi.fn(), getBids: vi.fn() }))
 vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn(), getSet: vi.fn(() => new Promise(() => {})) }))
@@ -36,8 +37,9 @@ vi.mock('@/services/echo', () => ({
   disconnectEcho: vi.fn(),
 }))
 vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
-const { navigate, leaveHooks } = vi.hoisted(() => ({
+const { navigate, enterHooks, leaveHooks } = vi.hoisted(() => ({
   navigate: vi.fn(),
+  enterHooks: [] as (() => void)[],
   leaveHooks: [] as (() => void)[],
 }))
 vi.mock('vue-router', async (importOriginal) => ({
@@ -49,7 +51,10 @@ vi.mock('@ionic/vue', async (importOriginal) => {
   return {
     ...(await importOriginal<typeof import('@ionic/vue')>()),
     useIonRouter: () => ({ navigate }),
-    onIonViewWillEnter: (hook: () => void) => onMounted(hook),
+    onIonViewWillEnter: (hook: () => void) => {
+      enterHooks.push(hook)
+      onMounted(hook)
+    },
     onIonViewWillLeave: (hook: () => void) => leaveHooks.push(hook),
   }
 })
@@ -155,6 +160,24 @@ async function openChat(wrapper: VueWrapper) {
   await flushPromises()
 }
 
+// A screen wide enough for the chat beside the table.
+function wide() {
+  window.matchMedia = vi.fn(
+    () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }) as unknown as MediaQueryList,
+  )
+}
+
+// Another page pushed on top, then back to the table.
+async function leaveView() {
+  leaveHooks.forEach((hook) => hook())
+  await flushPromises()
+}
+
+async function returnToView() {
+  enterHooks.forEach((hook) => hook())
+  await flushPromises()
+}
+
 async function write(wrapper: VueWrapper, text: string) {
   await wrapper.get('.chat-input').setValue(text)
   await wrapper.get('.chat-send').trigger('click')
@@ -164,6 +187,7 @@ async function write(wrapper: VueWrapper, text: string) {
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  enterHooks.length = 0
   leaveHooks.length = 0
   localStorage.clear()
   useAuthStore().user = { id: 3, name: 'Cy', username: 'cy', email: 'cy@example.com' }
@@ -305,26 +329,139 @@ describe('the chat panel', () => {
     expect(chat.open).toBe(false)
 
     await openChat(wrapper)
-    leaveHooks.forEach((hook) => hook())
+    await leaveView()
     expect(chat.open).toBe(false)
+    // The sheet's choice is the phone's alone: beside the table it is open.
+    expect(localStorage.getItem(CHAT_OPEN_KEY)).toBeNull()
   })
 
-  test('on a wide screen it sits beside the table', async () => {
-    window.matchMedia = vi.fn(
-      () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }) as unknown as MediaQueryList,
-    )
+  test('a sheet left open is back open when the player comes back', async () => {
+    const wrapper = await mountPage()
+    const chat = useChatStore()
+    await openChat(wrapper)
+
+    await leaveView()
+    expect(chat.open).toBe(false)
+    expect(wrapper.find('.board-chat').exists()).toBe(false)
+
+    await returnToView()
+    expect(chat.open).toBe(true)
+    expect(wrapper.find('.chat-sheet .board-chat').exists()).toBe(true)
+  })
+
+  test('on a phone it starts closed, whatever was chosen beside the table', async () => {
+    localStorage.setItem(CHAT_OPEN_KEY, '1')
     const wrapper = await mountPage()
 
+    expect(useChatStore().open).toBe(false)
+    expect(wrapper.find('.board-chat').exists()).toBe(false)
+  })
+})
+
+describe('beside the table on a wide screen', () => {
+  beforeEach(wide)
+
+  test('on show without pressing anything, the table making room for it', async () => {
+    const wrapper = await mountPage(auction(), [message(1)])
+
+    expect(useChatStore().open).toBe(true)
     expect(wrapper.find('.chat-sheet').exists()).toBe(false)
-    expect(wrapper.get('.play').classes()).not.toContain('with-chat-side')
-    await openChat(wrapper)
     expect(wrapper.get('.chat-side').find('.board-chat').exists()).toBe(true)
     expect(wrapper.get('.chat-side').attributes()).toHaveProperty('data-right-edge')
     expect(wrapper.get('.play').classes()).toContain('with-chat-side')
     expect(wrapper.get('.play').classes()).not.toContain('with-chat-sheet')
+    expect(wrapper.get('.chat-toggle').attributes('aria-expanded')).toBe('true')
+    // On show: nothing counts as unread.
+    expect(wrapper.find('.chat-badge').exists()).toBe(false)
+  })
+
+  test('but not before the first deal: there is no chat yet', async () => {
+    const wrapper = await mountPage(auction({ phase: 'waiting', playing_id: null, auction: null, players: null }))
+
+    expect(useChatStore().open).toBe(false)
+    expect(wrapper.find('.chat-side').exists()).toBe(false)
+  })
+
+  test('Chat collapses it and brings it back, and the choice is kept', async () => {
+    const wrapper = await mountPage()
+
+    await openChat(wrapper)
+    expect(wrapper.find('.chat-side').exists()).toBe(false)
+    expect(wrapper.get('.play').classes()).not.toContain('with-chat-side')
+    expect(useChatStore().open).toBe(false)
+    expect(localStorage.getItem(CHAT_OPEN_KEY)).toBe('0')
+
+    await openChat(wrapper)
+    expect(wrapper.get('.chat-side').find('.board-chat').exists()).toBe(true)
+    expect(wrapper.get('.play').classes()).toContain('with-chat-side')
+    expect(localStorage.getItem(CHAT_OPEN_KEY)).toBe('1')
+  })
+
+  test('Close collapses it too, for good', async () => {
+    const wrapper = await mountPage()
 
     await wrapper.get('.chat-close').trigger('click')
-    expect(wrapper.get('.play').classes()).not.toContain('with-chat-side')
+    expect(wrapper.find('.chat-side').exists()).toBe(false)
+    expect(localStorage.getItem(CHAT_OPEN_KEY)).toBe('0')
+  })
+
+  test('collapsed before, it stays collapsed, and messages count as unread', async () => {
+    localStorage.setItem(CHAT_OPEN_KEY, '0')
+    const wrapper = await mountPage(auction(), [message(1)])
+
+    expect(wrapper.find('.chat-side').exists()).toBe(false)
+    expect(wrapper.get('.chat-badge').text()).toBe('1')
+
+    useGameStore().applyBoardMessage({ table_id: 5, playing_id: 42, message: message(2) })
+    await flushPromises()
+    expect(wrapper.get('.chat-badge').text()).toBe('2')
+  })
+
+  test('the next board keeps whichever was chosen', async () => {
+    const wrapper = await mountPage()
+    await openChat(wrapper)
+
+    useGameStore().adopt(5, auction({ playing_id: 43, board: { id: 8, number: 8, dealer: 'S', vulnerable: '' } }))
+    await flushPromises()
+    expect(wrapper.find('.chat-side').exists()).toBe(false)
+  })
+
+  test('leaving the view hides it, coming back shows it as it was left', async () => {
+    const wrapper = await mountPage()
+    const chat = useChatStore()
+
+    await leaveView()
+    expect(chat.open).toBe(false)
+    expect(wrapper.find('.chat-side').exists()).toBe(false)
+    await returnToView()
+    expect(chat.open).toBe(true)
+    expect(wrapper.find('.chat-side').exists()).toBe(true)
+
+    await openChat(wrapper)
+    await leaveView()
+    await returnToView()
+    expect(chat.open).toBe(false)
+    expect(wrapper.find('.chat-side').exists()).toBe(false)
+  })
+
+  test('closed under it by anything else, it shows again while the choice is open', async () => {
+    const wrapper = await mountPage()
+    const chat = useChatStore()
+
+    chat.setOpen(false)
+    await flushPromises()
+    expect(chat.open).toBe(true)
+    expect(wrapper.find('.chat-side').exists()).toBe(true)
+  })
+
+  test('Ask in the chat brings a collapsed chat back', async () => {
+    localStorage.setItem(CHAT_OPEN_KEY, '0')
+    const wrapper = await mountPage()
+
+    wrapper.findComponent(AuctionHistory).vm.$emit('chat', 0)
+    await flushPromises()
+    expect(wrapper.get('.chat-side .chat-about').text()).toContain('About 1♥:')
+    expect(localStorage.getItem(CHAT_OPEN_KEY)).toBe('1')
   })
 })
 

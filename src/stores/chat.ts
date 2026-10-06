@@ -28,6 +28,28 @@ function writeSeen(id: number) {
   }
 }
 
+// Whether the player wants the chat on show beside the table (a wide
+// screen's; a phone's sheet starts closed every time): open until they
+// collapse it, and kept per browser so the next board, page or reload
+// shows it as they left it.
+export const CHAT_OPEN_KEY = 'bridge.chatOpen';
+
+function readKeepOpen(): boolean {
+  try {
+    return localStorage.getItem(CHAT_OPEN_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+function writeKeepOpen(value: boolean) {
+  try {
+    localStorage.setItem(CHAT_OPEN_KEY, value ? '1' : '0');
+  } catch {
+    // Not kept: after a reload the chat is on show again.
+  }
+}
+
 // The chat of the board the play page shows (bridge_backend docs/API.md,
 // Chat): its messages the user may read, whether the panel is open, and the
 // call a message about to be written is about.
@@ -36,7 +58,10 @@ export const useChatStore = defineStore('chat', () => {
   // The board the messages belong to: null before the first deal.
   const playingId = ref<number | null>(null);
   const messages = ref<BoardMessage[]>([]);
+  // On show now (the play page sets it): unread counts only while it isn't.
   const open = ref(false);
+  // The player's choice beside the table (CHAT_OPEN_KEY).
+  const keepOpen = ref(readKeepOpen());
   // The call of the auction (its index) the next message is about: Ask in
   // a call's pop-up attaches it.
   const about = ref<number | null>(null);
@@ -170,6 +195,12 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // The Chat button (or Close) beside the table: the choice sticks.
+  function setKeepOpen(value: boolean) {
+    keepOpen.value = value;
+    writeKeepOpen(value);
+  }
+
   // Open the chat with a call attached: "About 2♥:".
   function askAbout(index: number) {
     about.value = index;
@@ -203,6 +234,7 @@ export const useChatStore = defineStore('chat', () => {
     playingId,
     messages,
     open,
+    keepOpen,
     about,
     unread,
     load,
@@ -210,6 +242,7 @@ export const useChatStore = defineStore('chat', () => {
     receive,
     send,
     setOpen,
+    setKeepOpen,
     askAbout,
     clear,
   };

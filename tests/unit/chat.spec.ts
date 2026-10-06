@@ -15,7 +15,7 @@ import type { PlayingReview } from '@/services/history'
 import type { Seat } from '@/services/tables'
 import type { PublicUser } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { CHAT_SEEN_KEY, useChatStore } from '@/stores/chat'
+import { CHAT_OPEN_KEY, CHAT_SEEN_KEY, useChatStore } from '@/stores/chat'
 import { useGameStore } from '@/stores/game'
 import {
   aboutCall,
@@ -412,6 +412,57 @@ describe('chat store', () => {
     reconnected()
     await flushPromises()
     expect(chatService.getMessages).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('the chat kept open beside the table', () => {
+  test('open for a player who never touched it', () => {
+    expect(useChatStore().keepOpen).toBe(true)
+  })
+
+  test('the stored choice: open, or collapsed', () => {
+    localStorage.setItem(CHAT_OPEN_KEY, '1')
+    expect(useChatStore().keepOpen).toBe(true)
+
+    setActivePinia(createPinia())
+    localStorage.setItem(CHAT_OPEN_KEY, '0')
+    expect(useChatStore().keepOpen).toBe(false)
+  })
+
+  test('the choice is kept for the next page and reload', () => {
+    const chat = useChatStore()
+
+    chat.setKeepOpen(false)
+    expect(chat.keepOpen).toBe(false)
+    expect(localStorage.getItem(CHAT_OPEN_KEY)).toBe('0')
+
+    chat.setKeepOpen(true)
+    expect(chat.keepOpen).toBe(true)
+    expect(localStorage.getItem(CHAT_OPEN_KEY)).toBe('1')
+  })
+
+  test('storage failing: open, and a choice still holds for now', () => {
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    const chat = useChatStore()
+    expect(chat.keepOpen).toBe(true)
+
+    expect(() => chat.setKeepOpen(false)).not.toThrow()
+    expect(chat.keepOpen).toBe(false)
+    get.mockRestore()
+    set.mockRestore()
+  })
+
+  test('logging out leaves the choice alone', () => {
+    const chat = useChatStore()
+    chat.setKeepOpen(false)
+
+    chat.clear()
+    expect(chat.keepOpen).toBe(false)
   })
 })
 

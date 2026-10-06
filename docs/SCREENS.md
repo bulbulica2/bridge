@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/87-vulnerability-label`._
+_Status as of branch `bulbulica2/89-chat-open-by-default`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -311,7 +311,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -414,7 +414,7 @@ table** mid-set (in the next-board box) is confirmed more sternly, as on
 the detail page. Between sets, and before the first, the Start box has
 its own **Leave the table**, and a manager gets **Remove** on each other
 seat there (a robot, say), so finishing a set is no dead end (#121).
-Leave and Remove close the review, the chat and any sheet before asking;
+Leave and Remove close the review, a phone's chat sheet and any other sheet before asking;
 a failure is toasted and logged, never silent.
 
 What it shows by phase:
@@ -526,13 +526,18 @@ What it shows by phase:
   `PlayingUpdated` (or the `TableUpdated` that broke it off), and the
   page then reads the set again.
 
-**Board chat** (#102): from the first deal on, the header's **Chat**
-button (with a red badge counting the others' messages since you last
-looked) opens the board's chat: beside the table on a screen 1100 px wide
-or more (the board stays centred in the room left of the chat, menu
-pinned or not, and doesn't move at all where it already clears the chat;
-#114), as a half-height sheet on a phone (the page stays usable above
-it, and scrolls the bidding box and your hand clear of it). Each message
+**Board chat** (#102): from the first deal on, the board's chat is on
+show beside the table on a screen 1100 px wide or more (#153: the board
+stays centred in the room left of the chat, menu pinned or not, and
+doesn't move at all where it already clears the chat; #114). The header's
+**Chat** button (with a red badge counting the others' messages since you
+last looked, while the chat isn't on show) collapses it, giving the table
+its room back, and brings it back; the choice is kept in the browser
+(`bridge.chatOpen`), so the next board, a page change or a reload shows it
+the way you left it. On a phone the chat would cover the cards, so it
+starts closed and the button opens it as a half-height sheet (the page
+stays usable above it, and scrolls the bidding box and your hand clear of
+it). Leaving the page hides it; coming back shows it as you left it. Each message
 shows who wrote it and their seat, who reads it ("to opponents", "to
 table"), the time, and the call it is about as a chip; the text is plain
 (no HTML, links not clickable). In every phase (#115) a message goes to
