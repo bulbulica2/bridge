@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/92-daylight-redesign`._
+_Status as of branch `bulbulica2/93-daylight-play-page`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -317,7 +317,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim sheet with scores, the claim banner);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -326,7 +326,7 @@ detail page.
 Robots play by themselves: each of their calls, cards, claim answers and
 "ready"s arrives as an ordinary `PlayingUpdated` about a second apart, so
 nothing on this page drives them. On a robot's turn its seat reads
-**Thinking…** instead of **To act** and the status line says
+**Thinking…** instead of **To act** and the turn clock line says
 "robot-1 is thinking…". Robots are badged at their seat and in the
 next-board box, and count as having asked for the next board, so your
 **Deal now** deals it at once instead of waiting out the countdown. When your robot partner wins the contract, it stays
@@ -354,9 +354,9 @@ side's seats red, the call awaited a "?" ringed orange. **Start** and
 
 **Nothing jumps from card to card** (#133): while a board has a turn,
 every seat keeps a line for the turn label (**Your turn**, **To act**,
-**Thinking…**), filled only on the seat on turn; the status line under
-the table, in a tinted box, is there for the whole auction and play with
-room for two lines (empty while a claim's panel says what is going on);
+**Thinking…**), filled only on the seat on turn; the turn clock line
+under the table is there for the whole auction and play with room for two
+lines over its bar (empty while a claim's banner says what is going on);
 and the trick's caption sits over the **Last trick** button's row, which
 keeps its height while the button is hidden. So the table and your hand
 stay put on a phone as on a desktop.
@@ -390,15 +390,22 @@ stands before it instead. The plates keep a red/green top edge, and the
 table's centre says the same words until the first trick takes its
 place.
 
-**The turn clock** (#130, bb#120). The player the board waits for has
-**one minute** to call, play or act on a claim. A line over the status
-counts it down from the game state's `turn_deadline`: **Your turn ·
-0:42** for you (in red for the last 15 s, when your hand or the bidding
-box is ringed in red too), **Waiting for East · 0:42** for everyone else,
-and **Time is up…** at 0 until the backend acts (if nothing has arrived
-2 s after the deadline, the page rereads the game). Nothing shows while a
-robot or an admin is on turn, between boards or while a claim is
-pending; the line keeps its place so nothing moves. While the tab is
+**The header** reads the table's name and the board's place in its set,
+**Friday club · Board 2 of 4** (#161), never the board's number in the
+database; just the name before the first deal.
+
+**The turn clock** (#130, bb#120; its line #161). The player the board
+waits for has **one minute** to call, play or act on a claim. One line
+under the table says what the board waits for and counts it down from
+the game state's `turn_deadline`, with a bar under it emptying over the
+minute: **Your call** / **Your lead** / **Your turn · follow in ♦**
+and **0:42** in orange for you (in red for the last 15 s, when your hand
+or the bidding box is ringed in red too), **Waiting for East** and
+**0:42** for everyone else, **robot-1 is thinking…** for a robot, and
+**Time is up…** at 0 until the backend acts (if nothing has arrived 2 s
+after the deadline, the page rereads the game). No clock or bar while a
+robot or an admin is on turn, and the line is empty while a claim is
+pending; it keeps its height so nothing moves. While the tab is
 hidden on your turn its title becomes **● Your turn (0:42) – Bridge**,
 back to **Bridge** once you have played or look again; the header's
 **Your table** counts down too. Let the clock run out and a **robot takes
@@ -415,9 +422,8 @@ shown under their name at their seat as **13:32**. Only the bank of the
 player the board waits for runs, counted down from the game state's
 `turn_started_at` (in bold); the others stand still, and one turns red
 under a minute. Robots and admins have none. When the bank would run out
-before the move's minute (`turn_deadline_by: "set"`), the turn clock's
-line reads **Your time for the set: 0:42** (**East's time for the set:
-0:42** for the others). Running out is like letting the turn clock run
+before the move's minute (`turn_deadline_by: "set"`), the turn clock
+line's clock reads **Set 0:42**. Running out is like letting the turn clock run
 out: a robot takes the seat for the rest of the set, told once ("East ran
 out of time for the set: a robot took their seat." / "You ran out of time
 for the set: a robot took your seat. …").
@@ -430,7 +436,7 @@ admin's is a plain **away**). Several away count down together, and one
 line above the turn clock says what for, with no countdown: "Away
 players are replaced by a robot when their clock runs out." When the
 board waits for one of them the turn clock's line reads **Waiting for
-East (away)**, no clock of its own, and the status under it stays empty.
+East (away)**, with no clock or bar of its own.
 Robots taking several seats at once are told in one toast ("South and
 West were away: robots took their seats."). A tag clears the moment its
 player is back. Opening this page is
@@ -491,33 +497,41 @@ What it shows by phase:
   You tap a card from your own hand, or from dummy's if you're declarer.
   As declarer, when only one card may follow suit (say dummy holds a
   single card in the suit led), it pulses and plays itself after 3 s, with
-  the status line counting down ("Playing ♥7 in 3 s…"); tapping it plays
+  **plays in 3** on the card and the turn clock line counting down too
+  ("Your turn from dummy · ♥7 plays in 3"); tapping it plays
   it at once. Never on a lead, and never for a defender: their other cards
   are dimmed, but they tap the one left themselves. Opening the claim sheet or the board review, a claim or any new card on the
   table stops the countdown.
   Anyone but dummy can **Claim** some of the tricks left (or **Concede**
-  them): the claim sheet has one button per number, 1 up to the tricks
-  left, wrapping onto a second row. It opens with every remaining trick
-  picked, so the send button reads **Claim 5 tricks** at once and one tap
-  claims them all (#137); tapping another number picks it instead. A trick
-  finishing while it is open moves that default to the new maximum, and
-  keeps a number picked by hand while it is still possible (capped to the
-  new maximum otherwise). **Concede the rest** is its own button. The sheet
-  says the others have 10 seconds to answer and that no answer counts as
-  no. While a claim is pending, a banner says what is claimed, the
-  claimer's cards lie face up at their seat, no card can be played, the
-  players who still have to answer get **Accept** / **Reject** at once
-  (both of them, neither waits for the other; one reject ends it) and the
-  claimer **Withdraw**. The banner counts down to the claim's deadline:
-  "Answer within 0:07" for those who still have to answer, "Waiting for
-  East and West · 0:07" for everyone else, then "Time is up: no answer
-  counts as no.", when its buttons disable. A reject or withdrawal toasts
+  them) with the solid navy **Claim** button at the bottom left under the
+  hand. The claim sheet (#161) says "7 tricks left · you have 4 · 4♠ needs
+  10" and has a tile per number, four a row, from all the tricks left
+  down to 0, each with what it makes of the contract ("4♠ +1", "4♠ −2" in
+  red) and your side's score ("+450", "−100"), worked out on the page as a
+  hint (the backend's score is final). It opens with every remaining trick
+  picked, so the orange send button reads **Claim all 7 · 4♠ +1 · +450**
+  at once and one tap claims them all (#137); tapping another tile picks
+  it instead (**Claim 5 · 4♠ −1 · −50**; the 0 tile makes it
+  **Concede**). A trick finishing while it is open moves that default to
+  the new maximum, and keeps a number picked by hand while it is still
+  possible (capped to the new maximum otherwise). **Concede** is its own
+  outlined button, beside "Both opponents get 10 seconds. No answer counts
+  as no." While a claim is pending, a dark banner says what is claimed with
+  its countdown on the right, the claimer's cards lie face up at their
+  seat, no card can be played, the players who still have to answer get
+  **Accept** / **Reject**, two equal buttons, at once (both of them,
+  neither waits for the other; one reject ends it) and the claimer
+  **Withdraw**. Under them the countdown in words: "Answer within 0:07"
+  for those who still have to answer, "Waiting for East and West · 0:07"
+  for everyone else, then "Time is up: no answer counts as no.", when its
+  buttons disable. A reject or withdrawal toasts
   ("South's claim is off. Play on: no claim until the next card.") and
   play goes on; so does a claim nobody answered in time ("Nobody answered:
   the claim is off. Play on: no claim until the next card."). Until the
   next card is played nobody at the table may claim: **Claim** stays,
-  disabled, with "The claim was refused: play a card before claiming
-  again." under it, and comes back with the next card. If the backend's
+  grey and disabled as **Claim · locked**, with "The claim was refused:
+  play a card before claiming again." under it, and comes back with the
+  next card. If the backend's
   update hasn't come 2 s after the deadline, the page rereads the game.
   The last accept finishes the board.
 - **finished**: the result at a glance (#100), written the way it is at
@@ -563,7 +577,7 @@ What it shows by phase:
 show beside the table on a screen 1100 px wide or more (#153: the board
 stays centred in the room left of the chat, menu pinned or not, and
 doesn't move at all where it already clears the chat; #114). The header's
-**Chat** button (with a red badge counting the others' messages since you
+**Chat** button (with an orange badge counting the others' messages since you
 last looked, while the chat isn't on show) collapses it, giving the table
 its room back, and brings it back; the choice is kept in the browser
 (`bridge.chatOpen`), so the next board, a page change or a reload shows it

@@ -460,7 +460,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   (`playing:index:asker`) once per 10 s, shared with `CallQuestioned`'s
   toast. The game store calls `useChatStore()` lazily (its `clear()`
   clears the chat too); the chat store rereads on reconnect. UI: the
-  header's **Chat** button (`ion-badge` with `unread`, only once
+  header's **Chat** button (`ion-badge color="action"` with `unread`, only once
   `playing_id` is set), `BoardChat.vue` (list + recipient switch + "About
   2♥:" chip + textarea, Enter sends, the page owns `v-model:draft` and
   sending: cleared on success, kept and toasted on any refusal, 401 →
@@ -499,7 +499,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   declarer, or a robot declarer's dummy; a defender taps it themselves, no
   countdown or pulse),
   `src/composables/useForcedPlay.ts` plays it after 3 s
-  (`HandView`'s `forcedId` pulses it, the status line counts down). The
+  (`HandView`'s `forcedId` pulses it with "plays in 3" on the card,
+  `forcedSeconds`, which `BridgeTable` passes on for dummy's and
+  declarer's cards; the turn line counts down too). The
   page keys it by playing/trick/cards/turn/card, so a new state restarts
   or drops it; it is null while a card or claim is in flight, the claim
   sheet or review modal is open or the view is left (`onIonViewWillLeave`), and a key it
@@ -525,8 +527,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   The centre keeps the trick in progress meanwhile. Nothing changes height
   from card to card (#133): `BridgeTable` gives every seat a `.turn-slot`
   while `turn` is set (the label only on the seat on turn), the page's
-  `.status` is rendered for all of `auction`/`play` (empty during a claim)
-  two lines tall, and `.trick-foot` stacks the caption over `.trick-peek`,
+  `TurnClockLine` is rendered for all of `auction`/`play` (empty during a
+  claim) with two lines of room and its bar's track, and `.trick-foot`
+  stacks the caption over `.trick-peek`,
   the 22 px pill row kept without the pill. One card is in flight
   at a time; a 409 toasts and reloads, as for calls.
 - **Claims**: during `play` any player but dummy (except a robot
@@ -553,14 +556,25 @@ The user's standing rule (#91): **no task may leave code coverage under
   state's `claim_locked` (HTTP and compact `PlayingUpdated` alike,
   `expandPlaying` passes it through) until the next card clears it;
   `canClaim` is false then, `claimLocked(state, seat)` says who would
-  claim but for it, and the play page keeps Claim disabled with
-  `CLAIM_LOCKED_TEXT` under it (the sheet closes through `mayClaim`); a
-  409 for it toasts and reloads like any other. `ClaimSheet.vue` is the sheet (one button per number, opening with
-  all of the tricks left picked, #137, then "Claim N tricks"; a trick
-  finishing re-picks the new maximum unless a lower number was picked by
-  hand, kept while still possible; Concede sends 0; a line quotes
-  `CLAIM_SECONDS`),
-  `ClaimPanel.vue` the pending-claim banner with its buttons. A claim
+  claim but for it, and the play page keeps Claim disabled and grey as
+  "Claim · locked" with `CLAIM_LOCKED_TEXT` under it (the sheet closes
+  through `mayClaim`); a 409 for it toasts and reloads like any other.
+  Claim is a solid navy button at its own width under the hand
+  (`.claim-row`, bottom left). `ClaimSheet.vue` is the sheet (#161:
+  `claimSummary` "7 tricks left · you have 4 · 4♠ needs 10", tiles 4 a
+  row from the tricks left down to 0 (`data-tricks`, `.pick-count`), each
+  with `claimOutcome(state, seat, n)` (`{result: "4♠ +1", down, score:
+  "+450"}`, the claimer's side, from `contractScore` in `result.ts`:
+  duplicate scoring, a hint) given `state` + `seat` (`claimSeat`);
+  opening with all of the tricks left picked, #137; the orange send
+  button "Claim all 7 · 4♠ +1 · +450" / "Claim 5 · …" / "Concede · …"
+  for the 0 tile; a trick finishing re-picks the new maximum unless a
+  lower number was picked by hand, kept while still possible; the
+  outlined Concede sends 0; `claimAnswerersText` + `CLAIM_SECONDS`
+  "Both opponents get 10 seconds. No answer counts as no."),
+  `ClaimPanel.vue` the pending claim as a dark banner (`--bridge-popup`,
+  the countdown `.claim-seconds` on the right, Accept / Reject two equal
+  buttons, Withdraw). A claim
   going away mid-play toasts (`claimOffText`); the last accept lands in
   `finished` with `result.claimed`, which `resultSummary`/`BoardResultPanel`
   word as "by claim". **Silence means no** (#96, bb#96): the backend
@@ -679,8 +693,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   ("Your turn · 0:42" / "Waiting for East · 0:42" / with `by: 'set'`
   "Your time for the set: 0:42" / "East's time for the set: 0:42" /
   `TIME_UP_TEXT` "Time is up…"; with `by: 'away'` and not ours, "Waiting
-  for East (away)", no clock: `awayOnTurn`, and the play page's `.status`
-  is empty then), `turnUrgent` (mine and ≤ `TURN_URGENT_SECONDS` 15), `turnTitle`.
+  for East (away)", no clock: `awayOnTurn`), `turnClockTime` (the play
+  page's line: "0:42" / "Set 0:42", '' without a clock, at 0 or for an
+  away player), `turnClockFraction` (seconds / `TURN_SECONDS`, at most 1,
+  null without a clock or away), `turnUrgent` (mine and ≤
+  `TURN_URGENT_SECONDS` 15), `turnTitle`.
   **The set clock** (#143, bb#131, backend `docs/API.md` The set clock):
   each human's time bank for the set, the table's `set_minutes`
   (`SET_MINUTES` 8/12/16/20, `DEFAULT_SET_MINUTES` 16 in
@@ -701,10 +718,17 @@ The user's standing rule (#91): **no task may leave code coverage under
   a robot took their seat.", `REPLACED_WHY` in `sets.ts`; stats' reason
   "out of time for the set").
   `src/composables/useTurnClock.ts` (`useNow` while a deadline runs →
-  `clock`, `text`, `urgent`, `banks` = `setBanks`, `BridgeTable`'s `banks`
-  prop: `.seat-bank` under the name, `-running` bold, `-low` red) feeds the play page's `.turn-clock` line
-  (over `.status`, rendered all through auction/play, empty without a
-  clock, `turn-clock-mine`/`turn-clock-urgent`; the urgent cue is the
+  `clock`, `text`, `time`, `fraction`, `urgent`, `banks` = `setBanks`,
+  `BridgeTable`'s `banks` prop: `.seat-bank` under the name, `-running`
+  bold, `-low` red) feeds the play page's `TurnClockLine.vue` (#161: the
+  page's `lineText` left: "Your call", "Your lead", "Your turn from dummy
+  · follow in ♦", "… · ♠Q plays in 3", "Waiting for East" (`actingSeat`),
+  "robot-1 is thinking…", "Declarer plays your cards", `TIME_UP_TEXT`,
+  away → `turnClockText`; `time` right in Barlow; a 6 px bar of
+  `fraction`; `turn-line-mine` orange, `turn-line-urgent` red,
+  `turn-line-robot`; two lines of room + the bar's track, rendered all
+  through auction/play, empty during a claim; it replaced the old
+  `.status` box and `.turn-clock` line; the urgent cue is the
   class `turn-urgent` on `HandView` (playing from it) and `BiddingBox`),
   `useYourTable`'s `statusText`, and `useTurnTitle` (`App.vue`: while
   `document.visibilityState` is hidden and the game store's board waits
@@ -1031,10 +1055,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   alert never marked), side plates upright and 76 px below 576 px; it sets
   `--playable-ring` amber and white `--call-chip-*` for what lies on it.
   `TrickArea`'s `trump` rings `winningSoFar()` (`src/utils/play.ts`) and
-  `mySlot` draws a dashed `.my-slot`. Still to come: the turn clock line,
-  the play page's header and phone bar, the claim sheet's scores
-  (`contractScore`) and the claim banner (#161); the finished board,
-  Tables and Home (#162); the side sheets and the wide layout (#163).
+  `mySlot` draws a dashed `.my-slot`. #161 did the play page during a
+  board: `TurnClockLine`, the header (`headerTitle` "<table> · Board 2
+  of 4" from `playing.set`, never `board.number`; the name alone in
+  `waiting`), the chat badge in `action`, Claim, `ClaimSheet`'s tiles,
+  `ClaimPanel`'s banner (tokens `--bridge-on-popup-clock`/`-ok`) and
+  `HandView`'s `.forced-tag`; nothing draws a card back yet. #165 replaces
+  its contract chip and phone bar (the auction behind a button top left,
+  the contract bar kept). Still to come: the finished board, Tables and
+  Home (#162); the side sheets and the wide layout (#163).
 - **Card size** (#136): `src/utils/cardSize.ts` is the setting, `normal`
   (the old 48 px card) / `large` (96 px, the default) / `xlarge` (120 px),
   on the Account page (an `ion-segment` + two preview cards), kept in

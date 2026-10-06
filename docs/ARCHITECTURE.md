@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/92-daylight-redesign`._
+_Status as of branch `bulbulica2/93-daylight-play-page`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -178,10 +178,19 @@ whatever the table is waiting for.
   `fill="outline" color="danger"` as the red danger outline, and a grey
   disabled state rather than a faded one.
 
-Still to come in the same look: the turn clock line, the play page's
-header and phone bar and the claim sheet with scores (#161); the finished
-board, the Tables page and Home (#162); the side sheets, the wide
-(≥ 1100 px) table layout and the remaining pages' leftover colours (#163).
+The play page during a board (#161) has the **turn clock line**
+(`TurnClockLine`), the header **<table> · Board 2 of 4** with the chat's
+orange unread badge, Claim as a solid navy button at its own width under
+the hand (grey **Claim · locked** while claims are locked), the **claim
+sheet**'s tiles with each number's result and score (`contractScore` in
+`src/utils/result.ts`, `claimOutcome` in `claim.ts`), the pending claim
+as a dark banner, and a forced card's **plays in 3** on the card itself.
+Nothing in the app draws a card back yet. Coming: the auction behind a
+button top left, the board's place under it and the contract bar's last
+changes (#165, which replaces #161's contract chip and phone bar); the
+finished board, the Tables page and Home (#162); the side sheets, the
+wide (≥ 1100 px) table layout and the remaining pages' leftover colours
+(#163).
 
 ## Routes and the guard
 
@@ -618,8 +627,8 @@ works ([RUNNING.md](RUNNING.md) says the worker must run).
   card (bb#115): the state's `claim_locked` is true meanwhile (over HTTP
   and in the compact `PlayingUpdated`, which `expandPlaying` passes
   through), `canClaim()` says no, and the play page keeps the **Claim**
-  button disabled with a note ("The claim was refused: play a card before
-  claiming again."). The next card's `PlayingUpdated` clears it by itself;
+  button disabled and grey, reading **Claim · locked**, with a note ("The
+  claim was refused: play a card before claiming again."). The next card's `PlayingUpdated` clears it by itself;
   a claim sent anyway gets the backend's 409, toasted with a reread like
   any other.
 
@@ -645,17 +654,22 @@ heartbeat. Past it, the backend's check (every 10 s) takes them out and a
 their partner plays it out with the robot. Sets are never forfeited any
 more. The SPA never keeps a clock of its own, it only reads the deadline
 (`src/utils/turnClock.ts`, `useTurnClock`):
-- **The play page's turn clock**: a line over the status, "Your turn ·
-  0:42" for the player on turn (red in the last 15 s, when their hand or
-  the bidding box is ringed too), "Waiting for East · 0:42" for the
-  others, "Time is up…" at 0 until the backend's update lands. For an
-  away player on turn (`turn_deadline_by: "away"`, the deadline being
-  their seat's `replace_at`) it reads "Waiting for East (away)" with no
-  clock, since their seat's tag counts down, and the status line under
-  it says nothing more (`awayOnTurn()`). The line
-  is there through the auction and the play, empty with no clock, so
-  nothing moves. 2 s after the deadline with the same turn still shown,
-  `useStaleDeadline` rereads the game once.
+- **The play page's turn clock line** (`TurnClockLine`, #161): what the
+  board waits for on the left ("Your call", "Your lead", "Your turn ·
+  follow in ♦", "Waiting for East", "robot-1 is thinking…"), the clock
+  on the right ("0:42", or "Set 0:42" when the time for the set ends
+  first: `turnClockTime()`), and a 6 px bar under them emptying over the
+  move's minute (`turnClockFraction()`). Orange on your move, red in the
+  last 15 s (when your hand or the bidding box is ringed too); "Time
+  is up…" at 0 until the backend's update lands. For an away player on
+  turn (`turn_deadline_by: "away"`, the deadline being their seat's
+  `replace_at`) it reads "Waiting for East (away)" with no clock or bar,
+  since their seat's tag counts down (`awayOnTurn()`). It replaces the
+  old status box: one line through the auction and the play, with room
+  for two lines of text and the bar's track always there, so nothing
+  moves; empty while a claim's banner says it all. 2 s after the
+  deadline with the same turn still shown, `useStaleDeadline` rereads
+  the game once.
 - **The ping**: while the tab is hidden and the board the game store
   holds waits for you, `useTurnTitle` (run by `App.vue`) sets the tab's
   title to "● Your turn (0:42) – Bridge", and puts it back once the turn
@@ -716,9 +730,9 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   clock's tick) counts that one down from `turn_started_at` and leaves the
   others standing; `BridgeTable` shows each under the player's name,
   bold while it runs, red under a minute. `turn_deadline` is whichever
-  runs out first, and `turn_deadline_by: "set"` makes the turn clock's
-  line read "Your time for the set: 0:42" ("East's time for the set: …"
-  for the others). Running out is a replacement like a turn timeout,
+  runs out first, and `turn_deadline_by: "set"` makes the turn clock
+  line's clock read "Set 0:42" (`turnClockText`'s "Your time for the set:
+  0:42" stays for the header's Your table). Running out is a replacement like a turn timeout,
   with reason `set_time`: "East ran out of time for the set: a robot took
   their seat." / "You ran out of time for the set: …". The set's results
   list each human's time used (`time_used`, `SetResultsPanel`).
@@ -756,8 +770,9 @@ arrives, and the app falls back to what each request returns.
 | `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s), its cards as large as the setting and the centre's width allow; the winner is ringed amber but never drawn over a neighbour's rank and suit; given `trump`, the card winning so far is ringed while the trick is in progress (`winningSoFar` in `play.ts`), and `mySlot` draws a dashed place for your card. `spread` (the pop-up) parts the four cards and tags each with its seat or **You** |
 | `LastTrickPopover` | the **Last trick** button (22 px tall; the play page keeps that row, `trick-peek`, under the trick's caption while the button is hidden, #133) under the trick in progress and its pop-up with the last trick's cards (a spread `TrickArea`, shifted sideways if centring it on the button would cross the screen's edge); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it (all of that is `usePopover`, shared with the auction's calls) |
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat, in `order` (bridge order ♠ ♥ ♦ ♣ by default; dummy trumps first); given `rows`, every suit column keeps room for that many cards; its text follows the card size (1.15rem ranks when Large, at most 1.1rem on a phone) |
-| `ClaimSheet` | the bottom sheet for making a claim: one button per number from 1 to the tricks left, all of them picked on opening (#137: a tap picks fewer, **Claim N tricks** sends; a trick finishing moves the default to the new maximum and keeps a hand-picked number while still possible), and **Concede the rest**; says the others have 10 s to answer and that no answer counts as no; `forSeat` names a robot declarer's seat claimed for |
-| `ClaimPanel` | a pending claim: what is claimed, who has accepted, **Accept** / **Reject** or **Withdraw**, and the countdown to its `expires_at` ("Answer within 0:07", "Waiting for East and West · 0:07", ticked by `useNow`); the buttons disable at 0, so a late tap can't earn a 409; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
+| `ClaimSheet` | the bottom sheet for making a claim (#161): "7 tricks left · you have 4 · 4♠ needs 10" (`claimSummary`), then a 4-column grid of tiles from all the tricks left down to 0, each with the contract's result ("4♠ +1", "4♠ −2" in red) and the claimer's side's score ("+450"), from `claimOutcome()` (`state` + `seat`, the seat claimed for); all of them picked on opening (#137: a tap picks fewer; a trick finishing moves the default to the new maximum and keeps a hand-picked number while still possible); the orange send button reads **Claim all 7 · 4♠ +1 · +450** / **Claim 5 · 4♠ −1 · −50** / **Concede · …** for the 0 tile, and **Concede** is the outlined secondary; "Both opponents get 10 seconds. No answer counts as no." (declarer and partner for a defender's claim); `forSeat` names a robot declarer's seat claimed for |
+| `ClaimPanel` | a pending claim as Daylight's dark banner (#161): what is claimed with the countdown on the right, who has accepted, **Accept** / **Reject** as two equal buttons or **Withdraw**, and the countdown in words under them ("Answer within 0:07", "Waiting for East and West · 0:07", ticked by `useNow`); the buttons disable at 0, so a late tap can't earn a 409; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
+| `TurnClockLine` | the play page's turn clock line (#161): the words, the clock and the move's minute as a bar, orange for `mine`, red for `urgent`, blue for a `robot`; two lines of room and the bar's track always there, so its height never changes |
 | `BoardResultPanel`, `NextBoardBox` | the result once a board is finished, at a glance: one big row with the contract in table notation ("2♣ by West +2") and your score (N-S's, tagged, for someone who didn't play it), the tricks ("10 tricks · by claim"), then, at the table, one double dummy line ("Double dummy: 4♠ by South makes 10") with **Review**, then the set's position and the board's matchpoints for your side when known, and the countdown to the set's next board ("Next board in 0:08", then "Dealing the next board…") with the optional **Deal now** and, once pressed, the humans who haven't yet |
 | `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the review and the results page, or a note while it is being solved; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
@@ -769,18 +784,19 @@ arrives, and the app falls back to what each request returns.
 
 `BridgeTable`'s `thinking` prop is set when the player acting for `turn`
 (`acting_user_id`, declarer on dummy's turn) is a robot: that seat reads
-"Thinking…" instead of "To act", and the status line under the table says
-"robot-1 is thinking…". That status line is rendered for the whole auction
-and play (empty while a claim is pending) in a box two lines tall, so the
-hand below never moves with what it says (#133). The turn clock's line
-above it (see Away mid-set and the turn clock) is there just as long, one
-line, empty when no clock runs.
+"Thinking…" instead of "To act", and the turn clock line under the table
+says "robot-1 is thinking…". That line is rendered for the whole auction
+and play (empty while a claim is pending) with room for two lines of text
+over its bar, so the hand below never moves with what it says (#133; see
+Away mid-set and the turn clock).
 
 When you are declarer (or a robot declarer's dummy, playing both hands)
 and the hand you play from (your own, dummy's or declarer's) has
 exactly one legal card to follow with, `forcedCard()` in `play.ts` names it
 (never on the lead) and the play page's `useForcedPlay` plays it after 3 s:
-the card pulses and the status line counts down ("Playing ♥7 in 3 s…").
+the card pulses with **plays in 3** on it (`HandView`'s `forcedSeconds`,
+passed through `BridgeTable` for dummy's and declarer's cards) and the turn
+clock line counts down too ("Your turn from dummy · ♥7 plays in 3").
 Tapping it plays it at once. The countdown is tied to the state it started
 in (board, trick, cards in the trick, turn, card), so any new card restarts
 or drops it; it also stops while a card or claim is in flight, the claim

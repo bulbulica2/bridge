@@ -135,6 +135,7 @@
           :busy="busy"
           :sending-id="sendingId"
           :forced-id="dummyForcedId"
+          :forced-seconds="forcedSeconds"
           :order="trumpOrder"
           @play="emit('play', $event)"
         />
@@ -149,6 +150,7 @@
         :busy="busy"
         :sending-id="sendingId"
         :forced-id="declarerForcedId"
+        :forced-seconds="forcedSeconds"
         :order="trumpOrder"
         @play="emit('play', $event)"
       />
@@ -227,6 +229,8 @@ const props = withDefaults(
     // to play itself, as for dummy's.
     declarerPlayable?: number[] | null;
     declarerForcedId?: number | null;
+    // The seconds before dummy's or declarer's forced card plays itself.
+    forcedSeconds?: number | null;
     // The claimer's seat and remaining cards while a claim is pending.
     claim?: { seat: Seat; cards: Card[] } | null;
     // All four hands as dealt, once the board is finished.
@@ -261,6 +265,7 @@ const props = withDefaults(
     declarer: null,
     declarerPlayable: null,
     declarerForcedId: null,
+    forcedSeconds: null,
     claim: null,
     deal: null,
     replay: false,

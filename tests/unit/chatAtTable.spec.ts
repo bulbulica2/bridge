@@ -212,6 +212,8 @@ describe('the Chat button', () => {
 
     expect(chatService.getMessages).toHaveBeenCalledWith(5)
     expect(button.get('.chat-badge').text()).toBe('2')
+    // Daylight's orange, the action colour.
+    expect((button.get('.chat-badge').element as HTMLElement & { color?: string }).color).toBe('action')
     expect(button.attributes('aria-label')).toBe('Chat, 2 new')
     expect(wrapper.find('.board-chat').exists()).toBe(false)
 

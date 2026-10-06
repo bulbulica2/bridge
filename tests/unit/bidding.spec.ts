@@ -344,7 +344,7 @@ describe('TablePlayPage bidding', () => {
     await flushPromises()
 
     expect(wrapper.find('.bidding-box').exists()).toBe(false)
-    expect(wrapper.text()).toContain('Auction: waiting for di.')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Waiting for West')
     expect(wrapper.findAll('.auction td').map((td) => td.text())).toContain('2♣')
   })
 

@@ -272,6 +272,23 @@ describe('TablePlayPage loading', () => {
   })
 })
 
+describe('TablePlayPage header', () => {
+  const set = { id: 8, number: 3, board: 2, of: 4, finished: false, ended: null, replaced: [] }
+
+  test("the table's name and the board's place in its set, never the board's number", async () => {
+    const wrapper = await mountPage(auction({ set } as Partial<Playing>))
+
+    expect(wrapper.get('ion-title').text()).toBe('Club · Board 2 of 4')
+    expect(wrapper.get('ion-title').text()).not.toContain('Board 7')
+  })
+
+  test('the name alone with no set, or with nothing dealt', async () => {
+    expect((await mountPage(auction())).get('ion-title').text()).toBe('Club')
+    const waiting = await mountPage(auction({ phase: 'waiting', set } as Partial<Playing>))
+    expect(waiting.get('ion-title').text()).toBe('Club')
+  })
+})
+
 describe('TablePlayPage vulnerability label', () => {
   const label = (wrapper: VueWrapper) => wrapper.get('.board-bar .vul-label')
 
@@ -852,21 +869,25 @@ describe('TablePlayPage turn clock', () => {
     vi.useRealTimers()
   })
 
-  test('our turn: "Your turn · m:ss", red with the bidding box ringed in the last 15 s', async () => {
+  test('our call: "Your call" and the clock in orange over its bar, red with the bidding box ringed in the last 15 s', async () => {
     const wrapper = await mountPage(auction({ turn_deadline: inSeconds(42) }))
 
-    const clock = () => wrapper.get('.turn-clock')
+    const clock = () => wrapper.get('.turn-line')
+    const fill = () => wrapper.get('.turn-bar-fill').attributes('style')
     await flushPromises()
     expect(wrapper.findComponent(BiddingBox).exists()).toBe(true)
-    expect(clock().text()).toBe('Your turn · 0:42')
-    expect(clock().classes()).toContain('turn-clock-mine')
-    expect(clock().classes()).not.toContain('turn-clock-urgent')
+    expect(clock().get('.turn-line-text').text()).toBe('Your call')
+    expect(clock().get('.turn-line-time').text()).toBe('0:42')
+    expect(fill()).toBe('width: 70%;')
+    expect(clock().classes()).toContain('turn-line-mine')
+    expect(clock().classes()).not.toContain('turn-line-urgent')
     expect(wrapper.get('.bidding-box').classes()).not.toContain('turn-urgent')
 
     vi.advanceTimersByTime(27_000)
     await flushPromises()
-    expect(clock().text()).toBe('Your turn · 0:15')
-    expect(clock().classes()).toContain('turn-clock-urgent')
+    expect(clock().get('.turn-line-time').text()).toBe('0:15')
+    expect(fill()).toBe('width: 25%;')
+    expect(clock().classes()).toContain('turn-line-urgent')
     expect(wrapper.get('.bidding-box').classes()).toContain('turn-urgent')
   })
 
@@ -881,7 +902,8 @@ describe('TablePlayPage turn clock', () => {
       }),
     )
 
-    expect(wrapper.get('.turn-clock').text()).toBe('Your time for the set: 0:42')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Your call')
+    expect(wrapper.get('.turn-line-time').text()).toBe('Set 0:42')
     const mine = () => wrapper.get('.side-bottom .seat-bank')
     expect(mine().text()).toBe('0:42')
     expect(mine().classes()).toEqual(expect.arrayContaining(['seat-bank-running', 'seat-bank-low']))
@@ -890,7 +912,7 @@ describe('TablePlayPage turn clock', () => {
     vi.advanceTimersByTime(2000)
     await flushPromises()
     expect(mine().text()).toBe('0:40')
-    expect(wrapper.get('.turn-clock').text()).toBe('Your time for the set: 0:40')
+    expect(wrapper.get('.turn-line-time').text()).toBe('Set 0:40')
     expect(wrapper.get('.side-top .seat-bank').text()).toBe('5:00')
   })
 
@@ -908,16 +930,18 @@ describe('TablePlayPage turn clock', () => {
       } as unknown as Partial<Playing>),
     )
 
-    expect(wrapper.get('.turn-clock').text()).toBe('Your turn · 0:10')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Your lead')
+    expect(wrapper.get('.turn-line-time').text()).toBe('0:10')
     expect(wrapper.get('.my-hand .hand').classes()).toContain('turn-urgent')
   })
 
   test('somebody else\'s turn: "Waiting for East · m:ss", never red', async () => {
     const wrapper = await mountPage(auction({ turn: 'E', acting_user_id: 2, turn_deadline: inSeconds(5) }))
 
-    expect(wrapper.get('.turn-clock').text()).toBe('Waiting for East · 0:05')
-    expect(wrapper.get('.turn-clock').classes()).not.toContain('turn-clock-mine')
-    expect(wrapper.get('.turn-clock').classes()).not.toContain('turn-clock-urgent')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Waiting for East')
+    expect(wrapper.get('.turn-line-time').text()).toBe('0:05')
+    expect(wrapper.get('.turn-line').classes()).not.toContain('turn-line-mine')
+    expect(wrapper.get('.turn-line').classes()).not.toContain('turn-line-urgent')
   })
 
   test('an away player on turn: named once, no clock in the text; the seats count down', async () => {
@@ -933,8 +957,9 @@ describe('TablePlayPage turn clock', () => {
       table,
     )
 
-    expect(wrapper.get('.turn-clock').text()).toBe('Waiting for East (away)')
-    expect(wrapper.get('.status').text()).toBe('')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Waiting for East (away)')
+    expect(wrapper.find('.turn-line-time').exists()).toBe(false)
+    expect(wrapper.find('.turn-bar-fill').exists()).toBe(false)
     expect(wrapper.findAll('.away-line').map((l) => l.text())).toEqual([
       'Away players are replaced by a robot when their clock runs out.',
     ])
@@ -949,17 +974,20 @@ describe('TablePlayPage turn clock', () => {
     expect(tag('E').text()).toBe('away · 0:14')
     expect(tag('W').text()).toBe('away · 0:14')
     expect(tag('W').classes()).toContain('away-tag-urgent')
-    expect(wrapper.get('.turn-clock').text()).toBe('Waiting for East (away)')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Waiting for East (away)')
 
     vi.advanceTimersByTime(14_000)
     await flushPromises()
     expect(tag('E').text()).toBe('replacing…')
   })
 
-  test('no clock (a robot or an admin on turn): the line stays, empty', async () => {
+  test('no clock (a robot or an admin on turn): the line stays, without a time or a bar', async () => {
     const wrapper = await mountPage(auction({ turn_deadline: null }))
 
-    expect(wrapper.get('.turn-clock').text()).toBe('')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Your call')
+    expect(wrapper.find('.turn-line-time').exists()).toBe(false)
+    expect(wrapper.find('.turn-bar-fill').exists()).toBe(false)
+    expect(wrapper.find('.turn-bar').exists()).toBe(true)
     vi.advanceTimersByTime(120_000)
     await flushPromises()
     expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
@@ -970,7 +998,8 @@ describe('TablePlayPage turn clock', () => {
 
     vi.advanceTimersByTime(3000)
     await flushPromises()
-    expect(wrapper.get('.turn-clock').text()).toBe('Time is up…')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Time is up…')
+    expect(wrapper.find('.turn-line-time').exists()).toBe(false)
     expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(2000)

@@ -1,8 +1,10 @@
 import type { Seat } from '@/services/tables';
 import type { Claim, Playing, PublicPlaying } from '@/services/game';
-import { SEAT_NAMES } from '@/utils/auction';
+import { SEAT_NAMES, callLabel } from '@/utils/auction';
 import { formatClock, secondsLeft } from '@/utils/away';
+import { isVulnerable } from '@/utils/cards';
 import { playsForDeclarer } from '@/utils/play';
+import { contractScore, doubledMark, formatScore, madeSuffix, sideOf } from '@/utils/result';
 
 // Claims (bridge_backend docs/API.md, Claims; GAME-RULES.md §5), mirrored as
 // a hint for which buttons to show. The backend's ClaimService is the final
@@ -151,4 +153,57 @@ export function claimOffText(claim: Claim, now: number): string {
     ? 'Nobody answered: the claim is off.'
     : `${SEAT_NAMES[claim.seat]}'s claim is off.`;
   return `${off} Play on: no claim until the next card.`;
+}
+
+// What claiming `tricks` of the tricks left would make of the contract,
+// from `seat`'s side (the claimer's, claimSeatOf): the result as the table
+// writes it ("4♠ +1", "4♠X −2"), whether it goes down, and the side's score
+// ("+450", "−50"; contractScore, a hint). Null without a contract.
+export interface ClaimOutcome {
+  result: string;
+  down: boolean;
+  score: string;
+}
+
+export function claimOutcome(state: PublicPlaying, seat: Seat, tricks: number): ClaimOutcome | null {
+  const contract = state.contract;
+  const { level, strain } = contract?.bid ?? {};
+  if (!contract || !level || !strain) {
+    return null;
+  }
+  const declarerSide = sideOf(contract.declarer);
+  const ours = sideOf(seat) === declarerSide;
+  const won = state.tricks_won?.[declarerSide] ?? 0;
+  const taken = won + (ours ? tricks : tricksLeft(state) - tricks);
+  const vulnerable = isVulnerable(contract.declarer, state.board?.vulnerable ?? '');
+  const score = contractScore({ level, strain }, contract.doubled, vulnerable, taken);
+  const made = taken - (level + 6);
+  return {
+    result: `${callLabel(contract.bid)}${doubledMark(contract.doubled)} ${madeSuffix(made)}`,
+    down: made < 0,
+    score: formatScore(ours ? score : 0 - score),
+  };
+}
+
+// The claim sheet's line under its title: "7 tricks left · you have 4 · 4♠
+// needs 10", the tricks `seat`'s side has taken so far and what declarer
+// needs to make the contract.
+export function claimSummary(state: PublicPlaying, seat: Seat): string {
+  const left = tricksLeft(state);
+  const parts = [`${left} trick${left === 1 ? '' : 's'} left`];
+  const contract = state.contract;
+  if (contract?.bid.level) {
+    parts.push(`you have ${state.tricks_won?.[sideOf(seat)] ?? 0}`);
+    parts.push(`${callLabel(contract.bid)}${doubledMark(contract.doubled)} needs ${contract.bid.level + 6}`);
+  }
+  return parts.join(' · ');
+}
+
+// Who answers a claim by `seat`: declarer's side waits for both opponents,
+// a defender for declarer and their own partner.
+export function claimAnswerersText(state: PublicPlaying, seat: Seat): string {
+  if (!state.contract) {
+    return 'The others';
+  }
+  return sideOf(seat) === sideOf(state.contract.declarer) ? 'Both opponents' : 'Declarer and your partner';
 }
