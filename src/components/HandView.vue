@@ -6,7 +6,8 @@
        button: the ones that may go now stand raised and ringed, the ones
        that can't are dimmed. The
        `forcedId` card, the only legal one, is about to play itself: it
-       stands raised and pulses until it goes (see useForcedPlay). The cards
+       stands raised and pulses until it goes (see useForcedPlay), "plays in
+       3" on it while `forcedSeconds` counts down. The cards
        are the card size setting's (cardSize.ts), smaller on a phone, and
        each shows at least 44 px of itself to tap. The hand keeps the height
        it had as dealt while its cards go (useSteadyHeight). -->
@@ -35,6 +36,10 @@
           @click="emit('play', card)"
         >
           <PlayingCard :card="card" />
+          <!-- On the card itself, in the corner a fan leaves showing. -->
+          <span v-if="card.id === forcedId && forcedSeconds !== null" class="forced-tag">
+            <span>plays</span> <span>in {{ forcedSeconds }}</span>
+          </span>
         </button>
       </template>
       <template v-else>
@@ -62,8 +67,10 @@ const props = withDefaults(
     // A card is on its way: nothing more can be tapped until it lands.
     busy?: boolean;
     sendingId?: number | null;
-    // The only legal card, counting down to playing itself.
+    // The only legal card, counting down to playing itself, and the
+    // seconds left before it does.
     forcedId?: number | null;
+    forcedSeconds?: number | null;
     // The suits left to right: trumps first for dummy (see suitOrder).
     order?: readonly Suit[];
   }>(),
@@ -73,6 +80,7 @@ const props = withDefaults(
     busy: false,
     sendingId: null,
     forcedId: null,
+    forcedSeconds: null,
     order: () => HAND_SUITS,
   },
 );
@@ -134,6 +142,7 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
 }
 
 .card-button {
+  position: relative;
   display: block;
   padding: 0;
   border: 0;
@@ -162,6 +171,27 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
 /* About to play itself: a pulsing amber halo until it goes, or is tapped. */
 .card-button.forced :deep(.playing-card) {
   animation: forced-pulse 1s ease-in-out infinite;
+}
+
+/* "plays in 3": an amber tag at the bottom of the strip of the card the
+   next one leaves showing (`--card-step`), on two lines. */
+.forced-tag {
+  position: absolute;
+  bottom: calc(var(--card-w) * 0.08);
+  left: calc(var(--card-w) * 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: calc(var(--card-step) - var(--card-w) * 0.1);
+  padding: 2px 4px;
+  border-radius: 6px;
+  background: var(--bridge-amber);
+  color: var(--bridge-on-amber);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 @keyframes forced-pulse {

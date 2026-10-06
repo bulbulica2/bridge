@@ -11,11 +11,14 @@ import {
   TURN_URGENT_SECONDS,
   awayOnTurn,
   turnClock,
+  turnClockFraction,
   turnClockText,
+  turnClockTime,
   turnDeadline,
   turnTitle,
   turnUrgent,
 } from '@/utils/turnClock'
+import type { TurnClock } from '@/utils/turnClock'
 
 const NOW = Date.parse('2026-10-05T12:00:00.000Z')
 
@@ -288,5 +291,38 @@ describe('useTurnTitle', () => {
 
     expect(document.title).toBe('● Your turn (0:42) – Bridge')
     scope.stop()
+  })
+})
+
+describe('the turn clock line (#161)', () => {
+  const clock = (overrides: Partial<TurnClock> = {}): TurnClock => ({
+    seconds: 42,
+    mine: true,
+    seat: 'S',
+    by: 'move',
+    ...overrides,
+  })
+
+  test('the time on the right: "0:42", "Set 0:42" for the time for the set', () => {
+    expect(turnClockTime(clock())).toBe('0:42')
+    expect(turnClockTime(clock({ mine: false, seat: 'E' }))).toBe('0:42')
+    expect(turnClockTime(clock({ by: 'set' }))).toBe('Set 0:42')
+  })
+
+  test('no time without a clock, once it is up, or for somebody away', () => {
+    expect(turnClockTime(null)).toBe('')
+    expect(turnClockTime(clock({ seconds: 0 }))).toBe('')
+    expect(turnClockTime(clock({ mine: false, by: 'away' }))).toBe('')
+    // Our own away clock still shows: we are back to act.
+    expect(turnClockTime(clock({ by: 'away' }))).toBe('0:42')
+  })
+
+  test("the bar: the part of the move's minute left, never more than all of it", () => {
+    expect(turnClockFraction(clock({ seconds: 60 }))).toBe(1)
+    expect(turnClockFraction(clock({ seconds: 90 }))).toBe(1)
+    expect(turnClockFraction(clock({ seconds: 15 }))).toBe(0.25)
+    expect(turnClockFraction(clock({ seconds: 0 }))).toBe(0)
+    expect(turnClockFraction(null)).toBeNull()
+    expect(turnClockFraction(clock({ mine: false, by: 'away' }))).toBeNull()
   })
 })

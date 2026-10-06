@@ -525,7 +525,7 @@ describe('TablePlayPage between boards', () => {
     expect(wrapper.find('.next-board').exists()).toBe(false)
     expect(wrapper.findAll('.dealt-hand')).toHaveLength(0)
     expect(wrapper.findAll('.my-hand .playing-card')).toHaveLength(13)
-    expect(wrapper.text()).toContain('Auction: waiting for bob.')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Waiting for East')
   })
 
   test('the others see the next board arrive over the channel', async () => {

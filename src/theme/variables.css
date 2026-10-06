@@ -55,6 +55,9 @@
   --bridge-on-popup: #ffffff;
   --bridge-on-popup-muted: #cfdbeb;
   --bridge-popup-button: #2a3a55;
+  /* A banner's countdown and its ticks (a pending claim). */
+  --bridge-on-popup-clock: #f8b48a;
+  --bridge-on-popup-ok: #8fdca5;
 
   /* Hearts and diamonds written on the page (the auction, the contract);
      lifted in dark mode. A card face keeps --bridge-card-red. */
@@ -196,6 +199,8 @@
     --bridge-on-popup: #e8ecf3;
     --bridge-on-popup-muted: #c7cfdc;
     --bridge-popup-button: #3c4a6b;
+    --bridge-on-popup-clock: #ffc58f;
+    --bridge-on-popup-ok: #9be3b0;
 
     --bridge-red-suit: #ff8a96;
     --bridge-black-suit: #e8ecf3;

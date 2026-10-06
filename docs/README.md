@@ -33,7 +33,12 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/92-daylight-redesign` (after
+> branch `bulbulica2/93-daylight-play-page` (after
+> #161, the play page during a board in the Daylight look: one turn clock
+> line with a bar ("Your call · 0:42"), the header "<table> · Board 2 of
+> 4", the claim sheet's tiles with each number's result and score, the
+> pending claim as a dark banner, Claim at the bottom left (grey "Claim ·
+> locked" while locked) and "plays in 3" on a forced card; after
 > #160, the **Daylight** look: design tokens and bundled typefaces, 48 px
 > buttons with one orange action, new card faces, the navy table with
 > seat plates and last-call chips, call chips, the vulnerability pill and

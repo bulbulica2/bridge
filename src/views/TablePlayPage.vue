@@ -12,7 +12,7 @@
         >
           <ion-icon slot="start" :icon="chatbubblesOutline" />
           <span class="chat-toggle-label">Chat</span>
-          <ion-badge v-if="chat.unread > 0" color="danger" class="chat-badge">{{ chat.unread }}</ion-badge>
+          <ion-badge v-if="chat.unread > 0" color="action" class="chat-badge">{{ chat.unread }}</ion-badge>
         </ion-button>
         <!-- Look back at the finished boards without leaving the table. -->
         <ion-button v-if="reviewable.length > 0" class="review-boards" @click="reviewOpen = true">
@@ -223,6 +223,7 @@
             :declarer="declarerHand"
             :declarer-playable="playFrom === 'declarer' ? legalIds(playing.declarer_hand) : null"
             :declarer-forced-id="playFrom === 'declarer' ? (autoPlay.card.value?.id ?? null) : null"
+            :forced-seconds="autoPlay.card.value ? autoPlay.secondsLeft.value : null"
             :claim="pendingClaim ? { seat: pendingClaim.claim.seat, cards: pendingClaim.claim.hand } : null"
             :deal="playing.phase === 'finished' ? playing.deal : null"
             :away="awayTags"
@@ -269,36 +270,26 @@
                robots (bb#138), this says once what for. -->
           <AwayNotice :table="table" :me="me" />
 
-          <!-- The turn clock (turn_deadline, bb#120): "Your turn · 0:42",
-               red in its last seconds, or "Waiting for East · 0:42"; "Your
-               time for the set: 0:42" when the set clock ends first
-               (turn_deadline_by, bb#131); "Waiting for East (away)" with no
-               clock when the board waits for an away player, whose seat
-               counts down (bb#138), and the status line under it says
-               nothing more. One
-               line, there all through the auction and the play (empty when
-               no clock runs: a robot or an admin on turn, a claim), so
-               nothing moves when it comes and goes. -->
-          <p
+          <!-- The turn clock line (Daylight, #161): what the board waits
+               for ("Your call", "Your turn · follow in ♦", "Waiting for
+               East", "robot-1 is thinking…"), the turn clock on the right
+               (turn_deadline, bb#120: "0:42", "Set 0:42" when the time for
+               the set ends first, bb#131) and the move's minute as a bar,
+               orange on our move and red in its last seconds. "Waiting for
+               East (away)" with no clock when the board waits for an away
+               player, whose seat counts down (bb#138). Empty while a
+               claim's banner says it all. There all through the auction
+               and the play, always as tall, so nothing moves from call to
+               call or card to card (#133). -->
+          <TurnClockLine
             v-if="playing.phase === 'auction' || playing.phase === 'play'"
-            class="turn-clock"
-            :class="{ 'turn-clock-mine': turnClock.clock.value?.mine, 'turn-clock-urgent': turnClock.urgent.value }"
-            role="timer"
-          >
-            {{ turnClock.text.value }}
-          </p>
-
-          <!-- Whose move it is, always there (empty while a claim's panel
-               says it) and two lines tall during the auction and the play,
-               so the hand below doesn't move from call to call or card to
-               card. -->
-          <p
-            v-if="playing.phase === 'auction' || playing.phase === 'play'"
-            class="status"
-            :class="{ 'status-mine': myTurn, 'status-robot': robotActing }"
-          >
-            {{ status }}
-          </p>
+            :text="lineText"
+            :time="pendingClaim ? '' : turnClock.time.value"
+            :fraction="pendingClaim ? null : turnClock.fraction.value"
+            :mine="myTurn && !pendingClaim"
+            :urgent="turnClock.urgent.value"
+            :robot="robotActing && !pendingClaim"
+          />
 
           <!-- Alerted calls stand out (partner's only once the auction is
                over); until the board is over, an opponent's call may be
@@ -331,6 +322,7 @@
               :busy="sendingCard !== null"
               :sending-id="sendingCard"
               :forced-id="playFrom === 'own' ? (autoPlay.card.value?.id ?? null) : null"
+              :forced-seconds="autoPlay.card.value ? autoPlay.secondsLeft.value : null"
               :class="{ 'turn-urgent': playFrom === 'own' && turnClock.urgent.value }"
               @play="playCard"
             />
@@ -341,20 +333,20 @@
           </section>
 
           <!-- Ending the play early: any player but dummy, while no claim is
-               pending. After a refused claim, nobody claims until the next
-               card: the button stays, disabled, with a note. -->
-          <ion-button
-            v-if="mayClaim || claimBlocked"
-            expand="block"
-            fill="outline"
-            class="claim-button"
-            :class="{ 'is-locked': claimBlocked }"
-            :disabled="claimBlocked || sendingCard !== null || claiming"
-            @click="claimOpen = mayClaim"
-          >
-            Claim
-          </ion-button>
-          <p v-if="claimBlocked" class="claim-locked-note">{{ CLAIM_LOCKED_TEXT }}</p>
+               pending; solid navy, at the bottom left under the hand. After
+               a refused claim, nobody claims until the next card: the
+               button stays, grey ("Claim · locked"), with a note. -->
+          <div v-if="mayClaim || claimBlocked" class="claim-row">
+            <ion-button
+              class="claim-button"
+              :class="{ 'is-locked': claimBlocked }"
+              :disabled="claimBlocked || sendingCard !== null || claiming"
+              @click="claimOpen = mayClaim"
+            >
+              {{ claimBlocked ? 'Claim · locked' : 'Claim' }}
+            </ion-button>
+            <p v-if="claimBlocked" class="claim-locked-note">{{ CLAIM_LOCKED_TEXT }}</p>
+          </div>
 
           <template v-if="canBid">
             <BiddingBox
@@ -402,6 +394,8 @@
         :open="claimOpen"
         :remaining="playing ? tricksLeft(playing) : 0"
         :for-seat="forDeclarer ? claimSeat : null"
+        :state="playing"
+        :seat="claimSeat"
         :busy="claiming"
         @claim="sendClaim"
         @close="claimOpen = false"
@@ -481,6 +475,7 @@ import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
 import TrickArea from '@/components/TrickArea.vue';
+import TurnClockLine from '@/components/TurnClockLine.vue';
 import VulnerabilityLabel from '@/components/VulnerabilityLabel.vue';
 import { useAwayTags } from '@/composables/useAwayTags';
 import { useDoubleDummy } from '@/composables/useDoubleDummy';
@@ -500,7 +495,7 @@ import type { AlertDraft, Bid, Card, Claim, PlayedCard, Playing, Trick, Vulnerab
 import type { PublicUser, SearchedUser } from '@/services/users';
 import { openQuestion } from '@/utils/alerts';
 import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
-import { SUIT_NAMES, SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
+import { SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
 import { CLAIM_LOCKED_TEXT, canClaim, claimLocked, claimOffText, claimSeatOf, tricksLeft } from '@/utils/claim';
 import {
   autoPlaysForced,
@@ -519,7 +514,7 @@ import { reviewChoices } from '@/utils/review';
 import type { SeenBoard } from '@/utils/review';
 import { startNeeded } from '@/utils/start';
 import { turnNotice } from '@/utils/turn';
-import { awayOnTurn, turnDeadline } from '@/utils/turnClock';
+import { TIME_UP_TEXT, actingSeat, awayOnTurn, turnClockText, turnDeadline } from '@/utils/turnClock';
 import { showToast } from '@/utils/toast';
 
 const route = useRoute();
@@ -788,25 +783,26 @@ function who(seat: Seat): string {
   return user ? `${SEAT_NAMES[seat]} (${user.username})` : SEAT_NAMES[seat];
 }
 
-const status = computed(() => {
+// The turn clock line's words: what the board waits for, during the
+// auction and the play. Nothing while a claim is pending (its banner says
+// it); for an away player, the turn clock's own words; once the time is up,
+// "Time is up…" until the backend's update lands.
+const lineText = computed(() => {
   const state = playing.value;
-  // A finished board: the result panel and the next-board box say it all.
-  if (!state || state.phase === 'waiting' || state.phase === 'finished') {
+  if (!state || (state.phase !== 'auction' && state.phase !== 'play') || pendingClaim.value) {
     return '';
   }
-  // The board waits for an away player: the turn clock's line names them.
-  if (awayOnTurn(turnClock.clock.value)) {
-    return '';
+  const clock = turnClock.clock.value;
+  if (awayOnTurn(clock)) {
+    return turnClockText(clock!);
   }
-  if (state.phase === 'play') {
-    // A pending claim: its panel says what is going on.
-    return state.claim ? '' : playStatus(state.turn);
+  if (clock?.seconds === 0) {
+    return TIME_UP_TEXT;
   }
-  if (myTurn.value) {
-    return 'Auction: your turn.';
+  if (state.phase === 'auction') {
+    return myTurn.value ? 'Your call' : waitingFor(state);
   }
-  const actor = actorName();
-  return actor ? `Auction: ${waitingFor(actor)}` : 'Auction.';
+  return playLine(state);
 });
 
 // Who must act for `turn` (declarer on dummy's turn), from the players.
@@ -819,45 +815,43 @@ const actor = computed(() => {
 // (PlayingUpdated), so the page says it is thinking rather than waiting.
 const robotActing = computed(() => !!actor.value?.is_robot);
 
-function actorName(): string | null {
-  return actor.value?.username ?? null;
+// "Waiting for East", or "robot-1 is thinking…"; `from` goes before the end.
+function waitingFor(state: Playing, from = ''): string {
+  if (robotActing.value) {
+    return `${actor.value!.username} is thinking${from}…`;
+  }
+  const seat = actingSeat(state);
+  return seat ? `Waiting for ${SEAT_NAMES[seat]}${from}` : '';
 }
 
-// "waiting for ann.", or "robot-1 is thinking…"; `from` goes before the end.
-function waitingFor(name: string, from = ''): string {
-  return robotActing.value ? `${name} is thinking${from}…` : `waiting for ${name}${from}.`;
-}
-
-function playStatus(turn: Seat | null): string {
+// Our move in the play: "Your lead", "Your turn · follow in ♦", "Your turn
+// from dummy · ♠Q plays in 3"; else whom the play waits for.
+function playLine(state: Playing): string {
   if (sendingCard.value !== null) {
     return 'Playing your card…';
   }
-  const leading = (playing.value?.current_trick ?? []).length === 0;
+  const turn = state.turn;
   if (playFrom.value) {
+    const leading = (state.current_trick ?? []).length === 0;
     const from = {
       own: forDeclarer.value ? ' from your own hand' : '',
-      dummy: ` from dummy (${turn})`,
+      dummy: ' from dummy',
       declarer: ` from ${SEAT_NAMES[turn!]}'s hand`,
     }[playFrom.value];
+    const base = `${leading ? 'Your lead' : 'Your turn'}${from}`;
     const auto = autoPlay.card.value;
     if (auto) {
-      return `Play: your turn${from}. Playing ${cardLabel(auto)} in ${autoPlay.secondsLeft.value} s…`;
+      return `${base} · ${cardLabel(auto)} plays in ${autoPlay.secondsLeft.value}`;
     }
-    if (mustFollow.value) {
-      return `Play: your turn${from}. Follow suit: ${SUIT_NAMES[mustFollow.value]}.`;
-    }
-    return leading ? `Play: your lead${from}.` : `Play: your turn${from}.`;
+    return mustFollow.value ? `${base} · follow in ${SUIT_SYMBOLS[mustFollow.value]}` : base;
   }
   if (iAmDummy.value && !forDeclarer.value) {
-    return 'Declarer is playing your cards.';
+    return 'Declarer plays your cards';
   }
-  const actor = actorName();
-  if (!actor) {
-    return 'Play.';
+  if (!actor.value) {
+    return '';
   }
-  return turn && turn === playing.value?.contract?.dummy
-    ? `Play: ${waitingFor(actor, ', from dummy')}`
-    : `Play: ${waitingFor(actor)}`;
+  return waitingFor(state, turn && turn === state.contract?.dummy ? ', from dummy' : '');
 }
 
 // The next board waits for every human's Start: none dealt yet (or one
@@ -977,10 +971,12 @@ const chatEvents = {
   'clear-about': () => (chat.about = null),
 };
 
+// The table's name and the board's place in its set ("Friday club · Board 2
+// of 4"), never the board's number in the database.
 const headerTitle = computed(() => {
-  const board = playing.value?.board;
+  const set = playing.value?.phase === 'waiting' ? null : playing.value?.set;
   const name = table.value?.name || (tableId.value ? `Table #${tableId.value}` : 'Table');
-  return board ? `${name} · Board ${board.number}` : name;
+  return set ? `${name} · Board ${set.board} of ${set.of}` : name;
 });
 
 onIonViewWillEnter(() => {
@@ -1788,53 +1784,6 @@ async function refresh(event: CustomEvent) {
   color: var(--bridge-on-table-muted);
 }
 
-/* Two lines of room whatever it says, set off from the page. */
-.status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  min-height: calc(2 * 1.35em + 18px);
-  margin: 12px 0;
-  padding: 8px 12px;
-  border-radius: var(--bridge-radius-card);
-  background: var(--bridge-surface);
-  box-shadow: 0 1px 0 var(--bridge-line);
-  font-size: 1.05rem;
-  line-height: 1.35;
-  text-align: center;
-  color: var(--bridge-muted);
-}
-
-.status-robot {
-  color: var(--bridge-redouble-text);
-}
-
-.status-mine {
-  font-weight: 700;
-  color: var(--bridge-action-text);
-}
-
-/* The turn clock, one line over the status whatever it says. */
-.turn-clock {
-  min-height: 1.4em;
-  margin: 12px 0 -4px;
-  font-size: 1rem;
-  line-height: 1.4;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  color: var(--ion-color-medium);
-}
-
-.turn-clock-mine {
-  font-weight: 700;
-  color: var(--ion-text-color, #000);
-}
-
-.turn-clock-urgent {
-  color: var(--ion-color-danger, #c5000f);
-}
-
 /* Our hand or the bidding box in our clock's last seconds: ringed in red,
    pulsing unless motion is reduced. */
 .turn-urgent {
@@ -1988,18 +1937,23 @@ async function refresh(event: CustomEvent) {
   gap: 8px;
 }
 
-.claim-button {
+/* Claim at its own width, at the bottom left under the hand. */
+.claim-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   margin: 0 0 16px;
 }
 
-.claim-button.is-locked {
-  margin-bottom: 4px;
+.claim-button {
+  margin: 0;
+  min-width: 120px;
 }
 
 .claim-locked-note {
-  margin: 0 0 16px;
+  margin: 0;
   font-size: 0.85rem;
-  text-align: center;
   color: var(--ion-color-medium);
 }
 </style>

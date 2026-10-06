@@ -1,5 +1,5 @@
 import type { Seat } from '@/services/tables';
-import type { BoardResult } from '@/services/game';
+import type { BoardResult, Strain } from '@/services/game';
 import { callLabel, doubledSuffix, SEAT_NAMES } from '@/utils/auction';
 
 // A finished board's score, read from the backend's `result`
@@ -100,4 +100,54 @@ export function seatOfUser(
   }
   const seat = (Object.keys(players) as Seat[]).find((s) => players[s]?.id === userId);
   return seat ?? null;
+}
+
+// What a contract scores for declarer's side (negative when it goes down),
+// as duplicate scores it (bridge_backend docs/GAME-RULES.md §6, the
+// backend's ScoringService): trick points for the bid tricks (×2 doubled,
+// ×4 redoubled), the part-score, game and slam bonuses, the insult for a
+// doubled contract made, overtricks, or undertricks for the defenders.
+// `vulnerable` is declarer's side's; `tricks` all declarer's side took.
+// Only a hint, for the claim sheet: the backend's result is final.
+export function contractScore(
+  contract: { level: number; strain: Strain },
+  doubled: 0 | 1 | 2,
+  vulnerable: boolean,
+  tricks: number,
+): number {
+  const { level, strain } = contract;
+  const needed = level + 6;
+  if (tricks < needed) {
+    return 0 - undertricks(needed - tricks, doubled, vulnerable);
+  }
+  const multiplier = [1, 2, 4][doubled];
+  const perTrick = strain === 'C' || strain === 'D' ? 20 : 30;
+  const trickPoints = (level * perTrick + (strain === 'NT' ? 10 : 0)) * multiplier;
+  let score = trickPoints;
+  score += trickPoints >= 100 ? (vulnerable ? 500 : 300) : 50;
+  if (level === 6) {
+    score += vulnerable ? 750 : 500;
+  } else if (level === 7) {
+    score += vulnerable ? 1500 : 1000;
+  }
+  score += [0, 50, 100][doubled];
+  const over = tricks - needed;
+  const overValue = doubled === 0 ? perTrick : (vulnerable ? 200 : 100) * (doubled === 2 ? 2 : 1);
+  return score + over * overValue;
+}
+
+// The defenders' score for `down` undertricks.
+function undertricks(down: number, doubled: 0 | 1 | 2, vulnerable: boolean): number {
+  if (doubled === 0) {
+    return down * (vulnerable ? 100 : 50);
+  }
+  let total = 0;
+  for (let n = 1; n <= down; n++) {
+    if (vulnerable) {
+      total += n === 1 ? 200 : 300;
+    } else {
+      total += n === 1 ? 100 : n <= 3 ? 200 : 300;
+    }
+  }
+  return total * (doubled === 2 ? 2 : 1);
 }

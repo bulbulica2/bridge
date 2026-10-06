@@ -680,19 +680,19 @@ describe('TablePlayPage card play', () => {
       expect(second.get('.trick-foot .trick-peek .last-trick-button').text()).toBe('Last trick')
     })
 
-    test('the status line is there during the auction and the play, not once the board is over', async () => {
+    test('the turn line is there during the auction and the play, not once the board is over', async () => {
       const auction = await mountPage(
         state({ phase: 'auction', contract: null, current_trick: [], dummy_hand: null, turn: 'S' }),
       )
-      expect(auction.get('.status').text()).toBe('Auction: your turn.')
+      expect(auction.get('.turn-line-text').text()).toBe('Your call')
       auction.unmount()
 
       const play = await mountPage(state({ dummy_hand: cards('SQ', 'S4', 'H3') }))
-      expect(play.get('.status').text()).toBe('Play: your turn from dummy (N). Follow suit: spades.')
+      expect(play.get('.turn-line-text').text()).toBe('Your turn from dummy · follow in ♠')
       play.unmount()
 
       const finished = await mountPage(state({ phase: 'finished', turn: null, current_trick: [] }))
-      expect(finished.find('.status').exists()).toBe(false)
+      expect(finished.find('.turn-line').exists()).toBe(false)
     })
   })
 
@@ -716,7 +716,7 @@ describe('TablePlayPage card play', () => {
     expect(wrapper.find('.forced').exists()).toBe(false)
     // Our own hand waits: it isn't South's turn.
     expect(wrapper.findAll('.my-hand button')).toHaveLength(0)
-    expect(wrapper.text()).toContain('Play: your turn from dummy (N). Follow suit: spades.')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Your turn from dummy · follow in ♠')
   })
 
   test('a tapped card goes out once, and the answer moves the trick on', async () => {
@@ -748,7 +748,7 @@ describe('TablePlayPage card play', () => {
     expect(wrapper.get('.tricks-won').text()).toContain('NS 1')
     expect(wrapper.get('.trick .won').attributes('data-seat')).toBe('S')
     expect(wrapper.get('.trick-caption').text()).toBe('You win')
-    expect(wrapper.text()).toContain('Play: your lead.')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Your lead')
   })
 
   test('the finished trick stays up for a moment, then the table clears', async () => {
@@ -798,7 +798,7 @@ describe('TablePlayPage card play', () => {
     logIn(1, 'Ann')
     const wrapper = await mountPage(state({ my_seat: 'N', hand: NORTH }))
 
-    expect(wrapper.text()).toContain('Declarer is playing your cards.')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Declarer plays your cards')
     expect(wrapper.findAll('button[data-card]')).toHaveLength(0)
     // Dummy's cards are their own hand below, not a second copy at the table.
     expect(wrapper.find('.side-top .dummy-hand').exists()).toBe(false)
@@ -824,7 +824,7 @@ describe('TablePlayPage card play', () => {
     ])
     // Their own hand stays ♥ ♣ ♦ ♠ (here spades only).
     expect(wrapper.findAll('.my-hand .suit-group')).toHaveLength(1)
-    expect(wrapper.text()).toContain('Play: waiting for cy, from dummy.')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Waiting for South, from dummy')
   })
 
   test("a refused card shows the backend's reason and rereads the board", async () => {
@@ -848,10 +848,13 @@ describe('TablePlayPage card play', () => {
       const wrapper = await mountPage(state())
 
       expect(wrapper.get('.side-top .forced').attributes('data-card')).toBe(String(c('SQ').id))
-      expect(wrapper.get('.status').text()).toBe('Play: your turn from dummy (N). Playing ♠Q in 3 s…')
+      expect(wrapper.get('.turn-line-text').text()).toBe('Your turn from dummy · ♠Q plays in 3')
+      // On the card itself too.
+      expect(wrapper.get('.side-top .forced .forced-tag').text()).toBe('plays in 3')
       vi.advanceTimersByTime(1000)
       await nextTick()
-      expect(wrapper.get('.status').text()).toContain('Playing ♠Q in 2 s…')
+      expect(wrapper.get('.turn-line-text').text()).toContain('♠Q plays in 2')
+      expect(wrapper.get('.side-top .forced .forced-tag').text()).toBe('plays in 2')
       expect(gameService.playCard).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(2000)
@@ -902,7 +905,8 @@ describe('TablePlayPage card play', () => {
       // The hint stays: only the spade can be tapped.
       expect(enabledCards(wrapper, '.my-hand')).toEqual([c('S5').id])
       expect(wrapper.find('.forced').exists()).toBe(false)
-      expect(wrapper.get('.status').text()).not.toContain('Playing')
+      expect(wrapper.get('.turn-line-text').text()).not.toContain('plays in')
+      expect(wrapper.find('.forced-tag').exists()).toBe(false)
       vi.advanceTimersByTime(10_000)
       await flushPromises()
       expect(gameService.playCard).not.toHaveBeenCalled()
@@ -988,8 +992,8 @@ describe('TablePlayPage card play', () => {
       expect(top.get('.turn').text()).toBe('Your turn')
       expect(enabledCards(wrapper, '.side-top')).toEqual([c('SQ').id, c('S4').id])
       expect(wrapper.findAll('.my-hand button')).toHaveLength(0)
-      expect(wrapper.get('.status').text()).toBe("Play: your turn from North's hand. Follow suit: spades.")
-      expect(wrapper.get('.status').classes()).not.toContain('status-robot')
+      expect(wrapper.get('.turn-line-text').text()).toBe("Your turn from North's hand · follow in ♠")
+      expect(wrapper.get('.turn-line').classes()).not.toContain('turn-line-robot')
       expect(wrapper.get('.outcome-you').text()).toBe('robot-1 declares 4♠ — you play the hand')
     })
 
@@ -1025,14 +1029,14 @@ describe('TablePlayPage card play', () => {
 
       expect(enabledCards(wrapper, '.my-hand')).toEqual([c('SA').id, c('S7').id])
       expect(enabledCards(wrapper, '.side-top')).toEqual([])
-      expect(wrapper.get('.status').text()).toBe('Play: your turn from your own hand. Follow suit: spades.')
+      expect(wrapper.get('.turn-line-text').text()).toBe('Your turn from your own hand · follow in ♠')
     })
 
     test('a robot defender thinks; nobody plays our cards for us', async () => {
       const wrapper = await mountPage(robotState({ turn: 'W', acting_user_id: 4, current_trick: played('E S3, S SA') }))
 
-      expect(wrapper.get('.status').text()).toBe('Play: robot-3 is thinking…')
-      expect(wrapper.text()).not.toContain('Declarer is playing your cards.')
+      expect(wrapper.get('.turn-line-text').text()).toBe('robot-3 is thinking…')
+      expect(wrapper.text()).not.toContain('Declarer plays your cards')
       // Declarer's cards lie face up for us, but wait their turn.
       expect(wrapper.find('.side-top .declarer-hand').exists()).toBe(true)
       expect(enabledCards(wrapper, '.side-top')).toEqual([])
@@ -1044,7 +1048,7 @@ describe('TablePlayPage card play', () => {
       )
 
       expect(wrapper.get('.side-top .declarer-hand').findAll('.card')).toHaveLength(3)
-      expect(wrapper.get('.status').text()).toBe('Play: robot-2 is thinking…')
+      expect(wrapper.get('.turn-line-text').text()).toBe('robot-2 is thinking…')
     })
 
     test("declarer's only legal card plays itself after 3 s", async () => {
@@ -1053,7 +1057,8 @@ describe('TablePlayPage card play', () => {
       const wrapper = await mountPage(robotState({ declarer_hand: cards('SQ', 'H3', 'C9') }))
 
       expect(wrapper.get('.side-top .forced').attributes('data-card')).toBe(String(c('SQ').id))
-      expect(wrapper.get('.status').text()).toBe("Play: your turn from North's hand. Playing ♠Q in 3 s…")
+      expect(wrapper.get('.turn-line-text').text()).toBe("Your turn from North's hand · ♠Q plays in 3")
+      expect(wrapper.get('.declarer-hand .forced .forced-tag').text()).toBe('plays in 3')
       vi.advanceTimersByTime(3000)
       await flushPromises()
       expect(gameService.playCard).toHaveBeenCalledWith(5, c('SQ').id)
@@ -1099,8 +1104,8 @@ describe('TablePlayPage card play', () => {
       expect(east.find('.avatar-robot').attributes('title')).toBe('Robot player')
       expect(east.get('.seat-user').attributes('aria-label')).toBe("robot-1's profile, robot")
       expect(east.get('.turn').text()).toBe('Thinking…')
-      expect(wrapper.get('.status').text()).toBe('Play: robot-1 is thinking…')
-      expect(wrapper.get('.status').classes()).toContain('status-robot')
+      expect(wrapper.get('.turn-line-text').text()).toBe('robot-1 is thinking…')
+      expect(wrapper.get('.turn-line').classes()).toContain('turn-line-robot')
     })
 
     test('an admin carries the Admin badge at their seat', async () => {
@@ -1118,7 +1123,7 @@ describe('TablePlayPage card play', () => {
       )
 
       expect(wrapper.get('.side-right .turn').text()).toBe('To act')
-      expect(wrapper.get('.status').text()).toBe('Play: waiting for bob.')
+      expect(wrapper.get('.turn-line-text').text()).toBe('Waiting for East')
       expect(wrapper.find('.avatar-robot').exists()).toBe(false)
     })
   })

@@ -1,7 +1,7 @@
 import type { DeadlineBy, PublicPlaying } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
-import { formatClock, secondsLeft } from '@/utils/away';
+import { TURN_SECONDS, formatClock, secondsLeft } from '@/utils/away';
 
 // The turn clock (bridge_backend docs/API.md, Away mid-set, and the turn
 // clock; bb#120): the human the board waits for has a minute to call, play
@@ -96,4 +96,25 @@ export function turnUrgent(clock: TurnClock | null): boolean {
 // "● Your turn (0:42) – Bridge".
 export function turnTitle(clock: TurnClock, title: string): string {
   return `● Your turn (${formatClock(clock.seconds)}) – ${title}`;
+}
+
+// The turn clock line's right-hand side (Daylight, #161): "0:42", or "Set
+// 0:42" when it is the time for the set that ends first. Nothing without a
+// clock, once the time is up (the line says so) or for an away player, whose
+// seat counts down.
+export function turnClockTime(clock: TurnClock | null): string {
+  if (!clock || awayOnTurn(clock) || clock.seconds === 0) {
+    return '';
+  }
+  const time = formatClock(clock.seconds);
+  return clock.by === 'set' ? `Set ${time}` : time;
+}
+
+// How much of the move's minute is left, 0 to 1, for the bar under the line;
+// null without a clock or for an away player.
+export function turnClockFraction(clock: TurnClock | null): number | null {
+  if (!clock || awayOnTurn(clock)) {
+    return null;
+  }
+  return Math.min(1, clock.seconds / TURN_SECONDS);
 }

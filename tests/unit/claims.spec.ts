@@ -18,7 +18,10 @@ import {
   CLAIM_SECONDS,
   canClaim,
   claimAction,
+  claimAnswerersText,
   claimLocked,
+  claimOutcome,
+  claimSummary,
   claimClockText,
   claimExpired,
   claimOffText,
@@ -188,6 +191,48 @@ beforeEach(() => {
   setActivePinia(createPinia())
   vi.resetAllMocks()
   logIn(3)
+})
+
+describe('claim outcomes (the claim sheet)', () => {
+  test("declarer's side: the contract's result and N-S's score per number claimed", () => {
+    expect(claimOutcome(state(), 'S', 5)).toEqual({ result: '4♠ +3', down: false, score: '+510' })
+    expect(claimOutcome(state(), 'N', 2)).toEqual({ result: '4♠ =', down: false, score: '+420' })
+    expect(claimOutcome(state(), 'S', 0)).toEqual({ result: '4♠ −2', down: true, score: '−100' })
+  })
+
+  test("a defender's claim: what declarer then takes, from the defenders' side", () => {
+    const won = state({ tricks_won: { ns: 6, ew: 2 } })
+    expect(claimOutcome(won, 'W', 5)).toEqual({ result: '4♠ −4', down: true, score: '+200' })
+    expect(claimOutcome(won, 'E', 0)).toEqual({ result: '4♠ +1', down: false, score: '−450' })
+  })
+
+  test('redoubled and vulnerable, and no tricks counted yet', () => {
+    const xx = state({
+      board: { id: 7, number: 7, dealer: 'N', vulnerable: 'N-S E-W' },
+      contract: { bid: FOUR_SPADES, doubled: 2, declarer: 'S', dummy: 'N' },
+      tricks_won: null,
+    })
+    expect(claimOutcome(xx, 'S', 5)).toEqual({ result: '4♠XX −5', down: true, score: '−2800' })
+    expect(claimSummary(xx, 'S')).toBe('5 tricks left · you have 0 · 4♠XX needs 10')
+  })
+
+  test('without a contract there is nothing to work out', () => {
+    expect(claimOutcome(state({ contract: null }), 'S', 3)).toBeNull()
+    expect(claimSummary(state({ contract: null }), 'S')).toBe('5 tricks left')
+    expect(claimAnswerersText(state({ contract: null }), 'S')).toBe('The others')
+  })
+
+  test('the summary counts our side, and one trick left reads "1 trick left"', () => {
+    const last = state({ tricks: tricks(12), tricks_won: { ns: 9, ew: 3 } })
+    expect(claimSummary(last, 'S')).toBe('1 trick left · you have 9 · 4♠ needs 10')
+    expect(claimSummary(last, 'E')).toBe('1 trick left · you have 3 · 4♠ needs 10')
+  })
+
+  test('who answers: both opponents for declarer, declarer and partner for a defender', () => {
+    expect(claimAnswerersText(state(), 'S')).toBe('Both opponents')
+    expect(claimAnswerersText(state(), 'N')).toBe('Both opponents')
+    expect(claimAnswerersText(state(), 'W')).toBe('Declarer and your partner')
+  })
 })
 
 describe('claim hints', () => {
@@ -397,30 +442,45 @@ describe('game store claims', () => {
 describe('ClaimSheet', () => {
   const modalStub = { template: '<div><slot /></div>' }
 
-  const mountSheet = (props: { open?: boolean; remaining: number; busy?: boolean }) =>
+  type SheetProps = {
+    open?: boolean
+    remaining: number
+    busy?: boolean
+    forSeat?: Seat | null
+    state?: Playing | null
+    seat?: Seat | null
+  }
+  const mountSheet = (props: SheetProps) =>
     mount(ClaimSheet, {
       props: { open: true, ...props },
       global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } },
     })
 
-  const picks = (wrapper: ReturnType<typeof mountSheet>) => wrapper.findAll('.trick-pick').map((b) => b.text())
+  const picks = (wrapper: ReturnType<typeof mountSheet>) =>
+    wrapper.findAll('.trick-pick .pick-count').map((b) => b.text())
+  const picked = (wrapper: ReturnType<typeof mountSheet>) =>
+    wrapper.findAll('.trick-pick.picked .pick-count').map((b) => b.text())
   const isDisabled = (el: { element: Element }) => (el.element as HTMLButtonElement).disabled
 
-  test('one button per trick left, all of them picked to start with', async () => {
+  test('one tile per number, from all the tricks left down to 0, all of them picked to start with', async () => {
     const wrapper = mountSheet({ remaining: 6 })
 
-    expect(picks(wrapper)).toEqual(['1', '2', '3', '4', '5', '6'])
-    expect(wrapper.findAll('.trick-pick.picked').map((b) => b.text())).toEqual(['6'])
-    expect(wrapper.get('.send-claim').text()).toBe('Claim 6 tricks')
-    expect(wrapper.get('.claim-help').text()).toContain('All of them unless you pick fewer.')
+    expect(picks(wrapper)).toEqual(['6', '5', '4', '3', '2', '1', '0'])
+    expect(picked(wrapper)).toEqual(['6'])
+    expect(wrapper.get('[data-tricks="6"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-tricks="5"]').attributes('aria-pressed')).toBe('false')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim all 6')
+    expect(wrapper.get('.claim-summary').text()).toBe('6 tricks left')
 
     // One tap claims them all.
     await wrapper.get('.send-claim').trigger('click')
     expect(wrapper.emitted('claim')).toEqual([[6]])
   })
 
-  test('with 1 trick left the send button reads "Claim 1 trick"', () => {
-    expect(mountSheet({ remaining: 1 }).get('.send-claim').text()).toBe('Claim 1 trick')
+  test('with 1 trick left the send button reads "Claim 1"', () => {
+    const wrapper = mountSheet({ remaining: 1 })
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 1')
+    expect(wrapper.get('.claim-summary').text()).toBe('1 trick left')
   })
 
   test('with no trick left there is nothing to claim', () => {
@@ -430,9 +490,9 @@ describe('ClaimSheet', () => {
     expect(isDisabled(wrapper.get('.send-claim'))).toBe(true)
   })
 
-  test('with 13 tricks left there are 13 buttons, with 1 left a single one', () => {
-    expect(picks(mountSheet({ remaining: 13 }))).toHaveLength(13)
-    expect(picks(mountSheet({ remaining: 1 }))).toEqual(['1'])
+  test('with 13 tricks left there are 14 tiles, with 1 left two', () => {
+    expect(picks(mountSheet({ remaining: 13 }))).toHaveLength(14)
+    expect(picks(mountSheet({ remaining: 1 }))).toEqual(['1', '0'])
   })
 
   test('a pick only selects; the send button then claims that number', async () => {
@@ -440,31 +500,38 @@ describe('ClaimSheet', () => {
 
     await wrapper.get('[data-tricks="4"]').trigger('click')
     expect(wrapper.emitted('claim')).toBeUndefined()
-    expect(wrapper.get('.picked').text()).toBe('4')
-    expect(wrapper.get('.send-claim').text()).toBe('Claim 4 tricks')
+    expect(picked(wrapper)).toEqual(['4'])
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 4')
 
     // Changing the pick is one more tap.
     await wrapper.get('[data-tricks="1"]').trigger('click')
-    expect(wrapper.findAll('.picked').map((b) => b.text())).toEqual(['1'])
-    expect(wrapper.get('.send-claim').text()).toBe('Claim 1 trick')
+    expect(picked(wrapper)).toEqual(['1'])
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 1')
 
     await wrapper.get('[data-tricks="4"]').trigger('click')
     await wrapper.get('.send-claim').trigger('click')
     expect(wrapper.emitted('claim')).toEqual([[4]])
   })
 
-  test('Concede the rest claims 0 whatever is picked', async () => {
+  test('the 0 tile turns the send button into Concede', async () => {
     const wrapper = mountSheet({ remaining: 6 })
 
+    await wrapper.get('[data-tricks="0"]').trigger('click')
+    expect(wrapper.get('.send-claim').text()).toBe('Concede')
+    await wrapper.get('.send-claim').trigger('click')
+    expect(wrapper.emitted('claim')).toEqual([[0]])
+  })
+
+  test('Concede claims 0 whatever is picked', async () => {
+    const wrapper = mountSheet({ remaining: 6 })
+
+    expect(wrapper.get('.concede').text()).toBe('Concede')
     await wrapper.get('.concede').trigger('click')
     expect(wrapper.emitted('claim')).toEqual([[0]])
   })
 
   test("claiming for a robot declarer names its seat, whose hand goes face up", () => {
-    const wrapper = mount(ClaimSheet, {
-      props: { open: true, remaining: 5, forSeat: 'N' },
-      global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } },
-    })
+    const wrapper = mountSheet({ remaining: 5, forSeat: 'N' })
 
     expect(wrapper.get('.claim-title').text()).toBe('Claim tricks for North')
     expect(wrapper.get('.claim-help').text()).toContain("North's hand is shown to everyone")
@@ -474,9 +541,10 @@ describe('ClaimSheet', () => {
   test('busy disables every button', () => {
     const wrapper = mountSheet({ remaining: 3, busy: true })
 
-    for (const b of wrapper.findAll('ion-button')) {
+    for (const b of [...wrapper.findAll('ion-button'), ...wrapper.findAll('.trick-pick')]) {
       expect(isDisabled(b)).toBe(true)
     }
+    expect(wrapper.find('.send-claim ion-spinner').exists()).toBe(true)
   })
 
   test('reopening the sheet picks every remaining trick again', async () => {
@@ -486,8 +554,8 @@ describe('ClaimSheet', () => {
     await wrapper.setProps({ open: false })
     await wrapper.setProps({ open: true })
 
-    expect(wrapper.findAll('.picked').map((b) => b.text())).toEqual(['6'])
-    expect(wrapper.get('.send-claim').text()).toBe('Claim 6 tricks')
+    expect(picked(wrapper)).toEqual(['6'])
+    expect(wrapper.get('.send-claim').text()).toBe('Claim all 6')
   })
 
   test('reopening after tricks were played picks the new maximum', async () => {
@@ -496,7 +564,7 @@ describe('ClaimSheet', () => {
     await wrapper.setProps({ remaining: 4 })
     await wrapper.setProps({ open: true })
 
-    expect(wrapper.get('.send-claim').text()).toBe('Claim 4 tricks')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim all 4')
   })
 
   test('a trick finishing with the default picked moves it to the new maximum', async () => {
@@ -504,8 +572,8 @@ describe('ClaimSheet', () => {
 
     await wrapper.setProps({ remaining: 4 })
 
-    expect(picks(wrapper)).toEqual(['1', '2', '3', '4'])
-    expect(wrapper.findAll('.picked').map((b) => b.text())).toEqual(['4'])
+    expect(picks(wrapper)).toEqual(['4', '3', '2', '1', '0'])
+    expect(picked(wrapper)).toEqual(['4'])
     await wrapper.get('.send-claim').trigger('click')
     expect(wrapper.emitted('claim')).toEqual([[4]])
   })
@@ -515,14 +583,14 @@ describe('ClaimSheet', () => {
     await wrapper.get('[data-tricks="3"]').trigger('click')
 
     await wrapper.setProps({ remaining: 4 })
-    expect(wrapper.get('.send-claim').text()).toBe('Claim 3 tricks')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 3')
 
     await wrapper.setProps({ remaining: 3 })
-    expect(wrapper.get('.send-claim').text()).toBe('Claim 3 tricks')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim all 3')
 
     // No longer possible: capped to the new maximum.
     await wrapper.setProps({ remaining: 2 })
-    expect(wrapper.findAll('.picked').map((b) => b.text())).toEqual(['2'])
+    expect(picked(wrapper)).toEqual(['2'])
     await wrapper.get('.send-claim').trigger('click')
     expect(wrapper.emitted('claim')).toEqual([[2]])
   })
@@ -533,7 +601,55 @@ describe('ClaimSheet', () => {
 
     await wrapper.setProps({ remaining: 4 })
 
-    expect(wrapper.get('.send-claim').text()).toBe('Claim 4 tricks')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim all 4')
+  })
+
+  describe('with the board: each number\'s result and score', () => {
+    // 4♠ by South, nobody vulnerable: 8 tricks taken, 5 left.
+    const tiles = (wrapper: ReturnType<typeof mountSheet>) =>
+      wrapper.findAll('.trick-pick').map((t) => [
+        t.get('.pick-count').text(),
+        t.get('.pick-result').text(),
+        t.get('.pick-score').text(),
+        t.classes('down'),
+      ])
+
+    test("declarer's tiles: the contract's result, undertricks in red, and N-S's score", () => {
+      const wrapper = mountSheet({ remaining: 5, state: state(), seat: 'S' })
+
+      expect(tiles(wrapper)).toEqual([
+        ['5', '4♠ +3', '+510', false],
+        ['4', '4♠ +2', '+480', false],
+        ['3', '4♠ +1', '+450', false],
+        ['2', '4♠ =', '+420', false],
+        ['1', '4♠ −1', '−50', true],
+        ['0', '4♠ −2', '−100', true],
+      ])
+      expect(wrapper.get('.claim-summary').text()).toBe('5 tricks left · you have 8 · 4♠ needs 10')
+      expect(wrapper.get('.send-claim').text()).toBe('Claim all 5 · 4♠ +3 · +510')
+      expect(wrapper.get('.claim-deadline').text()).toBe('Both opponents get 10 seconds. No answer counts as no.')
+    })
+
+    test('the send button follows the pick', async () => {
+      const wrapper = mountSheet({ remaining: 5, state: state(), seat: 'S' })
+
+      await wrapper.get('[data-tricks="1"]').trigger('click')
+      expect(wrapper.get('.send-claim').text()).toBe('Claim 1 · 4♠ −1 · −50')
+      await wrapper.get('[data-tricks="0"]').trigger('click')
+      expect(wrapper.get('.send-claim').text()).toBe('Concede · 4♠ −2 · −100')
+    })
+
+    test("a defender's tiles: what declarer then makes, and E-W's score", () => {
+      const vulnerable = state({ board: { id: 7, number: 7, dealer: 'N', vulnerable: 'N-S' }, contract: { bid: FOUR_SPADES, doubled: 1, declarer: 'S', dummy: 'N' } })
+      const wrapper = mountSheet({ remaining: 5, state: vulnerable, seat: 'E' })
+
+      expect(tiles(wrapper)[0]).toEqual(['5', '4♠X −2', '+500', true])
+      expect(tiles(wrapper).at(-1)).toEqual(['0', '4♠X +3', '−1390', false])
+      expect(wrapper.get('.claim-summary').text()).toBe('5 tricks left · you have 0 · 4♠X needs 10')
+      expect(wrapper.get('.claim-deadline').text()).toBe(
+        'Declarer and your partner get 10 seconds. No answer counts as no.',
+      )
+    })
   })
 })
 
@@ -664,9 +780,7 @@ describe('claim deadline', () => {
     })
 
     expect(CLAIM_SECONDS).toBe(10)
-    expect(wrapper.get('.claim-deadline').text()).toBe(
-      'The others have 10 seconds to answer: no answer counts as no.',
-    )
+    expect(wrapper.get('.claim-deadline').text()).toBe('The others get 10 seconds. No answer counts as no.')
   })
 
   describe('ClaimPanel', () => {
@@ -680,12 +794,15 @@ describe('claim deadline', () => {
       const wrapper = panel(asSeat('E', { claim: pending({ expires_at: inSeconds(7) }) }), 'E')
 
       expect(wrapper.get('.claim-clock').text()).toBe('Answer within 0:07')
+      // The countdown on the right of the banner.
+      expect(wrapper.get('.claim-head .claim-seconds').text()).toBe('0:07')
       expect(isDisabled(wrapper.get('.accept'))).toBe(false)
       expect(isDisabled(wrapper.get('.reject'))).toBe(false)
 
       vi.advanceTimersByTime(2000)
       await nextTick()
       expect(wrapper.get('.claim-clock').text()).toBe('Answer within 0:05')
+      expect(wrapper.get('.claim-seconds').text()).toBe('0:05')
 
       vi.advanceTimersByTime(5000)
       await nextTick()
@@ -735,6 +852,7 @@ describe('claim deadline', () => {
       const wrapper = panel(asSeat('E', { claim: pending() }), 'E')
 
       expect(wrapper.find('.claim-clock').exists()).toBe(false)
+      expect(wrapper.find('.claim-seconds').exists()).toBe(false)
       expect(wrapper.get('.claim-detail').text()).toBe('Play stops until you and W answer.')
       expect(isDisabled(wrapper.get('.accept'))).toBe(false)
     })
@@ -781,10 +899,14 @@ describe('TablePlayPage claims', () => {
     const wrapper = await mountPage(state())
     vi.mocked(gameService.makeClaim).mockResolvedValue(state({ claim: pending() }))
 
+    // Claim: solid navy, at its own width under the hand.
+    expect(wrapper.get('.claim-button').text()).toBe('Claim')
+    expect(wrapper.get('.claim-row').classes()).toContain('claim-row')
     await wrapper.get('.claim-button').trigger('click')
-    expect(wrapper.findAll('.trick-pick').map((b) => b.text())).toEqual(['1', '2', '3', '4', '5'])
+    expect(wrapper.findAll('.trick-pick .pick-count').map((b) => b.text())).toEqual(['5', '4', '3', '2', '1', '0'])
+    expect(wrapper.get('.claim-summary').text()).toBe('5 tricks left · you have 8 · 4♠ needs 10')
     await wrapper.get('[data-tricks="4"]').trigger('click')
-    expect(wrapper.get('.send-claim').text()).toBe('Claim 4 tricks')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 4 · 4♠ +2 · +480')
     await wrapper.get('.send-claim').trigger('click')
     await flushPromises()
 
@@ -817,15 +939,18 @@ describe('TablePlayPage claims', () => {
     expect(wrapper.get('.claim-text').text()).toBe('You concede the remaining 5 tricks')
   })
 
-  test('the status line stays, empty, while a claim is pending', async () => {
+  test('the turn line stays, empty, while a claim is pending', async () => {
     const wrapper = await mountPage(state())
-    expect(wrapper.get('.status').text()).not.toBe('')
+    expect(wrapper.get('.turn-line-text').text()).toBe('Your lead')
+    expect(wrapper.get('.turn-line').classes()).toContain('turn-line-mine')
 
     useGameStore().applyPlayingUpdate(5, { ...state({ claim: pending() }) })
     await flushPromises()
 
     expect(wrapper.get('.claim-text').text()).toBe('You claim 4 of the remaining 5 tricks')
-    expect(wrapper.get('.status').text()).toBe('')
+    expect(wrapper.get('.turn-line-text').text()).toBe('')
+    expect(wrapper.get('.turn-line').classes()).not.toContain('turn-line-mine')
+    expect(wrapper.find('.turn-line-time').exists()).toBe(false)
   })
 
   test('dummy has no Claim button, and waits on a pending claim', async () => {
@@ -931,6 +1056,7 @@ describe('TablePlayPage claims', () => {
     )
     const claimButton = wrapper.get('.claim-button')
     expect((claimButton.element as HTMLButtonElement).disabled).toBe(true)
+    expect(claimButton.text()).toBe('Claim · locked')
     expect(wrapper.get('.claim-locked-note').text()).toBe(
       'The claim was refused: play a card before claiming again.',
     )
@@ -945,6 +1071,7 @@ describe('TablePlayPage claims', () => {
     await flushPromises()
     expect(wrapper.find('.claim-locked-note').exists()).toBe(false)
     expect((wrapper.get('.claim-button').element as HTMLButtonElement).disabled).toBe(false)
+    expect(wrapper.get('.claim-button').text()).toBe('Claim')
   })
 
   test('a claim lock arriving while the sheet is open closes it', async () => {
