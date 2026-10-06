@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { IonButton, IonRefresher, alertController } from '@ionic/vue'
+import { pickSegment, pullToRefresh, tapSegment } from './ionEvents'
 import TableDetailPage from '@/views/TableDetailPage.vue'
 import SetMinutesPicker from '@/components/SetMinutesPicker.vue'
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue'
@@ -210,7 +211,7 @@ describe('TableDetailPage loading', () => {
     const wrapper = await mountPage(makeTable({ N: 'bob' }))
     const complete = vi.fn()
 
-    wrapper.findComponent(IonRefresher).vm.$emit('ionRefresh', { target: { complete } })
+    await pullToRefresh(wrapper, complete)
     await flushPromises()
 
     expect(tablesService.getTable).toHaveBeenCalledTimes(2)
@@ -547,7 +548,7 @@ describe('TableDetailPage manager controls', () => {
     const picker = wrapper.findComponent(SetMinutesPicker)
     expect(picker.props('modelValue')).toBe(16)
 
-    picker.vm.$emit('update:modelValue', 8)
+    tapSegment(picker, '8')
     await wrapper.vm.$nextTick()
     expect(picker.props('disabled')).toBe(true)
     await flushPromises()
@@ -563,8 +564,7 @@ describe('TableDetailPage manager controls', () => {
       axiosError(409, 'A set is going on at this table: change its settings once it is over.'),
     )
 
-    wrapper.findComponent(SetMinutesPicker).vm.$emit('update:modelValue', 20)
-    await flushPromises()
+    await pickSegment(wrapper, '20')
 
     expect(showToast).toHaveBeenCalledWith(
       'A set is going on at this table: change its settings once it is over.',

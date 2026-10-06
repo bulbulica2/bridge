@@ -2,7 +2,7 @@
   <ion-page>
     <AppHeader :title="data ? `Board ${data.board.number}` : 'Board results'" />
     <ion-content :fullscreen="true" class="ion-padding">
-      <ion-refresher slot="fixed" @ionRefresh="refresh($event)">
+      <ion-refresher slot="fixed" v-ion-event:ion-refresh="refresh">
         <ion-refresher-content />
       </ion-refresher>
 
@@ -142,6 +142,7 @@ import {
   onIonViewWillEnter,
   useIonRouter,
 } from '@ionic/vue';
+import { vIonEvent } from '@/directives/ionEvent';
 import AppHeader from '@/components/AppHeader.vue';
 import CallLabel from '@/components/CallLabel.vue';
 import DoubleDummyTable from '@/components/DoubleDummyTable.vue';

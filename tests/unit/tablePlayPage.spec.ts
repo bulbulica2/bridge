@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { IonRefresher } from '@ionic/vue'
+import { pullToRefresh } from './ionEvents'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import BiddingBox from '@/components/BiddingBox.vue'
 import BoardReviewModal from '@/components/BoardReviewModal.vue'
@@ -246,7 +247,7 @@ describe('TablePlayPage loading', () => {
     const wrapper = await mountPage(auction())
     const complete = vi.fn()
 
-    await emitFrom(wrapper, IonRefresher, 'ionRefresh', { target: { complete } })
+    await pullToRefresh(wrapper, complete)
 
     expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
     expect(complete).toHaveBeenCalled()

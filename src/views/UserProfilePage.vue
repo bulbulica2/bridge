@@ -2,7 +2,7 @@
   <ion-page>
     <AppHeader :title="profile ? profile.username : 'Player'" />
     <ion-content :fullscreen="true" class="ion-padding">
-      <ion-refresher slot="fixed" @ionRefresh="refresh($event)">
+      <ion-refresher slot="fixed" v-ion-event:ion-refresh="refresh">
         <ion-refresher-content />
       </ion-refresher>
 
@@ -106,6 +106,7 @@ import {
   onIonViewWillEnter,
   useIonRouter,
 } from '@ionic/vue';
+import { vIonEvent } from '@/directives/ionEvent';
 import AdminBadge from '@/components/AdminBadge.vue';
 import AppHeader from '@/components/AppHeader.vue';
 import BanUserForm from '@/components/BanUserForm.vue';

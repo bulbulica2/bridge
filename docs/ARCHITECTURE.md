@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/86-away-clocks-on-the-seats`._
+_Status as of branch `bulbulica2/91-segment-changes-ignored`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -36,12 +36,38 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
 | `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board and each seat's time for the set, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved) |
+| `src/directives/` | `ionEvent.ts`: `v-ion-event:ion-refresh="refresh"` listens for an Ionic event on the element itself (pull-to-refresh, the history's infinite scroll); see [Ionic events](#ionic-events) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), the set clock (`setClock.ts`), a player's stats in words (`stats.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`) |
 | `src/theme/` | Ionic variables, the global toast styles and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
 `@/` is an alias for `src/` (set in both `tsconfig.json` and
 `vite.config.ts`; keep them in sync).
+
+### Ionic events
+
+Ionic Vue 8 dispatches every component event in kebab-case (`ion-change`,
+`ion-refresh`). Its Vue wrappers, though, declare the camelCase name
+(`ionChange`) as a component event and only pass it on from a listener for
+that camelCase name, which never fires (and only on components with a
+value). So a template's `@ion-change`, `@ionChange`, `@ionRefresh` or
+`@ionInfinite` is silently ignored (#158: the Account page's card size, a
+manager's set minutes and the review modal's board switcher did nothing,
+and neither did pull-to-refresh or loading older boards).
+
+- **Components with a value** (`ion-segment`, `ion-toggle`, inputs): use
+  `v-model`, or `:model-value` + `@update:model-value` when the pick needs
+  checking first. The wrapper's model hook listens for the kebab event and
+  emits `update:modelValue` with the element's value.
+- **Events without a value** (`ion-refresh`, `ion-infinite`): use the
+  `v-ion-event:<kebab-name>` directive (`src/directives/ionEvent.ts`). Its
+  handler gets the `CustomEvent`, whose `target` is the Ionic element (to
+  call `complete()` on).
+
+A unit test fails on any `@ion…` listener in a template, and tests drive
+these components by dispatching the element's real event
+(`tests/unit/ionEvents.ts`), never by emitting `ionChange` from the Vue
+wrapper, which passes while the app is broken.
 
 ## App shell
 
@@ -1044,6 +1070,10 @@ the menu offers only Copy as text (`Capacitor.isNativePlatform()`).
     `onMounted`.
   - `IonModal` only renders its content once presented, which jsdom never
     does: sheet tests stub it with `<div><slot /></div>`.
+  - Ionic components fire kebab-case DOM events; tests dispatch them on
+    the element with `tests/unit/ionEvents.ts` (`pickSegment`,
+    `pullToRefresh`, `fireIonEvent`), never `vm.$emit('ionChange')`. See
+    [Ionic events](#ionic-events).
   - **Coverage** (#91): every file under `src/` keeps 95 % of its lines
     covered, and the app as a whole 95 % of lines, statements and functions
     and 90 % of branches. `npm run test:coverage` (and CI's `unit` job)

@@ -1006,6 +1006,20 @@ The user's standing rule (#91): **no task may leave code coverage under
   `BridgeTable` below 576 px is `auto minmax(0, 1fr) auto`. The play page,
   `PlayingReviewPage` and `BoardReviewModal` are 720 px wide at most (the
   chat aside's `clamp()` uses 720 + 2 × 328 = 1376 px).
+- **Ionic events** (#158): Ionic Vue 8 dispatches every event in
+  kebab-case (`ion-change`), but its wrappers declare the camelCase name
+  as a component event and only re-emit it from an `ionChange` listener
+  that never fires, so `@ion-change` / `@ionChange` / `@ionRefresh` /
+  `@ionInfinite` **never run**. On Ionic form components use `v-model` or
+  `:model-value` + `@update:model-value` (the wrapper's model hook does
+  listen for the kebab event), never `@ion-change`; for an event without a
+  value (`ion-refresh`, `ion-infinite`) use the `v-ion-event:<kebab-name>`
+  directive (`src/directives/ionEvent.ts`), whose handler gets the
+  CustomEvent. `tests/unit/ionEvent.spec.ts` fails on any `@ion…`
+  listener in a template. Tests fire the element's real event through
+  `tests/unit/ionEvents.ts` (`pickSegment`/`tapSegment`, `pullToRefresh`,
+  `fireIonEvent`), never `vm.$emit('ionChange')`, which passes while the
+  app is broken.
 - **Path alias**: `@/*` maps to `src/*` (configured in both `tsconfig.json`
   and `vite.config.ts` — keep both in sync if it changes).
 - **Capacitor**: `capacitor.config.ts` declares `webDir: 'dist'`, so native

@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { IonSegment, IonSegmentButton } from '@ionic/vue'
+import { pickSegment } from './ionEvents'
 import AccountPage from '@/views/AccountPage.vue'
 import DummyColumns from '@/components/DummyColumns.vue'
 import HandView from '@/components/HandView.vue'
@@ -268,19 +269,18 @@ describe('the Account page', () => {
       'Large',
       'Extra large',
     ])
-    expect(wrapper.findComponent(IonSegment).props('value')).toBe('large')
+    expect(wrapper.findComponent(IonSegment).props('modelValue')).toBe('large')
     expect(wrapper.find('.card-size-preview').findAllComponents(PlayingCard)).toHaveLength(2)
   })
 
   test('a pick switches every card at once and is kept', async () => {
     const wrapper = mount(AccountPage)
 
-    wrapper.findComponent(IonSegment).vm.$emit('ionChange', { detail: { value: 'xlarge' } })
-    await flushPromises()
+    await pickSegment(wrapper, 'xlarge')
 
     expect(cardSize.value).toBe('xlarge')
     expect(localStorage.getItem(CARD_SIZE_KEY)).toBe('xlarge')
-    expect(wrapper.findComponent(IonSegment).props('value')).toBe('xlarge')
+    expect(wrapper.findComponent(IonSegment).props('modelValue')).toBe('xlarge')
     expect(cssVar(wrapper.find('.card-size-preview .playing-card').element, '--card-w')).toBe(
       'min(120px, var(--card-max, 120px))',
     )
@@ -289,7 +289,7 @@ describe('the Account page', () => {
   test('ignores a change without a size', async () => {
     const wrapper = mount(AccountPage)
 
-    wrapper.findComponent(IonSegment).vm.$emit('ionChange', { detail: { value: undefined } })
+    wrapper.findComponent(IonSegment).vm.$emit('update:modelValue', undefined)
     await flushPromises()
 
     expect(cardSize.value).toBe('large')

@@ -8,7 +8,8 @@ import type { PlayingHistoryEntry, SetBoardRow, SetResults } from '@/services/hi
 import type { Bid, PublicPlaying, SetPosition } from '@/services/game'
 import type { BroadcastTable, Seat } from '@/services/tables'
 import type { PublicUser } from '@/services/users'
-import { IonButton, IonInfiniteScroll, IonRefresher } from '@ionic/vue'
+import { IonButton } from '@ionic/vue'
+import { fireIonEvent, pullToRefresh } from './ionEvents'
 import SetResultsPanel from '@/components/SetResultsPanel.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useHistoryStore } from '@/stores/history'
@@ -578,7 +579,7 @@ describe('SetResultsPage failures and refreshing', () => {
 
     answer(results())
     const complete = vi.fn()
-    wrapper.findComponent(IonRefresher).vm.$emit('ionRefresh', { target: { complete } })
+    await pullToRefresh(wrapper, complete)
     await flushPromises()
     expect(complete).toHaveBeenCalled()
     expect(wrapper.find('.error').exists()).toBe(false)
@@ -595,7 +596,7 @@ describe('SetResultsPage failures and refreshing', () => {
     await flushPromises()
     const complete = vi.fn()
 
-    wrapper.findComponent(IonRefresher).vm.$emit('ionRefresh', { target: { complete } })
+    await pullToRefresh(wrapper, complete)
     await flushPromises()
 
     expect(http.get).not.toHaveBeenCalled()
@@ -624,7 +625,7 @@ describe('My boards, paging and refreshing', () => {
     const complete = vi.fn()
 
     answer(firstPage(1))
-    wrapper.findComponent(IonRefresher).vm.$emit('ionRefresh', { target: { complete } })
+    await pullToRefresh(wrapper, complete)
     await flushPromises()
 
     expect(http.get).toHaveBeenCalledTimes(2)
@@ -638,7 +639,7 @@ describe('My boards, paging and refreshing', () => {
     const complete = vi.fn()
 
     answer({ ...firstPage(2), current_page: 2, data: [entry(40, null, -50)] })
-    wrapper.findComponent(IonInfiniteScroll).vm.$emit('ionInfinite', { target: { complete } })
+    await fireIonEvent(wrapper, 'ion-infinite-scroll', 'ion-infinite', complete)
     await flushPromises()
 
     expect(complete).toHaveBeenCalled()
@@ -655,13 +656,13 @@ describe('My boards, paging and refreshing', () => {
     const complete = vi.fn()
 
     vi.mocked(http.get).mockRejectedValueOnce(new Error('offline'))
-    wrapper.findComponent(IonInfiniteScroll).vm.$emit('ionInfinite', { target: { complete } })
+    await fireIonEvent(wrapper, 'ion-infinite-scroll', 'ion-infinite', complete)
     await flushPromises()
     expect(wrapper.get('.error').text()).toBe('Could not load older boards. Pull down to try again.')
     expect(complete).toHaveBeenCalled()
 
     vi.mocked(http.get).mockRejectedValueOnce(axiosError(401, { message: 'Unauthenticated.' }))
-    wrapper.findComponent(IonInfiniteScroll).vm.$emit('ionInfinite', { target: { complete } })
+    await fireIonEvent(wrapper, 'ion-infinite-scroll', 'ion-infinite', complete)
     await flushPromises()
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
   })
