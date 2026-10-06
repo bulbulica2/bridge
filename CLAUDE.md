@@ -427,8 +427,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   Opponents when a call is attached (`about`); `CHAT_MAX` 500 in
   `limits.ts`. The Pinia store `src/stores/chat.ts` holds one board's chat
   (`tableId`, `playingId`, `messages` merged by id via `mergeMessages`,
-  `open`, `about` = the call index attached, `unread` = others' messages
-  above `seenUpTo`, kept in `localStorage` `bridge.chatSeen`, try/catch).
+  `open` = on show, `keepOpen` = the choice beside the table (#153,
+  `setKeepOpen`, `localStorage` `bridge.chatOpen` `0`/`1`, try/catch,
+  nothing stored = open), `about` = the call index attached, `unread` =
+  others' messages above `seenUpTo` while not `open`, kept in
+  `localStorage` `bridge.chatSeen`, try/catch).
   The play page's watch calls `follow(tableId, playingId, phase)`: first
   sight of a table `load`s (one request per table at a time, failures
   quiet), a newer board empties it, a board turning `finished` is read once
@@ -450,7 +453,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   content-box padding, stepped to 0 by a `clamp()` where the page-centred
   board already clears it, #114; the aside's `data-right-edge` is the
   right edge for `usePopover`), else an `ion-modal` sheet (breakpoint 0.5, page
-  padded); leaving the view closes it. `ChatMessageList.vue` (sender
+  padded). **Open by default** (#153): the page's `chatWanted` (a
+  `playing_id`, `viewActive`, then wide ? `chat.keepOpen` : its own
+  `sheetOpen`, false at first) is what shows, and a watch keeps
+  `chat.open` equal to it (anything else opening or closing the store is
+  put back). The Chat button, `BoardChat`'s Close and Ask in the chat go
+  through `showChat(value)` (wide: `setKeepOpen`, so it sticks across
+  boards, pages and reloads; narrow: `sheetOpen`); leaving the view hides
+  it, coming back shows it as left; `closeOverlays` closes only the
+  sheet. `ChatMessageList.vue` (sender
   "You"/username, seat, "to opponents"/"to table", `chatTime`, the call
   as a `CallLabel` chip, `white-space: pre-wrap`) is also the review's
   chat: `PlayingReview.messages` (optional) under the auction in

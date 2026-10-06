@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/87-vulnerability-label`._
+_Status as of branch `bulbulica2/89-chat-open-by-default`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -229,7 +229,7 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
 | `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `replacedFrom` (a set a robot took your seat over in) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `updateSettings` (a manager's time for a set), `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissReplaced`, `clear` (on logout); owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned` / `AuctionAlertsShown`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
-| `chat` | the chat of the board the play page shows: `tableId`, `playingId`, `messages`, `open` (the panel), `about` (the call a message is about), `unread` | `follow` (the play page's board: read, emptied for a new board, read again once finished), `load`, `receive`, `send`, `setOpen`, `askAbout`, `clear`; see [Board chat](#board-chat) |
+| `chat` | the chat of the board the play page shows: `tableId`, `playingId`, `messages`, `open` (the panel on show), `keepOpen` (the player's choice beside the table, `bridge.chatOpen`), `about` (the call a message is about), `unread` | `follow` (the play page's board: read, emptied for a new board, read again once finished), `load`, `receive`, `send`, `setOpen`, `setKeepOpen`, `askAbout`, `clear`; see [Board chat](#board-chat) |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, double dummy tables per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadDoubleDummy`, `loadSet`, `loadReview` |
 | `users` | public profiles by id (with `ban`/`bans` for an admin), players' stats by id (your own under your id) | `load`, `loadStats` (a number, or `null` for your own; read again every time a page shows them, since they change after every board; a 404 drops the cached ones), `ban`, `liftBan`, `clear` (on logout) |
 
@@ -882,7 +882,21 @@ never reads during the board**; there is no partner-only message:
   a phone it is a bottom sheet (`ion-modal`, half height, the page usable
   above it and padded so the bidding box and the hand can scroll clear).
   A refused message (409, 422, 429) is told in a toast and keeps its text.
-  Leaving the page closes it.
+- **Open by default** (#153): beside the table the chat is on show from
+  the first deal without pressing anything; the **Chat** button (or the
+  panel's Close) collapses it, giving the table its room back, and brings
+  it back. The choice is the `chat` store's `keepOpen`, kept in
+  `localStorage` (`bridge.chatOpen`, `0`/`1`, try/catch; nothing stored
+  reads as open), so the next board, page or reload shows it as the player
+  left it; logging out keeps it. A phone's sheet would cover the cards, so
+  there it starts closed every time and the button opens it as before
+  (the choice beside the table isn't touched). **Ask in the chat** opens
+  it either way. The play page decides what is on show (`chatWanted`:
+  a board, the view active, then `keepOpen` or the sheet's own flag) and
+  keeps the store's `open` in step with it, so `unread` still counts only
+  while the chat isn't on show. Leaving the view hides it and coming back
+  shows it as it was left; closing the page's overlays before a
+  confirmation closes a phone's sheet, not the panel beside the table.
 - **After the board**: the review's `messages` is the whole chat;
   `BoardReview` shows it under the auction and the text export lists it
   (`chatLines`).

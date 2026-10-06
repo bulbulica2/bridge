@@ -8,7 +8,7 @@
           class="chat-toggle"
           :aria-label="chatAria"
           :aria-expanded="chat.open"
-          @click="chat.setOpen(!chat.open)"
+          @click="showChat(!chat.open)"
         >
           <ion-icon slot="start" :icon="chatbubblesOutline" />
           <span class="chat-toggle-label">Chat</span>
@@ -302,7 +302,7 @@
             :busy="noting"
             @ask="askAbout"
             @explain="explainIndex = $event"
-            @chat="chat.askAbout($event)"
+            @chat="askInChat"
           />
 
           <!-- A finished board shows every hand on the table instead. -->
@@ -376,7 +376,7 @@
             :busy="noting"
             @ask="askAbout"
             @explain="explainIndex = $event"
-            @chat="chat.askAbout($event)"
+            @chat="askInChat"
           />
 
           <OfflineRefresh :table-id="tableId" :disabled="loading" @refresh="load()" />
@@ -410,7 +410,7 @@
         :initial-breakpoint="0.5"
         :breakpoints="[0, 0.5, 0.9]"
         :backdrop-breakpoint="0.9"
-        @did-dismiss="chat.setOpen(false)"
+        @did-dismiss="sheetOpen = false"
       >
         <ion-content class="ion-padding">
           <BoardChat v-if="chatSheet" v-bind="chatProps" v-model:draft="chatDraft" v-on="chatEvents" />
@@ -559,6 +559,8 @@ const chatDraft = ref('');
 const chatSending = ref(false);
 // Wide enough for the chat beside the table, even with the menu pinned.
 const chatWide = useMediaQuery('(min-width: 1100px)');
+// A phone's chat sheet, which would cover the cards: closed until asked for.
+const sheetOpen = ref(false);
 
 const me = computed(() => auth.user?.id ?? null);
 
@@ -922,6 +924,11 @@ const notice = computed(() =>
 
 // The chat is the board's: there is none before the first deal.
 const chatOn = computed(() => !!playing.value?.playing_id);
+// On show while the page is: beside the table as the player left it (open
+// until they collapse it), a phone's sheet only when they open it.
+const chatWanted = computed(
+  () => chatOn.value && viewActive.value && (chatWide.value ? chat.keepOpen : sheetOpen.value),
+);
 const chatSide = computed(() => chatOn.value && chatWide.value && chat.open);
 const chatSheet = computed(() => chatOn.value && !chatWide.value && chat.open);
 
@@ -939,7 +946,7 @@ const chatProps = computed(() => ({
 
 const chatEvents = {
   send: sendChat,
-  close: () => chat.setOpen(false),
+  close: () => showChat(false),
   'clear-about': () => (chat.about = null),
 };
 
@@ -974,8 +981,35 @@ onIonViewWillLeave(() => {
   reviewOpen.value = false;
   explainIndex.value = null;
   seatingAt.value = null;
-  chat.setOpen(false);
 });
+
+// The chat's store follows what is on show (its unread count stops while
+// it is), also after anything else opened or closed it.
+watch(
+  () => [chatWanted.value, chat.open] as const,
+  ([wanted, open]) => {
+    if (wanted !== open) {
+      chat.setOpen(wanted);
+    }
+  },
+  { immediate: true },
+);
+
+// The Chat button and Close: beside the table the choice sticks (next
+// board, page, reload); a phone's sheet opens and closes for now.
+function showChat(value: boolean) {
+  if (chatWide.value) {
+    chat.setKeepOpen(value);
+  } else {
+    sheetOpen.value = value;
+  }
+}
+
+// Ask in the chat from a call's pop-up: the chat on show, the call attached.
+function askInChat(index: number) {
+  showChat(true);
+  chat.askAbout(index);
+}
 
 // The chat follows the board on show: read on entering the table, emptied
 // for a new board, read again once a board is finished (its every message
@@ -1533,7 +1567,7 @@ async function closeOverlays() {
   claimOpen.value = false;
   explainIndex.value = null;
   seatingAt.value = null;
-  chat.setOpen(false);
+  sheetOpen.value = false;
   await nextTick();
 }
 

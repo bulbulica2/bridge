@@ -669,7 +669,8 @@ describe('TablePlayPage after a set', () => {
   test('the chat and the review close before the confirmation', async () => {
     const wrapper = await mountPage(lastBoard(), robotTable())
     const chat = useChatStore()
-    chat.setOpen(true)
+    await wrapper.get('.chat-toggle').trigger('click')
+    expect(chat.open).toBe(true)
     await wrapper.get('.review-and-export').trigger('click')
     expect(wrapper.findComponent(BoardReviewModal).props('open')).toBe(true)
     let openWhenAsked: unknown[] = []
