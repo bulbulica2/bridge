@@ -315,7 +315,14 @@ The user's standing rule (#91): **no task may leave code coverage under
   `trump` (the contract's strain) gives dummy and a robot declarer's cards
   `suitOrder(trump)`, that cycle rotated trumps first, #118), rank labels
   (the backend skips 11: `12`=J … `15`=A), seat rotation and
-  vulnerability live in `src/utils/cards.ts`. The detail page moves a
+  vulnerability live in `src/utils/cards.ts`. Vulnerability in words
+  (#151): `vulnerabilityText(vulnerable, mySeat)` → `{text, red}`
+  ("Vulnerable: N-S (you)", "Both (you too)", None green), drawn by
+  `VulnerabilityLabel.vue` top left above the table (the play page's
+  `.board-bar`, beside `setLabel`, auction/play/finished; `BoardReview`'s
+  `.board-bar`; `BoardResultsPage`'s `.board-info`), `BridgeTable`'s
+  centre line and `BoardPrintout`'s meta line (its `mySeat` prop, text
+  only); the seat stripes stay. The detail page moves a
   seated player to `/play` when `board_id` changes to a new board.
   `Playing.declarer_hand` is a robot declarer's remaining cards, only for
   its human dummy (null otherwise, and once `finished`); the same channel's

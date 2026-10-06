@@ -122,7 +122,7 @@
       <template v-else-if="board">
         <p class="board-number">Board {{ board.number }}</p>
         <p class="board-line">Dealer {{ board.dealer }}</p>
-        <p class="board-line">Vul {{ vulnerabilityLabel(board.vulnerable) }}</p>
+        <p class="board-line">{{ vulnerabilityText(board.vulnerable, mySeat).text }}</p>
       </template>
       <slot v-else />
     </div>
@@ -140,7 +140,7 @@ import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES } from '@/utils/auction';
 import { formatClock } from '@/utils/away';
-import { isVulnerable, longestSuit, seatAt, suitOrder, vulnerabilityLabel } from '@/utils/cards';
+import { isVulnerable, longestSuit, seatAt, suitOrder, vulnerabilityText } from '@/utils/cards';
 import { bankLabel } from '@/utils/setClock';
 import type { SeatBank } from '@/utils/setClock';
 import type { ScreenSide } from '@/utils/cards';

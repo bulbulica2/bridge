@@ -315,6 +315,26 @@ describe('BoardReview', () => {
     expect(wrapper.find('.outcome-detail').text()).toBe('Declarer North (you) · Dummy South')
   })
 
+  test("says who is vulnerable, from the viewer's side", () => {
+    const vul = (vulnerable: string) => {
+      const board = { id: 7, number: 7, dealer: 'N', vulnerable }
+      return mount(BoardReview, { props: { review: { ...review(), board } as never } }).get(
+        '.board-bar .vul-label',
+      )
+    }
+
+    // bo sat East.
+    expect(vul('').text()).toBe('Vulnerable: None')
+    expect(vul('').classes()).toContain('vul-label-green')
+    expect(vul('E-W').text()).toBe('Vulnerable: E-W (you)')
+    expect(vul('N-S').text()).toBe('Vulnerable: N-S')
+    expect(vul('N-S').classes()).toContain('vul-label-red')
+
+    // A board the viewer didn't play: no "(you)".
+    useAuthStore().user = { id: 99, name: 'Zed', username: 'zed', email: 'zed@example.com' } as never
+    expect(vul('N-S E-W').text()).toBe('Vulnerable: Both')
+  })
+
   test("a player's name is handed up", async () => {
     const wrapper = mount(BoardReview, { props: { review: review() } })
 
@@ -543,6 +563,7 @@ describe('BoardReviewModal', () => {
     await press(sheet.props('buttons') as Button[], 'Print / Save as PDF')
     expect(window.print).toHaveBeenCalledTimes(1)
     expect(document.querySelector('body > .board-printout')?.textContent).toContain('Board 7')
+    expect(document.querySelector('body > .board-printout .meta')?.textContent).toContain('Vulnerable: None')
 
     await wrapper.setProps({ open: false })
     await flushPromises()

@@ -68,10 +68,19 @@
             <span>Refreshing…</span>
           </div>
 
-          <!-- Where the table is in its set of four boards. -->
-          <p v-if="playing.set" class="set-bar" :class="{ 'set-bar-over': shownSet?.finished }">
-            {{ setLabel(playing.set) }}<template v-if="shownSet?.finished"> · set over</template>
-          </p>
+          <!-- The line above the table: who is vulnerable, in words, in the
+               top-left corner for the whole board (#151), then where the
+               table is in its set of four boards. -->
+          <div v-if="playing.set || vulnerable !== null" class="board-bar">
+            <VulnerabilityLabel
+              v-if="vulnerable !== null"
+              :vulnerable="vulnerable"
+              :my-seat="mySeat"
+            />
+            <p v-if="playing.set" class="set-bar" :class="{ 'set-bar-over': shownSet?.finished }">
+              {{ setLabel(playing.set) }}<template v-if="shownSet?.finished"> · set over</template>
+            </p>
+          </div>
 
           <!-- The end of the auction: the contract. It stays above the table
                for the whole play, with the tricks. -->
@@ -457,6 +466,7 @@ import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
 import TrickArea from '@/components/TrickArea.vue';
+import VulnerabilityLabel from '@/components/VulnerabilityLabel.vue';
 import { useDoubleDummy } from '@/composables/useDoubleDummy';
 import { useForcedPlay } from '@/composables/useForcedPlay';
 import { useMediaQuery } from '@/composables/useMediaQuery';
@@ -470,7 +480,7 @@ import { useTablesStore } from '@/stores/tables';
 import { canRemove, seatsOf } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { ChatTo } from '@/services/chat';
-import type { AlertDraft, Bid, Card, Claim, PlayedCard, Playing, Trick } from '@/services/game';
+import type { AlertDraft, Bid, Card, Claim, PlayedCard, Playing, Trick, Vulnerability } from '@/services/game';
 import type { PublicUser, SearchedUser } from '@/services/users';
 import { openQuestion } from '@/utils/alerts';
 import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
@@ -588,6 +598,12 @@ const mySeat = computed<Seat | null>(() => {
   const entry = Object.entries(players.value).find(([, user]) => user?.id === me.value);
   return (entry?.[0] as Seat | undefined) ?? null;
 });
+
+// Who is vulnerable on the board in hand (auction, play and finished), for
+// the label above the table; null with no board dealt.
+const vulnerable = computed<Vulnerability | null>(() =>
+  playing.value?.board && playing.value.phase !== 'waiting' ? playing.value.board.vulnerable : null,
+);
 
 // The others' seats marked away mid-set (ours is vouched for while we look).
 const awayMarks = computed(() =>
@@ -1821,11 +1837,18 @@ async function refresh(event: CustomEvent) {
   font-variant-numeric: tabular-nums;
 }
 
-.set-bar {
+.board-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
   margin: 0 0 8px;
+}
+
+.set-bar {
+  margin: 0;
   font-size: 0.85rem;
   font-weight: 600;
-  text-align: center;
   color: var(--ion-color-primary);
 }
 

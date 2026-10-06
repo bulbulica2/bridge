@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/85-set-clock`._
+_Status as of branch `bulbulica2/87-vulnerability-label`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -665,6 +665,7 @@ arrives, and the app falls back to what each request returns.
 | Component | Shows |
 |---|---|
 | `BridgeTable` | the four seats, rotated so **you are always at the bottom**; dealer, vulnerability, each human's time for the set (`banks`: the running one bold, red under a minute, none for a robot or an admin), whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged **away** (`away`) |
+| `VulnerabilityLabel` | who is vulnerable in words (`vulnerabilityText`), a bold red chip (green for None) with "(you)" on the viewer's side, top left above the table on the play page and in `BoardReview`, and on the board results page (#151) |
 | `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
 | `AwayNotice` | who is away mid-set, with no countdown (the turn clock is the play page's only one): an away admin on a line of their own (the table waits for them), the others in one line; with `held`, your own held seat (detail page, Tables, Home) |
 | `HandView` + `PlayingCard` | your hand, always ♥ ♣ ♦ ♠ (or the suits in `order`); playable cards become buttons, the rest dim; a forced card (`forcedId`) stands raised and pulses; each card shows at least 44 px of itself, the part a tap reaches, and the hand keeps the height it had as dealt while its cards go (`useSteadyHeight`); see [Card size](#card-size) |
@@ -712,7 +713,9 @@ landing at once would tell the table they are out of the suit led. The
 follow-suit hint still dims the other cards, and they tap the one left.
 
 Pure logic lives in `src/utils/`: `cards.ts` (sorting, rank labels, seat
-rotation, vulnerability; the suit orders: `HAND_SUITS` ♥ ♣ ♦ ♠ for your own
+rotation, vulnerability: `isVulnerable`, `vulnerabilityLabel` and
+`vulnerabilityText(vulnerable, mySeat)`, the words and colour of the
+**Vulnerable: N-S (you)** label every board carries (#151); the suit orders: `HAND_SUITS` ♥ ♣ ♦ ♠ for your own
 hand, `suitOrder(trump)` the same cycle rotated so trumps come first for
 dummy and a robot declarer's cards, so red and black always alternate, and
 `SUITS` ♠ ♥ ♦ ♣ for the claimer's hand, the deal and the exports, PBN
