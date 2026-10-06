@@ -68,15 +68,21 @@
             <span>Refreshing…</span>
           </div>
 
-          <!-- The line above the table: who is vulnerable, in words, in the
-               top-left corner for the whole board (#151), then where the
-               table is in its set of four boards. -->
+          <!-- The line above the table: on a wide screen the board tile
+               (number, dealer, vulnerable sides); then who is vulnerable, in
+               words, in the top-left corner for the whole board (#151), and
+               on a phone the dealer beside it; then where the table is in
+               its set of four boards. -->
           <div v-if="playing.set || vulnerable !== null" class="board-bar">
+            <BoardTile v-if="vulnerable !== null && playing.board" :board="playing.board" class="board-tile-wide" />
             <VulnerabilityLabel
               v-if="vulnerable !== null"
               :vulnerable="vulnerable"
               :my-seat="mySeat"
             />
+            <span v-if="vulnerable !== null && playing.board" class="dealer-pill">
+              Dealer {{ SEAT_NAMES[playing.board.dealer] }}
+            </span>
             <p v-if="playing.set" class="set-bar" :class="{ 'set-bar-over': shownSet?.finished }">
               {{ setLabel(playing.set) }}<template v-if="shownSet?.finished"> · set over</template>
             </p>
@@ -221,6 +227,8 @@
             :deal="playing.phase === 'finished' ? playing.deal : null"
             :away="awayTags"
             :banks="turnClock.banks.value"
+            :ready="readySeats"
+            :calls="playing.phase === 'auction' ? (playing.auction ?? []) : null"
             :busy="sendingCard !== null"
             :sending-id="sendingCard"
             @select="player = $event"
@@ -241,6 +249,8 @@
                 :cards="shownTrick.cards"
                 :my-seat="mySeat"
                 :winner="shownTrick.winner"
+                :trump="playing.contract.bid.strain"
+                :my-slot="playing.phase === 'play'"
               />
               <div class="trick-foot">
                 <p class="trick-caption" aria-live="polite">{{ shownTrick.caption }}</p>
@@ -456,6 +466,7 @@ import BiddingBox from '@/components/BiddingBox.vue';
 import BoardChat from '@/components/BoardChat.vue';
 import BoardResultPanel from '@/components/BoardResultPanel.vue';
 import BoardReviewModal from '@/components/BoardReviewModal.vue';
+import BoardTile from '@/components/BoardTile.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
 import ClaimPanel from '@/components/ClaimPanel.vue';
@@ -858,6 +869,12 @@ const showStart = computed(
     !!table.value &&
     table.value.seats.some((s) => s.user_id === me.value) &&
     startNeeded(table.value, playing.value),
+);
+
+// The seats that pressed Start, ticked on the table while a Start is
+// awaited.
+const readySeats = computed<Seat[]>(() =>
+  showStart.value && table.value ? table.value.seats.filter((s) => s.ready).map((s) => s.seat) : [],
 );
 
 // The taken seats the viewer may empty from StartBox (a manager's robots,
@@ -1763,12 +1780,12 @@ async function refresh(event: CustomEvent) {
 }
 
 .waiting-title {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .waiting-count {
   font-size: 0.8rem;
-  color: var(--ion-color-medium);
+  color: var(--bridge-on-table-muted);
 }
 
 /* Two lines of room whatever it says, set off from the page. */
@@ -1780,22 +1797,22 @@ async function refresh(event: CustomEvent) {
   min-height: calc(2 * 1.35em + 18px);
   margin: 12px 0;
   padding: 8px 12px;
-  border: 1px solid var(--ion-color-step-150, #e0e0e0);
-  border-radius: 8px;
-  background: var(--ion-color-light, #f4f5f8);
+  border-radius: var(--bridge-radius-card);
+  background: var(--bridge-surface);
+  box-shadow: 0 1px 0 var(--bridge-line);
   font-size: 1.05rem;
   line-height: 1.35;
   text-align: center;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
 }
 
 .status-robot {
-  color: var(--ion-color-tertiary, #5260ff);
+  color: var(--bridge-redouble-text);
 }
 
 .status-mine {
-  font-weight: 600;
-  color: var(--ion-color-warning-shade, #e0ac08);
+  font-weight: 700;
+  color: var(--bridge-action-text);
 }
 
 /* The turn clock, one line over the status whatever it says. */
@@ -1885,8 +1902,36 @@ async function refresh(event: CustomEvent) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
-  margin: 0 0 8px;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.dealer-pill {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--bridge-radius-pill);
+  background: var(--bridge-chip);
+  color: var(--bridge-ink);
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+/* The board tile on a wide screen, the dealer pill on a narrower one. */
+.board-tile-wide {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  .board-tile-wide {
+    display: grid;
+  }
+
+  .dealer-pill {
+    display: none;
+  }
 }
 
 .set-bar {

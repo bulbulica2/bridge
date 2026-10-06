@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import BiddingBox from '@/components/BiddingBox.vue'
+import { bidWith } from './biddingBox'
 import AuctionHistory from '@/components/AuctionHistory.vue'
 import OfflineRefresh from '@/components/OfflineRefresh.vue'
 import TablePlayPage from '@/views/TablePlayPage.vue'
@@ -85,64 +86,147 @@ describe('BiddingBox', () => {
     return mount(BiddingBox, { props: { bids: BIDS, auction: calls(auction), seat, busy } })
   }
 
-  function button(wrapper: VueWrapper, call: string) {
-    return wrapper.get(`button[data-call="${call}"]`)
-  }
+  const level = (wrapper: VueWrapper, n: number) => wrapper.get(`button[data-level="${n}"]`)
+  const strain = (wrapper: VueWrapper, s: string) => wrapper.get(`button[data-strain="${s}"]`)
+  const special = (wrapper: VueWrapper, call: string) => wrapper.get(`button[data-call="${call}"]`)
+  const confirm = (wrapper: VueWrapper) => wrapper.get('.confirm-call')
+  const disabled = (button: { element: Element }) => (button.element as HTMLButtonElement).disabled
 
-  function enabled(wrapper: VueWrapper) {
+  function open(wrapper: VueWrapper, selector: string, key: string) {
     return wrapper
-      .findAll('button[data-call]')
-      .filter((b) => !(b.element as HTMLButtonElement).disabled)
-      .map((b) => b.attributes('data-call'))
+      .findAll(selector)
+      .filter((b) => !disabled(b))
+      .map((b) => b.attributes(key))
   }
 
-  test('lays out 7 levels of ♣ ♦ ♥ ♠ NT, then Pass, X and XX', () => {
+  test('lays out levels 1-7, then the five strains, then Pass, X, XX and Alert', () => {
     const wrapper = mountBox('')
 
-    const rows = wrapper.findAll('.level').map((row) => row.findAll('button').map((b) => b.text()))
-    expect(rows).toHaveLength(7)
-    expect(rows[0]).toEqual(['1♣', '1♦', '1♥', '1♠', '1NT'])
-    expect(rows[6]).toEqual(['7♣', '7♦', '7♥', '7♠', '7NT'])
-    expect(wrapper.findAll('.special').map((b) => b.text())).toEqual(['Pass', 'X', 'XX'])
+    expect(wrapper.findAll('.levels button').map((b) => b.text())).toEqual(['1', '2', '3', '4', '5', '6', '7'])
+    expect(wrapper.findAll('.strains button').map((b) => b.text())).toEqual(['♣', '♦', '♥', '♠', 'NT'])
+    expect(wrapper.findAll('.specials button').map((b) => b.text())).toEqual(['Pass', 'X', 'XX', '! Alert'])
+    // Nothing picked: the confirm waits, grey.
+    expect(confirm(wrapper).text()).toBe('Pick a level, then a suit')
+    expect(disabled(confirm(wrapper))).toBe(true)
   })
 
-  test('opens with every bid and Pass, but no X or XX', () => {
+  test('opens with every level and Pass, no X or XX, and no strain until a level is picked', () => {
     const wrapper = mountBox('')
 
-    expect(enabled(wrapper)).toHaveLength(36)
-    expect((button(wrapper, 'X').element as HTMLButtonElement).disabled).toBe(true)
-    expect((button(wrapper, 'XX').element as HTMLButtonElement).disabled).toBe(true)
+    expect(open(wrapper, 'button[data-level]', 'data-level')).toEqual(['1', '2', '3', '4', '5', '6', '7'])
+    expect(open(wrapper, 'button[data-strain]', 'data-strain')).toEqual([])
+    expect(open(wrapper, 'button[data-call]', 'data-call')).toEqual(['P'])
+    expect(strain(wrapper, 'C').attributes('aria-label')).toBe('Clubs')
+    expect(strain(wrapper, 'NT').attributes('aria-label')).toBe('No trump')
   })
 
-  test("disables bids at or below the last one, and X on partner's bid", () => {
+  test('a level and a strain preview the bid; only the confirm sends it', async () => {
     const wrapper = mountBox('N 1H, E P')
 
-    expect(enabled(wrapper)).toEqual(['1S', '1NT', ...CODES.slice(8), 'P'])
+    await level(wrapper, 2).trigger('click')
+    expect(level(wrapper, 2).classes()).toContain('on')
+    expect(level(wrapper, 2).attributes('aria-pressed')).toBe('true')
+    expect(confirm(wrapper).text()).toBe('Pick a level, then a suit')
+    await strain(wrapper, 'H').trigger('click')
+    expect(strain(wrapper, 'H').classes()).toContain('on')
+    expect(wrapper.emitted('call')).toBeUndefined()
+
+    expect(confirm(wrapper).text()).toBe('Bid 2♥')
+    expect(confirm(wrapper).attributes('data-picked')).toBe('2H')
+    await confirm(wrapper).trigger('click')
+    expect(wrapper.emitted('call')).toEqual([[bid('2H')]])
   })
 
-  test("offers X on an opponent's bid, then XX to the doubled side", () => {
-    expect(enabled(mountBox('W 2D', 'N'))).toContain('X')
+  test('Pass, X and XX preview in words and need the confirm too', async () => {
+    const pass = mountBox('N 1H, E P')
+    await special(pass, 'P').trigger('click')
+    expect(confirm(pass).text()).toBe('Pass')
+    await confirm(pass).trigger('click')
+    expect(pass.emitted('call')).toEqual([[bid('P')]])
 
-    const redouble = enabled(mountBox('N 2D, E X', 'S'))
-    expect(redouble).toContain('XX')
-    expect(redouble).not.toContain('X')
+    const double = mountBox('W 2D', 'N')
+    await special(double, 'X').trigger('click')
+    expect(special(double, 'X').classes()).toContain('on')
+    expect(confirm(double).text()).toBe('Double')
+
+    const redouble = mountBox('N 2D, E X', 'S')
+    await special(redouble, 'XX').trigger('click')
+    expect(confirm(redouble).text()).toBe('Redouble')
+    await confirm(redouble).trigger('click')
+    expect(redouble.emitted('call')).toEqual([[bid('XX')]])
   })
 
-  test('sends the bid that was clicked', async () => {
+  test('picking one kind of call drops the other', async () => {
     const wrapper = mountBox('N 1H, E P')
 
-    await button(wrapper, '2C').trigger('click')
-    await button(wrapper, 'P').trigger('click')
+    await level(wrapper, 3).trigger('click')
+    await strain(wrapper, 'C').trigger('click')
+    await special(wrapper, 'P').trigger('click')
+    expect(level(wrapper, 3).classes()).not.toContain('on')
+    expect(confirm(wrapper).text()).toBe('Pass')
 
-    expect(wrapper.emitted('call')).toEqual([[bid('2C')], [bid('P')]])
+    await level(wrapper, 3).trigger('click')
+    expect(special(wrapper, 'P').classes()).not.toContain('on')
+    expect(confirm(wrapper).text()).toBe('Pick a level, then a suit')
+    await strain(wrapper, 'NT').trigger('click')
+    expect(confirm(wrapper).text()).toBe('Bid 3NT')
+  })
+
+  test('levels with no legal strain and strains too low at the picked level are disabled', async () => {
+    // 1♥ bid: at level 1 only ♠ and NT are left.
+    const wrapper = mountBox('N 1H, E P')
+
+    await level(wrapper, 1).trigger('click')
+    expect(open(wrapper, 'button[data-strain]', 'data-strain')).toEqual(['S', 'NT'])
+    expect(strain(wrapper, 'C').attributes('aria-label')).toBe('Clubs, too low')
+    expect(strain(wrapper, 'S').attributes('aria-label')).toBe('1 spade')
+    await level(wrapper, 2).trigger('click')
+    expect(open(wrapper, 'button[data-strain]', 'data-strain')).toEqual(['C', 'D', 'H', 'S', 'NT'])
+
+    // After 7♠ only 7NT is left; after 7NT no level at all.
+    const high = mountBox('N 7S')
+    expect(open(high, 'button[data-level]', 'data-level')).toEqual(['7'])
+    expect(open(mountBox('N 7NT'), 'button[data-level]', 'data-level')).toEqual([])
+  })
+
+  test('a strain picked at one level stays at another only while it is legal there', async () => {
+    const wrapper = mountBox('N 1H, E P')
+
+    await level(wrapper, 2).trigger('click')
+    await strain(wrapper, 'C').trigger('click')
+    await level(wrapper, 3).trigger('click')
+    expect(confirm(wrapper).text()).toBe('Bid 3♣')
+    await level(wrapper, 1).trigger('click')
+    expect(strain(wrapper, 'C').classes()).not.toContain('on')
+    expect(confirm(wrapper).text()).toBe('Pick a level, then a suit')
+  })
+
+  test('the pick starts over on a new state, and once a call settles', async () => {
+    const wrapper = mountBox('N 1H, E P')
+
+    await level(wrapper, 2).trigger('click')
+    await strain(wrapper, 'S').trigger('click')
+    await wrapper.setProps({ auction: calls('N 1H, E 2C') })
+    expect(confirm(wrapper).text()).toBe('Pick a level, then a suit')
+    expect(level(wrapper, 2).classes()).not.toContain('on')
+
+    // Sent, then refused (busy goes back off with the state unchanged).
+    await level(wrapper, 2).trigger('click')
+    await strain(wrapper, 'S').trigger('click')
+    await wrapper.setProps({ busy: true })
+    await wrapper.setProps({ busy: false })
+    expect(confirm(wrapper).text()).toBe('Pick a level, then a suit')
   })
 
   test('while a call is on its way, nothing can be clicked', async () => {
-    const wrapper = mountBox('', 'S', true)
+    const wrapper = mountBox('N 1H, E P')
+    await level(wrapper, 2).trigger('click')
+    await strain(wrapper, 'C').trigger('click')
+    await wrapper.setProps({ busy: true })
 
-    expect(enabled(wrapper)).toEqual([])
-    expect(wrapper.text()).toContain('Sending your call')
-    await button(wrapper, '1C').trigger('click')
+    expect(wrapper.findAll('button').filter((b) => !disabled(b))).toEqual([])
+    expect(confirm(wrapper).text()).toContain('Sending your call')
+    await confirm(wrapper).trigger('click')
     expect(wrapper.emitted('call')).toBeUndefined()
   })
 })
@@ -249,9 +333,9 @@ describe('TablePlayPage bidding', () => {
     let answer!: (state: Playing) => void
     vi.mocked(gameService.makeCall).mockReturnValue(new Promise((resolve) => (answer = resolve)))
 
-    await wrapper.get('button[data-call="2C"]').trigger('click')
+    await bidWith(wrapper, '2C')
     // Busy: a second click goes nowhere.
-    await wrapper.get('button[data-call="3C"]').trigger('click')
+    await wrapper.get('.confirm-call').trigger('click')
     expect(gameService.makeCall).toHaveBeenCalledTimes(1)
     expect(gameService.makeCall).toHaveBeenCalledWith(5, bid('2C').id, null)
     expect(wrapper.text()).toContain('Sending your call')
@@ -301,7 +385,7 @@ describe('TablePlayPage bidding', () => {
     vi.mocked(gameService.makeCall).mockRejectedValue(refused('It is not your turn: W calls next.'))
     vi.mocked(gameService.getPlaying).mockResolvedValue(state({ turn: 'W', acting_user_id: 4 }))
 
-    await wrapper.get('button[data-call="P"]').trigger('click')
+    await bidWith(wrapper, 'P')
     await flushPromises()
 
     expect(showToast).toHaveBeenCalledWith('It is not your turn: W calls next.', 'danger')

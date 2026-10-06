@@ -174,32 +174,32 @@ describe('vulnerability', () => {
   // What each seat (or nobody: a board the viewer didn't play) reads.
   const TEXTS: Record<Vulnerability, Record<Seat | 'none', string>> = {
     '': {
-      N: 'Vulnerable: None',
-      E: 'Vulnerable: None',
-      S: 'Vulnerable: None',
-      W: 'Vulnerable: None',
-      none: 'Vulnerable: None',
+      N: 'Nobody vulnerable',
+      E: 'Nobody vulnerable',
+      S: 'Nobody vulnerable',
+      W: 'Nobody vulnerable',
+      none: 'Nobody vulnerable',
     },
     'N-S': {
       N: 'Vulnerable: N-S (you)',
-      E: 'Vulnerable: N-S',
+      E: 'Vul: N-S',
       S: 'Vulnerable: N-S (you)',
-      W: 'Vulnerable: N-S',
-      none: 'Vulnerable: N-S',
+      W: 'Vul: N-S',
+      none: 'Vul: N-S',
     },
     'E-W': {
-      N: 'Vulnerable: E-W',
+      N: 'Vul: E-W',
       E: 'Vulnerable: E-W (you)',
-      S: 'Vulnerable: E-W',
+      S: 'Vul: E-W',
       W: 'Vulnerable: E-W (you)',
-      none: 'Vulnerable: E-W',
+      none: 'Vul: E-W',
     },
     'N-S E-W': {
-      N: 'Vulnerable: Both (you too)',
-      E: 'Vulnerable: Both (you too)',
-      S: 'Vulnerable: Both (you too)',
-      W: 'Vulnerable: Both (you too)',
-      none: 'Vulnerable: Both',
+      N: 'Both (you too)',
+      E: 'Both (you too)',
+      S: 'Both (you too)',
+      W: 'Both (you too)',
+      none: 'Vul: Both',
     },
   }
 
@@ -212,13 +212,15 @@ describe('vulnerability', () => {
     }
   })
 
-  test('the label is a red or green chip', () => {
+  test('the label is a red pill with a dot, or a green one', () => {
     const red = mount(VulnerabilityLabel, { props: { vulnerable: 'E-W', mySeat: 'W' } })
     expect(red.text()).toBe('Vulnerable: E-W (you)')
     expect(red.find('.vul-label').classes()).toContain('vul-label-red')
+    expect(red.find('.vul-dot').exists()).toBe(true)
 
     const green = mount(VulnerabilityLabel, { props: { vulnerable: '' } })
-    expect(green.text()).toBe('Vulnerable: None')
+    expect(green.text()).toBe('Nobody vulnerable')
     expect(green.find('.vul-label').classes()).toContain('vul-label-green')
+    expect(green.find('.vul-dot').exists()).toBe(false)
   })
 })

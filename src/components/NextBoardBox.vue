@@ -11,8 +11,7 @@
 
     <ion-button
       v-if="!iAmReady"
-      fill="outline"
-      size="small"
+      color="action"
       class="next-button"
       :disabled="busy"
       @click="emit('next')"

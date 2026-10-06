@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/86-away-clocks-on-the-seats`._
+_Status as of branch `bulbulica2/92-daylight-redesign`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -317,7 +317,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -338,6 +338,19 @@ one of your own. Forced cards play themselves on both hands, and you claim
 for declarer ("You claim 4 of the remaining 5 tricks for North"). The
 defenders still play by themselves. How they bid and play is in
 [backend `ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
+
+**Daylight** (#160). The table is a navy panel: each seat a plate
+(initials or a robot's icon, name, seat, the set clock as a pill, an
+amber **ADMIN** tag), the seat on turn ringed orange, an away seat red,
+a seat that pressed Start ticked green, an empty one dashed. During the
+auction each seat's last call sits beside its plate as a chip, an
+opponent's alerted one with an amber "!". Cards are plain white faces
+with a big rank over the suit in the corner; the cards you may play
+stand raised and ringed, the others dimmed; in the trick the card winning
+so far is ringed amber and a dashed place waits for yours. The auction
+grid is a card of chips (green Pass, red X, blue XX), the vulnerable
+side's seats red, the call awaited a "?" ringed orange. **Start** and
+**Deal now** are the orange buttons.
 
 **Nothing jumps from card to card** (#133): while a board has a turn,
 every seat keeps a line for the turn label (**Your turn**, **To act**,
@@ -367,12 +380,15 @@ board** boards 2 to 4, and after the fourth the set is over. A line at the
 top says where the table is: **Board 2 of 4 · Set 3** (**· set over** once
 it is).
 
-**Who is vulnerable, in words** (#151). The same line starts, top left,
-with a bold chip for the whole board (auction, play and once finished):
-**Vulnerable: N-S**, **E-W** or **Both** in red, **Vulnerable: None** in
-green, with **(you)** when it is your side ("Vulnerable: Both (you too)").
-The seats keep their red/green stripes, and the table's centre says the
-same words until the first trick takes its place.
+**Who is vulnerable, in words** (#151, #160). The same line starts, top
+left, with a pill for the whole board (auction, play and once finished):
+**Nobody vulnerable** in green, else red: **Vul: E-W** for the other side,
+**Vulnerable: N-S (you)** for yours, **Both (you too)**. On a phone a
+**Dealer West** pill follows it; from 1100 px wide the **board tile**
+(BBO's: the number in a navy square, the vulnerable sides red, "DEALER W")
+stands before it instead. The plates keep a red/green top edge, and the
+table's centre says the same words until the first trick takes its
+place.
 
 **The turn clock** (#130, bb#120). The player the board waits for has
 **one minute** to call, play or act on a claim. A line over the status
@@ -439,17 +455,22 @@ What it shows by phase:
   game, and get **Remove** on each other seat (#121). Everyone sees
   **Leave the table** under Start.
 - **auction**: your hand (always ♥ ♣ ♦ ♠, red and black alternating), the auction grid, and on your turn the bidding
-  box. The contract (or "Passed out") is announced when the last call
-  arrives. Above the calls, an **Alert** field: "Explain to the opponents
-  (optional)", up to 200 characters, and an **Alert** toggle (typing turns
-  it on), so a call can be alerted with nothing written; "Only the
+  box: **two taps plus confirm** (#160). Tap a level (1–7), then a strain
+  (♣ ♦ ♥ ♠ NT), and the orange **Bid 2♥** under them sends it; **Pass**,
+  **X** and **XX** show **Pass** / **Double** / **Redouble** there and
+  need the tap too. Levels with nothing legal left and strains too low at
+  the picked level are greyed out; the pick starts over once a call is
+  taken or refused. The contract (or "Passed out") is announced when the
+  last call arrives. The box's **Alert** button alerts the next call and
+  opens "Explain to the opponents (optional)" above its rows, up to 200
+  characters (a call can be alerted with nothing written); "Only the
   opponents see this. Your partner doesn't." The next call goes out with
   it; it clears once the call is taken and stays if the call is refused.
-  In the grid an alerted call stands out in amber with a "!"; hovering it
-  (or a tap) pops up its explanation, or "Alerted, no explanation given.",
-  and your own reads "You alerted: …". Partner's alerts don't show while
-  the auction lasts; once the play starts they do, as "Partner alerted:
-  …" (with no Ask). Any
+  In the grid an alerted call is ringed amber with a "!"; hovering it
+  (or a tap) pops up a dark card, "East alerted 2♦", with its explanation,
+  or "Alerted, no explanation given."; your own reads "You alerted 2♣".
+  Partner's alerts don't show while the auction lasts; once the play
+  starts they do, as "Partner alerted 2♣" (with no Ask). Any
   opponent's call, alerted or not, pops up **Ask what it means** until the
   board is over: a robot answers at once in the pop-up; a person gets a
   toast and a sheet to type the answer, which then shows like an

@@ -33,7 +33,11 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/77-player-stats` (after
+> branch `bulbulica2/92-daylight-redesign` (after
+> #160, the **Daylight** look: design tokens and bundled typefaces, 48 px
+> buttons with one orange action, new card faces, the navy table with
+> seat plates and last-call chips, call chips, the vulnerability pill and
+> board tile, and a two-taps-plus-confirm bidding box; after
 > #131, a player's **stats** (sets and boards played, won and their
 > average matchpoints, sets left early) on their profile, your own on the
 > Account page, and one line in the profile sheet; after

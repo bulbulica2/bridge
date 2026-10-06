@@ -3,7 +3,8 @@
        viewer's own hand, by default), high to low. A suit
        never splits across lines; on a narrow screen whole suits wrap.
        Given `playable`, the hand is the one being played: every card is a
-       button, and the ones that can't legally go now are dimmed. The
+       button: the ones that may go now stand raised and ringed, the ones
+       that can't are dimmed. The
        `forcedId` card, the only legal one, is about to play itself: it
        stands raised and pulses until it goes (see useForcedPlay). The cards
        are the card size setting's (cardSize.ts), smaller on a phone, and
@@ -109,9 +110,9 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
   gap: 8px 6px;
 }
 
-/* Room for a playable card to rise without being clipped. */
+/* Room for the playable cards to rise (14 px) with their ring. */
 .hand.active {
-  padding-top: 10px;
+  padding-top: 18px;
 }
 
 /* A phone: 1.5 times the old card, so two suits share a row (about six
@@ -142,14 +143,23 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
   transition: transform 0.12s ease;
 }
 
-.card-button:not(:disabled):hover,
-.card-button:not(:disabled):focus-visible,
+/* Daylight's card states (#160). Playable: raised 14 px and ringed, orange
+   below the table and amber on its navy (`--playable-ring`, set by
+   BridgeTable). The one on its way stays up. */
+.card-button:not(:disabled),
 .card-button.sending,
 .card-button.forced {
-  transform: translateY(-10px);
+  transform: translateY(-14px);
 }
 
-/* About to play itself: a pulsing ring until it goes, or is tapped. */
+.card-button:not(:disabled) :deep(.playing-card),
+.card-button.sending :deep(.playing-card) {
+  box-shadow:
+    0 0 0 3px var(--playable-ring, var(--bridge-action, #c2410c)),
+    0 8px 16px rgba(20, 32, 51, 0.25);
+}
+
+/* About to play itself: a pulsing amber halo until it goes, or is tapped. */
 .card-button.forced :deep(.playing-card) {
   animation: forced-pulse 1s ease-in-out infinite;
 }
@@ -157,17 +167,27 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
 @keyframes forced-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 2px var(--ion-color-warning, #ffc409);
+    box-shadow:
+      0 0 0 3px #fff,
+      0 0 0 5px var(--bridge-amber, #f59e0b);
   }
   50% {
-    box-shadow: 0 0 0 5px rgba(var(--ion-color-warning-rgb, 255, 196, 9), 0.45);
+    box-shadow:
+      0 0 0 3px #fff,
+      0 0 0 9px rgba(245, 158, 11, 0.45);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .card-button {
+    transition: none;
+  }
+
   .card-button.forced :deep(.playing-card) {
     animation: none;
-    box-shadow: 0 0 0 3px var(--ion-color-warning, #ffc409);
+    box-shadow:
+      0 0 0 3px #fff,
+      0 0 0 7px rgba(245, 158, 11, 0.6);
   }
 }
 
@@ -176,7 +196,9 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
 }
 
 .card-button:focus-visible :deep(.playing-card) {
-  box-shadow: 0 0 0 2px var(--ion-color-primary);
+  box-shadow:
+    0 0 0 3px var(--bridge-surface, #fff),
+    0 0 0 6px var(--ion-color-primary);
 }
 
 .card-button:disabled {
@@ -185,8 +207,8 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
 
 /* Can't follow to this trick: still readable, clearly out of play. */
 .card-button.illegal :deep(.playing-card) {
-  filter: grayscale(0.6) brightness(0.8);
-  opacity: 0.45;
+  filter: grayscale(0.4) brightness(0.92);
+  opacity: 0.5;
 }
 
 .empty {

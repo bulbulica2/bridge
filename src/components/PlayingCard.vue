@@ -1,5 +1,8 @@
 <template>
-  <!-- A card face: rank over suit in the corner, the suit again in the middle. -->
+  <!-- A card face as IntoBridge draws it (Daylight, #160): plain white with a
+       thin border, a big rank over its suit in the top-left corner, no pips
+       and no court pictures, so the corner a fan of cards leaves showing
+       says everything. -->
   <div
     class="playing-card"
     :class="{ red: isRed(card.suit) }"
@@ -11,10 +14,8 @@
       <span class="rank">{{ rankLabel(card.rank) }}</span>
       <span class="suit">{{ SUIT_SYMBOLS[card.suit] }}</span>
     </span>
-    <span class="pip" aria-hidden="true">{{ SUIT_SYMBOLS[card.suit] }}</span>
   </div>
 </template>
-
 <script setup lang="ts">
 import type { Card } from '@/services/game';
 import { SUIT_NAMES, SUIT_SYMBOLS, isRed, rankLabel } from '@/utils/cards';
@@ -25,7 +26,9 @@ defineProps<{ card: Card }>();
 
 <style scoped>
 /* Everything scales with `--card-w`, the card size setting's width (see
-   cardSize.ts): 48 px is the old card, rank 0.9rem and pip 1.4rem. */
+   cardSize.ts). The corner fits the part of a card a hand leaves showing
+   (HandView's `--card-step`, at least 44 px): "10" included. Card faces
+   stay white in dark mode too. */
 .playing-card {
   --card-h: calc(var(--card-w) * 17 / 12);
   position: relative;
@@ -33,23 +36,26 @@ defineProps<{ card: Card }>();
   box-sizing: border-box;
   width: var(--card-w);
   height: var(--card-h);
-  border: 1px solid #9e9e9e;
+  border: 1px solid var(--bridge-card-border, #d5d9e0);
   border-radius: calc(var(--card-w) * 0.12);
-  background: #fff;
-  color: #1a1a1a;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  background: var(--bridge-card-face, #fff);
+  color: var(--bridge-card-ink, #142033);
+  box-shadow:
+    0 1px 2px rgba(20, 32, 51, 0.3),
+    0 4px 10px rgba(20, 32, 51, 0.18);
+  font-family: var(--bridge-font-numbers, sans-serif);
   font-weight: 700;
   user-select: none;
 }
 
 .playing-card.red {
-  color: #c62828;
+  color: var(--bridge-card-red, #c8102e);
 }
 
 .corner {
   position: absolute;
   top: calc(var(--card-w) * 0.06);
-  left: calc(var(--card-w) * 0.08);
+  left: calc(var(--card-w) * 0.06);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -57,19 +63,11 @@ defineProps<{ card: Card }>();
 }
 
 .rank {
-  font-size: calc(var(--card-w) * 0.3);
-  letter-spacing: -0.05em;
+  font-size: calc(var(--card-w) * 0.38);
+  letter-spacing: -0.04em;
 }
 
 .suit {
-  font-size: calc(var(--card-w) * 0.28);
-}
-
-.pip {
-  position: absolute;
-  right: calc(var(--card-w) * 0.1);
-  bottom: calc(var(--card-w) * 0.06);
-  font-size: calc(var(--card-w) * 0.47);
-  line-height: 1;
+  font-size: calc(var(--card-w) * 0.32);
 }
 </style>
