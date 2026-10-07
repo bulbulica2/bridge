@@ -136,8 +136,12 @@
               v-else
               :result="playing.result"
               :my-seat="mySeat"
+              :players="players"
+              :set-position="playing.set"
               :set-so-far="setResults"
               :extras="boardExtras"
+              :others="playing.board ? (history.results[playing.board.id] ?? null) : null"
+              :playing-id="playing.playing_id"
               :double-dummy="doubleDummy.analysis.value"
               :reviewable="reviewable.length > 0"
               @review="reviewOpen = true"
@@ -172,6 +176,7 @@
               :players="players"
               :my-seat="mySeat"
               :next-board-at="playing.next_board_at ?? null"
+              :set="playing.set"
               :busy="asking"
               @next="askNext"
               @leave="leave"
@@ -904,7 +909,9 @@ const boardExtras = computed(() =>
 );
 
 // The finished board's double dummy table (bb#114), read once it is over
-// here (the backend refuses earlier): one line under its result.
+// here (the backend refuses earlier): one line under its result. Its
+// results at every table too: "Same board elsewhere" (failures quiet, the
+// list just stays away).
 const finishedBoardId = computed(() =>
   playing.value?.phase === 'finished' ? (playing.value.board?.id ?? null) : null,
 );
@@ -914,6 +921,7 @@ watch(
   (boardId) => {
     if (boardId) {
       doubleDummy.load();
+      history.loadResults(boardId).catch(() => null);
     }
   },
   { immediate: true },

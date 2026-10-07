@@ -73,3 +73,16 @@ ion-button.button-outline.button-disabled {
   --ion-color-base: var(--bridge-disabled-text);
   opacity: 1;
 }
+
+/* The lobby's white cards (Tables and Home, #162): Play now with robots,
+   Open a table for friends, Your form, Recent boards. */
+.lobby-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--bridge-surface);
+  box-shadow: 0 1px 0 var(--bridge-card-border);
+}

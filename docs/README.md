@@ -33,7 +33,14 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/93-daylight-play-page` (after
+> branch `bulbulica2/94-daylight-result-and-lobby` (after
+> #162, the finished board and the lobby in the Daylight look: a navy
+> result card with your score big and your matchpoints as a bar, the same
+> board at the other tables, a tick when declarer found every double dummy
+> trick, the set's boards as tiles and a countdown ring to the next board;
+> the Tables page as a lobby with Your table, Play now with robots / Open a
+> table for friends, filter chips and a mini compass per table, and Your
+> form and Recent boards beside it (also on Home); after
 > #161, the play page during a board in the Daylight look: one turn clock
 > line with a bar ("Your call · 0:42"), the header "<table> · Board 2 of
 > 4", the claim sheet's tiles with each number's result and score, the

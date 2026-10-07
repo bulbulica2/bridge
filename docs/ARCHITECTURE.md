@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/93-daylight-play-page`._
+_Status as of branch `bulbulica2/94-daylight-result-and-lobby`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -121,8 +121,10 @@ held after a Leave mid-set, or marked away), **Your turn**
 (`turnNotice()` on the board the game store holds for that table, or a
 Start the table waits for; "Your turn · 0:42" while your turn clock
 runs), **Board in progress**; the header draws it as
-a coloured dot (spelled out in the button's `aria-label`), the menu as a
-badge. The menu's badge sits at the end of the row in a cell as wide as
+a coloured dot (spelled out in the button's `aria-label`) and, on your
+turn, turns the button into Daylight's orange pill with the turn written
+out, "Your turn · 0:42" (`statusText`; below 576 px the pill drops the
+name, #162), the menu as a badge. The menu's badge sits at the end of the row in a cell as wide as
 an invisible copy of the longest status, so the entry keeps its size
 whatever the status says, or with none; "YOUR TABLE" and the name never
 wrap, and a long name (up to 50 characters) ends in "…" with the whole
@@ -185,12 +187,32 @@ the hand (grey **Claim · locked** while claims are locked), the **claim
 sheet**'s tiles with each number's result and score (`contractScore` in
 `src/utils/result.ts`, `claimOutcome` in `claim.ts`), the pending claim
 as a dark banner, and a forced card's **plays in 3** on the card itself.
-Nothing in the app draws a card back yet. Coming: the auction behind a
-button top left, the board's place under it and the contract bar's last
-changes (#165, which replaces #161's contract chip and phone bar); the
-finished board, the Tables page and Home (#162); the side sheets, the
-wide (≥ 1100 px) table layout and the remaining pages' leftover colours
-(#163).
+Nothing in the app draws a card back yet.
+
+The finished board and the lobby (#162) follow the same boards. A board's
+result is a navy **hero card** (`BoardResultPanel`: who declared, the
+contract with its result green or red, your score big in Barlow, and the
+matchpoints against the other tables with an amber bar), then **Same
+board elsewhere** (the board's results at every table, yours tinted
+orange and named "You"), the double dummy line with a green tick when
+declarer found every trick, the set's boards as tiles (`SetStrip`), and
+the **next board bar** (`NextBoardBox`: a ring emptying over the wait,
+**Deal now** orange); `SetResultsPanel` uses the same navy card. The
+Tables page is the **lobby**: `YourTableHero` (navy, the set's tiles,
+**Back to the table** orange), **Play now with robots** (the
+`SetMinutesPicker` as a four-way segmented control, **Deal me in**) and
+**Open a table for friends** side by side, the open tables as
+`TableCard`s with filter chips and a mini compass, and an aside with
+`YourForm` and `RecentBoards`; Home reuses the hero and the aside. The
+lobby's white cards share `.lobby-card` (`daylight.css`); the navy
+cards' own tokens (`--bridge-on-table-good`/`-bad`/`-accent`,
+`--bridge-table-dim`, `--bridge-on-table-faint`, `--bridge-navy-tint`,
+`--bridge-action-line`) have light and Midnight values.
+
+Coming: the auction behind a button top left, the board's place under it
+and the contract bar's last changes (#165, which replaces #161's contract
+chip and phone bar); the side sheets, the wide (≥ 1100 px) table layout
+and the remaining pages' leftover colours (#163).
 
 ## Routes and the guard
 
@@ -408,7 +430,8 @@ A few backend rules the stores rely on:
   deals the next board then, with the usual `TableUpdated`,
   `PlayingUpdated` and `HandDealt`. The result and the deal stay on show
   until they arrive. `NextBoardBox` counts down from `next_board_at`
-  (`useNow`, `secondsLeft`/`formatClock` from `utils/away.ts`); its
+  (`useNow`, `secondsLeft`/`formatClock` from `utils/away.ts`), its ring
+  a full circle at `NEXT_BOARD_SECONDS` (10, `utils/sets.ts`); its
   optional **Deal now** (`game.next()`, `POST /tables/{id}/playing/next`)
   deals at once when every human at the table has pressed it (robots count
   as asked), so a player alone with robots skips the wait. If nothing has
@@ -773,14 +796,27 @@ arrives, and the app falls back to what each request returns.
 | `ClaimSheet` | the bottom sheet for making a claim (#161): "7 tricks left · you have 4 · 4♠ needs 10" (`claimSummary`), then a 4-column grid of tiles from all the tricks left down to 0, each with the contract's result ("4♠ +1", "4♠ −2" in red) and the claimer's side's score ("+450"), from `claimOutcome()` (`state` + `seat`, the seat claimed for); all of them picked on opening (#137: a tap picks fewer; a trick finishing moves the default to the new maximum and keeps a hand-picked number while still possible); the orange send button reads **Claim all 7 · 4♠ +1 · +450** / **Claim 5 · 4♠ −1 · −50** / **Concede · …** for the 0 tile, and **Concede** is the outlined secondary; "Both opponents get 10 seconds. No answer counts as no." (declarer and partner for a defender's claim); `forSeat` names a robot declarer's seat claimed for |
 | `ClaimPanel` | a pending claim as Daylight's dark banner (#161): what is claimed with the countdown on the right, who has accepted, **Accept** / **Reject** as two equal buttons or **Withdraw**, and the countdown in words under them ("Answer within 0:07", "Waiting for East and West · 0:07", ticked by `useNow`); the buttons disable at 0, so a late tap can't earn a 409; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
 | `TurnClockLine` | the play page's turn clock line (#161): the words, the clock and the move's minute as a bar, orange for `mine`, red for `urgent`, blue for a `robot`; two lines of room and the bar's track always there, so its height never changes |
-| `BoardResultPanel`, `NextBoardBox` | the result once a board is finished, at a glance: one big row with the contract in table notation ("2♣ by West +2") and your score (N-S's, tagged, for someone who didn't play it), the tricks ("10 tricks · by claim"), then, at the table, one double dummy line ("Double dummy: 4♠ by South makes 10") with **Review**, then the set's position and the board's matchpoints for your side when known, and the countdown to the set's next board ("Next board in 0:08", then "Dealing the next board…") with the optional **Deal now** and, once pressed, the humans who haven't yet |
+| `BoardResultPanel`, `NextBoardBox` | the result once a board is finished (#162), as a navy hero card: who declared (`declaredText`: "You declared", "radu declared", "E-W declared"), the contract and its result ("2♣ +2", the suffix green, red when down), the tricks ("10 tricks · by claim"), your score big on the right (N-S's, tagged, for someone who didn't play it) and, once another table has played it, "Against the other tables 67 %" with an amber bar; then **Same board elsewhere** (`others` = the history store's board results, `otherTableRows` in `utils/result.ts`: the first five, always with yours, each named by its N-S pair, yours "You" and tinted), the double dummy line ("Double dummy: 4♠ by South makes 10. You found every trick.", `doubleDummyVerdict`, ticked green when declarer took at least as many tricks) with **Review**, and the set's boards (`SetStrip`). `NextBoardBox` is the bar under it: a ring emptying over the wait with the seconds in it, "Next board in 0:08" (then "Dealing the next board…"), "Board 3 of 4 · or skip the wait" (`set`), the optional orange **Deal now** and, once pressed, the humans who haven't yet |
+| `SetStrip` | a set's boards as tiles, B1–B4: your side's matchpoints on each board finished (`setStripTiles` in `utils/sets.ts`; "—" while no other table has played it), the board on now tinted ("now" until it is finished), light under a board's result or `onTable` on a navy card (Your table) |
 | `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the review and the results page, or a note while it is being solved; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
-| `SetResultsPanel` | once the set is over (also on `/sets/:id`): who won from your side, whom a robot replaced and why ("you" for the viewer it replaced), each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score), then each human's time used of their time for the set |
-| `SetMinutesPicker` | the time for a set, 8 / 12 / 16 / 20 minutes, as an `ion-segment` (`v-model`): the create-table form and a manager on the table's page |
+| `SetResultsPanel` | once the set is over (also on `/sets/:id`), in the same navy card as a board's result: who won from your side, whom a robot replaced and why ("you" for the viewer it replaced), each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score), then each human's time used of their time for the set |
+| `SetMinutesPicker` | the time for a set, 8 / 12 / 16 / 20 minutes, as a four-way segmented control (an `ion-segment`, `v-model`, `label`): the lobby's **Play now with robots** and a manager on the table's page |
 | `StartBox` | before a board: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, each seat's ready mark (also on the detail page, which marks its compass instead), plus, with `manage`, **Seat a player** / **Add robot** per empty seat (`seatPlayer` / `addRobot` events; the play page runs them, #117), **Remove** on each seat in `removable` (`remove` event) and, with `canLeave`, **Leave the table** (`leave` event): the play page's way off the seat between sets (#121) |
-| `RobotBadge` | the "robot" mark next to a robot's name (Home, Tables, Table detail and the profile sheet; at the table the plate's robot icon says it) |
+| `RobotBadge` | the "robot" mark next to a robot's name (Table detail and the profile sheet; at the table the plate's robot icon says it, in the lobby's compass the blue seat) |
 | `AdminBadge` | the amber **ADMIN** tag next to an admin's name, at the table's plates and wherever `RobotBadge` goes, plus `StartBox` and the User profile page |
+
+The lobby (Tables and Home, #162) has its own pieces:
+
+| Component | Shows |
+|---|---|
+| `YourTableHero` | the table you sit at (`useYourTable`, so nothing for a guest, a banned user or somebody not seated): its name, "Set 3 · Board 2 of 4 · you sit South with radu" (`yourTableLine` in `utils/lobby.ts`), the set's tiles (`SetStrip`, from `history.sets`, read with `loadSet` once a board of the set is finished, failures quiet), **Back to the table** (or **Come back** with the held seat's countdown) and an `actions` slot (the Tables page's **Leave**) |
+| `TableCard` | one open table: its name (a link to its page, not for a banned user), a meta line (`tableMeta`: "16 min · set 2 · board 2/4", "left 3 min ago · closes in 7"), a pill (`tableStatus`), and a mini compass (`compassSeats`: you, robots, away players, players, empty seats as **Sit N**, `join` event; a name opens the profile, `player` event) |
+| `YourForm`, `RecentBoards` | your stats in three figures (average board %, sets won / played, boards played; `users.loadStats(null)`) and your last three boards (`history.loadHistory(null)`, each opening its review), both read by the page through their exposed `load()` once the tables are in; failures are quiet |
+
+The Tables page's filter chips (`TABLE_FILTERS`, `matchesFilter`,
+`filterCounts` in `utils/lobby.ts`: All, Seat free, Playing, Robots only)
+count over the list the page holds; it has no channel.
 
 `BridgeTable`'s `thinking` prop is set when the player acting for `turn`
 (`acting_user_id`, declarer on dummy's turn) is a robot: that seat reads

@@ -1,17 +1,21 @@
-import { VueWrapper, flushPromises, mount } from '@vue/test-utils'
+import { RouterLinkStub, VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { IonButton } from '@ionic/vue'
 import HomePage from '@/views/HomePage.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTablesStore } from '@/stores/tables'
+import * as historyService from '@/services/history'
 import * as tablesService from '@/services/tables'
+import * as usersService from '@/services/users'
 import type { Seat, Table } from '@/services/tables'
 
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   listTables: vi.fn(),
 }))
+vi.mock('@/services/users', () => ({ getMyStats: vi.fn() }))
+vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn(), getSet: vi.fn() }))
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
   leaveTable: vi.fn(),
@@ -34,6 +38,9 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>>, board_id: n
     created_by: 1,
     moderated_by: 1,
     board_id,
+    unattended_since: null,
+    set_minutes: 16,
+    set: null,
     created_at: '2026-09-20T10:00:00.000000Z',
     updated_at: '2026-09-20T10:00:00.000000Z',
     seats: taken.map(([seat, username], i) => ({
@@ -41,6 +48,9 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>>, board_id: n
       table_id: id,
       user_id: ids[username],
       seat,
+      ready: false,
+      away_since: null,
+      replace_at: null,
       user: { id: ids[username], name: username, username, description: null, is_robot: false, is_admin: username === 'eve' },
     })),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
@@ -51,8 +61,10 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>>, board_id: n
 // Ionic's onIonViewWillEnter never fires outside a router outlet, so the page
 // is mounted as a guest and the login triggers the table lookup, as it would
 // if someone logged in while Home was on screen.
+const stubs = { 'router-link': RouterLinkStub }
+
 async function mountLoggedIn() {
-  const wrapper = mount(HomePage)
+  const wrapper = mount(HomePage, { global: { stubs } })
   useAuthStore().user = ana
   await flushPromises()
   return wrapper
@@ -71,12 +83,23 @@ describe('HomePage.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.resetAllMocks()
+    // The aside's reads: nothing played yet.
+    vi.mocked(usersService.getMyStats).mockReturnValue(new Promise(() => {}))
+    vi.mocked(historyService.getMyPlayings).mockResolvedValue({
+      current_page: 1,
+      last_page: 1,
+      next_page_url: null,
+      per_page: 20,
+      total: 0,
+      data: [],
+    })
   })
 
   test('explains the app to guests and offers log in and sign up', () => {
-    const wrapper = mount(HomePage)
+    const wrapper = mount(HomePage, { global: { stubs } })
 
     expect(wrapper.text()).toContain('13 tricks')
+    expect(wrapper.find('.your-form').exists()).toBe(false)
     expect(pageLinks(wrapper).map((l) => l.to)).toEqual(['/login', '/create-account'])
     expect(tablesService.listTables).not.toHaveBeenCalled()
   })
@@ -84,35 +107,36 @@ describe('HomePage.vue', () => {
   test('shows a seated user their table, one tap away', async () => {
     vi.mocked(tablesService.listTables).mockResolvedValue([
       makeTable(2, { N: 'bob' }),
-      makeTable(7, { E: 'ana', S: 'bob' }, 3),
+      makeTable(7, { E: 'ana', W: 'bob' }, 3),
     ])
     const wrapper = await mountLoggedIn()
 
     expect(wrapper.text()).toContain('Welcome back, Ana!')
-    const card = wrapper.find('.your-table')
-    expect(card.text()).toContain('Table 7')
-    expect(card.text()).toContain('Board in progress')
-    expect(card.text()).toContain('ana (you)')
-    expect(card.text()).toContain('bob')
+    const hero = wrapper.get('.your-table')
+    expect(hero.get('.your-table-name').text()).toBe('Table 7')
+    expect(hero.get('.your-table-line').text()).toBe('No set yet · you sit East with bob')
     // A board in progress: straight to the game.
-    expect(pageLinks(wrapper)).toEqual([{ text: 'Go to the board', to: '/tables/7/play' }])
+    expect(pageLinks(wrapper)).toEqual([{ text: 'Back to the table', to: '/tables/7/play' }])
   })
 
-  test('marks an admin at your table, and only free seats as empty', async () => {
-    vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(7, { E: 'ana', S: 'eve' })])
-    const wrapper = await mountLoggedIn()
-
-    const card = wrapper.find('.your-table')
-    expect(card.findAll('.admin-badge')).toHaveLength(1)
-    expect(card.findAll('.empty-seat')).toHaveLength(2)
-  })
-
-  test('leaves out the board badge when no board is being played', async () => {
+  test("no board yet: back to the table's own page, no partner while the seat is empty", async () => {
     vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(7, { N: 'ana' })])
     const wrapper = await mountLoggedIn()
 
-    expect(wrapper.find('.your-table').text()).not.toContain('Board in progress')
-    expect(pageLinks(wrapper)).toEqual([{ text: 'Go to table', to: '/tables/7' }])
+    expect(wrapper.get('.your-table-line').text()).toBe('No set yet · you sit North')
+    expect(pageLinks(wrapper)).toEqual([{ text: 'Back to the table', to: '/tables/7' }])
+  })
+
+  test('your form and recent boards follow the table lookup', async () => {
+    vi.mocked(tablesService.listTables).mockResolvedValue([])
+    const wrapper = await mountLoggedIn()
+
+    expect(usersService.getMyStats).toHaveBeenCalled()
+    expect(historyService.getMyPlayings).toHaveBeenCalledWith(1)
+    // No figures yet, nothing played.
+    expect(wrapper.findAll('.form-figure b').map((b) => b.text())).toEqual(['—', '—', '—'])
+    expect(wrapper.get('.recent-empty').text()).toBe('No boards played yet.')
+    expect(wrapper.getComponent('.recent-all').props('to')).toBe('/history')
   })
 
   test('sends an unseated user to find a table', async () => {
@@ -120,6 +144,7 @@ describe('HomePage.vue', () => {
     const wrapper = await mountLoggedIn()
 
     expect(wrapper.find('.your-table').exists()).toBe(false)
+    expect(wrapper.get('.no-table h2').text()).toBe("You're not at a table")
     expect(pageLinks(wrapper)).toEqual([{ text: 'Find a table', to: '/tables' }])
   })
 

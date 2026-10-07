@@ -8,15 +8,18 @@ import * as gameService from '@/services/game'
 import * as historyService from '@/services/history'
 import * as tablesService from '@/services/tables'
 import type { Bid, BoardResult, Card, Playing, Suit } from '@/services/game'
-import type { SetResults } from '@/services/history'
+import type { BoardResults, SetResults } from '@/services/history'
 import type { Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
 import { useTablesStore } from '@/stores/tables'
 import {
+  contractShort,
+  declaredText,
   doubledMark,
   formatScore,
   madeSuffix,
+  otherTableRows,
   percentText,
   resultContract,
   resultSummary,
@@ -36,7 +39,12 @@ vi.mock('@/services/game', () => ({
   playCard: vi.fn(),
   nextBoard: vi.fn(),
 }))
-vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn(), getSet: vi.fn(), getDoubleDummy: vi.fn() }))
+vi.mock('@/services/history', () => ({
+  getMyPlayings: vi.fn(),
+  getSet: vi.fn(),
+  getDoubleDummy: vi.fn(),
+  getBoardResults: vi.fn(),
+}))
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   getTable: vi.fn(),
@@ -205,18 +213,40 @@ describe('BoardResultPanel', () => {
     claimed: true,
   })
 
-  test("one headline row: the contract and how it went, and the viewer's score", () => {
-    const wrapper = mount(BoardResultPanel, { props: { result: twoClubs, mySeat: 'N' } })
+  const person = (id: number, username: string) => ({
+    id,
+    name: username,
+    username,
+    description: null,
+    is_robot: false,
+    is_admin: false,
+  })
 
-    expect(wrapper.get('.result-contract').text()).toBe('2♣ by West +2')
+  test("the navy hero: who declared, the contract and how it went, the viewer's score", () => {
+    const wrapper = mount(BoardResultPanel, {
+      props: { result: twoClubs, mySeat: 'N', players: { W: person(4, 'radu') } },
+    })
+
+    expect(wrapper.get('.result-who').text()).toBe('radu declared')
+    expect(wrapper.get('.result-contract').text()).toBe('2♣ +2')
+    expect(wrapper.get('.result-made').classes()).toContain('made-ok')
     expect(wrapper.get('.result-score').text()).toBe('−130')
     expect(wrapper.get('.result-score').classes()).toContain('score-minus')
     expect(wrapper.find('.result-side').exists()).toBe(false)
     expect(wrapper.get('.result-detail').text()).toBe('10 tricks · by claim')
-    // No repeats: no N-S/E-W line, no summary line, nothing about the set.
-    expect(wrapper.text()).not.toContain('E-W')
-    expect(wrapper.text()).not.toContain('Made with')
-    expect(wrapper.find('.result-set').exists()).toBe(false)
+    // Nothing else until there is something to compare with.
+    expect(wrapper.find('.result-mp').exists()).toBe(false)
+    expect(wrapper.find('.elsewhere').exists()).toBe(false)
+    expect(wrapper.find('.set-strip').exists()).toBe(false)
+  })
+
+  test('the declarer is "You", or their side when their name is unknown', () => {
+    expect(mount(BoardResultPanel, { props: { result: twoClubs, mySeat: 'W' } }).get('.result-who').text()).toBe(
+      'You declared',
+    )
+    expect(mount(BoardResultPanel, { props: { result: twoClubs, mySeat: 'N' } }).get('.result-who').text()).toBe(
+      'E-W declared',
+    )
   })
 
   test('from the other side the same board is a plus', () => {
@@ -233,11 +263,12 @@ describe('BoardResultPanel', () => {
     expect(wrapper.get('.result-score-value').text()).toBe('−130')
   })
 
-  test('played out, down doubled: no "by claim"', () => {
+  test('played out, down doubled: no "by claim", the undertrick in red', () => {
     const r = result({ doubled: 1, declarer: 'S', tricks_won: 9, made_by: -1, score_ns: -100 })
     const wrapper = mount(BoardResultPanel, { props: { result: r, mySeat: 'S' } })
 
-    expect(wrapper.get('.result-contract').text()).toBe('4♠X by South −1')
+    expect(wrapper.get('.result-contract').text()).toBe('4♠X −1')
+    expect(wrapper.get('.result-made').classes()).toContain('made-down')
     expect(wrapper.get('.result-detail').text()).toBe('9 tricks')
   })
 
@@ -245,59 +276,177 @@ describe('BoardResultPanel', () => {
     const r = result({ contract: bid('3NT'), declarer: 'N', tricks_won: 1, made_by: 0, score_ns: 400 })
     const wrapper = mount(BoardResultPanel, { props: { result: r, mySeat: 'S' } })
 
-    expect(wrapper.get('.result-contract').text()).toBe('3NT by North =')
+    expect(wrapper.get('.result-contract').text()).toBe('3NT =')
     expect(wrapper.get('.result-detail').text()).toBe('1 trick')
   })
 
-  test('the set line is its position only, no summed score', () => {
-    const wrapper = mount(BoardResultPanel, {
-      props: { result: result(), mySeat: 'E', setSoFar: setSoFar() },
-    })
-
-    expect(wrapper.get('.result-set').text()).toBe('Set 1 · 2 of 4 boards played')
-    expect(wrapper.text()).not.toContain('870')
-  })
-
-  test("with matchpoints, this board's for the viewer's side", () => {
+  test("against the other tables: this board's matchpoints for the viewer's side, with a bar", () => {
     const extras = { matchpoints: { ns: 3, ew: 1 }, top: 4 }
-    const east = mount(BoardResultPanel, {
-      props: { result: result(), mySeat: 'E', setSoFar: setSoFar(), extras },
-    })
-    expect(east.get('.result-set').text()).toBe('Set 1 · 2 of 4 boards played · Matchpoints 25 %')
+    const east = mount(BoardResultPanel, { props: { result: result(), mySeat: 'E', extras } })
+    expect(east.get('.result-mp-line span').text()).toBe('Against the other tables')
+    expect(east.get('.result-mp-line b').text()).toBe('25 %')
+    expect(east.get('.result-mp-bar').attributes('style')).toContain('width: 25%')
 
-    // N-S's for someone who didn't play it, and no set line in a review.
+    // N-S's for someone who didn't play it.
     const watcher = mount(BoardResultPanel, { props: { result: result(), mySeat: null, extras } })
-    expect(watcher.get('.result-set').text()).toBe('Matchpoints 75 %')
+    expect(watcher.get('.result-mp-line b').text()).toBe('75 %')
   })
 
   test('a board only this table has played (top 0) says nothing about points', () => {
     const wrapper = mount(BoardResultPanel, {
-      props: {
-        result: result(),
-        mySeat: 'N',
-        setSoFar: setSoFar({ boards: [], of: 1 }),
-        extras: { matchpoints: { ns: 0, ew: 0 }, top: 0 },
-      },
+      props: { result: result(), mySeat: 'N', extras: { matchpoints: { ns: 0, ew: 0 }, top: 0 } },
     })
 
-    expect(wrapper.find('.result-set').exists()).toBe(false)
+    expect(wrapper.find('.result-mp').exists()).toBe(false)
   })
 
-  test('a one-board set', () => {
-    const one = setSoFar({ of: 1, boards: [setSoFar().boards[0]] })
-    const wrapper = mount(BoardResultPanel, { props: { result: result(), mySeat: 'N', setSoFar: one } })
+  describe('same board elsewhere', () => {
+    // GET /boards/{id}/results: best N-S first, ours (playing 42) third.
+    function others(count = 4, mineAt = 2): BoardResults {
+      const names = ['anna', 'dan', 'ioana', 'vlad', 'luis', 'carla', 'nick', 'sorin']
+      const rows = Array.from({ length: count }, (_, i) => ({
+        playing_id: i === mineAt ? 42 : 100 + i,
+        table_id: i,
+        players: {
+          N: person(i * 4 + 1, names[i % names.length]),
+          E: person(i * 4 + 2, 'e'),
+          S: person(i * 4 + 3, names[(i + 1) % names.length]),
+          W: i === 0 ? null : person(i * 4 + 4, 'w'),
+        },
+        contract: i === 0 ? bid('3NT') : bid('4S'),
+        doubled: 0 as const,
+        declarer: 'N' as Seat,
+        tricks_won: 11 - i,
+        score_ns: 460 - i * 10,
+        made_by: i === 0 ? 2 : 1 - i,
+        matchpoints: { ns: count - 1 - i, ew: i },
+        finished_at: '2026-10-01T12:00:00Z',
+      }))
+      return { board: { id: 7, number: 7, dealer: 'N', vulnerable: '' }, top: 2 * (count - 1), results: rows }
+    }
 
-    expect(wrapper.get('.result-set').text()).toBe('Set 1 · 1 of 1 board played')
+    test('every table with its contract and N-S score, ours named "You" and tinted', () => {
+      const wrapper = mount(BoardResultPanel, {
+        props: { result: result(), mySeat: 'S', others: others(), playingId: 42 },
+      })
+
+      const rows = wrapper.findAll('.elsewhere-row:not(.elsewhere-head)')
+      expect(rows.map((r) => r.get('.elsewhere-who').text())).toEqual(['anna & dan', 'dan & ioana', 'You', 'vlad & luis'])
+      expect(rows.map((r) => r.get('.elsewhere-contract').text())).toEqual(['3NT N +2', '4♠ N =', '4♠ N −1', '4♠ N −2'])
+      expect(rows.map((r) => r.get('.elsewhere-score').text())).toEqual(['+460', '+450', '+440', '+430'])
+      expect(rows[2].classes()).toContain('elsewhere-mine')
+      expect(rows[0].classes()).not.toContain('elsewhere-mine')
+      // The whole table in a tooltip, an account gone as "?".
+      expect(rows[0].get('.elsewhere-who').attributes('title')).toBe('anna, e, dan, ?')
+      expect(wrapper.findAll('.elsewhere-head span').map((h) => h.text())).toEqual(['Same board elsewhere', 'Contract', 'N-S'])
+    })
+
+    test('a long list keeps the top ones and ours', () => {
+      const wrapper = mount(BoardResultPanel, {
+        props: { result: result(), mySeat: 'S', others: others(8, 6), playingId: 42 },
+      })
+
+      const rows = wrapper.findAll('.elsewhere-row:not(.elsewhere-head)')
+      expect(rows).toHaveLength(5)
+      expect(rows[4].get('.elsewhere-who').text()).toBe('You')
+    })
+
+    test('nothing while only this table has played it', () => {
+      const wrapper = mount(BoardResultPanel, {
+        props: { result: result(), mySeat: 'S', others: others(1, 0), playingId: 42 },
+      })
+
+      expect(wrapper.find('.elsewhere').exists()).toBe(false)
+    })
+
+    test('a passed-out table reads so', () => {
+      const board = others(2, 0)
+      Object.assign(board.results[1], { contract: null, declarer: null, made_by: null, score_ns: 0 })
+      const wrapper = mount(BoardResultPanel, {
+        props: { result: result(), mySeat: 'S', others: board, playingId: 42 },
+      })
+
+      expect(wrapper.findAll('.elsewhere-contract').map((c) => c.text())).toEqual(['3NT N +2', 'Passed out'])
+    })
+  })
+
+  describe('the set strip', () => {
+    // "Board 2 50 %": each tile's label and figure.
+    const tilesOf = (wrapper: ReturnType<typeof mount>) =>
+      wrapper.findAll('.strip-tile').map((t) => `${t.get('.strip-label').text()} ${t.get('.strip-value').text()}`)
+
+    test("each board's matchpoints for the viewer's side, this one tinted, the rest to come", () => {
+      const wrapper = mount(BoardResultPanel, {
+        props: { result: result(), mySeat: 'E', setPosition: { number: 1, board: 2, of: 4 }, setSoFar: setSoFar() },
+      })
+
+      const tiles = wrapper.findAll('.strip-tile')
+      expect(tilesOf(wrapper)).toEqual(['Board 1 50 %', 'Board 2 50 %', 'Board 3 ·', 'Board 4 ·'])
+      expect(tiles[1].classes()).toContain('strip-current')
+      expect(tiles[1].attributes('aria-current')).toBe('step')
+      expect(wrapper.get('.set-strip').attributes('aria-label')).toBe('Set 1 so far')
+      // No summed score anywhere.
+      expect(wrapper.text()).not.toContain('870')
+    })
+
+    test('before the set is read: the position alone, this board "now"', () => {
+      const wrapper = mount(BoardResultPanel, {
+        props: { result: result(), mySeat: 'E', setPosition: { number: 3, board: 1, of: 4 } },
+      })
+
+      expect(tilesOf(wrapper)).toEqual([
+        'Board 1 now',
+        'Board 2 ·',
+        'Board 3 ·',
+        'Board 4 ·',
+      ])
+    })
+
+    test('a board nobody else has played yet shows a dash', () => {
+      const lonely = setSoFar()
+      lonely.boards[0].top = 0
+      const wrapper = mount(BoardResultPanel, {
+        props: { result: result(), mySeat: 'N', setPosition: { number: 1, board: 2, of: 4 }, setSoFar: lonely },
+      })
+
+      expect(wrapper.findAll('.strip-value')[0].text()).toBe('—')
+    })
+
+    test('without the position, from the set as read', () => {
+      const one = setSoFar({ of: 1, boards: [setSoFar().boards[0]] })
+      const wrapper = mount(BoardResultPanel, { props: { result: result(), mySeat: 'N', setSoFar: one } })
+
+      expect(tilesOf(wrapper)).toEqual(['Board 1 50 %'])
+    })
   })
 
   test('a passed-out board', () => {
     const wrapper = mount(BoardResultPanel, { props: { result: PASSED_OUT, mySeat: 'S' } })
 
+    expect(wrapper.get('.result-who').text()).toBe('All four passed')
     expect(wrapper.get('.result-contract').text()).toBe('Passed out')
     expect(wrapper.get('.result-score').text()).toBe('0')
     expect(wrapper.get('.result-score').classes()).toContain('score-zero')
     expect(wrapper.find('.result-detail').exists()).toBe(false)
-    expect(wrapper.find('.result-set').exists()).toBe(false)
+  })
+})
+
+describe('result helpers for the hero and the other tables', () => {
+  test('contractShort: the contract and how it went, or null when passed out', () => {
+    expect(contractShort(result({ doubled: 2, made_by: -1 }))).toBe('4♠XX N −1')
+    expect(contractShort(PASSED_OUT)).toBeNull()
+  })
+
+  test('declaredText', () => {
+    expect(declaredText('N', 'N')).toBe('You declared')
+    expect(declaredText('N', 'S', { N: { username: 'radu' } })).toBe('radu declared')
+    expect(declaredText('E', null)).toBe('E-W declared')
+    expect(declaredText('S', null, { S: null })).toBe('N-S declared')
+  })
+
+  test('otherTableRows: nothing without results', () => {
+    expect(otherTableRows(null, 1)).toEqual([])
+    expect(otherTableRows(undefined, 1)).toEqual([])
   })
 })
 
@@ -444,6 +593,44 @@ describe('TablePlayPage between boards', () => {
     vi.mocked(historyService.getSet).mockResolvedValue(setSoFar())
     // The double dummy table has its own specs: it never answers here.
     vi.mocked(historyService.getDoubleDummy).mockReturnValue(new Promise(() => {}))
+    vi.mocked(historyService.getBoardResults).mockReturnValue(new Promise(() => {}))
+  })
+
+  test('the same board at the other tables, ours named "You"', async () => {
+    const row = (playingId: number, n: string, scoreNs: number) => ({
+      playing_id: playingId,
+      table_id: playingId,
+      players: {
+        N: { id: playingId * 10, name: n, username: n, description: null, is_robot: false, is_admin: false },
+        E: null,
+        S: { id: playingId * 10 + 2, name: 's', username: 's', description: null, is_robot: false, is_admin: false },
+        W: null,
+      },
+      contract: bid('4S'),
+      doubled: 0 as const,
+      declarer: 'N' as Seat,
+      tricks_won: 10,
+      score_ns: scoreNs,
+      made_by: scoreNs > 420 ? 1 : 0,
+      matchpoints: { ns: 1, ew: 1 },
+      finished_at: '2026-10-01T12:00:00Z',
+    })
+    vi.mocked(historyService.getBoardResults).mockResolvedValue({
+      board: { id: 7, number: 7, dealer: 'N', vulnerable: '' },
+      top: 2,
+      results: [row(42, 'ann', 450), row(9, 'dan', 420)],
+    })
+    const wrapper = await mountPage(finished())
+
+    expect(wrapper.findAll('.elsewhere-who').map((w) => w.text())).toEqual(['You', 'dan & s'])
+  })
+
+  test('a refused read of the other tables leaves the list out', async () => {
+    vi.mocked(historyService.getBoardResults).mockRejectedValue(new Error('offline'))
+    const wrapper = await mountPage(finished())
+
+    expect(wrapper.find('.elsewhere').exists()).toBe(false)
+    expect(wrapper.find('.result').exists()).toBe(true)
   })
 
   test('shows the result, the whole deal and the next board coming', async () => {
@@ -451,7 +638,7 @@ describe('TablePlayPage between boards', () => {
       finished({ ready: ['N', 'W'], next_board_at: new Date(Date.now() + 30_000).toISOString() }),
     )
 
-    expect(wrapper.get('.result-contract').text()).toBe('4♠ by North +1')
+    expect(wrapper.get('.result-contract').text()).toBe('4♠ +1')
     expect(wrapper.get('.result-score').text()).toBe('+450')
     // Every seat shows its 13 cards as dealt; our own hand section is gone.
     expect(wrapper.findAll('.dealt-hand')).toHaveLength(4)
@@ -460,7 +647,12 @@ describe('TablePlayPage between boards', () => {
     // Where the set stands and this board's matchpoints, read from GET
     // /sets/{id}; no score summed over the set.
     expect(historyService.getSet).toHaveBeenCalledWith(5)
-    expect(wrapper.get('.result-set').text()).toBe('Set 1 · 2 of 4 boards played · Matchpoints 50 %')
+    expect(wrapper.get('.result-mp-line b').text()).toBe('50 %')
+    expect(wrapper.findAll('.strip-value').map((v) => v.text())).toEqual(['50 %', '50 %', '·', '·'])
+    expect(wrapper.findAll('.strip-tile')[1].classes()).toContain('strip-current')
+    // The next board's place, and the board at the other tables read once.
+    expect(nextBox(wrapper).get('.next-sub').text()).toBe('Board 3 of 4 · or skip the wait')
+    expect(historyService.getBoardResults).toHaveBeenCalledWith(7)
     // Where the table is in its set.
     expect(wrapper.get('.set-bar').text()).toBe('Board 2 of 4 · Set 1')
     // And the same board at the other tables is one tap away.
@@ -563,7 +755,7 @@ describe('TablePlayPage between boards', () => {
       await flushPromises()
       expect(nextBox(wrapper).get('.next-title').text()).toBe('Dealing the next board…')
       // The result is still there to read until the new board lands.
-      expect(wrapper.get('.result-contract').text()).toBe('4♠ by North +1')
+      expect(wrapper.get('.result-contract').text()).toBe('4♠ +1')
       expect(wrapper.findAll('.dealt-hand')).toHaveLength(4)
 
       const game = useGameStore()

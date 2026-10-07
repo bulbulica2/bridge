@@ -1,5 +1,7 @@
 import type { Seat } from '@/services/tables';
 import type { BoardResult, Strain } from '@/services/game';
+import type { BoardResults } from '@/services/history';
+import type { PublicUser } from '@/services/users';
 import { callLabel, doubledSuffix, SEAT_NAMES } from '@/utils/auction';
 
 // A finished board's score, read from the backend's `result`
@@ -13,11 +15,6 @@ export const SIDE_LABELS: Record<Side, string> = { ns: 'N-S', ew: 'E-W' };
 
 export function sideOf(seat: Seat): Side {
   return seat === 'N' || seat === 'S' ? 'ns' : 'ew';
-}
-
-// Four passes: no contract, and 0 for both sides.
-export function isPassedOut(result: BoardResult): boolean {
-  return result.contract === null;
 }
 
 // `score_ns` is from N-S's point of view whichever side declared; E-W's is
@@ -64,13 +61,82 @@ export function resultContract(result: BoardResult): string | null {
 // score from the side of whoever sits at `seat`, or "2♣ W +2 · N-S −130"
 // for someone without a seat. "Passed out · 0" when nobody bid.
 export function resultSummary(result: BoardResult, seat: Seat | null = null): string {
-  if (isPassedOut(result) || !result.declarer || result.made_by === null) {
+  const contract = contractShort(result);
+  if (contract === null) {
     return 'Passed out · 0';
   }
   const score = viewerScore(result, seat);
   const shown = score === null ? `N-S ${formatScore(result.score_ns)}` : formatScore(score);
-  const call = `${callLabel(result.contract!)}${doubledMark(result.doubled)}`;
-  return `${call} ${result.declarer} ${madeSuffix(result.made_by)} · ${shown}`;
+  return `${contract} · ${shown}`;
+}
+
+// The contract and how it went in table notation, "2♣X W +2"; null for a
+// passed-out board.
+export function contractShort(
+  result: Pick<BoardResult, 'contract' | 'doubled' | 'declarer' | 'made_by'>,
+): string | null {
+  if (!result.contract || !result.declarer || result.made_by === null) {
+    return null;
+  }
+  const call = `${callLabel(result.contract)}${doubledMark(result.doubled)}`;
+  return `${call} ${result.declarer} ${madeSuffix(result.made_by)}`;
+}
+
+// Who played the contract, as the result's hero card says it: "You
+// declared", "radu declared" (the declarer's username, when known), or the
+// side, "E-W declared".
+export function declaredText(
+  declarer: Seat,
+  mySeat: Seat | null,
+  players: Partial<Record<Seat, Pick<PublicUser, 'username'> | null>> = {},
+): string {
+  if (declarer === mySeat) {
+    return 'You declared';
+  }
+  const name = players[declarer]?.username;
+  return `${name ?? SIDE_LABELS[sideOf(declarer)]} declared`;
+}
+
+// One row of "Same board elsewhere": the table's result told by its players
+// (a result row has no table name), N-S's score, and whether it is ours.
+export interface OtherTableRow {
+  playingId: number;
+  // "You" for our own table, else its N-S pair: "anna & luis".
+  label: string;
+  // Every player there, for a tooltip: "anna, dan, luis, vlad".
+  players: string;
+  // "3NT N +2", or "Passed out".
+  contract: string;
+  scoreNs: number;
+  mine: boolean;
+}
+
+// The board's results at every table (best N-S first) as the finished
+// board's list: the first `max`, always with our own row (in place of the
+// last when it is further down). Empty until another table has played it.
+export function otherTableRows(
+  board: BoardResults | null | undefined,
+  playingId: number | null,
+  max = 5,
+): OtherTableRow[] {
+  if (!board || board.results.length < 2) {
+    return [];
+  }
+  const rows = board.results;
+  const mineAt = rows.findIndex((r) => r.playing_id === playingId);
+  const shown = mineAt < max ? rows.slice(0, max) : [...rows.slice(0, max - 1), rows[mineAt]];
+  return shown.map((row) => {
+    const mine = row.playing_id === playingId;
+    const name = (seat: Seat) => row.players[seat]?.username ?? '?';
+    return {
+      playingId: row.playing_id,
+      label: mine ? 'You' : `${name('N')} & ${name('S')}`,
+      players: (['N', 'E', 'S', 'W'] as Seat[]).map(name).join(', '),
+      contract: contractShort(row) ?? 'Passed out',
+      scoreNs: row.score_ns,
+      mine,
+    };
+  });
 }
 
 // The board's score for whoever sits at `seat`: positive when their side
