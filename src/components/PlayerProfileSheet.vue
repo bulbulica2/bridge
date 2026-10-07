@@ -9,6 +9,8 @@
   >
     <ion-content class="ion-padding">
       <div v-if="shown" class="profile">
+        <!-- The plate's avatar, large (#163). -->
+        <PlayerAvatar :user="shown" class="profile-avatar" />
         <h2 class="profile-name">{{ shown.name }}</h2>
         <p class="profile-username">
           @{{ shown.username }}
@@ -60,6 +62,7 @@ import { nextTick, ref, watch } from 'vue';
 import { IonModal, IonContent, IonButton, IonSpinner, IonText, useIonRouter } from '@ionic/vue';
 import BanUserForm from '@/components/BanUserForm.vue';
 import AdminBadge from '@/components/AdminBadge.vue';
+import PlayerAvatar from '@/components/PlayerAvatar.vue';
 import PlayerStats from '@/components/PlayerStats.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -147,16 +150,34 @@ function openPage() {
   text-align: center;
 }
 
+.profile-avatar {
+  --avatar-size: 64px;
+  margin: 8px auto 0;
+  box-shadow: 0 0 0 4px var(--bridge-plate);
+  background: var(--bridge-plate);
+  color: var(--bridge-on-plate);
+}
+
+.profile-avatar.player-avatar-robot {
+  background: var(--bridge-avatar-robot);
+  color: var(--bridge-avatar-ink);
+}
+
 .profile-name {
-  margin: 8px 0 0;
+  margin: 12px 0 0;
   font-size: 1.3rem;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
 .profile-username {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   margin: 4px 0 16px;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
   overflow-wrap: anywhere;
 }
 
@@ -170,7 +191,7 @@ function openPage() {
 .profile-empty,
 .profile-gone {
   margin: 0 0 16px;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
 }
 
 .refreshing {
@@ -179,7 +200,7 @@ function openPage() {
   justify-content: center;
   gap: 8px;
   margin-bottom: 12px;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
   font-size: 0.9rem;
 }
 
@@ -202,5 +223,10 @@ function openPage() {
 .ban-form,
 .ban-open {
   margin-bottom: 12px;
+}
+
+/* The sheet's buttons: Daylight's 48 px, side by side with room. */
+.profile ion-button {
+  margin-inline: 0;
 }
 </style>

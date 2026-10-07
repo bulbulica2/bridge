@@ -428,6 +428,8 @@ describe('PlayerProfileSheet stats', () => {
 
     expect(http.get).toHaveBeenCalledWith('/users/3/stats')
     expect(wrapper.find('.stats-summary').text()).toBe('48 boards · 65 % won · avg 56.0 %')
+    // The plate's avatar, large (#163).
+    expect(wrapper.get('.profile-avatar').text()).toBe(ann.username.slice(0, 2).toUpperCase())
   })
 
   test('reads the next player tapped', async () => {
@@ -460,6 +462,8 @@ describe('PlayerProfileSheet stats', () => {
 
     expect(wrapper.find('.player-stats').exists()).toBe(false)
     expect(http.get).not.toHaveBeenCalledWith('/users/9/stats')
+    expect(wrapper.get('.profile-avatar').classes()).toContain('player-avatar-robot')
+    expect(wrapper.find('.profile-avatar svg').exists()).toBe(true)
   })
 
   test('nothing for an account that is gone', async () => {

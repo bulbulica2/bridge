@@ -145,8 +145,8 @@ const label = computed(() => {
    ring over a neighbour's index. Its ring goes under the cards above it. */
 .slot.won :deep(.playing-card) {
   box-shadow:
-    0 0 0 3px var(--bridge-amber, #f59e0b),
-    0 4px 10px rgba(0, 0, 0, 0.3);
+    0 0 0 3px var(--bridge-amber),
+    0 4px 10px var(--bridge-card-shadow);
 }
 
 /* Where the viewer's card goes: a dashed outline on the table. */
@@ -155,7 +155,7 @@ const label = computed(() => {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
-  border: 2px dashed var(--bridge-table-slot, #6b8bb5);
+  border: 2px dashed var(--bridge-table-slot);
   border-radius: calc(var(--card-w) * 0.12);
 }
 
@@ -199,7 +199,7 @@ const label = computed(() => {
 }
 
 .slot.won .seat-tag {
-  color: var(--ion-color-warning-shade, #b45309);
+  color: var(--ion-color-warning-shade);
 }
 
 .slot-top .seat-tag,

@@ -212,7 +212,8 @@ defineExpose({ load });
 }
 
 .set-header {
-  --background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.08);
+  --background: var(--bridge-navy-tint);
+  --color: var(--bridge-navy-tint-text);
   margin-top: 8px;
 }
 

@@ -110,10 +110,10 @@ const tone = computed(() => {
 }
 
 .score-plus {
-  color: var(--ion-color-success-shade, #2dd36f);
+  color: var(--bridge-pass-text);
 }
 
 .score-minus {
-  color: var(--ion-color-danger, #eb445a);
+  color: var(--bridge-double-text);
 }
 </style>

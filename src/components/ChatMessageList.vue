@@ -59,20 +59,25 @@ withDefaults(
   list-style: none;
 }
 
+/* Daylight (#163): the others' messages on the chip grey, ours on the
+   right in the navy tint; a message to the whole table marked green. */
 .chat-message {
   max-width: 92%;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: var(--ion-color-step-100, #e6e6e6);
+  padding: 8px 12px;
+  border-radius: 12px 12px 12px 4px;
+  background: var(--bridge-chip);
+  color: var(--bridge-ink);
 }
 
 .chat-message.mine {
   align-self: flex-end;
-  background: rgba(var(--ion-color-primary-rgb, 56, 128, 255), 0.15);
+  border-radius: 12px 12px 4px 12px;
+  background: var(--bridge-navy-tint);
+  color: var(--bridge-navy-tint-text);
 }
 
 .chat-message.to-table {
-  border-left: 3px solid var(--ion-color-success, #2dd36f);
+  box-shadow: inset 3px 0 0 var(--bridge-pass-text);
 }
 
 .chat-message p {
@@ -84,13 +89,13 @@ withDefaults(
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 6px;
-  font-size: 0.72rem;
-  color: var(--ion-color-medium);
+  font-size: 0.75rem;
+  color: var(--bridge-muted);
 }
 
 .chat-sender {
   font-weight: 700;
-  color: var(--ion-text-color, #1a1a1a);
+  color: inherit;
 }
 
 .chat-to {
@@ -113,8 +118,8 @@ withDefaults(
   display: inline-flex;
   margin-right: 6px;
   padding: 0 6px;
-  border-radius: 999px;
-  background: var(--ion-background-color, #fff);
+  border-radius: var(--bridge-radius-pill);
+  background: var(--bridge-surface);
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -122,6 +127,6 @@ withDefaults(
 .chat-empty {
   margin: 8px 0;
   text-align: center;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
 }
 </style>

@@ -3,7 +3,8 @@
        seat's own clock is on its tag at the table ("away · 0:42", bb#138),
        so this says only once what those clocks are for, whoever and however
        many are away, with no countdown. With `held`, the viewer's own held
-       seat instead, seen away from the table, with its clock. -->
+       seat instead, seen away from the table, with its clock. Daylight's
+       orange-tint banner (#163). -->
   <div v-if="line" class="away-notice" role="status" aria-live="polite">
     <p class="away-line">{{ line }}</p>
   </div>
@@ -44,14 +45,15 @@ const line = computed<string | null>(() => {
 <style scoped>
 .away-notice {
   margin: 8px 0;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border-left: 4px solid var(--ion-color-warning, #ffc409);
-  background: rgba(var(--ion-color-warning-rgb, 255, 196, 9), 0.12);
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bridge-action-tint);
+  color: var(--bridge-action-text);
 }
 
 .away-line {
   margin: 0;
   font-size: 0.9rem;
+  line-height: 1.4;
 }
 </style>

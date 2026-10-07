@@ -164,7 +164,7 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
 .card-button:not(:disabled) :deep(.playing-card),
 .card-button.sending :deep(.playing-card) {
   box-shadow:
-    0 0 0 3px var(--playable-ring, var(--bridge-action, #c2410c)),
+    0 0 0 3px var(--playable-ring, var(--bridge-action)),
     0 8px 16px rgba(20, 32, 51, 0.25);
 }
 
@@ -198,13 +198,13 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
   0%,
   100% {
     box-shadow:
-      0 0 0 3px #fff,
-      0 0 0 5px var(--bridge-amber, #f59e0b);
+      0 0 0 3px var(--bridge-card-face),
+      0 0 0 5px var(--bridge-amber);
   }
   50% {
     box-shadow:
-      0 0 0 3px #fff,
-      0 0 0 9px rgba(245, 158, 11, 0.45);
+      0 0 0 3px var(--bridge-card-face),
+      0 0 0 9px var(--bridge-amber-glow);
   }
 }
 
@@ -216,7 +216,7 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
   .card-button.forced :deep(.playing-card) {
     animation: none;
     box-shadow:
-      0 0 0 3px #fff,
+      0 0 0 3px var(--bridge-card-face),
       0 0 0 7px rgba(245, 158, 11, 0.6);
   }
 }
@@ -227,7 +227,7 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
 
 .card-button:focus-visible :deep(.playing-card) {
   box-shadow:
-    0 0 0 3px var(--bridge-surface, #fff),
+    0 0 0 3px var(--bridge-surface),
     0 0 0 6px var(--ion-color-primary);
 }
 

@@ -36,12 +36,12 @@ defineProps<{ card: Card }>();
   box-sizing: border-box;
   width: var(--card-w);
   height: var(--card-h);
-  border: 1px solid var(--bridge-card-border, #d5d9e0);
+  border: 1px solid var(--bridge-card-border);
   border-radius: calc(var(--card-w) * 0.12);
-  background: var(--bridge-card-face, #fff);
-  color: var(--bridge-card-ink, #142033);
+  background: var(--bridge-card-face);
+  color: var(--bridge-card-ink);
   box-shadow:
-    0 1px 2px rgba(20, 32, 51, 0.3),
+    0 1px 2px var(--bridge-card-shadow),
     0 4px 10px rgba(20, 32, 51, 0.18);
   font-family: var(--bridge-font-numbers, sans-serif);
   font-weight: 700;
@@ -49,7 +49,7 @@ defineProps<{ card: Card }>();
 }
 
 .playing-card.red {
-  color: var(--bridge-card-red, #c8102e);
+  color: var(--bridge-card-red);
 }
 
 .corner {

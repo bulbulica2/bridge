@@ -39,7 +39,15 @@
         <BoardChat v-bind="chatProps" v-model:draft="chatDraft" v-on="chatEvents" />
       </aside>
 
-      <div class="play" :class="{ 'with-chat-side': chatSide, 'with-chat-sheet': chatSheet }">
+      <!-- A wide screen with room for it (#163): the table takes boards
+           A/B's layout (BridgeTable's `wide`), the board tile in its corner
+           and, during the auction, the auction and the bidding box in its
+           centre. -->
+      <div
+        ref="playEl"
+        class="play"
+        :class="{ 'with-chat-side': chatSide, 'with-chat-sheet': chatSheet, 'play-wide': wideTable }"
+      >
         <div v-if="notFound" class="gone">
           <p>This table no longer exists.</p>
           <ion-button router-link="/tables" router-direction="back">Back to tables</ion-button>
@@ -74,7 +82,11 @@
                on a phone the dealer beside it; then where the table is in
                its set of four boards. -->
           <div v-if="playing.set || vulnerable !== null" class="board-bar">
-            <BoardTile v-if="vulnerable !== null && playing.board" :board="playing.board" class="board-tile-wide" />
+            <BoardTile
+              v-if="vulnerable !== null && playing.board && !wideTable"
+              :board="playing.board"
+              class="board-tile-wide"
+            />
             <VulnerabilityLabel
               v-if="vulnerable !== null"
               :vulnerable="vulnerable"
@@ -235,27 +247,51 @@
             :banks="turnClock.banks.value"
             :ready="readySeats"
             :calls="playing.phase === 'auction' ? (playing.auction ?? []) : null"
+            :wide="wideTable"
             :busy="sendingCard !== null"
             :sending-id="sendingCard"
             @select="player = $event"
             @play="playCard"
           >
+            <template v-if="wideTable && vulnerable !== null && playing.board" #corner>
+              <BoardTile :board="playing.board" />
+            </template>
+
             <p class="waiting-title">
               {{ seatedCount < 4 ? 'Waiting for 4 players' : 'Waiting for Start' }}
             </p>
             <p class="waiting-count">{{ seatedCount }} of 4 seated</p>
 
+            <!-- A wide table's auction: the calls so far and, on our turn,
+                 the bidding box under them, in the middle of the table. It
+                 keeps the height it reached until the next board, so the
+                 table doesn't shrink when the box goes after our call. -->
+            <template v-if="auctionCentre" #centre>
+              <div ref="auctionEl" class="centre-auction">
+                <AuctionHistory v-bind="liveAuctionProps" v-on="auctionEvents" />
+                <template v-if="canBid">
+                  <BiddingBox v-if="game.bids.length > 0" v-bind="biddingProps" v-on="biddingEvents" />
+                  <div v-else class="bids-missing">
+                    <p v-if="bidsError">{{ bidsError }}</p>
+                    <p v-else><ion-spinner name="dots" /> Loading the bidding box…</p>
+                    <ion-button v-if="bidsError" size="small" fill="outline" @click="loadBids()">
+                      Try again
+                    </ion-button>
+                  </div>
+                </template>
+              </div>
+            </template>
             <!-- Once the board is over the centre goes back to the board's
                  details, after the last trick's moment on show. -->
             <template
-              v-if="playing.contract && (playing.phase === 'play' || finishedTrick)"
+              v-else-if="playing.contract && (playing.phase === 'play' || finishedTrick)"
               #centre
             >
               <TrickArea
                 :cards="shownTrick.cards"
                 :my-seat="mySeat"
                 :winner="shownTrick.winner"
-                :trump="playing.contract.bid.strain"
+                :trump="playing.contract!.bid.strain"
                 :my-slot="playing.phase === 'play'"
               />
               <div class="trick-foot">
@@ -300,18 +336,9 @@
                over); until the board is over, an opponent's call may be
                asked about and ours answered. -->
           <AuctionHistory
-            v-if="playing.phase === 'auction' && playing.auction"
-            :auction="playing.auction"
-            :board="playing.board"
-            :my-seat="mySeat"
-            :turn="playing.turn"
-            :players="players"
-            live
-            bidding
-            :busy="noting"
-            @ask="askAbout"
-            @explain="explainIndex = $event"
-            @chat="askInChat"
+            v-if="playing.phase === 'auction' && playing.auction && !auctionCentre"
+            v-bind="liveAuctionProps"
+            v-on="auctionEvents"
           />
 
           <!-- A finished board shows every hand on the table instead. -->
@@ -353,18 +380,8 @@
             <p v-if="claimBlocked" class="claim-locked-note">{{ CLAIM_LOCKED_TEXT }}</p>
           </div>
 
-          <template v-if="canBid">
-            <BiddingBox
-              v-if="game.bids.length > 0"
-              v-model:alert="alertDraft.alert"
-              v-model:explanation="alertDraft.explanation"
-              :bids="game.bids"
-              :auction="playing.auction ?? []"
-              :seat="mySeat!"
-              :busy="calling"
-              :class="{ 'turn-urgent': turnClock.urgent.value }"
-              @call="makeCall"
-            />
+          <template v-if="canBid && !auctionCentre">
+            <BiddingBox v-if="game.bids.length > 0" v-bind="biddingProps" v-on="biddingEvents" />
             <div v-else class="bids-missing">
               <p v-if="bidsError">{{ bidsError }}</p>
               <p v-else><ion-spinner name="dots" /> Loading the bidding box…</p>
@@ -384,9 +401,7 @@
             :players="players"
             :live="playing.phase === 'play'"
             :busy="noting"
-            @ask="askAbout"
-            @explain="explainIndex = $event"
-            @chat="askInChat"
+            v-on="auctionEvents"
           />
 
           <OfflineRefresh :table-id="tableId" :disabled="loading" @refresh="load()" />
@@ -485,8 +500,10 @@ import VulnerabilityLabel from '@/components/VulnerabilityLabel.vue';
 import { useAwayTags } from '@/composables/useAwayTags';
 import { useDoubleDummy } from '@/composables/useDoubleDummy';
 import { useForcedPlay } from '@/composables/useForcedPlay';
+import { useElementWidth } from '@/composables/useElementWidth';
 import { useMediaQuery } from '@/composables/useMediaQuery';
 import { useStaleDeadline } from '@/composables/useStaleDeadline';
+import { useSteadyHeight } from '@/composables/useSteadyHeight';
 import { useTurnClock } from '@/composables/useTurnClock';
 import { useAuthStore } from '@/stores/auth';
 import { useChatStore } from '@/stores/chat';
@@ -518,6 +535,7 @@ import { currentSet, setLabel } from '@/utils/sets';
 import { reviewChoices } from '@/utils/review';
 import type { SeenBoard } from '@/utils/review';
 import { startNeeded } from '@/utils/start';
+import { WIDE_TABLE_MIN_PX } from '@/utils/layout';
 import { turnNotice } from '@/utils/turn';
 import { TIME_UP_TEXT, actingSeat, awayOnTurn, turnClockText, turnDeadline } from '@/utils/turnClock';
 import { showToast } from '@/utils/toast';
@@ -576,6 +594,11 @@ const chatSending = ref(false);
 const chatWide = useMediaQuery('(min-width: 1100px)');
 // A phone's chat sheet, which would cover the cards: closed until asked for.
 const sheetOpen = ref(false);
+// The page's column, as wide as the window, the menu and the chat leave it.
+const playEl = ref<HTMLElement | null>(null);
+const playWidth = useElementWidth(playEl);
+// The wide table's auction in the middle of the table (see useSteadyHeight).
+const auctionEl = ref<HTMLElement | null>(null);
 
 const me = computed(() => auth.user?.id ?? null);
 
@@ -640,6 +663,54 @@ const myTurn = computed(
 const canBid = computed(
   () => playing.value?.phase === 'auction' && myTurn.value && mySeat.value !== null,
 );
+
+// A wide screen whose column has room for boards A/B's table (#163): side
+// plates, and a centre for the auction and the bidding box. With the menu
+// pinned and the chat open, a screen just over 1100 px hasn't, and keeps
+// the table it has below.
+const wideTable = computed(() => chatWide.value && playWidth.value >= WIDE_TABLE_MIN_PX);
+
+// The auction in the wide table's centre, with the bidding box under it.
+const auctionCentre = computed(
+  () => wideTable.value && playing.value?.phase === 'auction' && !!playing.value.auction,
+);
+useSteadyHeight(auctionEl, () => playing.value?.playing_id);
+
+// The auction while it lasts, below the table or in its centre: an
+// opponent's call may be asked about and ours answered.
+const liveAuctionProps = computed(() => ({
+  auction: playing.value?.auction ?? [],
+  board: playing.value?.board ?? null,
+  mySeat: mySeat.value,
+  turn: playing.value?.turn ?? null,
+  players: players.value,
+  live: true,
+  bidding: true,
+  busy: noting.value,
+}));
+
+const auctionEvents = {
+  ask: askAbout,
+  explain: (index: number) => (explainIndex.value = index),
+  chat: askInChat,
+};
+
+// The bidding box on our turn, its alert typed into the page's draft.
+const biddingProps = computed(() => ({
+  alert: alertDraft.value.alert,
+  explanation: alertDraft.value.explanation,
+  bids: game.bids,
+  auction: playing.value?.auction ?? [],
+  seat: mySeat.value!,
+  busy: calling.value,
+  class: { 'turn-urgent': turnClock.urgent.value },
+}));
+
+const biddingEvents = {
+  call: makeCall,
+  'update:alert': (alert: boolean) => (alertDraft.value.alert = alert),
+  'update:explanation': (explanation: string) => (alertDraft.value.explanation = explanation),
+};
 
 // The hand we play from now, if any: ours, dummy's as declarer, or a robot
 // declarer's as its dummy.
@@ -1708,6 +1779,45 @@ async function refresh(event: CustomEvent) {
   padding-right: calc(328px - clamp(0px, (100% - 1376px) * 1000, 328px));
 }
 
+/* A wide table (#163): room for side plates and the auction in the centre.
+   With the chat beside it, the clamp() below steps its padding down where
+   the column centred on the whole content already clears the chat (100 % >=
+   1040 + 2 x 328 px). */
+.play.play-wide {
+  max-width: 1040px;
+}
+
+.play.play-wide.with-chat-side {
+  padding-right: calc(328px - clamp(0px, (100% - 1696px) * 1000, 328px));
+}
+
+/* The auction and the bidding box, two cards on the table's navy (board
+   A), as wide as the centre allows up to the bidding box's comfort. */
+.centre-auction {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 520px;
+  color: var(--bridge-ink);
+  text-align: left;
+}
+
+.centre-auction > * {
+  margin: 0;
+}
+
+.play .centre-auction :deep(.empty) {
+  color: var(--bridge-muted);
+}
+
+.centre-auction .bids-missing {
+  padding: 12px;
+  border-radius: var(--bridge-radius-card);
+  background: var(--bridge-surface);
+}
+
 /* Room to scroll the bidding box and the hand above a phone's chat sheet. */
 .play.with-chat-sheet {
   padding-bottom: 50vh;
@@ -1720,10 +1830,10 @@ async function refresh(event: CustomEvent) {
   width: 320px;
   box-sizing: border-box;
   padding: 8px 12px;
-  border: 1px solid var(--ion-color-step-150, #e0e0e0);
-  border-radius: 12px;
-  background: var(--ion-background-color, #fff);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--bridge-line);
+  border-radius: var(--bridge-radius-panel);
+  background: var(--bridge-surface);
+  box-shadow: 0 4px 16px var(--bridge-shadow);
 }
 
 .chat-badge {
@@ -1796,17 +1906,17 @@ async function refresh(event: CustomEvent) {
    pulsing unless motion is reduced. */
 .turn-urgent {
   border-radius: 8px;
-  outline: 2px solid var(--ion-color-danger, #c5000f);
+  outline: 2px solid var(--ion-color-danger);
   outline-offset: 4px;
   animation: turn-urgent-pulse 1s ease-in-out infinite alternate;
 }
 
 @keyframes turn-urgent-pulse {
   from {
-    outline-color: var(--ion-color-danger, #c5000f);
+    outline-color: var(--ion-color-danger);
   }
   to {
-    outline-color: rgba(var(--ion-color-danger-rgb, 197, 0, 15), 0.25);
+    outline-color: rgba(var(--ion-color-danger-rgb), 0.25);
   }
 }
 
@@ -1906,7 +2016,8 @@ async function refresh(event: CustomEvent) {
   margin: 0 0 12px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.08);
+  background: var(--bridge-navy-tint);
+  color: var(--bridge-navy-tint-text);
   text-align: center;
 }
 

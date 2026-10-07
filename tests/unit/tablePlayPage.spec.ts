@@ -463,7 +463,7 @@ describe('TablePlayPage filling empty seats', () => {
 
     const box = wrapper.findComponent(StartBox)
     expect(box.props('manage')).toBe(true)
-    expect(wrapper.findAll('.start-fill li').map((li) => li.attributes('data-fill-seat'))).toEqual(['N', 'E', 'W'])
+    expect(wrapper.findAll('.start-fill').map((row) => row.attributes('data-fill-seat'))).toEqual(['N', 'E', 'W'])
   })
 
   test('nobody else gets them', async () => {

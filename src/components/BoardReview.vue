@@ -317,7 +317,8 @@ function go(to: number) {
   margin: 0 0 12px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.08);
+  background: var(--bridge-navy-tint);
+  color: var(--bridge-navy-tint-text);
   text-align: center;
 }
 

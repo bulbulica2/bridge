@@ -228,8 +228,15 @@ describe('StartBox.vue', () => {
 
     const ready = wrapper.findAll('.start-seats li.is-ready').map((li) => li.attributes('data-seat'))
     expect(ready).toEqual(['N', 'E'])
-    expect(wrapper.get('[data-seat="S"]').text()).toContain('S you')
-    expect(wrapper.get('[data-seat="W"]').text()).toContain('W empty')
+    // Plates (#163): the viewer's ringed, a tick for each Start, an empty
+    // seat dashed.
+    expect(wrapper.get('[data-seat="S"] .seat-name').text()).toBe('South')
+    expect(wrapper.get('[data-seat="S"] .seat-you').text()).toBe('· you')
+    expect(wrapper.get('[data-seat="S"] .seat-plate').classes()).toContain('seat-plate-mine')
+    expect(wrapper.get('[data-seat="E"] .plate-ready').text()).toBe('· ready')
+    expect(wrapper.findAll('.seat-plate-tick')).toHaveLength(2)
+    expect(wrapper.get('[data-seat="N"]').text()).toContain('· robot')
+    expect(wrapper.get('[data-seat="W"] .start-empty').text()).toBe('Empty · West')
     expect(wrapper.text()).toContain('Waiting for a fourth player, and for you to press Start.')
   })
 
@@ -247,8 +254,10 @@ describe('StartBox.vue', () => {
       props: { table: makeTable({ N: 'robot-1', S: 'ana' }), me: 1, showSeats: true, manage: true },
     })
 
-    const rows = wrapper.findAll('.start-fill li')
-    expect(rows.map((li) => li.attributes('data-fill-seat'))).toEqual(['E', 'W'])
+    const rows = wrapper.findAll('.start-fill')
+    expect(rows.map((row) => row.attributes('data-fill-seat'))).toEqual(['E', 'W'])
+    // Inside the empty seat's dashed plate.
+    expect(wrapper.get('[data-seat="E"] .start-empty').text()).toContain('Empty · East')
     await rows[0].get('.start-seat-player').trigger('click')
     await rows[1].get('.start-add-robot').trigger('click')
 
@@ -433,9 +442,10 @@ describe('TableDetailPage.vue Start', () => {
     expect(wrapper.get('.start-box').text()).toContain('Waiting for you to press Start.')
     // Robots are marked ready on the compass; we aren't yet.
     for (const seat of ['n', 'e', 'w']) {
-      expect(wrapper.get(`.seat-${seat}`).text()).toContain('Ready')
+      expect(wrapper.get(`.seat-${seat}`).text()).toContain('· ready')
+      expect(wrapper.find(`.seat-${seat} .seat-plate-tick`).exists()).toBe(true)
     }
-    expect(wrapper.get('.seat-s').text()).not.toContain('Ready')
+    expect(wrapper.get('.seat-s').text()).not.toContain('ready')
 
     const dealt = makeTable(WITH_ROBOTS, [], { board_id: 8 })
     vi.mocked(tablesService.startTable).mockResolvedValue({ ...dealt, playing: stateOf(dealt) })
@@ -459,7 +469,7 @@ describe('TableDetailPage.vue Start', () => {
     expect(box.text()).toContain('Waiting for the others…')
     expect(box.text()).toContain('Waiting for East (bob) to press Start.')
     expect(box.find('.start-cancel').exists()).toBe(true)
-    expect(wrapper.get('.seat-s').text()).toContain('Ready')
+    expect(wrapper.get('.seat-s').text()).toContain('· ready')
     expect(navigate).not.toHaveBeenCalled()
 
     // Bob's Start deals: we learn it from TableUpdated.
@@ -486,7 +496,7 @@ describe('TableDetailPage.vue Start', () => {
     expect(wrapper.get('.start-box').text()).toContain(
       'Waiting for a fourth player, and for you to press Start.',
     )
-    expect(wrapper.get('.seat-e').text()).toContain('Ready')
+    expect(wrapper.get('.seat-e').text()).toContain('· ready')
   })
 
   test('no Start during a board, nor for somebody not seated here', async () => {

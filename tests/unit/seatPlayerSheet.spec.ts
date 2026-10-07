@@ -78,7 +78,8 @@ describe('SeatPlayerSheet', () => {
     const wrapper = mountSheet()
 
     const items = wrapper.findAllComponents(IonItem)
-    expect(items.map((i) => i.text())).toEqual(['bobBob', 'cyCyalready at a table'])
+    // Each with the plates' avatar (#163).
+    expect(items.map((i) => i.text())).toEqual(['BObobBob', 'CYcyCyalready at a table'])
     expect(items[1].props('disabled')).toBe(true)
     expect(wrapper.find('.searching').exists()).toBe(false)
     expect(wrapper.text()).toContain('Searching…')

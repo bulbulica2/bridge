@@ -823,7 +823,7 @@ describe('TablePlayPage between boards', () => {
     expect(wrapper.find('.next-board').exists()).toBe(false)
     const box = wrapper.get('.start-box')
     expect(box.text()).toContain('Waiting for a fourth player, and for North (ann), East (bob) and you to press Start.')
-    expect(box.get('[data-seat="W"]').text()).toContain('W empty')
+    expect(box.get('[data-seat="W"]').text()).toBe('Empty · West')
   })
 
   test('a player replaced after the board: Start, which deals the next one here', async () => {

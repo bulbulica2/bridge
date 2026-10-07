@@ -13,8 +13,8 @@
   align-items: center;
   padding: 1px 6px;
   border-radius: 6px;
-  background: var(--bridge-amber, #f59e0b);
-  color: var(--bridge-on-amber, #2b1700);
+  background: var(--bridge-amber);
+  color: var(--bridge-on-amber);
   font-size: 0.65rem;
   font-weight: 700;
   line-height: 1.4;

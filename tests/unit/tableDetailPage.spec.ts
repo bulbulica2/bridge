@@ -279,7 +279,7 @@ describe('TableDetailPage sitting down', () => {
     vi.spyOn(store, 'seatedTable').mockResolvedValue(null)
     const join = vi.spyOn(store, 'join').mockResolvedValue(makeTable({ N: 'bob', E: 'ana' }))
 
-    await click(wrapper, 'E', 'Sit here')
+    await click(wrapper, 'E', 'Sit here · East')
 
     expect(join).toHaveBeenCalledWith(5, 'E')
     expect(confirmMove).not.toHaveBeenCalled()
@@ -292,7 +292,7 @@ describe('TableDetailPage sitting down', () => {
     const join = vi.spyOn(store, 'join')
     vi.mocked(confirmMove).mockResolvedValue(false)
 
-    await click(wrapper, 'E', 'Sit here')
+    await click(wrapper, 'E', 'Sit here · East')
 
     expect(confirmMove).toHaveBeenCalled()
     expect(join).not.toHaveBeenCalled()
@@ -304,7 +304,7 @@ describe('TableDetailPage sitting down', () => {
     vi.spyOn(store, 'seatedTable').mockResolvedValue(null)
     vi.spyOn(store, 'join').mockRejectedValue(axiosError(409, 'That seat is taken.'))
 
-    await click(wrapper, 'E', 'Sit here')
+    await click(wrapper, 'E', 'Sit here · East')
 
     expect(showToast).toHaveBeenCalledWith('That seat is taken.', 'danger')
     expect(tablesService.getTable).toHaveBeenCalledTimes(2)

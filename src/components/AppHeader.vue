@@ -104,7 +104,7 @@ const {
 }
 
 .status-board {
-  background: var(--ion-color-success, #2dd36f);
+  background: var(--bridge-pass-text);
 }
 
 /* Our turn: the shortcut turns into the action-tinted pill, its dot the
@@ -127,7 +127,7 @@ const {
 }
 
 .status-away {
-  background: var(--ion-color-warning, #ffc409);
+  background: var(--bridge-amber);
 }
 
 /* iOS centres the title over the whole toolbar, where the table's button

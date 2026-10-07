@@ -21,8 +21,15 @@
        deal lies face up, each hand at its seat (in a replay, what is left
        of it, in the room the hand took as dealt). Dummy's and a robot
        declarer's cards read trumps first (`trump`, see suitOrder); the
-       claimer's and the deal keep bridge order. -->
-  <div class="bridge-table">
+       claimer's and the deal keep bridge order. With `wide` (the play page
+       on a wide screen, #163) the table takes boards A/B's layout: the
+       `corner` slot (the board tile) top left, partner top centre, the
+       opponents' plates upright where room is short, and a centre wide
+       enough for the auction and the bidding box. -->
+  <div class="bridge-table" :class="{ 'table-wide': wide, 'with-corner': wide && !!$slots.corner }">
+    <div v-if="wide && $slots.corner" class="corner">
+      <slot name="corner" />
+    </div>
     <div
       v-for="side in SIDES"
       :key="side"
@@ -252,6 +259,8 @@ const props = withDefaults(
     // The auction so far, while it lasts: each seat's last call by its
     // plate. Null (the default) shows none.
     calls?: AuctionCall[] | null;
+    // A wide screen's layout (see the comment above).
+    wide?: boolean;
     busy?: boolean;
     sendingId?: number | null;
   }>(),
@@ -274,6 +283,7 @@ const props = withDefaults(
     banks: () => ({}),
     ready: () => [],
     calls: null,
+    wide: false,
     busy: false,
     sendingId: null,
   },
@@ -358,10 +368,9 @@ function turnLabel(side: ScreenSide): string {
    card on it is ringed amber (HandView's `--playable-ring`). */
 .bridge-table {
   --playable-ring: var(--bridge-amber);
-  --bridge-table-slot: #6b8bb5;
-  --call-chip-bg: #fff;
-  --call-chip-ink: #142033;
-  --call-chip-red: #c8102e;
+  --call-chip-bg: var(--bridge-card-face);
+  --call-chip-ink: var(--bridge-card-ink);
+  --call-chip-red: var(--bridge-card-red);
   display: grid;
   grid-template-columns: 1fr 1.1fr 1fr;
   gap: 10px 8px;
@@ -449,11 +458,11 @@ function turnLabel(side: ScreenSide): string {
 /* The usual convention, on the plate's top edge: red for a vulnerable
    side, green for not. */
 .seat.vul .plate {
-  box-shadow: inset 0 3px 0 #e5484d;
+  box-shadow: inset 0 3px 0 var(--bridge-vul-stripe);
 }
 
 .seat.not-vul .plate {
-  box-shadow: inset 0 3px 0 #3fa45b;
+  box-shadow: inset 0 3px 0 var(--bridge-not-vul-stripe);
 }
 
 /* On turn: the orange ring (over the stripe). */
@@ -465,12 +474,12 @@ function turnLabel(side: ScreenSide): string {
 
 /* Away mid-set: a red plate with its clock. */
 .seat-away .plate {
-  background: #5a1d1a;
+  background: var(--bridge-plate-away);
 }
 
 .seat-away .avatar {
-  background: #fde6e4;
-  color: #9f1d17;
+  background: var(--bridge-avatar-away);
+  color: var(--bridge-avatar-away-ink);
 }
 
 .avatar {
@@ -481,14 +490,14 @@ function turnLabel(side: ScreenSide): string {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: #fff;
-  color: #1d3a5f;
+  background: var(--bridge-avatar);
+  color: var(--bridge-avatar-ink);
   font-size: 0.75rem;
   font-weight: 700;
 }
 
 .avatar-robot {
-  background: #cfe0ff;
+  background: var(--bridge-avatar-robot);
 }
 
 .robot-icon {
@@ -545,12 +554,12 @@ function turnLabel(side: ScreenSide): string {
 }
 
 .seat-away .plate-sub {
-  color: #ffc2bc;
+  color: var(--bridge-on-plate-away);
 }
 
 .seat-away-tag {
-  --away-tag-color: #ffc2bc;
-  --away-tag-urgent: #fff;
+  --away-tag-color: var(--bridge-on-plate-away);
+  --away-tag-urgent: var(--bridge-on-table);
   font-size: 0.7rem;
 }
 
@@ -580,7 +589,7 @@ function turnLabel(side: ScreenSide): string {
   flex: none;
   padding: 2px 7px;
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--bridge-on-table-chip);
   color: var(--bridge-on-table-muted);
   font-family: var(--bridge-font-numbers);
   font-size: 0.95rem;
@@ -589,13 +598,13 @@ function turnLabel(side: ScreenSide): string {
 }
 
 .seat-bank-running {
-  background: #fff;
-  color: #142033;
+  background: var(--bridge-bank-running);
+  color: var(--bridge-on-bank-running);
 }
 
 .seat-bank-low {
-  background: #b3261e;
-  color: #fff;
+  background: var(--bridge-bank-low);
+  color: var(--bridge-on-bank-low);
 }
 
 .seat-ready-mark {
@@ -606,8 +615,8 @@ function turnLabel(side: ScreenSide): string {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #2f7a5b;
-  color: #fff;
+  background: var(--bridge-ready);
+  color: var(--bridge-on-ready);
 }
 
 .seat-ready-mark svg {
@@ -673,11 +682,11 @@ function turnLabel(side: ScreenSide): string {
   align-items: center;
   gap: 4px;
   font-weight: 700;
-  color: #ffb27a;
+  color: var(--bridge-on-table-turn);
 }
 
 .turn.turn-thinking {
-  color: #b8c8ff;
+  color: var(--bridge-on-table-thinking);
 }
 
 .turn-dot {
@@ -704,7 +713,7 @@ function turnLabel(side: ScreenSide): string {
   min-height: 88px;
   padding: 8px 6px;
   border-radius: var(--bridge-radius-card);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bridge-on-table-wash);
 }
 
 /* The trick's cards fit the centre's width (TrickArea's `--card-max`). */
@@ -730,6 +739,80 @@ function turnLabel(side: ScreenSide): string {
 .board-line {
   font-size: 0.8rem;
   color: var(--bridge-on-table-muted);
+}
+
+/* A wide screen (#163, boards A/B): roomier, the board tile in the top-left
+   corner beside partner, the side seats as wide as their plates (upright
+   where the table is short of room) and the centre all the rest, room for
+   the auction and the bidding box. The table is its own container, so the
+   seats follow its width rather than the window's (the menu and the chat
+   take their share of a wide screen). */
+.bridge-table.table-wide {
+  container: bridge-table / inline-size;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px 20px;
+  padding: 20px 24px 24px;
+  border-radius: 28px;
+}
+
+.corner {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  justify-self: start;
+}
+
+.with-corner .side-top {
+  grid-column: 2;
+}
+
+.table-wide .side-left,
+.table-wide .side-right {
+  min-width: clamp(84px, 18cqi, 190px);
+}
+
+.table-wide .side-left {
+  align-items: flex-start;
+}
+
+.table-wide .side-right {
+  align-items: flex-end;
+}
+
+.table-wide .centre {
+  min-height: 160px;
+}
+
+@container bridge-table (max-width: 759px) {
+  .side-left .plate-row,
+  .side-right .plate-row {
+    flex-direction: column;
+  }
+
+  .side-left .plate,
+  .side-right .plate {
+    flex-direction: column;
+    gap: 4px;
+    width: 84px;
+    padding: 6px 4px;
+    text-align: center;
+  }
+
+  .side-left .plate-text,
+  .side-right .plate-text {
+    align-items: center;
+    max-width: 100%;
+  }
+
+  .side-left .plate-sub,
+  .side-right .plate-sub {
+    justify-content: center;
+  }
+
+  .side-left .seat-user,
+  .side-right .seat-user {
+    max-width: 76px;
+  }
 }
 
 /* A phone: the side seats take only what their plate and any hand need,
