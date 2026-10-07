@@ -6,9 +6,23 @@
        compared with the other tables that played it. The play page shows it
        once a set is over, the set's own page at any time. -->
   <section class="set-results" aria-live="polite">
-    <p class="set-title">{{ setTitle(set) }}</p>
-    <p v-if="winner" class="set-winner" :class="wonClass">{{ winner }}</p>
-    <p v-for="line in replaced" :key="line" class="set-replaced">{{ line }}</p>
+    <!-- The navy hero card: the set, who won and the viewer's matchpoints
+         over it. -->
+    <div class="set-hero">
+      <p class="set-title">{{ setTitle(set) }}</p>
+      <p v-if="winner" class="set-winner" :class="wonClass">{{ winner }}</p>
+      <div v-if="set.boards.length > 0" class="set-totals">
+        <p v-if="totals.percent !== null" class="set-total-mine">
+          <span class="set-total-label">
+            {{ mySeat ? 'Your matchpoints' : `${SIDE_LABELS[totals.side]} matchpoints` }}
+          </span>
+          <span class="set-total-value bridge-number">{{ percentText(totals.percent) }}</span>
+          <span class="set-total-mp">{{ totals.matchpoints }} of {{ totals.top }}</span>
+        </p>
+        <p v-else class="set-total-none">No other table has played these boards yet.</p>
+      </div>
+      <p v-for="line in replaced" :key="line" class="set-replaced">{{ line }}</p>
+    </div>
 
     <p v-if="set.boards.length === 0" class="set-empty">No board of this set was finished.</p>
     <ion-list v-else class="set-boards" lines="full">
@@ -35,7 +49,7 @@
             </p>
           </div>
           <div class="set-row-figures">
-            <span class="set-row-score" :class="tone(scoreFor(row.score_ns, totals.side))">
+            <span class="set-row-score bridge-number" :class="tone(scoreFor(row.score_ns, totals.side))">
               {{ formatScore(scoreFor(row.score_ns, totals.side)) }}
             </span>
             <span class="set-row-mp">{{ mpText(row.matchpoints[totals.side], row.top) }}</span>
@@ -43,17 +57,6 @@
         </div>
       </ion-item>
     </ion-list>
-
-    <div v-if="set.boards.length > 0" class="set-totals">
-      <p v-if="totals.percent !== null" class="set-total-mine">
-        <span class="set-total-label">
-          {{ mySeat ? 'Your matchpoints' : `${SIDE_LABELS[totals.side]} matchpoints` }}
-        </span>
-        <span class="set-total-value">{{ percentText(totals.percent) }}</span>
-        <span class="set-total-mp">{{ totals.matchpoints }} of {{ totals.top }}</span>
-      </p>
-      <p v-else class="set-total-none">No other table has played these boards yet.</p>
-    </div>
 
     <!-- The set clock (bb#131): how much of their time for the set each
          human used (for a seat a robot took over, its player up to then). -->
@@ -121,40 +124,54 @@ function tone(score: number): string {
 
 <style scoped>
 .set-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin: 0 0 12px;
-  padding: 12px;
-  border-radius: 8px;
-  background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.08);
 }
 
 .set-results p {
   margin: 0;
 }
 
-.set-title {
-  font-size: 1.2rem;
-  font-weight: 700;
+/* The navy hero card, as a board's result. */
+.set-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px;
+  border-radius: var(--bridge-radius-panel);
+  background: var(--bridge-table);
+  color: var(--bridge-on-table);
   text-align: center;
+}
+
+.set-title {
+  font-size: 1.25rem;
+  font-weight: 700;
 }
 
 .set-results .set-winner {
-  margin-top: 2px;
   font-weight: 700;
-  text-align: center;
 }
 
-.set-results .set-replaced,
+.set-results .set-replaced {
+  font-size: 0.875rem;
+  color: var(--bridge-on-table-muted);
+}
+
 .set-results .set-empty {
-  margin-top: 4px;
   font-size: 0.9rem;
   text-align: center;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
 }
 
 .set-boards {
-  margin: 8px 0 0;
-  padding: 0;
-  border-radius: 8px;
+  margin: 0;
+  padding: 6px 0;
+  border-radius: var(--bridge-radius-card);
+  background: var(--bridge-surface);
 }
 
 .set-row {
@@ -171,7 +188,7 @@ function tone(score: number): string {
 }
 
 .set-row-board {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .set-results .set-row-contract {
@@ -183,33 +200,33 @@ function tone(score: number): string {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .set-row-score {
-  font-weight: 700;
+  font-size: 1.0625rem;
 }
 
 .set-row-mp {
   font-size: 0.85rem;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
 }
 
 .set-totals {
   margin-top: 8px;
-  text-align: center;
 }
 
 .set-time {
-  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--bridge-radius-card);
+  background: var(--bridge-surface);
 }
 
 .set-results .set-time-title {
   margin-bottom: 4px;
   font-size: 0.75rem;
-  text-transform: uppercase;
-  color: var(--ion-color-medium);
+  font-weight: 700;
+  color: var(--bridge-muted);
 }
 
 .set-results .set-time-row {
@@ -230,29 +247,35 @@ function tone(score: number): string {
 }
 
 .set-total-label {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  color: var(--ion-color-medium);
+  font-size: 0.875rem;
+  color: var(--bridge-on-table-muted);
 }
 
 .set-total-value {
-  font-size: 1.8rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  font-size: 2.75rem;
   line-height: 1.1;
 }
 
 .set-results .set-total-mp,
 .set-results .set-total-none {
-  font-size: 0.85rem;
-  color: var(--ion-color-medium);
+  font-size: 0.875rem;
+  color: var(--bridge-on-table-muted);
 }
 
-.score-plus {
-  color: var(--ion-color-success-shade, #2dd36f);
+/* Won and lost on the navy, plus and minus on the white list. */
+.set-hero .score-plus {
+  color: var(--bridge-on-table-good);
 }
 
-.score-minus {
-  color: var(--ion-color-danger, #eb445a);
+.set-hero .score-minus {
+  color: var(--bridge-on-table-bad);
+}
+
+.set-row .score-plus {
+  color: var(--bridge-pass-text);
+}
+
+.set-row .score-minus {
+  color: var(--bridge-double-text);
 }
 </style>

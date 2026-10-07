@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/93-daylight-play-page`._
+_Status as of branch `bulbulica2/94-daylight-result-and-lobby`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -54,15 +54,23 @@ a review…) the router asks `GET /tables` once to find the seat. See
 ## Home — `/home`
 
 **Everyone.** Built by #3 (menu + home) and #25 (the real home page);
-held seat by #74; a robot taking your seat by #130.
+held seat by #74; a robot taking your seat by #130; the Daylight lobby
+look by #162.
 
 - **Guest**: an intro to the app with **Log in** and **Create account**.
-- **Logged in**: a greeting and either a **Your table** card (the table you
-  sit at, from the tables store's `myTable`, robots badged) or **Find a
-  table**, plus a short how-to-play. After a Leave mid-set the card says
-  so, counting down ("You're away from Club: a robot takes your seat in
-  1:42 unless you come back.", #150) and its button reads
-  **Come back** (it opens the game, which brings you back).
+- **Logged in**: a greeting, then the **Your table** card (navy, as on
+  Tables: the table's name, "Set 3 · Board 2 of 4 · you sit South with
+  radu", the set's boards so far as tiles B1–B4 with your side's
+  matchpoints and the board on now in amber, and an orange **Back to the
+  table**: the game once a board is dealt, else the table's page) or
+  "You're not at a table" with **Find a table**. Then **Your form** (your
+  average board %, sets won of sets played, boards played) and **Recent
+  boards** (your last three, each opening its review, then **All my
+  boards**), and a short how-to-play. While your seat is held (after a
+  Leave mid-set, or marked away) the card counts down ("You're away from
+  Club: a robot takes your seat in 1:42 unless you come back.", #150) and
+  its button reads **Come back** (it opens the game, which brings you
+  back).
 - **Set N: a robot took your seat**: a card when your turn clock ran out
   (or you were removed while away) and a robot took your seat for the rest
   of the set, whether seen live or found on this visit (the set you were
@@ -73,6 +81,8 @@ held seat by #74; a robot taking your seat by #130.
 | Calls | Endpoint |
 |---|---|
 | `tables.load()` (logged in only) | `GET /tables`; then `GET /sets/{id}` once, if you were in the middle of a set at a table you no longer sit at |
+| `users.loadStats(null)` (Your form), `history.loadHistory(null)` (Recent boards), once the tables are in | `GET /api/user/stats`, `GET /api/user/playings`; failures are quiet |
+| `history.loadSet()` (Your table's tiles, once a board of the set is finished) | `GET /sets/{id}`; failures are quiet |
 
 ## Login — `/login`
 
@@ -161,55 +171,74 @@ stats with bb#121.
 **Logged in**, menu item **Tables**. Built by #8; seat moves by #22;
 profile sheet by #24; robots by #53; a seat opening the table by #67;
 Start by #68; held seat by #74; banned users by #75; your seat with Leave
-by #121; the time for a set by #143.
+by #121; the time for a set by #143; the Daylight lobby by #162.
 
-The list of open tables, each with its four seats (robots carry a
-**robot** badge). Tap an empty seat to sit (or **move here** at your own
-table), a player's name to open their profile sheet, **Open** to look at a
-table's page. Taking a seat takes you to the table as soon as the seat
-request answers: to `/play` when the table the answer describes has a
-board (`board_id` set: a finished board still on it, waiting for its seats
-to be refilled), otherwise to its page, where you press **Start**. Sitting
-down never deals a board. The seat's
-spinner and the disabled seat buttons stay until the page has changed. A
-cancelled move or a seat taken meanwhile (409, toasted) keeps you on the
-list. A table only robots sit at (`unattended_since` set: its last
-person left) reads **Robots only — sit down to take over**. **Create
-table** opens a modal with an optional name, **Play with robots**, on
-by default, and **Time for a set, each**: 8, 12, 16 or 20 minutes per
-player for a set of 4 boards (the set clock, 16 unless picked). You sit **South** at the new table, and the page goes to its
-page as soon as it exists (the modal closes first, #55; #132): with robots
-they take North, East and West and your **Start** deals the first board
-(robots are always ready); without them the other three seats are free
-for players to take, or for you to fill with **Seat a player** / **Add
-robot**. Moving to another table asks first, because
-leaving your seat can abandon a board there; in the middle of a set it
-says a robot takes your seat there for the rest of the set and you can't
-sit down there again until it is over (bb#120). After a Leave mid-set a
-notice at the top counts down the 2 minutes your seat is kept ("You're
-away from Club: a robot takes your seat in 1:42 unless you come back.",
-#150), with
-**Come back to …** (opens the game). Otherwise, while you sit
-somewhere, a line at the top says so: **You sit at Club · Leave** (the
-table's name links to its page). Going to another page never gets you up
-from a table, so this is the way to leave it without opening it: the same
-confirmation as on the table's pages, then a toast. No live updates on
-this page: pull to refresh.
+The lobby, up to 1280 px wide: the list on the left and, beside it from
+about 1000 px (below it on a phone), **Your form** and **Recent boards**
+(as on Home).
+
+- **Your table** (navy, while you sit somewhere): the table's name, "Set
+  3 · Board 2 of 4 · you sit South with radu", the set's boards as tiles
+  B1–B4 (your side's matchpoints on each board finished, **now** in amber
+  on the board being played), an orange **Back to the table** and
+  **Leave**. Going to another page never gets you up from a table, so
+  Leave is the way to leave it without opening it: the same confirmation
+  as on the table's pages, then a toast. While your seat is held after a
+  Leave mid-set (or you were marked away) the card counts down the 2
+  minutes it is kept ("You're away from Club: a robot takes your seat in
+  1:42 unless you come back.", #150) and the button reads **Come back**
+  (it opens the game). The header's **Your table** turns into an orange
+  pill, "Your turn · 0:42", whenever the game waits for you.
+- **Play now with robots**: "Your time for a set of 4 boards", 8, 12, 16
+  or 20 minutes per player (the set clock, 16 unless picked), and
+  **Deal me in**: a table where you sit **South** and robots take North,
+  East and West. **Open a table for friends**: an optional name and
+  **Create table**: you sit South, the other three seats are free for
+  players to take, or for you to fill with **Seat a player** / **Add
+  robot** (its time for a set is the backend's default until you change
+  it on the table's page). Either way the page goes to the new table's
+  page as soon as it exists (#55, #132), where your **Start** deals the
+  first board (robots are always ready). A refusal shows under the card
+  it came from.
+- **Open tables**, with filter chips counted over the list: **All**,
+  **Seat free**, **Playing** (a board on) and **Robots only** (the last
+  person left: anyone may sit down and run the table). Each table is a
+  card: its name (opening its page), a line with the time for a set and
+  where it is ("16 min · set 2 · board 2/4", "16 min · no set yet", or
+  "left 3 min ago · closes in 7" while only robots are left), a pill ("1
+  seat free", "Playing", "Full", "Robots only") and a mini compass of the
+  four seats: names, robots in blue, away players in red ("nick · away"),
+  you in orange, and an empty seat as a dashed **Sit N**. Tap a name to
+  open that player's profile sheet, **Sit N** to sit. Taking a seat takes
+  you to the table as soon as the seat request answers: to `/play` when
+  the table the answer describes has a board (`board_id` set: a finished
+  board still on it, waiting for its seats to be refilled), otherwise to
+  its page, where you press **Start**. Sitting down never deals a board.
+  The seat's spinner and the disabled seats stay until the page has
+  changed. A cancelled move or a seat taken meanwhile (409, toasted) keeps
+  you on the list. Moving to another table asks first, because leaving
+  your seat can abandon a board there; in the middle of a set it says a
+  robot takes your seat there for the rest of the set and you can't sit
+  down there again until it is over (bb#120).
+
+No live updates on this page: pull to refresh.
 
 A **banned** user still sees the list, but the ban (reason and end date)
-takes the place of **Create table**, every seat button is disabled and
-there is no **Open**.
+takes the place of the two start cards, every **Sit** is disabled and the
+tables' names don't open their pages.
 
 | Calls | Endpoint |
 |---|---|
 | `tables.load()` | `GET /tables` |
-| `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` (`seat: 'S'`, `robots: true` by default, `set_minutes`) |
+| `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` (`seat: 'S'`; **Deal me in**: `robots: true` and `set_minutes`; **Create table**: `robots: false`) |
 | `tables.join()` | `GET /sanctum/csrf-cookie`, `POST /tables/{id}/seats`, then `GET /tables` after a move |
-| `tables.leave()` (You sit at … · Leave) | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
+| `tables.leave()` (Your table · Leave) | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
+| `users.loadStats(null)` (Your form), `history.loadHistory(null)` (Recent boards), once the list is in | `GET /api/user/stats`, `GET /api/user/playings`; failures are quiet |
+| `history.loadSet()` (Your table's tiles, once a board of the set is finished) | `GET /sets/{id}`; failures are quiet |
 
 Backend: bb#9 (create table, 3 active per creator), bb#12 (join a seat),
 bb#25 (joining elsewhere moves you), bb#65 (robots), bb#73 (nothing is
-dealt before Start), bb#77 (bans), bb#131 (`set_minutes`).
+dealt before Start), bb#77 (bans), bb#121 (stats), bb#131 (`set_minutes`).
 
 ## Table detail — `/tables/:id`
 
@@ -534,35 +563,44 @@ What it shows by phase:
   next card. If the backend's
   update hasn't come 2 s after the deadline, the page rereads the game.
   The last accept finishes the board.
-- **finished**: the result at a glance (#100), written the way it is at
-  the table: one big row with the contract and how it went on the left
-  (**2♣ by West +2**, **4♠X by South −1**, **3NT by North =**, or
-  **Passed out**) and your score on the right in green or red (**−130**;
-  N-S's, tagged "N-S", if you didn't play it), then a small line
-  ("10 tricks · by claim"), and one double dummy line (#119): "Double
-  dummy: 4♠ by South makes 10" with **Review** (the board review at the
-  table, where the whole table is), "Double dummy analysis is being
-  worked out…" while the backend solves it, or "Double dummy analysis
-  isn't set up on this server." on a server without the solver (#138). Below it, where the set stands ("Set 2 · 3 of
-  4 boards played", read from the set) and, once another table has played
-  the board, its matchpoints for your side ("Matchpoints 75 %"). Scores
+- **finished**: the result at a glance (#100, Daylight's look by #162).
+  A navy card: who declared ("You declared", "radu declared", or the
+  side, "E-W declared"), the contract and how it went in big type
+  (**2♣ +2**, **4♠X −1** in red, **3NT =**, or **Passed out**), "10
+  tricks · by claim" under it, and your score big on the right (**−130**;
+  N-S's, tagged "N-S", if you didn't play it). Once another table has
+  played the board, "Against the other tables 67 %" with an amber bar.
+  Under it **Same board elsewhere**: every table's result on this board
+  (best N-S first, the first five, always with yours), each named by its
+  N-S pair since a result has no table name, with its contract ("3NT N
+  +2") and N-S score; yours is tinted orange and named "You". Then one
+  double dummy line (#119): "Double dummy: 4♠ by South makes 11. You
+  found every trick." with a green tick when declarer took at least as
+  many tricks as double dummy says ("Declarer took 2 fewer." otherwise),
+  and **Review** (the board review at the table, where the whole table
+  is); "Double dummy analysis is being worked out…" while the backend
+  solves it, or "Double dummy analysis isn't set up on this server." on a
+  server without the solver (#138). Then the set's four boards as tiles
+  (**Board 1 62 %** … with this one tinted, "·" for those to come). Scores
   are never added up over a set: each board is compared with the other
-  tables. All four hands lie face up, **Compare with other tables**, **Review
-  and export** (the board review at the table, below), and the next-board
-  box: **Next board in 0:08**, counting down to the set's next board, which
-  is dealt by itself (#98; then "Dealing the next board…"). The result and
-  the deal stay on show until it arrives, then the page moves to its
-  auction; **Last board** still reviews the one just played. **Deal now**
-  is optional: it deals at once once every person at the table has pressed
-  it (robots count as pressed), and after pressing it the box says who
+  tables. **Compare with other tables**, **Review and export** (the board
+  review at the table, below), and the next-board bar: a ring emptying
+  over the wait with the seconds in it, **Next board in 0:08**, "Board 3
+  of 4 · or skip the wait", and an orange **Deal now**. The next board is
+  dealt by itself (#98; then "Dealing the next board…"). All four hands
+  lie face up on the table below, and the result and the deal stay on
+  show until the next board arrives, then the page moves to its auction;
+  **Last board** still reviews the one just played. **Deal now** is
+  optional: it deals at once once every person at the table has pressed
+  it (robots count as pressed), and after pressing it the bar says who
   hasn't ("You asked to deal now. Waiting for bob."). Nobody, a manager
   included, asks for the others (#72). If nothing has arrived 2 s after
-  the countdown ends, the page rereads the game. If one of
-  the four has left or been replaced since, the Start box takes the
-  next-board box's place: the next board waits for every person's Start.
+  the countdown ends, the page rereads the game. If one of the four has
+  left or been replaced since, the Start box takes the next-board bar's
+  place: the next board waits for every person's Start.
 - **set over** (after the fourth board, or earlier when it is broken off
-  between boards): the set's results take the board result's place: who
-  won, from your side ("You won the set.", "You lost the set."), whom a
+  between boards): the set's results take the board result's place, in
+  the same navy card (#162): who won, from your side ("You won the set.", "You lost the set."), whom a
   robot replaced and why ("East didn't play in time: a robot took their
   seat."), the four boards (number, contract and declarer, result, your
   side's score and matchpoint %, each opening its review) and the totals.
@@ -634,6 +672,7 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `history.loadSet()` (after each finished board, when the set ends, and on entry mid-set) | `GET /sets/{id}` |
 | `history.loadReview()` (the board review) | `GET /playings/{id}`, once per board per session (again while its double dummy analysis is pending) |
 | `history.loadDoubleDummy()` (once a board is finished; once more 5 s later if pending) | `GET /boards/{id}/double-dummy` |
+| `history.loadResults()` (once a board is finished: Same board elsewhere) | `GET /boards/{id}/results`; failures are quiet |
 | `history.loadHistory()` (on entry, only when no board to review is known but one may have been finished here) | `GET /api/user/playings` |
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
@@ -857,11 +896,15 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans), bb#
 | `BoardReview` | Board review, Play (`BoardReviewModal`) | none (given the review from `history.loadReview`) |
 | `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}`; one line of stats ("48 boards · 65 % won · avg 56.0 %", none for a robot) via `PlayerStats` → `GET /users/{id}/stats`; **Ban** for admins (`BanUserForm`) |
 | `PlayerStats` | User profile, Account, profile sheet (one line) | `users.loadStats()` → `GET /users/{id}/stats` or `GET /api/user/stats` (#131) |
-| `RobotBadge` | Home, Tables, Table detail, Play (`BridgeTable`), profile sheet | none (`is_robot` on the user) |
-| `AdminBadge` | Home, Tables, Table detail, Play (`BridgeTable`, `StartBox`), profile sheet, User profile | none (`is_admin` on the user, #77) |
+| `RobotBadge` | Table detail, Play (`BridgeTable`), profile sheet | none (`is_robot` on the user; the lobby's compass shows robots in blue instead) |
+| `AdminBadge` | Table detail, Play (`BridgeTable`, `StartBox`), profile sheet, User profile | none (`is_admin` on the user, #77) |
 | `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | `SetResultsPanel` | Play (set over), Set results | none (given the set from `history.loadSet`) |
+| `SetStrip` | Play (finished board), Tables and Home (Your table) | none (the set's tiles, from `history.sets`) |
+| `YourTableHero` | Tables, Home | `history.loadSet()` → `GET /sets/{id}` once a board of the running set is finished |
+| `TableCard` | Tables | none (one open table with its mini compass) |
+| `YourForm`, `RecentBoards` | Tables, Home | `users.loadStats(null)` → `GET /api/user/stats`; `history.loadHistory(null)` → `GET /api/user/playings` |
 | `AwayNotice` | Play, Table detail (one line while others are away, no countdown); Table detail, Tables, Home (your held seat, counting down) | none (reads `away_since` / `replace_at` from the table) |
 | `AwaySeatTag` | Play (`BridgeTable`), Table detail (compass): an away seat's clock | none (`replace_at` via `useAwayTags`) |
 | route progress bar, boot bar, toasts | the app shell | none (#18) |

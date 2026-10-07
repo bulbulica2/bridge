@@ -1,5 +1,5 @@
 import type { PublicPlaying, ReplacementReason, SetPosition, SetReplacement, SideCode } from '@/services/game';
-import type { PlayingHistoryEntry, SetResults } from '@/services/history';
+import type { PlayingHistoryEntry, SetBoardRow, SetResults } from '@/services/history';
 import { SEATS } from '@/services/tables';
 import type { BroadcastTable, Seat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
@@ -15,6 +15,11 @@ import type { Side } from '@/utils/result';
 export function sideOfCode(code: SideCode): Side {
   return code === 'NS' ? 'ns' : 'ew';
 }
+
+// BRIDGE_NEXT_BOARD_SECONDS' default (bb#97): how long after a board ends
+// the next one of the set is dealt by itself (`next_board_at`). Only the
+// countdown ring's full circle: the deadline itself is the backend's.
+export const NEXT_BOARD_SECONDS = 10;
 
 // "Board 2 of 4 · Set 3".
 export function setLabel(set: Pick<SetPosition, 'number' | 'board' | 'of'>): string {
@@ -231,4 +236,37 @@ export function groupBySet(entries: PlayingHistoryEntry[]): HistorySetGroup[] {
     });
   }
   return groups;
+}
+
+// One tile of a set's strip (the finished board, the lobby's Your table):
+// "B2" with the viewer's side's matchpoints once the board is finished
+// there (`percent` null while no other table has played it), the board on
+// now marked `current`.
+export interface SetStripTile {
+  position: number;
+  label: string;
+  played: boolean;
+  percent: number | null;
+  current: boolean;
+}
+
+// The `of` boards of a set in order, from its finished rows (GET /sets/{id},
+// none until read) and the board it is on.
+export function setStripTiles(
+  of: number,
+  current: number | null,
+  boards: Pick<SetBoardRow, 'position' | 'matchpoints' | 'top'>[],
+  side: Side,
+): SetStripTile[] {
+  return Array.from({ length: of }, (_, i) => {
+    const position = i + 1;
+    const row = boards.find((b) => b.position === position);
+    return {
+      position,
+      label: `B${position}`,
+      played: !!row,
+      percent: row ? matchpointPercent(row.matchpoints[side], row.top) : null,
+      current: position === current,
+    };
+  });
 }

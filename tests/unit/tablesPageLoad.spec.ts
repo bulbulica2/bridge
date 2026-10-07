@@ -1,12 +1,13 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonButton } from '@ionic/vue'
 import { pullToRefresh } from './ionEvents'
 import TablesPage from '@/views/TablesPage.vue'
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue'
+import * as historyService from '@/services/history'
 import * as tablesService from '@/services/tables'
+import * as usersService from '@/services/users'
 import type { Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useTablesStore } from '@/stores/tables'
@@ -17,6 +18,8 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   createTable: vi.fn(),
   sendHeartbeat: vi.fn(),
 }))
+vi.mock('@/services/users', () => ({ getMyStats: vi.fn() }))
+vi.mock('@/services/history', () => ({ getMyPlayings: vi.fn(), getSet: vi.fn() }))
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
   leaveTable: vi.fn(),
@@ -62,24 +65,31 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>>): Table {
         table_id: id,
         user_id: userId,
         seat,
-        user: { id: userId, name: username, username, description: null, is_robot: false },
+        ready: false,
+        away_since: null,
+        replace_at: null,
+        user: { id: userId, name: username, username, description: null, is_robot: false, is_admin: false },
       }
     }),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
     can_manage: false,
+    set_minutes: 16,
+    set: null,
   }
 }
 
-const modalStub = { props: ['isOpen'], template: '<div class="modal" :data-open="isOpen"><slot /></div>' }
 const mountPage = () =>
   mount(TablesPage, {
-    global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub, PlayerProfileSheet: true } },
+    global: { stubs: { PlayerProfileSheet: true, 'router-link': RouterLinkStub } },
   })
 
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   useAuthStore().user = { id: 1, name: 'Ana', username: 'ana', email: 'ana@example.com' }
+  // The aside's reads have their own tests below: they never answer here.
+  vi.mocked(usersService.getMyStats).mockReturnValue(new Promise(() => {}))
+  vi.mocked(historyService.getMyPlayings).mockReturnValue(new Promise(() => {}))
 })
 
 afterEach(() => {
@@ -153,8 +163,8 @@ describe('TablesPage.vue loading', () => {
     useTablesStore().heldTableId = 4
     await flushPromises()
 
-    const button = wrapper.find('.held').findComponent(IonButton)
-    expect(button.text()).toBe('Come back to Table 4')
+    const button = wrapper.getComponent('.your-table-go')
+    expect(button.text()).toBe('Come back')
     expect(button.props('routerLink')).toBe('/tables/4/play')
   })
 
@@ -185,18 +195,58 @@ describe('TablesPage.vue loading', () => {
     expect(navigate).not.toHaveBeenCalled()
   })
 
-  test('an invalid name keeps the modal open with the error, and goes nowhere', async () => {
+  test('an invalid name shows the error on the card, and goes nowhere', async () => {
     vi.mocked(tablesService.listTables).mockResolvedValue([])
     vi.mocked(tablesService.createTable).mockRejectedValue(axiosError(422, 'The name field must not be greater than 50 characters.'))
     const wrapper = mountPage()
     await flushPromises()
-    await wrapper.findAll('ion-button').find((b) => b.text() === 'Create table')!.trigger('click')
 
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.get('.modal').attributes('data-open')).toBe('true')
-    expect(wrapper.text()).toContain('The name field must not be greater than 50 characters.')
+    expect(wrapper.get('.start-friends .error').text()).toBe('The name field must not be greater than 50 characters.')
     expect(navigate).not.toHaveBeenCalled()
   })
+
+  test("once the list is in, the aside reads our form and recent boards", async () => {
+    vi.mocked(tablesService.listTables).mockResolvedValue([])
+    vi.mocked(usersService.getMyStats).mockResolvedValue({
+      user_id: 1,
+      boards: { played: 34, compared: 30, won: 18, win_rate: 0.6, average_percent: 54.25 },
+      sets: { played: 8, won: 3, win_rate: 0.375, average_percent: 51 },
+      leaving: { abandoned: 0, abandoned_by_reason: {} as never, left_rate: 0 },
+    })
+    vi.mocked(historyService.getMyPlayings).mockResolvedValue({
+      current_page: 1,
+      last_page: 1,
+      next_page_url: null,
+      per_page: 20,
+      total: 1,
+      data: [
+        {
+          playing_id: 9,
+          table_id: 4,
+          set: { id: 2, number: 3, board: 1, of: 4 },
+          board: { id: 7, number: 7, dealer: 'N', vulnerable: '' },
+          seat: 'S',
+          partner: null,
+          contract: { id: 1, call: '4S', level: 4, strain: 'S', special: false },
+          doubled: 0,
+          declarer: 'S',
+          tricks_won: 11,
+          score_ns: 450,
+          made_by: 1,
+          score: 450,
+          finished_at: '2026-10-01T12:00:00Z',
+        },
+      ],
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.findAll('.form-figure b').map((b) => b.text())).toEqual(['54.3 %', '3 / 8', '34'])
+    expect(wrapper.get('.recent-row').text()).toContain('4♠ S +1')
+    expect(wrapper.get('.recent-row').text()).toContain('Set 3 · B1')
+  })
+
 })

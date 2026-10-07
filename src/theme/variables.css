@@ -33,11 +33,23 @@
   --bridge-table-inner: #2a4c76;
   --bridge-on-table: #ffffff;
   --bridge-on-table-muted: #cfdbeb;
+  /* On the navy cards (a board's result, Your table): made / down, the
+     small caps label, and the set strip's boards still to come. */
+  --bridge-on-table-good: #8fdca5;
+  --bridge-on-table-bad: #ffb4ab;
+  --bridge-on-table-accent: #f8b48a;
+  --bridge-table-dim: #24456c;
+  --bridge-on-table-faint: #9fb3cc;
+  /* A light navy wash: a table being played, in the lobby. */
+  --bridge-navy-tint: #e6ebf2;
+  --bridge-navy-tint-text: #1d3a5f;
 
   --bridge-action: #c2410c;
   --bridge-on-action: #ffffff;
   --bridge-action-text: #9a3412;
   --bridge-action-tint: #fff1e8;
+  /* The ring round something of yours on an action tint (your row). */
+  --bridge-action-line: #f3b48b;
 
   --bridge-amber: #f59e0b;
   --bridge-on-amber: #2b1700;
@@ -181,11 +193,19 @@
     --bridge-table-inner: #222a3a;
     --bridge-on-table: #e8ecf3;
     --bridge-on-table-muted: #a7b0c0;
+    --bridge-on-table-good: #9be3b0;
+    --bridge-on-table-bad: #ff8a96;
+    --bridge-on-table-accent: #ffc58f;
+    --bridge-table-dim: #1b2130;
+    --bridge-on-table-faint: #7f8aa0;
+    --bridge-navy-tint: #222a3a;
+    --bridge-navy-tint-text: #c7cfdc;
 
     --bridge-action: #ffb547;
     --bridge-on-action: #2b1d00;
     --bridge-action-text: #ffb547;
     --bridge-action-tint: #2b2210;
+    --bridge-action-line: #6b4f1f;
 
     --bridge-pass-bg: #13281b;
     --bridge-pass-text: #8fdca5;

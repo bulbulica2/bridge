@@ -3,7 +3,7 @@
        8, 12, 16 or 20 minutes for its 4 boards, like a chess clock. The
        create-table form and a manager on the table's page pick it here. -->
   <div class="set-minutes">
-    <p :id="labelId" class="set-minutes-label">Time for a set, each</p>
+    <p :id="labelId" class="set-minutes-label">{{ label }}</p>
     <ion-segment
       :model-value="String(modelValue)"
       :disabled="disabled"
@@ -28,8 +28,9 @@ const props = withDefaults(
     disabled?: boolean;
     // Ties the label to the segment; unique per page.
     labelId?: string;
+    label?: string;
   }>(),
-  { disabled: false, labelId: 'set-minutes-label' },
+  { disabled: false, labelId: 'set-minutes-label', label: 'Time for a set, each' },
 );
 
 const emit = defineEmits<{ 'update:modelValue': [minutes: SetMinutes] }>();
@@ -51,7 +52,40 @@ function pick(value: unknown) {
 
 .set-minutes-label {
   margin: 0 0 6px;
-  font-size: 0.85rem;
-  color: var(--ion-color-medium);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+/* Daylight's segmented control: four equal parts on the chip grey, the
+   picked one raised on the surface. */
+.set-minutes ion-segment {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--bridge-chip);
+}
+
+.set-minutes ion-segment-button {
+  --background: transparent;
+  --background-checked: var(--bridge-surface);
+  --color: var(--bridge-muted);
+  --color-checked: var(--bridge-ink);
+  --indicator-color: transparent;
+  --indicator-height: 0;
+  --border-radius: 9px;
+  --border-width: 0;
+  min-width: 0;
+  min-height: 40px;
+  margin: 0;
+  border-radius: 9px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.set-minutes ion-segment-button.segment-button-checked {
+  box-shadow: 0 1px 3px rgba(var(--ion-text-color-rgb), 0.2);
 }
 </style>

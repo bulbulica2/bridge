@@ -19,7 +19,15 @@ const user = (id: number, username: string, is_robot = false): PublicUser => ({
 const PEOPLE = { N: user(1, 'ann'), E: user(2, 'bob'), S: user(3, 'cy'), W: user(4, 'di') }
 const ROBOTS = { N: user(11, 'robot-1', true), E: user(12, 'robot-2', true), S: user(3, 'cy'), W: user(13, 'robot-3', true) }
 
-function box(props: { ready?: Seat[]; nextBoardAt?: string | null; players?: typeof PEOPLE; busy?: boolean } = {}) {
+function box(
+  props: {
+    ready?: Seat[]
+    nextBoardAt?: string | null
+    players?: typeof PEOPLE
+    busy?: boolean
+    set?: { board: number; of: number } | null
+  } = {},
+) {
   return mount(NextBoardBox, {
     props: { ready: [], players: PEOPLE, mySeat: 'S' as Seat, ...props },
   })
@@ -45,6 +53,36 @@ describe('NextBoardBox.vue', () => {
     expect(wrapper.get('.next-title').text()).toBe('Next board in 0:01')
     await vi.advanceTimersByTimeAsync(500)
     expect(wrapper.get('.next-title').text()).toBe('Dealing the next board…')
+  })
+
+  test('a ring empties over the wait, the seconds in its middle', async () => {
+    const wrapper = box({ nextBoardAt: inSeconds(8) })
+
+    expect(wrapper.get('.next-ring-face').text()).toBe('8')
+    expect(wrapper.get('.next-ring').attributes('style')).toContain('--ring-fill: 80%')
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(wrapper.get('.next-ring-face').text()).toBe('4')
+    expect(wrapper.get('.next-ring').attributes('style')).toContain('--ring-fill: 40%')
+  })
+
+  test('a deadline further off than the usual wait fills the ring, no more', () => {
+    expect(box({ nextBoardAt: inSeconds(30) }).get('.next-ring').attributes('style')).toContain('--ring-fill: 100%')
+  })
+
+  test('no ring without a deadline', () => {
+    expect(box({ nextBoardAt: null }).find('.next-ring').exists()).toBe(false)
+  })
+
+  test("says which board is next, and that it's skippable until we asked", async () => {
+    const wrapper = box({ nextBoardAt: inSeconds(8), set: { board: 2, of: 4 } })
+    expect(wrapper.get('.next-sub').text()).toBe('Board 3 of 4 · or skip the wait')
+
+    await wrapper.setProps({ ready: ['S'] })
+    expect(wrapper.get('.next-sub').text()).toBe('Board 3 of 4')
+
+    // The set's last board has no next one in it; asked, nothing is left to say.
+    await wrapper.setProps({ set: { board: 4, of: 4 } })
+    expect(wrapper.find('.next-sub').exists()).toBe(false)
   })
 
   test('a deadline already past, or unreadable, reads as dealing', () => {

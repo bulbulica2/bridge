@@ -221,10 +221,36 @@ describe('the header\'s "Your table"', () => {
     const button = shortcut(wrapper)!
     expect(button.find('.status-turn').exists()).toBe(true)
     expect(button.attributes('aria-label')).toBe('Your table: Table 7, your turn')
+    // The Daylight pill: tinted, the turn written out beside the name.
+    expect(button.classes()).toContain('turn-pill')
+    expect(button.get('.table-shortcut-turn').text()).toBe('Your turn')
 
     game.playing = { ...game.playing, acting_user_id: ids.bob }
     await nextTick()
     expect(button.find('.status-board').exists()).toBe(true)
+    expect(button.classes()).not.toContain('turn-pill')
+    expect(button.find('.table-shortcut-turn').exists()).toBe(false)
+  })
+
+  test('the pill counts our turn clock down', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.parse('2026-10-05T12:00:00Z'))
+    try {
+      seatAt(makeTable(7, full, { board_id: 3 }))
+      const game = useGameStore()
+      game.tableId = 7
+      game.playing = {
+        phase: 'auction',
+        acting_user_id: ana.id,
+        board: { id: 3 },
+        turn_deadline: '2026-10-05T12:00:42Z',
+      } as unknown as Playing
+      const wrapper = await mountHeader()
+
+      expect(shortcut(wrapper)!.get('.table-shortcut-turn').text()).toBe('Your turn · 0:42')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test('a Start the table waits for is the user\'s turn too', async () => {

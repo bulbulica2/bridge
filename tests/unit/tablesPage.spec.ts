@@ -2,7 +2,7 @@ import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonToggle } from '@ionic/vue'
+import { IonInput } from '@ionic/vue'
 import { pickSegment } from './ionEvents'
 import SetMinutesPicker from '@/components/SetMinutesPicker.vue'
 import TablesPage from '@/views/TablesPage.vue'
@@ -50,7 +50,8 @@ function axiosError(status: number): AxiosError {
   return error
 }
 
-// Seats are given as seat -> username; `robot-…` usernames are robots.
+// Seats are given as seat -> username; `robot-…` usernames are robots, a
+// trailing `!` marks the player away.
 function makeTable(id: number, seats: Partial<Record<Seat, string>>, extra: Partial<Table> = {}): Table {
   const taken = Object.entries(seats) as [Seat, string][]
   return {
@@ -60,22 +61,31 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>>, extra: Part
     moderated_by: 1,
     board_id: null,
     unattended_since: null,
+    set_minutes: 16,
+    set: null,
     created_at: '2026-10-01T10:00:00.000000Z',
     updated_at: '2026-10-01T10:00:00.000000Z',
-    seats: taken.map(([seat, username], i) => ({
-      id: id * 10 + i,
-      table_id: id,
-      user_id: username === 'ana' ? 1 : id * 10 + i + 100,
-      seat,
-      user: {
-        id: username === 'ana' ? 1 : id * 10 + i + 100,
-        name: username,
-        username,
-        description: null,
-        is_robot: username.startsWith('robot-'),
-        is_admin: username === 'eve',
-      },
-    })),
+    seats: taken.map(([seat, label], i) => {
+      const username = label.replace('!', '')
+      const userId = username === 'ana' ? 1 : id * 10 + i + 100
+      return {
+        id: id * 10 + i,
+        table_id: id,
+        user_id: userId,
+        seat,
+        ready: false,
+        away_since: label.endsWith('!') ? '2026-10-01T10:00:00.000000Z' : null,
+        replace_at: null,
+        user: {
+          id: userId,
+          name: username,
+          username,
+          description: null,
+          is_robot: username.startsWith('robot-'),
+          is_admin: username === 'eve',
+        },
+      }
+    }),
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
     can_manage: false,
     ...extra,
@@ -85,81 +95,162 @@ function makeTable(id: number, seats: Partial<Record<Seat, string>>, extra: Part
 // ion-segment scrolls its checked button into view; jsdom has no scrolling.
 Element.prototype.scrollTo ??= () => {}
 
-// IonModal only renders its content once presented, which jsdom never does.
-const modalStub = { template: '<div><slot /></div>' }
-
 // onIonViewWillEnter never fires outside a router outlet, so the list is put
 // in the store directly rather than loaded.
 function mountWith(tables: Table[]) {
   const store = useTablesStore()
   store.tables = tables
   store.loaded = true
-  return mount(TablesPage, {
-    global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub, 'router-link': RouterLinkStub } },
-  })
+  return mount(TablesPage, { global: { stubs: { 'router-link': RouterLinkStub } } })
 }
 
-describe('TablesPage.vue with robots', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    vi.resetAllMocks()
-    useAuthStore().user = ana
-  })
+type Wrapper = ReturnType<typeof mountWith>
 
-  test('marks robots and unattended tables in the list', () => {
+// The card of table `id`.
+function card(wrapper: Wrapper, id: number) {
+  return wrapper.findAll('.table-card').find((c) => c.get('.table-card-name').text() === `Table ${id}`)!
+}
+
+// The compass cell of `seat` in table `id`'s card.
+function cell(wrapper: Wrapper, id: number, seat: Seat) {
+  return card(wrapper, id).get(`.compass-${seat}`)
+}
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+  vi.resetAllMocks()
+  useAuthStore().user = ana
+})
+
+describe('TablesPage.vue open tables', () => {
+  test('each card: the name opening its page, the meta line, the pill and the compass', () => {
     const wrapper = mountWith([
-      makeTable(2, { E: 'robot-1', S: 'robot-2' }, { moderated_by: null, unattended_since: '2026-10-01T10:05:00.000000Z' }),
-      makeTable(1, { N: 'bob' }),
+      makeTable(1, { N: 'bob', E: 'robot-1', S: 'carl!' }),
+      makeTable(2, { N: 'bob', E: 'carl', S: 'dan', W: 'eve' }, {
+        board_id: 9,
+        set_minutes: 8,
+        set: { id: 3, number: 2, board: 2, of: 4, finished: false, ended: null, replaced: [], minutes: 8, time_left: { N: null, E: null, S: null, W: null } },
+      }),
     ])
 
-    const rows = wrapper.findAll('ion-list ion-item')
-    const unattended = rows.find((r) => r.text().includes('Table 2'))!
-    const plain = rows.find((r) => r.text().includes('Table 1'))!
-    expect(unattended.text()).toContain('Robots only — sit down to take over')
-    expect(unattended.findAll('.robot-badge')).toHaveLength(2)
-    expect(plain.text()).not.toContain('Robots only')
-    expect(plain.find('.robot-badge').exists()).toBe(false)
+    const first = card(wrapper, 1)
+    expect(first.getComponent(RouterLinkStub).props('to')).toBe('/tables/1')
+    expect(first.get('.table-card-meta').text()).toBe('16 min · no set yet')
+    expect(first.get('.table-card-pill').text()).toBe('1 seat free')
+    expect(first.get('.table-card-pill').classes()).toContain('pill-wait')
+    // Names in the compass: robots blue, away players red, empty seats to sit in.
+    expect(cell(wrapper, 1, 'N').text()).toBe('bob')
+    expect(cell(wrapper, 1, 'E').classes()).toContain('compass-robot')
+    expect(cell(wrapper, 1, 'E').get('button').attributes('title')).toBe('East: robot-1 (robot)')
+    expect(cell(wrapper, 1, 'S').text()).toBe('carl · away')
+    expect(cell(wrapper, 1, 'S').classes()).toContain('compass-away')
+    expect(cell(wrapper, 1, 'W').text()).toBe('Sit W')
+
+    const second = card(wrapper, 2)
+    expect(second.get('.table-card-meta').text()).toBe('8 min · set 2 · board 2/4')
+    expect(second.get('.table-card-pill').text()).toBe('Playing')
+    expect(cell(wrapper, 2, 'W').get('button').attributes('title')).toBe('West: eve (admin)')
   })
 
-  test('marks an admin in the list', () => {
-    const wrapper = mountWith([makeTable(3, { N: 'eve', E: 'bob' })])
+  test('only robots left: says so, and how long the table waits', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.parse('2026-10-01T10:08:00Z'))
+    try {
+      const wrapper = mountWith([
+        makeTable(2, { E: 'robot-1', S: 'robot-2' }, { moderated_by: null, unattended_since: '2026-10-01T10:05:00Z' }),
+      ])
 
-    const row = wrapper.findAll('ion-list ion-item').find((r) => r.text().includes('Table 3'))!
-    expect(row.findAll('.admin-badge')).toHaveLength(1)
+      expect(card(wrapper, 2).get('.table-card-pill').text()).toBe('Robots only')
+      expect(card(wrapper, 2).get('.table-card-meta').text()).toBe('left 3 min ago · closes in 7')
+      expect(card(wrapper, 2).findAll('.compass-robot')).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  test('creating with robots (the default) goes to the table, where Start is', async () => {
+  test('filter chips count over the list and narrow it', async () => {
+    const wrapper = mountWith([
+      makeTable(1, { N: 'bob' }),
+      makeTable(2, { N: 'bob', E: 'carl', S: 'dan', W: 'eve' }, { board_id: 9 }),
+      makeTable(3, { E: 'robot-1' }, { unattended_since: '2026-10-01T10:05:00Z' }),
+    ])
+
+    const chips = () => wrapper.findAll('.filter-chip')
+    expect(chips().map((c) => c.text())).toEqual(['All 3', 'Seat free 2', 'Playing 1', 'Robots only 1'])
+    expect(chips()[0].attributes('aria-pressed')).toBe('true')
+
+    await wrapper.get('[data-filter="playing"]').trigger('click')
+    expect(wrapper.findAll('.table-card-name').map((n) => n.text())).toEqual(['Table 2'])
+    expect(wrapper.get('[data-filter="playing"]').classes()).toContain('filter-on')
+
+    await wrapper.get('[data-filter="free"]').trigger('click')
+    expect(wrapper.findAll('.table-card-name').map((n) => n.text())).toEqual(['Table 1', 'Table 3'])
+
+    await wrapper.get('[data-filter="robots"]').trigger('click')
+    expect(wrapper.findAll('.table-card-name').map((n) => n.text())).toEqual(['Table 3'])
+  })
+
+  test('a chip with nothing in it says so', async () => {
+    const wrapper = mountWith([makeTable(1, { N: 'bob' })])
+
+    await wrapper.get('[data-filter="robots"]').trigger('click')
+
+    expect(wrapper.find('.table-card').exists()).toBe(false)
+    expect(wrapper.get('.empty').text()).toBe('No table matches.')
+  })
+
+  test('no tables at all', () => {
+    const wrapper = mountWith([])
+
+    expect(wrapper.get('.empty').text()).toBe('No tables yet. Create the first one.')
+    expect(wrapper.findAll('.filter-chip').map((c) => c.text())[0]).toBe('All 0')
+  })
+
+  test('our own seat reads "You", and an empty seat at our table is a move', () => {
+    const wrapper = mountWith([makeTable(1, { S: 'ana' })])
+
+    expect(cell(wrapper, 1, 'S').text()).toBe('You')
+    expect(cell(wrapper, 1, 'S').classes()).toContain('compass-me')
+    expect(cell(wrapper, 1, 'N').get('.compass-sit').attributes('aria-label')).toBe('Move to North')
+    expect(card(wrapper, 1).classes()).toContain('table-card-mine')
+  })
+
+  test('an unnamed table goes by its number', () => {
+    const wrapper = mountWith([makeTable(4, { N: 'bob' }, { name: null })])
+
+    expect(wrapper.get('.table-card-name').text()).toBe('Table #4')
+  })
+})
+
+describe('TablesPage.vue starting a table', () => {
+  test('"Deal me in" makes a table with robots and goes to it, where Start is', async () => {
     // Full, but nothing is dealt until the creator presses Start.
     const full = makeTable(3, { N: 'robot-1', E: 'robot-2', S: 'ana', W: 'robot-3' })
     vi.mocked(tablesService.createTable).mockResolvedValue(full)
     const wrapper = mountWith([])
 
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('.deal-me-in').trigger('click')
     await flushPromises()
 
     expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true, set_minutes: 16 })
     expect(navigate).toHaveBeenCalledWith('/tables/3', 'forward', 'push')
     // The table page draws from this copy rather than fetching the table again.
     expect(useTablesStore().currentTable).toEqual(full)
-    // The form is free again at once: nothing waits for the game page to be up.
-    expect(wrapper.find('form ion-spinner').exists()).toBe(false)
+    // Free again at once: nothing waits for the game page to be up.
+    expect(wrapper.find('.deal-me-in ion-spinner').exists()).toBe(false)
   })
 
-  test('the form offers 8, 12, 16 or 20 minutes for a set, 16 unless picked', async () => {
+  test('the robots card offers 8, 12, 16 or 20 minutes for a set, 16 unless picked', async () => {
     vi.mocked(tablesService.createTable).mockResolvedValue(makeTable(3, { S: 'ana' }))
     const wrapper = mountWith([])
 
-    expect(wrapper.findAll('ion-segment-button').map((b) => b.text())).toEqual([
-      '8 min',
-      '12 min',
-      '16 min',
-      '20 min',
-    ])
+    expect(wrapper.findAll('ion-segment-button').map((b) => b.text())).toEqual(['8 min', '12 min', '16 min', '20 min'])
+    expect(wrapper.get('.set-minutes-label').text()).toBe('Your time for a set of 4 boards')
     expect(wrapper.findComponent(SetMinutesPicker).props('modelValue')).toBe(16)
 
     await pickSegment(wrapper, '12')
     expect(wrapper.findComponent(SetMinutesPicker).props('modelValue')).toBe(12)
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('.deal-me-in').trigger('click')
     await flushPromises()
 
     expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true, set_minutes: 12 })
@@ -167,38 +258,69 @@ describe('TablesPage.vue with robots', () => {
     expect(wrapper.findComponent(SetMinutesPicker).props('modelValue')).toBe(16)
   })
 
-  test('creating without robots goes to the table too, the other three seats free', async () => {
-    const created = makeTable(3, { S: 'ana' })
+  test('"Create table" opens a named table for friends, the other three seats free', async () => {
+    const created = makeTable(3, { S: 'ana' }, { name: 'Sunday pairs' })
     vi.mocked(tablesService.createTable).mockResolvedValue(created)
     const wrapper = mountWith([])
 
-    wrapper.findComponent(IonToggle).vm.$emit('update:modelValue', false)
-    await wrapper.get('form').trigger('submit')
+    wrapper.findComponent(IonInput).vm.$emit('update:modelValue', '  Sunday pairs ')
+    await wrapper.get('form.start-friends').trigger('submit')
     await flushPromises()
 
-    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: false, set_minutes: 16 })
+    expect(tablesService.createTable).toHaveBeenCalledWith({ name: 'Sunday pairs', robots: false })
     expect(navigate).toHaveBeenCalledWith('/tables/3', 'forward', 'push')
-    expect(useTablesStore().currentTable).toEqual(created)
     expect(useTablesStore().tables.map((t) => t.id)).toEqual([3])
+  })
+
+  test('an empty name makes an unnamed table', async () => {
+    vi.mocked(tablesService.createTable).mockResolvedValue(makeTable(3, { S: 'ana' }))
+    const wrapper = mountWith([])
+
+    await wrapper.get('form.start-friends').trigger('submit')
+    await flushPromises()
+
+    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: false })
+  })
+
+  test('both cards wait while one is creating, its own button spinning', async () => {
+    vi.mocked(tablesService.createTable).mockReturnValue(new Promise(() => {}))
+    const wrapper = mountWith([])
+
+    await wrapper.get('.deal-me-in').trigger('click')
+
+    expect(wrapper.find('.deal-me-in ion-spinner').exists()).toBe(true)
+    expect(wrapper.find('.create-table ion-spinner').exists()).toBe(false)
+    expect(wrapper.getComponent('.create-table').props('disabled')).toBe(true)
+    expect(wrapper.findComponent(SetMinutesPicker).props('disabled')).toBe(true)
+  })
+
+  test("a refusal stays on the card it came from, with the backend's reason", async () => {
+    vi.mocked(tablesService.createTable).mockRejectedValue(new Error('You already have 3 active tables.'))
+    const wrapper = mountWith([])
+
+    await wrapper.get('form.start-friends').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('.start-friends .error').text()).toBe('Could not create the table. Please try again.')
+    expect(wrapper.find('.start-robots .error').exists()).toBe(false)
+    expect(navigate).not.toHaveBeenCalled()
+
+    // The other card clears it when it tries.
+    await wrapper.get('.deal-me-in').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.start-friends .error').exists()).toBe(false)
+    expect(wrapper.get('.start-robots .error').text()).toBe('Could not create the table. Please try again.')
   })
 })
 
 describe('TablesPage.vue taking a seat', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    vi.resetAllMocks()
-    useAuthStore().user = ana
-  })
-
-  // The seat button of `seat` in the row of table `id`.
-  function seatButton(wrapper: ReturnType<typeof mountWith>, id: number, seat: Seat) {
-    const row = wrapper.findAll('ion-list ion-item').find((r) => r.text().includes(`Table ${id}`))!
-    return row.findAll('.seat').find((s) => s.get('.seat-name').text() === seat)!.get('ion-button')
+  // The Sit button of `seat` in the card of table `id`.
+  function seatButton(wrapper: Wrapper, id: number, seat: Seat) {
+    return cell(wrapper, id, seat).get('.compass-sit')
   }
 
-  // Ionic's web components take `disabled` as a DOM property, not an attribute.
   function isDisabled(button: ReturnType<typeof seatButton>) {
-    return (button.element as Element & { disabled?: boolean }).disabled
+    return (button.element as HTMLButtonElement).disabled
   }
 
   test('a table still waiting for players opens its page', async () => {
@@ -210,11 +332,21 @@ describe('TablesPage.vue taking a seat', () => {
 
     expect(tablesService.joinSeat).toHaveBeenCalledWith(1, 'E')
     expect(navigate).toHaveBeenCalledWith('/tables/1', 'forward', 'push')
-    // The buttons stay disabled while the page changes.
+    // The buttons stay disabled while the page changes, the seat taken spinning.
     expect(isDisabled(seatButton(wrapper, 1, 'S'))).toBe(true)
   })
 
-  test('the answer, not the list row, decides: a board goes to /play', async () => {
+  test('the seat being taken spins', async () => {
+    vi.mocked(tablesService.joinSeat).mockReturnValue(new Promise(() => {}))
+    const wrapper = mountWith([makeTable(1, { N: 'bob' })])
+
+    await seatButton(wrapper, 1, 'E').trigger('click')
+
+    expect(seatButton(wrapper, 1, 'E').find('ion-spinner').exists()).toBe(true)
+    expect(seatButton(wrapper, 1, 'S').find('ion-spinner').exists()).toBe(false)
+  })
+
+  test('the answer, not the card, decides: a board goes to /play', async () => {
     vi.mocked(tablesService.joinSeat).mockResolvedValue(
       makeTable(1, { N: 'bob', E: 'carol', S: 'dan', W: 'ana' }, { board_id: 5 }),
     )
@@ -266,42 +398,42 @@ describe('TablesPage.vue taking a seat', () => {
   })
 })
 
-// Leaving the table's pages keeps the seat; the list says where we sit and
-// offers the same Leave as the table's pages (#121).
-describe('TablesPage.vue leaving your table', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    vi.resetAllMocks()
-    useAuthStore().user = ana
-  })
-
+// Leaving the table's pages keeps the seat; the lobby's Your table says where
+// we sit and offers the same Leave as the table's pages (#121).
+describe('TablesPage.vue your table', () => {
   afterEach(() => vi.restoreAllMocks())
 
   const mine = () => makeTable(1, { S: 'ana', N: 'robot-1', E: 'robot-2', W: 'robot-3' }, { board_id: 18 })
 
-  async function leave(wrapper: ReturnType<typeof mountWith>) {
+  async function leave(wrapper: Wrapper) {
     await wrapper.get('.seated-leave').trigger('click')
     await flushPromises()
   }
 
-  test('says where you sit, with Leave, only while you sit somewhere', () => {
+  test('the hero: where you sit, back to the table, and Leave, only while you sit somewhere', () => {
     const seated = mountWith([mine()])
-    const free = mountWith([makeTable(2, { N: 'bob' })])
 
-    expect(seated.get('.seated-at').text()).toContain('You sit at')
-    expect(seated.get('.seated-at').text()).toContain('Table 1')
-    expect(seated.getComponent(RouterLinkStub).props('to')).toBe('/tables/1')
+    const hero = seated.get('.your-table')
+    expect(hero.get('.your-table-name').text()).toBe('Table 1')
+    expect(hero.get('.your-table-line').text()).toBe('No set yet · you sit South with robot-1')
+    expect(seated.getComponent('.your-table-go').props('routerLink')).toBe('/tables/1/play')
+    expect(seated.get('.your-table-go').text()).toBe('Back to the table')
     expect(seated.get('.seated-leave').text()).toBe('Leave')
-    expect(free.find('.seated-at').exists()).toBe(false)
+
+    setActivePinia(createPinia())
+    useAuthStore().user = ana
+    const free = mountWith([makeTable(2, { N: 'bob' })])
+    expect(free.find('.your-table').exists()).toBe(false)
   })
 
-  test('a held seat has Come back instead', async () => {
+  test('a held seat comes back to the game, without Leave', async () => {
     const wrapper = mountWith([mine()])
     useTablesStore().heldTableId = 1
     await flushPromises()
 
-    expect(wrapper.find('.seated-at').exists()).toBe(false)
-    expect(wrapper.get('.held').text()).toContain('Come back to Table 1')
+    expect(wrapper.find('.seated-leave').exists()).toBe(false)
+    expect(wrapper.get('.your-table-go').text()).toBe('Come back')
+    expect(wrapper.getComponent('.your-table-go').props('routerLink')).toBe('/tables/1/play')
   })
 
   test.each([

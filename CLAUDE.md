@@ -76,8 +76,9 @@ The user's standing rule (#91): **no task may leave code coverage under
 
 - **Routing is flat, driven by a side menu**: `src/router/index.ts` defines
   `/` → redirect to `/home`, plus lazy-loaded `/home` (`HomePage.vue`: an
-  intro with Log in / Create account for guests; for a logged-in user a
-  "Your table" card from the tables store's `myTable`, or "Find a table"),
+  intro with Log in / Create account for guests; for a logged-in user
+  `YourTableHero` from the tables store's `myTable`, or "Find a table",
+  then `YourForm` + `RecentBoards`),
   `/login` (`LoginPage.vue`, `meta.guestOnly`), `/create-account`
   (`CreateAccountPage.vue`, `meta.guestOnly`, linked from the Login page and guest Home),
   `/reset-password` and `/password-reset/:token` (both `ResetPasswordPage.vue`,
@@ -121,9 +122,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   logout presents its toast once `/login` is up, and login/sign-up greet the
   user with `showWelcomeToast` once `/account` is up. The toasts' styles live in
   `src/theme/toasts.css`: toasts render outside the pages, so the CSS is
-  global and styles the toast's shadow parts through `::part()`. Create
-  table and taking a seat on the Tables page are the exceptions to
-  `navigateAndSettle`: Create's modal closes and it navigates to
+  global and styles the toast's shadow parts through `::part()`. Creating
+  a table and taking a seat on the Tables page are the exceptions to
+  `navigateAndSettle`: **Deal me in** / **Create table** navigate to
   `/tables/:id` (where Start, the seats and Seat a player / Add robot
   are, #68), with or without robots (#132), as soon as `POST /tables`
   answers (#55; `createTable` seats the creator South, `CREATOR_SEAT`,
@@ -163,7 +164,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   `/tables/:id/play` if `board_id` or the seat is held/away, else
   `/tables/:id`; status `away` > `turn` (`turnNotice` on the game store's
   board for that table, `startNeeded` for a Start; `statusText` "Your
-  turn · 0:42" while our turn clock runs, `useTurnClock`) > `board`; `current`
+  turn · 0:42" while our turn clock runs, `useTurnClock`; `AppHeader`
+  then makes its button the orange `.turn-pill` with `statusText` in
+  `.table-shortcut-turn`, #162) > `board`; `current`
   when the route is the target, `atTable` on either table page. `myTable`
   on every page: the router's `afterEach` calls the store's `findSeat()`
   (one `GET /tables`, deduped, skipped once anything held says where we
@@ -261,16 +264,18 @@ The user's standing rule (#91): **no task may leave code coverage under
 - **Robots** (bb#65, backend `docs/ROBOTS.md`): users with `is_robot: true`
   (on every `PublicUser`; `GET /users?search=` never returns them) that
   fill seats nobody else takes. `createTable({robots: true})` (the
-  Tables page's "Play with robots" toggle, on by default; the same form's
-  `SetMinutesPicker` sends `set_minutes`) seats three
+  Tables page's **Deal me in**, with its card's `SetMinutesPicker`'s
+  `set_minutes`; **Create table** for friends sends `robots: false` and
+  no `set_minutes`) seats three
   but deals nothing, so the page goes to `/tables/:id`, where the
   creator's Start deals (robots are always ready); a manager adds one
   with the store's `seatRobot(id, seat)` ("Add robot" on the detail page).
   The backend moves them (a queued job per `PlayingUpdated`, about 1 s
   apart; `queue:work` must run) through the same rules as a human, so the
-  SPA only shows them: `RobotBadge.vue` next to their name (Home, Tables,
-  detail, `BridgeTable`, the profile sheet, which has no "Full profile"
-  link for a robot), and `BridgeTable`'s `thinking` prop + "robot-1 is
+  SPA only shows them: `RobotBadge.vue` next to their name (detail,
+  `BridgeTable`, the profile sheet, which has no "Full profile" link for
+  a robot; the lobby's `TableCard` compass draws a robot's seat blue
+  instead), and `BridgeTable`'s `thinking` prop + "robot-1 is
   thinking…" status when `acting_user_id` is a robot. Robots count as
   having asked for the next board, so a lone human's **Deal now** deals
   it at once. A robot declarer hands the play to its human dummy (#95, bb#94):
@@ -598,23 +603,41 @@ The user's standing rule (#91): **no task may leave code coverage under
   `src/utils/result.ts` words it in table notation and turns it round for
   the viewer's side (#100: `madeSuffix` "+2"/"="/"−1", `doubledMark`
   X/XX, `resultSummary(result, seat)` "2♣ W +2 · −130", N-S's tagged
-  without a seat, `viewerScore`, `percentText` "75 %");
-  `BoardResultPanel.vue` shows it at a glance: one big row ("2♣ by West
-  +2" left, the viewer's score right, N-S's tagged "N-S" for someone not
-  seated), "10 tricks · by claim" under it, no N-S/E-W line or summary,
-  then the set's position ("Set 2 · 3 of 4 boards played") and this
-  board's matchpoints for the viewer's side when known (`extras`, from
-  `playingExtras()` in `export.ts`: the board's results or a cached set's
-  row by `playing_id`; `useBoardExport` uses it too),
+  without a seat, `viewerScore`, `percentText` "75 %", `contractShort`
+  "2♣X W +2", `declaredText` "You declared" / "radu declared" / "E-W
+  declared");
+  `BoardResultPanel.vue` (#162, Daylight's result board) is a navy hero
+  card: `declaredText` (`players` prop), the contract + made suffix
+  ("2♣ +2", `.made-ok` green / `.made-down` red), "10 tricks · by
+  claim", the viewer's score big right (N-S's tagged "N-S" for someone
+  not seated), and "Against the other tables 67 %" + an amber bar when
+  this board's matchpoints for the viewer's side are known (`extras`,
+  from `playingExtras()` in `export.ts`: the board's results or a cached
+  set's row by `playing_id`; `useBoardExport` uses it too); then **Same
+  board elsewhere** (`others` = `history.results[boardId]`, which the play
+  page reads with `loadResults` once `finished`, failures quiet;
+  `otherTableRows(board, playingId)`: rows only with 2+ results, the
+  first 5 with ours always in, labelled by the N-S pair's usernames since
+  a result row has no table name, ours "You" + `.elsewhere-mine`), the
+  double dummy line (below) with `doubleDummyVerdict` and a green
+  `.dd-tick` when `doubleDummyDiff` ≥ 0, and `SetStrip` (`setPosition`
+  = the board's `set`, `setSoFar` for the figures: `setStripTiles` in
+  `sets.ts`, "Board 2 62 %", the current tile tinted, "now" until played,
+  "·" to come, "—" with top 0; `onTable` is the navy B1–B4 version);
   `BridgeTable`'s `deal` prop lays each hand at its seat. **The next board comes by itself**
   (#98, bb#97): `next_board_at` (ISO 8601, `BRIDGE_NEXT_BOARD_SECONDS` =
   10 after the board ended; null when no deal is coming: set over, a seat
   empty, players changed) is when the backend's queued `DealNextBoard`
   deals it, with the usual `TableUpdated` + `PlayingUpdated` +
   `HandDealt`; the result stays on show until then. `NextBoardBox.vue`
-  (prop `nextBoardAt`) counts down from it ("Next board in 0:08", then
-  "Dealing the next board…"; `useNow`, `secondsLeft`/`formatClock` from
-  `away.ts`; no seat chips or badges). Its optional **Deal now** is the
+  (prop `nextBoardAt`, `set` = the board's) is the next board bar: a
+  `.next-ring` (conic gradient, `--ring-fill` = seconds left of
+  `NEXT_BOARD_SECONDS` 10 in `sets.ts`, the seconds in `.next-ring-face`)
+  counting down ("Next board in 0:08", then "Dealing the next board…";
+  `useNow`, `secondsLeft`/`formatClock` from `away.ts`), `.next-sub`
+  "Board 3 of 4 · or skip the wait" (no next board after the set's last,
+  no "skip" once asked), Deal now orange, Leave a small clear button
+  under it. Its optional **Deal now** is the
   game store's `next()`: `POST /tables/{id}/playing/next` through the
   same `isBehind` guard; once every human has asked (robots count as
   asked) the last one gets the new board in the answer, the others
@@ -630,7 +653,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   deals the board (the play page swaps `NextBoardBox` for `StartBox`).
   `leaveWarning()` / `moveConsequences()` in `src/utils/seatMove.ts` word
   leaving by phase (`game.phaseOf(id)`). Under a board's result goes its
-  set's position (`BoardResultPanel`'s `setSoFar`, below), never a
+  set's boards (`BoardResultPanel`'s `SetStrip`, below), never a
   running score.
 - **Sets of four boards** (#73, bb#75, backend `docs/API.md` Sets): Start
   deals a set's first board, the other three come by themselves
@@ -657,10 +680,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   boards) is cached by the history store's `loadSet` (replaced on every
   read, 403/404 drop it). The play page reads it once per finished board
   and when the set ends (keyed, failures ignored: a newcomer gets 403),
-  feeds `BoardResultPanel`'s set line and matchpoints and, once the set is
+  feeds `BoardResultPanel`'s set strip and matchpoints and, once the set is
   over (`endedSet`), shows `SetResultsPanel.vue` instead of the board
-  result (also in `waiting` for a set ended mid-board), with `StartBox`
-  below. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
+  result (also in `waiting` for a set ended mid-board; the same navy hero
+  card, #162), with `StartBox` below. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
   side), `replacementsOf` (`?? []`), `replacedText(entry, mine)` ("East
   didn't play in time: a robot took their seat." / "You didn't play in
   time: a robot took your seat."; `SetResultsPanel` lists one per
@@ -920,8 +943,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   `banNotice`; `BanNotice.vue` navigates to `/login` and shows it in a
   modal until `dismissBanNotice` (plain text, not `ion-alert`, whose
   message is HTML). Logged in while banned: `BanBanner` on every page,
-  the guard's `notBanned`, and `TablesPage` replaces Create with the ban,
-  disables seats and hides Open. Game actions 403 with the ban in the
+  the guard's `notBanned`, and `TablesPage` replaces the two start cards
+  with the ban, disables every Sit and shows table names as plain text. Game actions 403 with the ban in the
   message, which `errorMessage` already shows.
 - **Public profiles**: `src/services/users.ts` wraps `GET /users/{id}` (auth,
   envelope, 404 for an unknown id) and defines `PublicUser` (`id`, `name`,
@@ -1015,8 +1038,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   `confirmRemove` + `removeCost` in `seatMove.ts`) inside the request's
   `try`, so a failure before any request is toasted and logged, never
   silent, and close the page's own sheets/modals (`closeSheets` /
-  `closeOverlays`, then `nextTick`) before asking. The Tables page shows
-  "You sit at <table> · Leave" for an unheld seat (`seatedAt`).
+  `closeOverlays`, then `nextTick`) before asking. The Tables page's
+  `YourTableHero` has **Leave** (`.seated-leave`, its `actions` slot)
+  for an unheld seat (`seatedAt`).
 - **Dev server port is 3000 on purpose** (`vite.config.ts`, `strictPort`): the
   backend's CORS `allowed_origins` defaults to `http://localhost:3000` and that
   host is a Sanctum stateful domain. Keep `VITE_API_BASE_URL` on `localhost`
@@ -1062,8 +1086,40 @@ The user's standing rule (#91): **no task may leave code coverage under
   `ClaimPanel`'s banner (tokens `--bridge-on-popup-clock`/`-ok`) and
   `HandView`'s `.forced-tag`; nothing draws a card back yet. #165 replaces
   its contract chip and phone bar (the auction behind a button top left,
-  the contract bar kept). Still to come: the finished board, Tables and
-  Home (#162); the side sheets and the wide layout (#163).
+  the contract bar kept). #162 did the finished board and the lobby
+  (Board result above; **Lobby** below); tokens
+  `--bridge-on-table-good`/`-bad`/`-accent`, `--bridge-table-dim`,
+  `--bridge-on-table-faint`, `--bridge-navy-tint`(`-text`),
+  `--bridge-action-line`; `.lobby-card` in `daylight.css` is the lobby's
+  white card. Still to come: the side sheets and the wide layout (#163).
+- **Lobby** (#162, the Lobby board): `TablesPage.vue` is 1280 px at most,
+  `.lobby-main` + `.lobby-aside` wrapping to one column. `YourTableHero.vue`
+  (navy; `useYourTable`'s table/target/status, so nothing for a guest,
+  banned or unseated; `yourTableLine` "Set 3 · Board 2 of 4 · you sit
+  South with radu"; `SetStrip` `onTable` from `currentSet(table, held
+  board)` + `history.sets`, read by `loadSet` once `board > 1` or
+  finished, failures quiet; **Back to the table** / **Come back** +
+  `AwayNotice` held; `actions` slot) on Tables and Home. Two
+  `.start-cards`: **Play now with robots** (`SetMinutesPicker` with
+  `label`, styled as a 4-way segmented control; `.deal-me-in` →
+  `create({name: null, robots: true, set_minutes})`) and the
+  `form.start-friends` (**Create table** → `create({name, robots:
+  false})`); `creating` is `'robots'|'friends'`, errors per card.
+  **Open tables**: `.filter-chip`s (`TABLE_FILTERS`, `matchesFilter`,
+  `filterCounts` in `src/utils/lobby.ts`: all / free = free seats /
+  playing = `board_id` / robots = `unattended_since`), then
+  `TableCard.vue` per table (`tableMeta(table, now)`: "16 min · set 2 ·
+  board 2/4", "left 3 min ago · closes in 7"; `tableStatus` pill
+  wait/play/robots; the compass from `compassSeats(table, me)`, kinds
+  me/robot/away/player/empty; empty → `.compass-sit` "Sit N" (`join`,
+  aria "Move to North" at our own table), a name → `player`). The aside
+  (and Home's `.home-aside`): `YourForm.vue` (`users.loadStats(null)`:
+  `averageText` board %, sets won / played, boards played; "—" unread)
+  and `RecentBoards.vue` (`history.loadHistory(null)`, the first 3,
+  `contractShort`, "Set 2 · B3", score, links to `/playings/:id`, "All my
+  boards"); both expose `load()`, which the page calls after the tables
+  load (failures quiet). Page specs mock `@/services/users`
+  (`getMyStats`) and `@/services/history` (`getMyPlayings`, `getSet`).
 - **Card size** (#136): `src/utils/cardSize.ts` is the setting, `normal`
   (the old 48 px card) / `large` (96 px, the default) / `xlarge` (120 px),
   on the Account page (an `ion-segment` + two preview cards), kept in

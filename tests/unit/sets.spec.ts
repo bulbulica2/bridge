@@ -26,6 +26,7 @@ import {
   setPercent,
   setTotals,
   setWinnerText,
+  setStripTiles,
 } from '@/utils/sets'
 import HistoryPage from '@/views/HistoryPage.vue'
 import SetResultsPage from '@/views/SetResultsPage.vue'
@@ -665,5 +666,23 @@ describe('My boards, paging and refreshing', () => {
     await fireIonEvent(wrapper, 'ion-infinite-scroll', 'ion-infinite', complete)
     await flushPromises()
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
+  })
+})
+
+describe('setStripTiles', () => {
+  const row = (position: number, ns: number, top = 4) => ({ position, matchpoints: { ns, ew: top - ns }, top })
+
+  test("one tile per board, the finished ones with the side's matchpoints, the one on now marked", () => {
+    expect(setStripTiles(4, 3, [row(1, 3), row(2, 1)], 'ns')).toEqual([
+      { position: 1, label: 'B1', played: true, percent: 75, current: false },
+      { position: 2, label: 'B2', played: true, percent: 25, current: false },
+      { position: 3, label: 'B3', played: false, percent: null, current: true },
+      { position: 4, label: 'B4', played: false, percent: null, current: false },
+    ])
+    expect(setStripTiles(2, null, [row(1, 3)], 'ew').map((t) => t.percent)).toEqual([25, null])
+  })
+
+  test('a board nobody else has played has no percentage yet', () => {
+    expect(setStripTiles(1, 1, [row(1, 0, 0)], 'ns')[0]).toMatchObject({ played: true, percent: null, current: true })
   })
 })

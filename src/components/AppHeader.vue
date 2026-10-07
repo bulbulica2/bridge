@@ -12,7 +12,7 @@
         <ion-button
           v-if="tableTarget"
           class="table-shortcut"
-          :class="{ 'at-table': atTable }"
+          :class="{ 'at-table': atTable, 'turn-pill': tableStatus === 'turn' }"
           :fill="atTable ? 'solid' : 'outline'"
           size="small"
           :router-link="atTarget ? undefined : tableTarget"
@@ -29,6 +29,8 @@
             :class="`status-${tableStatus}`"
             aria-hidden="true"
           />
+          <!-- Our turn there: the Daylight pill, "Your turn · 0:42". -->
+          <span v-if="tableStatus === 'turn'" class="table-shortcut-turn">{{ tableStatusText }}</span>
         </ion-button>
       </ion-buttons>
       <ion-title>{{ title }}</ion-title>
@@ -71,6 +73,7 @@ const {
   atTable,
   label: tableLabel,
   status: tableStatus,
+  statusText: tableStatusText,
   ariaLabel: tableAria,
 } = useYourTable();
 </script>
@@ -104,9 +107,23 @@ const {
   background: var(--ion-color-success, #2dd36f);
 }
 
+/* Our turn: the shortcut turns into the action-tinted pill, its dot the
+   action colour, the turn and its clock beside the name. */
 .status-turn {
-  background: var(--ion-color-tertiary, #6030ff);
-  box-shadow: 0 0 0 2px rgba(var(--ion-color-tertiary-rgb, 96, 48, 255), 0.3);
+  background: var(--bridge-action);
+}
+
+.table-shortcut.turn-pill {
+  --background: var(--bridge-action-tint);
+  --border-color: var(--bridge-action-tint);
+  --color: var(--bridge-action-text);
+}
+
+.table-shortcut-turn {
+  margin-inline-start: 6px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .status-away {
@@ -130,6 +147,11 @@ const {
 
   .table-shortcut-name {
     max-width: 6.5em;
+  }
+
+  /* The turn says more than the name on a phone. */
+  .turn-pill .table-shortcut-name {
+    display: none;
   }
 }
 </style>

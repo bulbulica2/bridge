@@ -1,5 +1,5 @@
 import { AxiosError, AxiosHeaders } from 'axios'
-import { flushPromises, mount } from '@vue/test-utils'
+import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { IonInput, IonTextarea } from '@ionic/vue'
@@ -380,23 +380,27 @@ describe('TablesPage.vue for a banned user', () => {
         table_id: id,
         user_id: 50 + i,
         seat,
-        user: { id: 50 + i, name: username, username, description: null, is_robot: false },
+        ready: false,
+        away_since: null,
+        replace_at: null,
+        user: { id: 50 + i, name: username, username, description: null, is_robot: false, is_admin: false },
       })),
       free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
       can_manage: false,
+      set_minutes: 16,
+      set: null,
     }
   }
 
-  // Ionic's web components take `disabled` as a DOM property, not an attribute.
   function isDisabled(button: { element: Element }) {
-    return (button.element as Element & { disabled?: boolean }).disabled
+    return (button.element as HTMLButtonElement).disabled
   }
 
   function mountPage() {
     const store = useTablesStore()
     store.tables = [makeTable(1, { N: 'bob' })]
     store.loaded = true
-    return mount(TablesPage, { global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } } })
+    return mount(TablesPage, { global: { stubs: { 'router-link': RouterLinkStub } } })
   }
 
   afterEach(() => {
@@ -409,10 +413,11 @@ describe('TablesPage.vue for a banned user', () => {
 
     const page = wrapper.get('.tables-page')
     expect(page.text()).toContain("Until then you can't create a table or take a seat.")
-    const buttons = page.findAll('ion-button')
-    expect(buttons.some((b) => b.text() === 'Create table')).toBe(false)
-    expect(buttons.some((b) => b.text().startsWith('Open'))).toBe(false)
-    const seats = buttons.filter((b) => b.text() === 'empty')
+    // Neither start card, and no way into a table's page.
+    expect(page.find('.start-cards').exists()).toBe(false)
+    expect(page.find('a.table-card-name').exists()).toBe(false)
+    expect(page.get('.table-card-name').text()).toBe('Table 1')
+    const seats = page.findAll('.compass-sit')
     expect(seats.length).toBeGreaterThan(0)
     for (const seat of seats) {
       expect(isDisabled(seat)).toBe(true)
@@ -426,7 +431,8 @@ describe('TablesPage.vue for a banned user', () => {
     const page = wrapper.get('.tables-page')
     expect(page.text()).not.toContain("can't create a table")
     expect(page.findAll('ion-button').some((b) => b.text() === 'Create table')).toBe(true)
-    const seat = page.findAll('ion-button').find((b) => b.text() === 'empty')!
+    expect(page.findAll('ion-button').some((b) => b.text() === 'Deal me in')).toBe(true)
+    const seat = page.get('.compass-sit')
     expect(isDisabled(seat)).toBe(false)
   })
 })

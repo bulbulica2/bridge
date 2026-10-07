@@ -59,56 +59,22 @@
               </ion-card-content>
             </ion-card>
 
-            <ion-card v-if="myTable" class="your-table">
-              <ion-card-header>
-                <ion-card-subtitle>Your table</ion-card-subtitle>
-                <ion-card-title>{{ myTable.name || `Table #${myTable.id}` }}</ion-card-title>
-              </ion-card-header>
-              <ion-card-content>
-                <ion-badge v-if="myTable.board_id !== null" color="success" class="board">
-                  Board in progress
-                </ion-badge>
-                <!-- Left mid-set: the seat waits 2 minutes for us, counted down. -->
-                <AwayNotice v-if="held" :table="myTable" :me="auth.user?.id ?? null" held />
-                <ul class="players">
-                  <li v-for="{ seat, user } in seatsOf(myTable)" :key="seat">
-                    <span class="seat-name">{{ seat }}</span>
-                    <template v-if="user">
-                      <span>
-                        {{ user.username }}<span v-if="user.id === auth.user?.id"> (you)</span>
-                      </span>
-                      <RobotBadge v-if="user.is_robot" />
-                      <AdminBadge v-if="user.is_admin" />
-                    </template>
-                    <span v-else class="empty-seat">empty</span>
-                  </li>
-                </ul>
-                <ion-button
-                  expand="block"
-                  :router-link="
-                    held || myTable.board_id !== null
-                      ? `/tables/${myTable.id}/play`
-                      : `/tables/${myTable.id}`
-                  "
-                  router-direction="forward"
-                >
-                  {{ held ? 'Come back' : myTable.board_id !== null ? 'Go to the board' : 'Go to table' }}
-                  <ion-icon slot="end" :icon="chevronForwardOutline" />
-                </ion-button>
-              </ion-card-content>
-            </ion-card>
+            <!-- Our table, one tap back (the Lobby board's hero). -->
+            <YourTableHero v-if="myTable" />
 
-            <ion-card v-else-if="tablesStore.loaded">
-              <ion-card-header>
-                <ion-card-title>You're not at a table</ion-card-title>
-              </ion-card-header>
-              <ion-card-content>
-                <p>Take a free seat at an open table, or create your own.</p>
-                <ion-button expand="block" router-link="/tables" router-direction="root">
-                  Find a table
-                </ion-button>
-              </ion-card-content>
-            </ion-card>
+            <section v-else-if="tablesStore.loaded" class="lobby-card no-table">
+              <h2>You're not at a table</h2>
+              <p>Take a free seat at an open table, or start one of your own.</p>
+              <ion-button color="action" router-link="/tables" router-direction="root">
+                Find a table
+              </ion-button>
+            </section>
+
+            <!-- How we have been playing, and our last boards. -->
+            <div class="home-aside">
+              <YourForm ref="form" />
+              <RecentBoards ref="recent" />
+            </div>
           </template>
         </template>
 
@@ -138,7 +104,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import {
   IonPage,
@@ -147,37 +113,33 @@ import {
   IonCard,
   IonCardHeader,
   IonCardSubtitle,
-  IonCardTitle,
   IonCardContent,
-  IonBadge,
-  IonIcon,
   IonText,
   IonSkeletonText,
   onIonViewWillEnter,
 } from '@ionic/vue';
-import { chevronForwardOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
-import AwayNotice from '@/components/AwayNotice.vue';
-import AdminBadge from '@/components/AdminBadge.vue';
-import RobotBadge from '@/components/RobotBadge.vue';
+import RecentBoards from '@/components/RecentBoards.vue';
+import YourForm from '@/components/YourForm.vue';
+import YourTableHero from '@/components/YourTableHero.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useTablesStore } from '@/stores/tables';
-import { seatsOf } from '@/services/tables';
 import { replacedFromText } from '@/utils/sets';
 import { errorMessage } from '@/utils/errors';
 
 const auth = useAuthStore();
 const tablesStore = useTablesStore();
 const { myTable } = storeToRefs(tablesStore);
-// Our seat at it is held after a Leave mid-set: opening the game comes back.
-const held = computed(() => !!myTable.value && tablesStore.heldTableId === myTable.value.id);
+const form = ref<InstanceType<typeof YourForm> | null>(null);
+const recent = ref<InstanceType<typeof RecentBoards> | null>(null);
 
 const loading = ref(false);
 const loadError = ref('');
 
 // A user holds at most one seat, and GET /tables is where to find it. Loaded
 // on every enter (the list has no live channel), and again when somebody logs
-// in while Home is already the page on screen.
+// in while Home is already the page on screen; the stats and recent boards
+// follow once it is in (the local backend answers one request at a time).
 onIonViewWillEnter(() => {
   load();
 });
@@ -203,13 +165,36 @@ async function load() {
   } finally {
     loading.value = false;
   }
+  form.value?.load();
+  recent.value?.load();
 }
 </script>
 
 <style scoped>
 .home {
-  max-width: 560px;
+  max-width: 960px;
   margin: 0 auto;
+}
+
+.home-aside {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.no-table h2 {
+  margin: 0;
+  font-size: 1.1875rem;
+}
+
+.no-table p {
+  margin: 0;
+  color: var(--bridge-muted);
+}
+
+.no-table ion-button {
+  margin: 0;
 }
 
 .intro {
@@ -225,10 +210,6 @@ ion-card {
   margin-right: 0;
 }
 
-.board {
-  margin-bottom: 8px;
-}
-
 .replaced-from p {
   margin: 0 0 8px;
 }
@@ -236,26 +217,6 @@ ion-card {
 .replaced-from-actions {
   display: flex;
   gap: 8px;
-}
-
-.players {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 12px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 4px 16px;
-}
-
-.seat-name {
-  font-weight: 600;
-  color: var(--ion-color-medium);
-  margin-right: 6px;
-}
-
-.empty-seat {
-  color: var(--ion-color-medium);
-  font-style: italic;
 }
 
 .skeleton-title {

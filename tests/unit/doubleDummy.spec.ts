@@ -23,8 +23,10 @@ import {
   DOUBLE_DUMMY_UNAVAILABLE,
   bestLeads,
   ddTricks,
+  doubleDummyDiff,
   doubleDummyLine,
   doubleDummyLines,
+  doubleDummyVerdict,
   leadSummary,
   leadsInHandOrder,
   pbnOptimumResultTable,
@@ -567,9 +569,27 @@ describe('BoardResultPanel double dummy line', () => {
       props: { result: result(), mySeat: 'S', doubleDummy: READY, reviewable: true },
     })
 
-    expect(wrapper.get('.result-dd').text()).toBe('Double dummy: 4♠ by North makes 10 Review')
+    expect(wrapper.get('.result-dd').text()).toBe(
+      'Double dummy: 4♠ by North makes 10. Declarer found every trick. Review',
+    )
+    // Every trick found: the green tick.
+    expect(wrapper.find('.dd-tick').exists()).toBe(true)
     await wrapper.get('.result-dd-review').trigger('click')
     expect(wrapper.emitted('review')).toHaveLength(1)
+  })
+
+  test('the tick stays for a gift from the defence, and goes when declarer fell short', () => {
+    const over = mount(BoardResultPanel, {
+      props: { result: result({ made_by: 1, tricks_won: 11 }), mySeat: 'N', doubleDummy: READY },
+    })
+    expect(over.get('.dd-text').text()).toBe('Double dummy: 4♠ by North makes 10. You took 1 more.')
+    expect(over.find('.dd-tick').exists()).toBe(true)
+
+    const short = mount(BoardResultPanel, {
+      props: { result: result({ made_by: -2, tricks_won: 8 }), mySeat: 'E', doubleDummy: READY },
+    })
+    expect(short.get('.dd-text').text()).toBe('Double dummy: 4♠ by North makes 10. Declarer took 2 fewer.')
+    expect(short.find('.dd-tick').exists()).toBe(false)
   })
 
   test('the note while pending; no button when there is nothing to review', () => {
@@ -579,6 +599,7 @@ describe('BoardResultPanel double dummy line', () => {
 
     expect(wrapper.get('.result-dd').text()).toBe(DOUBLE_DUMMY_PENDING)
     expect(wrapper.find('.result-dd-review').exists()).toBe(false)
+    expect(wrapper.find('.dd-tick').exists()).toBe(false)
   })
 
   test('the note on a server without a solver', () => {
@@ -680,5 +701,29 @@ describe('BoardResultsPage double dummy', () => {
 
     expect(http.get).toHaveBeenCalledTimes(1)
     expect(wrapper.find('.double-dummy').exists()).toBe(false)
+  })
+})
+
+describe('how declarer did against double dummy', () => {
+  test('the tricks taken less the tricks double dummy makes', () => {
+    expect(doubleDummyDiff(READY, result())).toBe(0)
+    expect(doubleDummyDiff(READY, result({ made_by: 2 }))).toBe(2)
+    expect(doubleDummyDiff(READY, result({ made_by: -1 }))).toBe(-1)
+  })
+
+  test('nothing to compare before it is solved, without a solver, or with no contract', () => {
+    expect(doubleDummyDiff(null, result())).toBeNull()
+    expect(doubleDummyDiff(PENDING, result())).toBeNull()
+    expect(doubleDummyDiff({ status: 'unavailable', table: null }, result())).toBeNull()
+    expect(doubleDummyDiff(READY, PASSED)).toBeNull()
+    // A table without that declarer's row.
+    expect(doubleDummyDiff({ status: 'ready', table: {} as Grid }, result())).toBeNull()
+    expect(doubleDummyVerdict(PENDING, result(), 'N')).toBeNull()
+  })
+
+  test('"You" for the declarer, "Declarer" for everyone else', () => {
+    expect(doubleDummyVerdict(READY, result(), 'N')).toBe('You found every trick.')
+    expect(doubleDummyVerdict(READY, result(), 'S')).toBe('Declarer found every trick.')
+    expect(doubleDummyVerdict(READY, result({ made_by: -3 }), null)).toBe('Declarer took 3 fewer.')
   })
 })

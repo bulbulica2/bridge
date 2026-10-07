@@ -113,6 +113,7 @@
       v-if="review.result && step === total"
       :result="review.result"
       :my-seat="mySeat"
+      :players="review.players"
       :extras="extras"
     />
 

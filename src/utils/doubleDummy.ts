@@ -50,6 +50,42 @@ export function doubleDummyLine(
   return `Double dummy: ${callLabel(result.contract)} by ${SEAT_NAMES[result.declarer]} makes ${tricks}`;
 }
 
+// How declarer did against double dummy, once the table is in: the tricks
+// declarer's side took (from the contract and how it went) less the tricks
+// double dummy says it makes. 0 means every trick was found; null before
+// the analysis is ready, and for a passed-out board.
+export function doubleDummyDiff(
+  analysis: DoubleDummy | null | undefined,
+  result: BoardResult,
+): number | null {
+  const { contract, declarer, made_by: made } = result;
+  if (analysis?.status !== 'ready' || !contract?.level || !contract.strain || !declarer || made === null) {
+    return null;
+  }
+  const tricks = ddTricks(analysis.table, declarer, contract.strain);
+  return tricks === null ? null : contract.level + 6 + made - tricks;
+}
+
+// The words after the double dummy line: "You found every trick." when
+// declarer took what double dummy makes, "Declarer took 1 more." (a gift
+// from the defence) or "Declarer took 2 fewer."; "You" when the viewer
+// declared. Null with nothing to compare.
+export function doubleDummyVerdict(
+  analysis: DoubleDummy | null | undefined,
+  result: BoardResult,
+  mySeat: Seat | null,
+): string | null {
+  const diff = doubleDummyDiff(analysis, result);
+  if (diff === null) {
+    return null;
+  }
+  const who = result.declarer === mySeat ? 'You' : 'Declarer';
+  if (diff === 0) {
+    return `${who} found every trick.`;
+  }
+  return `${who} took ${Math.abs(diff)} ${diff > 0 ? 'more' : 'fewer'}.`;
+}
+
 // "♠K".
 function cardName(card: Card): string {
   return `${SUIT_SYMBOLS[card.suit]}${rankLabel(card.rank)}`;
