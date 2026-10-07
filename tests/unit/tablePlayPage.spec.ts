@@ -302,9 +302,13 @@ describe('TablePlayPage vulnerability label', () => {
     // The dealer in a pill beside it (a phone), the board tile on a wide
     // screen (CSS picks one).
     expect(wrapper.get('.board-bar .dealer-pill').text()).toBe('Dealer South')
+    // Outside a set, never the board's number: the tile names the dealer,
+    // the centre has no board line.
     expect(wrapper.get('.board-bar .board-tile').attributes('aria-label')).toBe(
-      'Board 7, dealer South, vulnerable: N-S',
+      'Dealer South, vulnerable: N-S',
     )
+    expect(wrapper.find('.board-bar .tile-number').exists()).toBe(false)
+    expect(wrapper.find('.bridge-table .board-number').exists()).toBe(false)
   })
 
   test('in the play: the other side, still in red, above the trick', async () => {
@@ -345,7 +349,7 @@ describe('TablePlayPage vulnerability label', () => {
 
     expect(label(wrapper).text()).toBe('Nobody vulnerable')
     expect(label(wrapper).classes()).toContain('vul-label-green')
-    expect(wrapper.get('.board-bar .set-bar').text()).toBe('Board 2 of 4 · Set 1')
+    expect(wrapper.get('.board-bar .set-bar').text()).toBe('Board 2 of 4')
   })
 
   test('nothing dealt yet: no label', async () => {
@@ -354,6 +358,115 @@ describe('TablePlayPage vulnerability label', () => {
     expect(wrapper.find('.vul-label').exists()).toBe(false)
     expect(wrapper.find('.dealer-pill').exists()).toBe(false)
     expect(wrapper.find('.board-tile').exists()).toBe(false)
+    expect(wrapper.find('.auction-button').exists()).toBe(false)
+  })
+})
+
+describe('TablePlayPage top-left corner (#165)', () => {
+  const set = { id: 9, number: 3, board: 2, of: 4, finished: false, ended: null, replaced: [] } as Playing['set']
+  const contract = {
+    bid: { id: 20, call: null, level: 4, strain: 'S' } as unknown as Bid,
+    doubled: 0,
+    declarer: 'S',
+    dummy: 'N',
+  } as Playing['contract']
+  const played = (overrides: Partial<Playing> = {}) =>
+    auction({
+      phase: 'play',
+      set,
+      turn: 'W',
+      acting_user_id: 4,
+      auction: [
+        { seat: 'S', bid: pass },
+        { seat: 'W', bid: pass },
+      ] as Playing['auction'],
+      contract,
+      tricks: [],
+      current_trick: [],
+      tricks_won: { ns: 0, ew: 0 },
+      ...overrides,
+    })
+
+  test('the board\'s place in its set under the button: no set number, no board number', async () => {
+    const wrapper = await mountPage(played())
+
+    const corner = wrapper.get('.board-bar .board-corner')
+    expect(corner.classes()).toContain('board-corner-dealt')
+    expect(corner.get('.corner-vul').exists()).toBe(true)
+    expect(corner.get('.corner-auction .auction-button').text()).toBe('Auction')
+    expect(corner.get('.corner-set').text()).toBe('Board 2 of 4')
+    expect(wrapper.get('.board-bar').text()).not.toContain('Set 3')
+    // The tile and the table's centre give the place in the set too.
+    expect(wrapper.get('.board-bar .tile-number').text()).toBe('2')
+    expect(wrapper.get('.board-bar .board-tile').attributes('aria-label')).toContain('Board 2, dealer South')
+    expect(wrapper.text()).not.toContain('Board 7')
+  })
+
+  test("the centre's board line is the place in the set while no trick is shown", async () => {
+    const wrapper = await mountPage(auction({ set }))
+
+    expect(wrapper.get('.bridge-table .board-number').text()).toBe('Board 2 of 4')
+  })
+
+  test('the button from the first call on, not before', async () => {
+    const wrapper = await mountPage(auction({ set }))
+    expect(wrapper.find('.auction-button').exists()).toBe(false)
+    // The row is there anyway (the pill), and the set line under it.
+    expect(wrapper.find('.corner-set').exists()).toBe(true)
+
+    useGameStore().applyPlayingUpdate(5, auction({ set, turn: 'W', acting_user_id: 4, auction: [{ seat: 'S', bid: pass }] as Playing['auction'] }))
+    await flushPromises()
+    expect(wrapper.find('.auction-button').exists()).toBe(true)
+  })
+
+  test('during the play: no grid on the page, the button shows it on a hover or a tap', async () => {
+    const wrapper = await mountPage(played())
+
+    expect(wrapper.find('.auction').exists()).toBe(false)
+    const root = wrapper.get('.auction-peek')
+    await root.trigger('pointerenter', { pointerType: 'mouse' })
+    expect(wrapper.find('.auction-popup .auction').exists()).toBe(true)
+    await root.trigger('pointerleave', { pointerType: 'mouse' })
+    expect(wrapper.find('.auction-popup').exists()).toBe(false)
+
+    await wrapper.get('.auction-button').trigger('click')
+    expect(wrapper.get('.auction-button').attributes('aria-expanded')).toBe('true')
+    expect(wrapper.findAll('.auction-popup td .call')).toHaveLength(2)
+  })
+
+  test('once finished: still behind the button, no grid below', async () => {
+    const wrapper = await mountPage({
+      ...finished(),
+      set,
+      auction: [
+        { seat: 'S', bid: pass },
+        { seat: 'W', bid: pass },
+        { seat: 'N', bid: pass },
+        { seat: 'E', bid: pass },
+      ] as Playing['auction'],
+    })
+
+    expect(wrapper.find('.auction').exists()).toBe(false)
+    await wrapper.get('.auction-button').trigger('click')
+    expect(wrapper.findAll('.auction-popup td .call')).toHaveLength(4)
+  })
+
+  test('the contract bar: the contract and the tricks; a robot declarer\'s dummy still told', async () => {
+    const robot = { id: 9, name: 'Robot', username: 'robot-1', is_robot: true }
+    const wrapper = await mountPage(
+      played({
+        contract: { ...contract!, declarer: 'N', dummy: 'S' },
+        players: { ...PLAYERS, N: robot } as Playing['players'],
+        turn: 'N',
+        acting_user_id: 3,
+        declarer_hand: hand('N'),
+      } as Partial<Playing>),
+    )
+
+    expect(wrapper.get('.outcome-title').text().replace(/\s+/g, ' ')).toBe('4♠ by North')
+    expect(wrapper.findAll('.tricks-won span').map((s) => s.text())).toEqual(['NS 0', '·', 'EW 0'])
+    expect(wrapper.find('.outcome-detail').exists()).toBe(false)
+    expect(wrapper.get('.outcome-you').text().replace(/\s+/g, ' ')).toBe('robot-1 declares 4♠ — you play the hand')
   })
 })
 

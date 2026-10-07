@@ -76,32 +76,55 @@
             <span>Refreshing…</span>
           </div>
 
-          <!-- The line above the table: on a wide screen the board tile
-               (number, dealer, vulnerable sides); then who is vulnerable, in
-               words, in the top-left corner for the whole board (#151), and
-               on a phone the dealer beside it; then where the table is in
-               its set of four boards. -->
+          <!-- The top-left corner (#165): on a wide screen the board tile
+               (its place in the set, dealer, vulnerable sides); then who is
+               vulnerable, in words, for the whole board (#151), with the
+               Auction button beside it from the first call on (the only
+               place the auction shows once the bidding is over); under them
+               the dealer on a phone, and the board's place in its set under
+               the button. Both rows keep their height from call to call. -->
           <div v-if="playing.set || vulnerable !== null" class="board-bar">
             <BoardTile
               v-if="vulnerable !== null && playing.board && !wideTable"
               :board="playing.board"
+              :position="playing.set?.board ?? null"
               class="board-tile-wide"
             />
-            <VulnerabilityLabel
-              v-if="vulnerable !== null"
-              :vulnerable="vulnerable"
-              :my-seat="mySeat"
-            />
-            <span v-if="vulnerable !== null && playing.board" class="dealer-pill">
-              Dealer {{ SEAT_NAMES[playing.board.dealer] }}
-            </span>
-            <p v-if="playing.set" class="set-bar" :class="{ 'set-bar-over': shownSet?.finished }">
-              {{ setLabel(playing.set) }}<template v-if="shownSet?.finished"> · set over</template>
-            </p>
+            <div class="board-corner" :class="{ 'board-corner-dealt': vulnerable !== null }">
+              <VulnerabilityLabel
+                v-if="vulnerable !== null"
+                class="corner-vul"
+                :vulnerable="vulnerable"
+                :my-seat="mySeat"
+              />
+              <AuctionPopover
+                v-if="auctionButton"
+                class="corner-auction"
+                :auction="playing.auction!"
+                :board="playing.board"
+                :my-seat="mySeat"
+                :turn="playing.phase === 'auction' ? playing.turn : null"
+                :players="players"
+                :live="playing.phase !== 'finished'"
+                :busy="noting"
+                :bidding="playing.phase === 'auction'"
+                v-on="auctionEvents"
+              />
+              <span v-if="vulnerable !== null && playing.board" class="dealer-pill corner-dealer">
+                Dealer {{ SEAT_NAMES[playing.board.dealer] }}
+              </span>
+              <p
+                v-if="playing.set"
+                class="set-bar corner-set"
+                :class="{ 'set-bar-over': shownSet?.finished }"
+              >
+                {{ boardPosition(playing.set) }}<template v-if="shownSet?.finished"> · set over</template>
+              </p>
+            </div>
           </div>
 
-          <!-- The end of the auction: the contract. It stays above the table
-               for the whole play, with the tricks. -->
+          <!-- The end of the auction: the contract ("5♣ by East") and the
+               tricks, above the table for the whole play. -->
           <section
             v-if="playing.phase === 'play' && playing.contract"
             class="outcome"
@@ -110,9 +133,6 @@
             <p class="outcome-title">
               <CallLabel :bid="playing.contract.bid" />{{ doubledSuffix(playing.contract.doubled) }}
               by {{ SEAT_NAMES[playing.contract.declarer] }}
-            </p>
-            <p class="outcome-detail">
-              Declarer {{ who(playing.contract.declarer) }} · Dummy {{ who(playing.contract.dummy) }}
             </p>
             <!-- A robot declarer hands its game to us, its dummy. -->
             <p v-if="forDeclarer" class="outcome-you">
@@ -247,6 +267,7 @@
             :banks="turnClock.banks.value"
             :ready="readySeats"
             :calls="playing.phase === 'auction' ? (playing.auction ?? []) : null"
+            :board-label="playing.set ? boardPosition(playing.set) : null"
             :wide="wideTable"
             :busy="sendingCard !== null"
             :sending-id="sendingCard"
@@ -254,7 +275,7 @@
             @play="playCard"
           >
             <template v-if="wideTable && vulnerable !== null && playing.board" #corner>
-              <BoardTile :board="playing.board" />
+              <BoardTile :board="playing.board" :position="playing.set?.board ?? null" />
             </template>
 
             <p class="waiting-title">
@@ -391,19 +412,6 @@
             </div>
           </template>
 
-          <!-- Once the auction is over it is only for reference: below the hand. -->
-          <AuctionHistory
-            v-if="(playing.phase === 'play' || playing.phase === 'finished') && playing.auction"
-            :auction="playing.auction"
-            :board="playing.board"
-            :my-seat="mySeat"
-            :turn="null"
-            :players="players"
-            :live="playing.phase === 'play'"
-            :busy="noting"
-            v-on="auctionEvents"
-          />
-
           <OfflineRefresh :table-id="tableId" :disabled="loading" @refresh="load()" />
         </template>
       </div>
@@ -475,6 +483,7 @@ import { vIonEvent } from '@/directives/ionEvent';
 import { chatbubblesOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
 import AuctionHistory from '@/components/AuctionHistory.vue';
+import AuctionPopover from '@/components/AuctionPopover.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
 import BiddingBox from '@/components/BiddingBox.vue';
 import BoardChat from '@/components/BoardChat.vue';
@@ -531,7 +540,7 @@ import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
 import { playingExtras } from '@/utils/export';
 import { resultSummary } from '@/utils/result';
 import { confirmLeave, confirmRemove, heldNotice, removeCost } from '@/utils/seatMove';
-import { currentSet, setLabel } from '@/utils/sets';
+import { boardPosition, currentSet } from '@/utils/sets';
 import { reviewChoices } from '@/utils/review';
 import type { SeenBoard } from '@/utils/review';
 import { startNeeded } from '@/utils/start';
@@ -675,6 +684,13 @@ const auctionCentre = computed(
   () => wideTable.value && playing.value?.phase === 'auction' && !!playing.value.auction,
 );
 useSteadyHeight(auctionEl, () => playing.value?.playing_id);
+
+// The Auction button top left (#165): from the first call to the end of
+// the board, the only way to see the auction once the bidding is over.
+const auctionButton = computed(() => {
+  const state = playing.value;
+  return !!state && state.phase !== 'waiting' && (state.auction?.length ?? 0) > 0;
+});
 
 // The auction while it lasts, below the table or in its centre: an
 // opponent's call may be asked about and ours answered.
@@ -848,15 +864,6 @@ const peekTrick = computed(() =>
 
 function wins(seat: Seat): string {
   return seat === mySeat.value ? 'You win' : `${seat} wins`;
-}
-
-// "North (ann)", or "North (you)".
-function who(seat: Seat): string {
-  if (seat === mySeat.value) {
-    return `${SEAT_NAMES[seat]} (you)`;
-  }
-  const user = players.value[seat];
-  return user ? `${SEAT_NAMES[seat]} (${user.username})` : SEAT_NAMES[seat];
 }
 
 // The turn clock line's words: what the board waits for, during the
@@ -1055,7 +1062,7 @@ const chatEvents = {
 const headerTitle = computed(() => {
   const set = playing.value?.phase === 'waiting' ? null : playing.value?.set;
   const name = table.value?.name || (tableId.value ? `Table #${tableId.value}` : 'Table');
-  return set ? `${name} · Board ${set.board} of ${set.of}` : name;
+  return set ? `${name} · ${boardPosition(set)}` : name;
 });
 
 onIonViewWillEnter(() => {
@@ -1967,10 +1974,49 @@ async function refresh(event: CustomEvent) {
 
 .board-bar {
   display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+/* The vulnerability pill and the Auction button on one row, at every
+   width; under them the dealer (a phone's) and the board's place in its
+   set, under the button. Both rows are there for the whole board: before
+   the first call the pill holds the row's height. */
+.board-corner {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin: 0 0 10px;
+  min-width: 0;
+}
+
+.board-corner.board-corner-dealt {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    'vul auction'
+    'dealer set';
+  justify-content: start;
+  justify-items: start;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.corner-vul {
+  grid-area: vul;
+}
+
+.corner-auction {
+  grid-area: auction;
+}
+
+.corner-dealer {
+  grid-area: dealer;
+}
+
+.corner-set {
+  grid-area: set;
 }
 
 .dealer-pill {
@@ -2028,12 +2074,6 @@ async function refresh(event: CustomEvent) {
 .outcome-title {
   font-size: 1.15rem;
   font-weight: 700;
-}
-
-.outcome .outcome-detail {
-  margin-top: 4px;
-  font-size: 0.85rem;
-  color: var(--ion-color-medium);
 }
 
 .outcome .outcome-you {

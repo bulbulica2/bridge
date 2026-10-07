@@ -229,7 +229,7 @@ describe('the wide table on the play page', () => {
     expect(wrapper.find('.centre-auction .bidding-box').exists()).toBe(true)
   })
 
-  test('the play: the trick in the centre as before, the auction below for reference', async () => {
+  test('the play: the trick in the centre as before, the auction behind the button top left', async () => {
     const contract = { bid: oneHeart, doubled: '' as const, declarer: 'E' as Seat, dummy: 'W' as Seat }
     const wrapper = await mountPage(
       auction({ phase: 'play', contract, turn: 'S', current_trick: [], tricks: [], tricks_won: { ns: 0, ew: 0 } }),
@@ -237,8 +237,11 @@ describe('the wide table on the play page', () => {
 
     expect(wrapper.find('.centre-auction').exists()).toBe(false)
     expect(wrapper.find('.bridge-table .centre .trick').exists()).toBe(true)
+    expect(wrapper.findComponent(AuctionHistory).exists()).toBe(false)
+    await wrapper.get('.board-bar .auction-button').trigger('click')
     const history = wrapper.findComponent(AuctionHistory)
     expect(history.element.closest('.bridge-table')).toBeNull()
+    expect(history.element.closest('.auction-popup')).not.toBeNull()
     expect(wrapper.find('.bridge-table .corner .board-tile').exists()).toBe(true)
   })
 

@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/95-daylight-sheets-and-wide-layout`._
+_Status as of branch `bulbulica2/96-auction-button-and-board-bar`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -352,7 +352,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim sheet with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim sheet with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button top left, Board 1 of 4 under it, the contract bar without the declarer/dummy line);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -399,7 +399,7 @@ box under it; the centre keeps the height it reached until the next
 board, so the table doesn't shrink once your call is made. During the
 play it is dummy and the trick, as on any screen. The chat stays on the
 right. Narrower, the table keeps the layout it has on a tablet, with the
-auction under it.
+auction under it while the bidding lasts.
 
 **Nothing jumps from card to card** (#133): while a board has a turn,
 every seat keeps a line for the turn label (**Your turn**, **To act**,
@@ -425,19 +425,28 @@ off for 5 s; while they work, pull to refresh is the only manual reload
 (#76).
 
 Play goes in **sets of four boards** (#73): Start deals board 1, **Next
-board** boards 2 to 4, and after the fourth the set is over. A line at the
-top says where the table is: **Board 2 of 4 · Set 3** (**· set over** once
-it is).
+board** boards 2 to 4, and after the fourth the set is over. The top-left
+corner says where the table is: **Board 2 of 4** (**· set over** once it
+is), under the Auction button (#165). The page never shows the set's
+number or the board's number in the database.
 
-**Who is vulnerable, in words** (#151, #160). The same line starts, top
-left, with a pill for the whole board (auction, play and once finished):
+**The top-left corner** (#151, #160, #165). A pill for the whole board
+(auction, play and once finished) says who is vulnerable, in words:
 **Nobody vulnerable** in green, else red: **Vul: E-W** for the other side,
-**Vulnerable: N-S (you)** for yours, **Both (you too)**. On a phone a
-**Dealer West** pill follows it; from 1100 px wide the **board tile**
-(BBO's: the number in a navy square, the vulnerable sides red, "DEALER W")
-stands before it instead, or in the wide table's corner. The plates keep a red/green top edge, and the
-table's centre says the same words until the first trick takes its
-place.
+**Vulnerable: N-S (you)** for yours, **Both (you too)**. Beside it, on a
+phone as on a desktop, the **Auction** button, there from the first call
+until the board is over: hovering it with a mouse pops up the auction
+grid (chips, the vulnerable side's seats red, alerts "!", questions "?")
+and moving away hides it; a tap opens it and a tap outside (or Escape)
+closes it. While the board is on, an opponent's call in it still offers
+**Ask what it means** and **Ask in the chat**. Under the pill, on a
+phone, a **Dealer West** pill, and under the button **Board 2 of 4**.
+From 1100 px wide the **board tile** (BBO's: the board's place in its set,
+1–4, in a navy square, the vulnerable sides red, "DEALER W") stands
+before them instead of the dealer pill, or in the wide table's corner.
+The plates keep a red/green top edge, and the table's centre says
+**Board 2 of 4**, the dealer and the same words until the first trick
+takes its place.
 
 **The header** reads the table's name and the board's place in its set,
 **Friday club · Board 2 of 4** (#161), never the board's number in the
@@ -531,9 +540,13 @@ What it shows by phase:
   board is over: a robot answers at once in the pop-up; a person gets a
   toast and a sheet to type the answer, which then shows like an
   explanation (closed, the sheet comes back from **Answer** in the call's
-  pop-up). The grid stays below your hand during the play, where asking
-  still works. The pop-up also offers **Ask in the chat** (below).
-- **play**: the contract bar with tricks won, the current trick in the
+  pop-up). Once the auction is over the grid leaves the page: the
+  **Auction** button top left is the only way to see it, and asking still
+  works there during the play. The pop-up also offers **Ask in the chat**
+  (below).
+- **play**: the contract bar, **5♣ by East** (**doubled** /
+  **redoubled** when it is) and the tricks won, **NS 0 · EW 0**, with no
+  declarer/dummy line (#165), the current trick in the
   centre, dummy's cards once the opening lead is made, trumps on the left
   and the colours still alternating (4♠: ♠ ♥ ♣ ♦, 3♦: ♦ ♠ ♥ ♣, NT: ♥ ♣ ♦
   ♠; a robot declarer's cards, for its dummy, the same way). From the second
@@ -626,7 +639,7 @@ What it shows by phase:
   seat."), the four boards (number, contract and declarer, result, your
   side's score and matchpoint %, each opening its review) and the totals.
   Below it the Start box: everyone's Start opens the next set, **Board 1
-  of 4 · Set 4**. A set that ended mid-board (a player taken out of it)
+  of 4**. A set that ended mid-board (a player taken out of it)
   shows its results the same way once the table is back to waiting. They
   update live for all four: the set ending arrives with the last card's
   `PlayingUpdated` (or the `TableUpdated` that broke it off), and the

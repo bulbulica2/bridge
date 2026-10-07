@@ -90,6 +90,16 @@ describe('BridgeTable plates', () => {
     })
   }
 
+  test("the centre's board line: the board's number left out, the play page's label, or none", () => {
+    const board = { id: 1, number: 12, dealer: 'W', vulnerable: 'E-W' }
+
+    expect(mountTable({ board }).get('.board-number').text()).toBe('Board 12')
+    expect(mountTable({ board, boardLabel: 'Board 2 of 4' }).get('.board-number').text()).toBe('Board 2 of 4')
+    const none = mountTable({ board, boardLabel: null })
+    expect(none.find('.board-number').exists()).toBe(false)
+    expect(none.get('.board-line').text()).toBe('Dealer W')
+  })
+
   test("each seat is a plate: initials (a robot's icon), name, seat and the badges", () => {
     const wrapper = mountTable({ board: { id: 1, number: 2, dealer: 'W', vulnerable: 'E-W' } })
 
@@ -164,16 +174,24 @@ describe('BridgeTable plates', () => {
 })
 
 describe('BoardTile', () => {
-  test('the number, the dealer and the vulnerable sides in red', () => {
-    const wrapper = mount(BoardTile, { props: { board: { number: 2, dealer: 'W', vulnerable: 'E-W' } } })
+  test("the board's place in its set, the dealer and the vulnerable sides in red", () => {
+    const wrapper = mount(BoardTile, { props: { board: { dealer: 'W', vulnerable: 'E-W' }, position: 2 } })
 
     expect(wrapper.get('.tile-number').text()).toBe('2')
     expect(wrapper.get('.tile-dealer').text()).toBe('DEALER W')
     expect(wrapper.findAll('.tile-side.vul').map((s) => s.text())).toEqual(['W', 'E'])
     expect(wrapper.get('.board-tile').attributes('aria-label')).toBe('Board 2, dealer West, vulnerable: E-W')
 
-    const both = mount(BoardTile, { props: { board: { number: 4, dealer: 'N', vulnerable: 'N-S E-W' } } })
+    const both = mount(BoardTile, { props: { board: { dealer: 'N', vulnerable: 'N-S E-W' } } })
     expect(both.findAll('.tile-side.vul')).toHaveLength(4)
+  })
+
+  test("outside a set, no number at all: never the board's number in the database", () => {
+    const wrapper = mount(BoardTile, { props: { board: { number: 17, dealer: 'S', vulnerable: '' } as never } })
+
+    expect(wrapper.find('.tile-number').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('17')
+    expect(wrapper.get('.board-tile').attributes('aria-label')).toBe('Dealer South, vulnerable: None')
   })
 })
 

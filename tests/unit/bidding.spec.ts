@@ -393,7 +393,7 @@ describe('TablePlayPage bidding', () => {
     expect(wrapper.find('.bidding-box').exists()).toBe(false)
   })
 
-  test('announces the contract with declarer and dummy', async () => {
+  test('the contract bar: the contract and the tricks, no declarer/dummy line', async () => {
     const wrapper = await mountPage(
       state({
         phase: 'play',
@@ -401,12 +401,15 @@ describe('TablePlayPage bidding', () => {
         acting_user_id: 2,
         auction: calls('N 4S, E X, S P, W P, N P'),
         contract: { bid: bid('4S'), doubled: 1, declarer: 'N', dummy: 'S' },
+        tricks_won: { ns: 0, ew: 0 },
       }),
     )
 
-    const outcome = wrapper.get('.outcome').text().replace(/\s+/g, ' ')
-    expect(outcome).toContain('4♠ doubled by North')
-    expect(outcome).toContain('Declarer North (ann) · Dummy South (you)')
+    expect(wrapper.get('.outcome-title').text().replace(/\s+/g, ' ')).toBe('4♠ doubled by North')
+    expect(wrapper.findAll('.tricks-won span').map((s) => s.text())).toEqual(['NS 0', '·', 'EW 0'])
+    expect(wrapper.get('.outcome').text()).not.toContain('Declarer')
+    expect(wrapper.get('.outcome').text()).not.toContain('Dummy')
+    expect(wrapper.find('.outcome-you').exists()).toBe(false)
     expect(wrapper.find('.bidding-box').exists()).toBe(false)
   })
 

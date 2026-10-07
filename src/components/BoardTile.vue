@@ -1,13 +1,15 @@
 <template>
-  <!-- The board as BBO draws it (Daylight, #160): the number in a navy
-       square, the four sides round it (N on top, as the cards lie on the
-       table's paper, not rotated for the viewer), a vulnerable side's red,
-       and the dealer under the number. -->
+  <!-- The board as BBO draws it (Daylight, #160): the board's place in its
+       set (1–4, never its number in the database, #165) in a navy square,
+       the four sides round it (N on top, as the cards lie on the table's
+       paper, not rotated for the viewer), a vulnerable side's red, and the
+       dealer under the number. Outside a set the square holds the dealer
+       alone. -->
   <div class="board-tile" role="img" :aria-label="label">
     <span class="tile-side tile-n" :class="{ vul: vul('N') }">N</span>
     <span class="tile-side tile-w" :class="{ vul: vul('W') }">W</span>
     <span class="tile-centre">
-      <span class="tile-number">{{ board.number }}</span>
+      <span v-if="position" class="tile-number">{{ position }}</span>
       <span class="tile-dealer">DEALER {{ board.dealer }}</span>
     </span>
     <span class="tile-side tile-e" :class="{ vul: vul('E') }">E</span>
@@ -22,7 +24,14 @@ import type { Seat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
 import { isVulnerable, vulnerabilityLabel } from '@/utils/cards';
 
-const props = defineProps<{ board: Pick<Board, 'number' | 'dealer' | 'vulnerable'> }>();
+const props = withDefaults(
+  defineProps<{
+    board: Pick<Board, 'dealer' | 'vulnerable'>;
+    // The board's place in its set, if it is in one.
+    position?: number | null;
+  }>(),
+  { position: null },
+);
 
 function vul(seat: Seat): boolean {
   return isVulnerable(seat, props.board.vulnerable);
@@ -30,7 +39,7 @@ function vul(seat: Seat): boolean {
 
 const label = computed(
   () =>
-    `Board ${props.board.number}, dealer ${SEAT_NAMES[props.board.dealer]}, vulnerable: ${vulnerabilityLabel(props.board.vulnerable)}`,
+    `${props.position ? `Board ${props.position}, dealer` : 'Dealer'} ${SEAT_NAMES[props.board.dealer]}, vulnerable: ${vulnerabilityLabel(props.board.vulnerable)}`,
 );
 </script>
 
