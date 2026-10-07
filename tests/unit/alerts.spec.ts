@@ -929,7 +929,7 @@ describe('TablePlayPage alerts', () => {
     expect(w.find('.explain-sheet').exists()).toBe(false)
   })
 
-  test('during the play the auction below the hand still asks and answers', async () => {
+  test('during the play the Auction pop-up still asks and answers', async () => {
     const w = await mountPage(
       state({
         phase: 'play',
@@ -946,6 +946,9 @@ describe('TablePlayPage alerts', () => {
     await flushPromises()
     vi.mocked(gameService.askAboutCall).mockResolvedValue(state())
 
+    // No grid on the page once the auction is over: only behind the button.
+    expect(w.find('.auction').exists()).toBe(false)
+    await w.get('.auction-button').trigger('click')
     await callButton(w, 'Pass').trigger('click')
     await w.get('.popup-action.ask').trigger('click')
     await flushPromises()
@@ -977,6 +980,7 @@ describe('TablePlayPage alerts', () => {
     )
     await flushPromises()
 
+    await w.get('.auction-button').trigger('click')
     expect(callButton(w, '2♣').classes()).toContain('alerted')
     await callButton(w, '2♣').trigger('click')
     expect(w.get('.alert-text').text()).toBe('Strong')

@@ -325,9 +325,16 @@ The user's standing rule (#91): **no task may leave code coverage under
   ("Nobody vulnerable" green; red "Vul: E-W" for the other side or no
   seat, "Vulnerable: N-S (you)", "Both (you too)"), drawn by
   `VulnerabilityLabel.vue` as a pill top left above the table (the play
-  page's `.board-bar`, beside `setLabel`, auction/play/finished, then a
-  `.dealer-pill` "Dealer West" below 1100 px and `BoardTile.vue`, BBO's
-  board tile, from 1100 px; `BoardReview`'s `.board-bar`;
+  page's `.board-bar`, auction/play/finished: `.board-corner`, a 2×2 grid
+  (#165), the pill and `AuctionPopover.vue` (the **Auction** button,
+  `auctionButton`: from the first call to the end of the board, the
+  `AuctionHistory` grid in a `usePopover` pop-up, `live` until finished,
+  `bidding` during the auction, `auctionEvents` passed on) on one row at
+  every width, under them a `.dealer-pill` "Dealer West" below 1100 px
+  and `.set-bar` `boardPosition(set)` ("Board 2 of 4", `sets.ts`, no set
+  number) under the button; before them `BoardTile.vue`, BBO's board
+  tile, from 1100 px, holding the board's place in its set (`position`,
+  never `board.number`); `BoardReview`'s `.board-bar`;
   `BoardResultsPage`'s `.board-info`), `BridgeTable`'s centre line and
   `BoardPrintout`'s meta line (its `mySeat` prop, text only); the seat
   stripes stay (the plate's top edge). The detail page moves a
@@ -417,7 +424,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   `AuctionHistory` draws each call with `AuctionCallCell.vue`: alerted =
   amber ring + "!", questioned = blue ring + "?", the pop-up (a dark
   card; `src/composables/usePopover.ts`, shared with
-  `LastTrickPopover`: mouse hover, tap toggles, Escape / tap outside)
+  `LastTrickPopover` and `AuctionPopover`: mouse hover, tap toggles, Escape / tap outside)
   titled "East alerted 2♦" ("You alerted 2♣" for your own, "Partner
   alerted 2♣" for partner's, "2♦ by West" / "Your 2♣" unalerted) shows
   `alertText()` ("Alerted, no explanation given." when empty, plain
@@ -677,8 +684,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   boards sends only that, so read it through `currentSet(table, playing)` in
   `src/utils/sets.ts`, which merges both copies (a higher id wins; the
   longer `replaced`). The
-  play page shows `setLabel` ("Board 2 of 4 · Set 3") at the top, the
-  detail page while a set runs. `getSet(id)` (`GET /sets/{id}`, in
+  play page shows `boardPosition` ("Board 2 of 4") top left and in the
+  header, the detail page `setLabel` ("Board 2 of 4 · Set 3") while a set
+  runs. `getSet(id)` (`GET /sets/{id}`, in
   `src/services/history.ts`: finished `boards` with `matchpoints`/`top`,
   `totals`, `winner`; 403 unless a player of it or finished all its
   boards) is cached by the history store's `loadSet` (replaced on every
@@ -1096,9 +1104,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   of 4" from `playing.set`, never `board.number`; the name alone in
   `waiting`), the chat badge in `action`, Claim, `ClaimSheet`'s tiles,
   `ClaimPanel`'s banner (tokens `--bridge-on-popup-clock`/`-ok`) and
-  `HandView`'s `.forced-tag`; nothing draws a card back yet. #165 replaces
-  its contract chip and phone bar (the auction behind a button top left,
-  the contract bar kept). #162 did the finished board and the lobby
+  `HandView`'s `.forced-tag`; nothing draws a card back yet. #165 did the
+  top-left corner (above, Vulnerability in words) in place of #161's
+  contract chip and phone bar: no `AuctionHistory` on the page once the
+  auction is over (the Auction button only), the contract bar
+  (`.outcome`) only "5♣ by East" + `tricks_won` (and `.outcome-you` for a
+  robot declarer's dummy), no declarer/dummy line, and no
+  `board.number` anywhere on the play page: `BridgeTable`'s
+  `boardLabel` (the centre's first line; left out "Board 7", the play
+  page passes `boardPosition` or null). #162 did the finished board and the lobby
   (Board result above; **Lobby** below); tokens
   `--bridge-on-table-good`/`-bad`/`-accent`, `--bridge-table-dim`,
   `--bridge-on-table-faint`, `--bridge-navy-tint`(`-text`),

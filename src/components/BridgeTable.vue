@@ -179,7 +179,7 @@
     <div class="centre" :class="{ 'centre-slot': $slots.centre }">
       <slot v-if="$slots.centre" name="centre" />
       <template v-else-if="board">
-        <p class="board-number">Board {{ board.number }}</p>
+        <p v-if="boardLabel !== null" class="board-number">{{ boardLabel ?? `Board ${board.number}` }}</p>
         <p class="board-line">Dealer {{ board.dealer }}</p>
         <p class="board-line">{{ vulnerabilityText(board.vulnerable, mySeat).text }}</p>
       </template>
@@ -259,6 +259,10 @@ const props = withDefaults(
     // The auction so far, while it lasts: each seat's last call by its
     // plate. Null (the default) shows none.
     calls?: AuctionCall[] | null;
+    // The centre's first line while it shows the board: left out, "Board 7"
+    // (the board's number); the play page gives its place in the set
+    // ("Board 2 of 4") or null for none, never the number (#165).
+    boardLabel?: string | null;
     // A wide screen's layout (see the comment above).
     wide?: boolean;
     busy?: boolean;
@@ -283,6 +287,7 @@ const props = withDefaults(
     banks: () => ({}),
     ready: () => [],
     calls: null,
+    boardLabel: undefined,
     wide: false,
     busy: false,
     sendingId: null,

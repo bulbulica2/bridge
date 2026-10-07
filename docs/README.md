@@ -33,7 +33,12 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/95-daylight-sheets-and-wide-layout` (after
+> branch `bulbulica2/96-auction-button-and-board-bar` (after
+> #165, the play page's top-left corner: the auction behind an **Auction**
+> button beside the vulnerability pill (hover or tap), no auction grid on
+> the page once the bidding is over, **Board 1 of 4** under the button
+> and never the board's number in the database, the contract bar down to
+> the contract and the tricks; after
 > #163, the last of the Daylight redesign: on a wide screen the table
 > spreads out with the board tile in its corner and the auction and the
 > bidding box in its centre; seats off the table are plates too (the

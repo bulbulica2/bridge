@@ -497,7 +497,7 @@ describe('Ask in the chat', () => {
     expect(wrapper.find('.chat-about').exists()).toBe(false)
   })
 
-  test('from the auction below the hand during the play too', async () => {
+  test('from the Auction pop-up during the play too', async () => {
     const wrapper = await mountPage(
       auction({
         phase: 'play',
@@ -516,6 +516,8 @@ describe('Ask in the chat', () => {
       }),
     )
 
+    expect(wrapper.findComponent(AuctionHistory).exists()).toBe(false)
+    await wrapper.get('.auction-button').trigger('click')
     wrapper.findComponent(AuctionHistory).vm.$emit('chat', 0)
     await flushPromises()
     expect(useChatStore().about).toBe(0)

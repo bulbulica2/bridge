@@ -21,9 +21,15 @@ export function sideOfCode(code: SideCode): Side {
 // countdown ring's full circle: the deadline itself is the backend's.
 export const NEXT_BOARD_SECONDS = 10;
 
+// "Board 2 of 4": the board's place in its set (the play page names no set
+// and never the board's number in the database, #165).
+export function boardPosition(set: Pick<SetPosition, 'board' | 'of'>): string {
+  return `Board ${set.board} of ${set.of}`;
+}
+
 // "Board 2 of 4 · Set 3".
 export function setLabel(set: Pick<SetPosition, 'number' | 'board' | 'of'>): string {
-  return `Board ${set.board} of ${set.of} · Set ${set.number}`;
+  return `${boardPosition(set)} · Set ${set.number}`;
 }
 
 // The set a table is on, from what we hold of it. The table payload follows

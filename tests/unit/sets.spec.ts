@@ -21,6 +21,7 @@ import {
   replacedTogetherText,
   replacementOf,
   seatInSet,
+  boardPosition,
   setLabel,
   setTitle,
   setPercent,
@@ -161,8 +162,9 @@ beforeEach(() => {
 })
 
 describe('set helpers', () => {
-  test('the set bar', () => {
+  test("the set bar, and the board's place alone", () => {
     expect(setLabel(position())).toBe('Board 2 of 4 · Set 3')
+    expect(boardPosition(position())).toBe('Board 2 of 4')
   })
 
   test("the table's set and the board's agree on whatever either knows", () => {
