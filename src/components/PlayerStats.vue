@@ -111,7 +111,7 @@ defineExpose({ load });
 <style scoped>
 .player-stats {
   padding: 16px;
-  border: 1px solid var(--ion-color-step-150, #e0e0e0);
+  border: 1px solid var(--bridge-line);
   border-radius: 8px;
   margin-bottom: 16px;
   text-align: left;

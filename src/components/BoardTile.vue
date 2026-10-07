@@ -58,8 +58,8 @@ const label = computed(
 }
 
 .tile-side.vul {
-  background: #c8102e;
-  color: #fff;
+  background: var(--bridge-vul-seat);
+  color: var(--bridge-on-vul-seat);
 }
 
 .tile-n {
@@ -90,7 +90,7 @@ const label = computed(
   align-items: center;
   justify-content: center;
   background: var(--bridge-table);
-  color: #fff;
+  color: var(--bridge-on-table);
   line-height: 1;
 }
 
@@ -104,6 +104,6 @@ const label = computed(
   margin-top: 2px;
   font-size: 0.55rem;
   font-weight: 700;
-  color: #f8b48a;
+  color: var(--bridge-on-table-accent);
 }
 </style>

@@ -33,7 +33,13 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/94-daylight-result-and-lobby` (after
+> branch `bulbulica2/95-daylight-sheets-and-wide-layout` (after
+> #163, the last of the Daylight redesign: on a wide screen the table
+> spreads out with the board tile in its corner and the auction and the
+> bidding box in its centre; seats off the table are plates too (the
+> Start box, the table page's compass, "Sit here · North" dashed orange);
+> the away banner, the chat and the sheets in Daylight's look, and no page
+> left with a colour of its own; after
 > #162, the finished board and the lobby in the Daylight look: a navy
 > result card with your score big and your matchpoints as a bar, the same
 > board at the other tables, a tick when declarer found every double dummy

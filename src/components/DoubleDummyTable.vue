@@ -131,7 +131,7 @@ function strainName(strain: Strain): string {
 .dd-table th,
 .dd-table td {
   padding: 4px 6px;
-  border: 1px solid var(--ion-color-step-150, #e0e0e0);
+  border: 1px solid var(--bridge-line);
 }
 
 .dd-strain {
@@ -139,7 +139,7 @@ function strainName(strain: Strain): string {
 }
 
 .dd-strain.red {
-  color: #c62828;
+  color: var(--bridge-red-suit);
 }
 
 .dd-seat {
@@ -152,7 +152,7 @@ function strainName(strain: Strain): string {
 
 /* The contract played here. */
 .dd-cell.played {
-  background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.18);
+  background: var(--bridge-navy-tint);
   outline: 2px solid var(--ion-color-primary);
   outline-offset: -2px;
   font-weight: 800;
@@ -171,7 +171,7 @@ function strainName(strain: Strain): string {
   width: 12px;
   height: 12px;
   border: 2px solid var(--ion-color-primary);
-  background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.18);
+  background: var(--bridge-navy-tint);
 }
 
 .sr-only {

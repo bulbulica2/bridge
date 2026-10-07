@@ -42,29 +42,22 @@
               class="seat"
               :class="[`seat-${seat.toLowerCase()}`, { 'seat-mine': user && user.id === me }]"
             >
-              <span class="seat-name">{{ seat }}</span>
-
-              <!-- Tapping a player opens their public profile. -->
-              <button
+              <!-- Each player a plate (#163): tapping the name opens their
+                   public profile; a tick once they pressed Start (robots
+                   always have, before a board), red with its clock while
+                   they are away mid-set (the robot takes the seat at 0,
+                   bb#138). -->
+              <SeatPlate
                 v-if="user"
-                type="button"
-                class="seat-user"
-                :aria-label="`${user.username}'s profile`"
-                @click="player = user"
-              >
-                {{ user.username }}
-                <span v-if="user.id === me" class="seat-you">you</span>
-              </button>
-              <span v-else class="seat-empty">Empty</span>
-              <RobotBadge v-if="user?.is_robot" />
-              <AdminBadge v-if="user?.is_admin" />
-              <!-- Away mid-set: the seat is held, its tag counts down to the
-                   robot taking it (bb#138). -->
-              <AwaySeatTag v-if="awayTags[seat]" class="seat-away" :tag="awayTags[seat]!" />
-              <!-- Before a board: who has pressed Start (robots always have). -->
-              <span v-if="showStart && readySeats.includes(seat)" class="seat-ready">
-                ✓ Ready
-              </span>
+                :user="user"
+                :seat="seat"
+                :mine="user.id === me"
+                :ready="showStart && readySeats.includes(seat)"
+                :away="awayTags[seat] ?? null"
+                selectable
+                @select="player = $event"
+              />
+              <span v-else-if="held" class="seat-empty">Empty · {{ SEAT_NAMES[seat] }}</span>
 
               <!-- A held seat has been left already: "Come back" below. -->
               <ion-button
@@ -83,13 +76,13 @@
                    holding one elsewhere makes it a move, confirmed in sit(). -->
               <ion-button
                 v-else-if="!user && !held"
-                size="small"
                 fill="outline"
+                class="seat-sit"
                 :disabled="busySeat !== null"
                 @click="sit(seat)"
               >
                 <ion-spinner v-if="busySeat === seat" name="crescent" />
-                <span v-else>{{ mySeat ? 'Move here' : 'Sit here' }}</span>
+                <span v-else>{{ mySeat ? 'Move here' : 'Sit here' }} · {{ SEAT_NAMES[seat] }}</span>
               </ion-button>
 
               <!-- Managers put somebody else in a free seat, found by name. -->
@@ -241,11 +234,9 @@ import {
 import { vIonEvent } from '@/directives/ionEvent';
 import AppHeader from '@/components/AppHeader.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
-import AwaySeatTag from '@/components/AwaySeatTag.vue';
 import OfflineRefresh from '@/components/OfflineRefresh.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
-import AdminBadge from '@/components/AdminBadge.vue';
-import RobotBadge from '@/components/RobotBadge.vue';
+import SeatPlate from '@/components/SeatPlate.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import SetMinutesPicker from '@/components/SetMinutesPicker.vue';
 import StartBox from '@/components/StartBox.vue';
@@ -265,6 +256,7 @@ import {
   leaveWarning,
   removeCost,
 } from '@/utils/seatMove';
+import { SEAT_NAMES } from '@/utils/auction';
 import { setClockText } from '@/utils/setClock';
 import { currentSet, setLabel } from '@/utils/sets';
 import { isReady, startNeeded } from '@/utils/start';
@@ -747,16 +739,23 @@ function handleExpiredSession(e: unknown): boolean {
   margin: 16px 0;
 }
 
-/* N on top, W and E flanking the table itself, S underneath. */
+/* N on top, W and E flanking the table itself, S underneath; N and S as
+   wide as the compass allows a plate, as at the game table. */
 .compass {
   display: grid;
-  grid-template-columns: 1fr 1.2fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 12px;
   margin-bottom: 24px;
 }
 
+.seat-n,
+.seat-s {
+  grid-column: 1 / 4;
+  justify-self: center;
+  width: min(100%, 320px);
+}
+
 .seat-n {
-  grid-column: 2;
   grid-row: 1;
 }
 
@@ -776,75 +775,96 @@ function handleExpiredSession(e: unknown): boolean {
 }
 
 .seat-s {
-  grid-column: 2;
   grid-row: 3;
+}
+
+/* A phone: the side plates stand upright, avatar over name over seat. */
+@media (max-width: 575px) {
+  .seat-w :deep(.seat-plate),
+  .seat-e :deep(.seat-plate) {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+
+  .seat-w :deep(.plate-text),
+  .seat-e :deep(.plate-text) {
+    align-items: center;
+    max-width: 100%;
+  }
+
+  .seat-w :deep(.plate-sub),
+  .seat-e :deep(.plate-sub) {
+    justify-content: center;
+  }
 }
 
 .seat,
 .table-info {
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 12px 8px;
-  text-align: center;
-  border: 1px solid var(--ion-color-step-150, #e0e0e0);
-  border-radius: 8px;
+  min-width: 0;
+}
+
+.seat-w,
+.seat-e,
+.table-info {
   min-height: 108px;
 }
 
-.seat-mine {
-  border-color: var(--ion-color-primary);
+/* A seat's plate and its buttons (#163); the small ones are still 44 px
+   to tap. */
+.seat {
+  align-items: stretch;
 }
 
-.seat-name {
-  font-weight: 700;
-  color: var(--ion-color-medium);
+.seat ion-button {
+  height: 44px;
+  margin: 0;
+  font-size: 0.875rem;
 }
 
-/* A plain button that reads as a link: the name itself is the tap target. */
-.seat-user {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
+/* An empty seat: the dashed orange "Sit here · North" of the component kit. */
+ion-button.seat-sit.button-outline {
+  --background: var(--bridge-action-tint);
+  --color: var(--bridge-action-text);
+  --border-color: var(--bridge-action);
+  --border-style: dashed;
+  --border-width: 2px;
+  --border-radius: 14px;
+  height: 52px;
   font-size: 0.95rem;
-  color: var(--ion-color-primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  overflow-wrap: anywhere;
 }
 
-.seat-you {
-  display: block;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  color: var(--ion-color-primary);
-}
-
-.seat-away {
-  font-size: 0.75rem;
+.seat-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 8px;
+  border: 2px dashed var(--bridge-line);
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--bridge-muted);
 }
 
 .held {
   margin: 12px 0;
 }
 
-.seat-ready {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--ion-color-success-shade, #28ba62);
-}
-
-.seat-empty {
-  font-size: 0.95rem;
-  color: var(--ion-color-medium);
-}
-
+/* The table itself in the middle, a navy-tinted card. */
 .table-info {
-  background: var(--ion-color-light, #f4f5f8);
+  align-items: center;
+  padding: 12px 8px;
+  border-radius: var(--bridge-radius-card);
+  background: var(--bridge-navy-tint);
+  color: var(--bridge-navy-tint-text);
+  text-align: center;
 }
 
 .table-title {
@@ -858,18 +878,16 @@ function handleExpiredSession(e: unknown): boolean {
   margin: 4px 0 0;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--ion-color-primary);
 }
 
 .table-manager,
 .table-yours {
   margin: 0;
   font-size: 0.8rem;
-  color: var(--ion-color-medium);
 }
 
 .table-yours {
-  color: var(--ion-color-primary);
+  font-weight: 700;
 }
 
 .set-clock {
@@ -892,7 +910,7 @@ function handleExpiredSession(e: unknown): boolean {
   margin: 0 0 16px;
   font-size: 0.9rem;
   text-align: center;
-  color: var(--ion-color-tertiary, #5260ff);
+  color: var(--bridge-redouble-text);
 }
 
 .between-boards,

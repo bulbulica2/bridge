@@ -5,6 +5,11 @@
   <section class="start-box" aria-label="Start">
     <p class="start-title">{{ iAmReady ? 'Waiting for the others…' : 'Ready to play?' }}</p>
 
+    <!-- The four seats as plates (#163): a green tick once a player pressed
+         Start, an empty seat dashed orange. A manager fills an empty one
+         from here too (the table's page has the same buttons), so being
+         left alone at the game table is no dead end, and takes a player (a
+         robot, say) out. -->
     <ul v-if="showSeats" class="start-seats">
       <li
         v-for="{ seat, held } in seats"
@@ -12,16 +17,41 @@
         :class="{ 'is-ready': held && isReady(held) }"
         :data-seat="seat"
       >
-        <span class="start-mark" aria-hidden="true">{{ !held ? '–' : isReady(held) ? '✓' : '…' }}</span>
-        <span>{{ seat }} {{ !held ? 'empty' : held.user_id === me ? 'you' : held.user.username }}</span>
-        <RobotBadge v-if="held?.user.is_robot" />
-        <AdminBadge v-if="held?.user.is_admin" />
-        <span class="sr-only">{{ !held ? '' : isReady(held) ? 'ready' : 'not yet' }}</span>
-        <!-- A manager takes a player (a robot, say) out from here too. -->
+        <SeatPlate
+          v-if="held"
+          :user="held.user"
+          :seat="seat"
+          :mine="held.user_id === me"
+          :ready="isReady(held)"
+        />
+        <div v-else class="start-empty">
+          <span class="start-empty-label">Empty · {{ SEAT_NAMES[seat] }}</span>
+          <div v-if="fillable.includes(seat)" class="start-fill" :data-fill-seat="seat">
+            <ion-button
+              size="small"
+              fill="outline"
+              class="start-seat-player"
+              :disabled="busy || fillingSeat !== null"
+              @click="emit('seatPlayer', seat)"
+            >
+              Seat a player
+            </ion-button>
+            <ion-button
+              size="small"
+              fill="outline"
+              class="start-add-robot"
+              :disabled="busy || fillingSeat !== null"
+              @click="emit('addRobot', seat)"
+            >
+              <ion-spinner v-if="fillingSeat === seat" name="crescent" />
+              <span v-else>Add robot</span>
+            </ion-button>
+          </div>
+        </div>
         <ion-button
           v-if="held && removable.includes(seat)"
           size="small"
-          fill="clear"
+          fill="outline"
           color="danger"
           class="start-remove"
           :aria-label="`Remove ${held.user.username}`"
@@ -30,34 +60,6 @@
         >
           <ion-spinner v-if="fillingSeat === seat" name="crescent" />
           <span v-else>Remove</span>
-        </ion-button>
-      </li>
-    </ul>
-
-    <!-- A manager fills the empty seats from here too (the table's page has
-         the same buttons), so being left alone at the game table is no dead
-         end. -->
-    <ul v-if="fillable.length > 0" class="start-fill" aria-label="Fill the empty seats">
-      <li v-for="seat in fillable" :key="seat" :data-fill-seat="seat">
-        <span class="start-fill-seat">{{ seat }}</span>
-        <ion-button
-          size="small"
-          fill="outline"
-          class="start-seat-player"
-          :disabled="busy || fillingSeat !== null"
-          @click="emit('seatPlayer', seat)"
-        >
-          Seat a player
-        </ion-button>
-        <ion-button
-          size="small"
-          fill="outline"
-          class="start-add-robot"
-          :disabled="busy || fillingSeat !== null"
-          @click="emit('addRobot', seat)"
-        >
-          <ion-spinner v-if="fillingSeat === seat" name="crescent" />
-          <span v-else>Add robot</span>
         </ion-button>
       </li>
     </ul>
@@ -93,8 +95,7 @@
     <ion-button
       v-if="canLeave"
       fill="outline"
-      color="medium"
-      size="small"
+      color="danger"
       class="start-leave"
       :disabled="busy || fillingSeat !== null"
       @click="emit('leave')"
@@ -107,10 +108,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { IonButton, IonSpinner } from '@ionic/vue';
-import AdminBadge from '@/components/AdminBadge.vue';
-import RobotBadge from '@/components/RobotBadge.vue';
+import SeatPlate from '@/components/SeatPlate.vue';
 import { SEATS } from '@/services/tables';
 import type { BroadcastTable, Seat } from '@/services/tables';
+import { SEAT_NAMES } from '@/utils/auction';
 import { isReady, startWaiting } from '@/utils/start';
 
 const props = withDefaults(
@@ -161,11 +162,16 @@ const waiting = computed(() => startWaiting(props.table, props.me));
 </script>
 
 <style scoped>
+/* Daylight's white card (#163), the seats as plates. */
 .start-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin: 0 0 16px;
-  padding: 12px;
-  border: 1px solid var(--ion-color-primary);
-  border-radius: 8px;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--bridge-surface);
+  box-shadow: 0 1px 0 var(--bridge-card-border);
   text-align: center;
 }
 
@@ -174,100 +180,74 @@ const waiting = computed(() => startWaiting(props.table, props.me));
 }
 
 .start-title {
+  font-size: 1.05rem;
   font-weight: 700;
 }
 
 .start-box .start-detail {
-  margin-top: 4px;
-  font-size: 0.85rem;
-  color: var(--ion-color-medium);
+  font-size: 0.875rem;
+  color: var(--bridge-muted);
 }
 
 .start-seats {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  margin: 8px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .start-seats li {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 12px;
-  background: var(--ion-color-light, #f4f5f8);
-  font-size: 0.85rem;
-  color: var(--ion-color-medium);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
-.start-seats li.is-ready {
-  background: rgba(var(--ion-color-success-rgb, 45, 211, 111), 0.15);
-  color: var(--ion-text-color, #000);
+/* An empty seat: dashed orange, waiting for a player (a manager's buttons
+   to fill it inside). */
+.start-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 8px;
+  border: 2px dashed var(--bridge-action);
+  border-radius: 14px;
+  background: var(--bridge-action-tint);
+  color: var(--bridge-action-text);
 }
 
-.start-mark {
+.start-empty-label {
+  font-size: 0.95rem;
   font-weight: 700;
-}
-
-.is-ready .start-mark {
-  color: var(--ion-color-success-shade, #28ba62);
 }
 
 .start-fill {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  margin: 0 0 8px;
-  padding: 0;
-  list-style: none;
+  gap: 6px;
 }
 
-.start-fill li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.start-fill-seat {
-  min-width: 1.5em;
-  font-weight: 700;
-}
-
-.start-button {
-  margin-top: 8px;
-}
-
+/* The seats' small buttons: still a 44 px touch target. */
+.start-fill ion-button,
+.start-remove,
 .start-cancel {
-  margin-top: 4px;
+  height: 44px;
+  margin: 0;
+  font-size: 0.875rem;
 }
 
-.start-remove {
-  --padding-start: 4px;
-  --padding-end: 4px;
-  height: 1.6em;
+.start-button,
+.start-leave {
   margin: 0;
-  font-size: 0.8rem;
 }
 
 .start-leave {
-  display: block;
-  width: fit-content;
-  margin: 12px auto 0;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+  align-self: center;
 }
 </style>

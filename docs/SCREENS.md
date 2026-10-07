@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/94-daylight-result-and-lobby`._
+_Status as of branch `bulbulica2/95-daylight-sheets-and-wide-layout`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -86,7 +86,8 @@ look by #162.
 
 ## Login — `/login`
 
-**Guests only.** Built by #4.
+**Guests only.** Built by #4; Daylight's colours throughout by #163 (as on
+every page below: the tokens, fonts and buttons, no colour of its own).
 
 Email, password and a **Remember me** checkbox (off by default, #65);
 links to Create account and Reset password. On success it goes to
@@ -107,7 +108,7 @@ first backend commit), described in [backend `AUTH.md`](https://github.com/bulbu
 
 ## Create account — `/create-account`
 
-**Guests only.** Built by #5. Linked from Login and guest Home.
+**Guests only.** Built by #5; Daylight's colours by #163. Linked from Login and guest Home.
 
 Name (at most 50 characters), username (at most 30), email, password and
 confirmation; each 422 error shows under its field. On success the user is logged in, lands on `/account`
@@ -123,7 +124,7 @@ Backend: `routes/auth.php`. Email verification is not wired yet
 
 ## Reset password — `/reset-password` and `/password-reset/:token`
 
-**Guests only.** Built by #6. One page, two stages:
+**Guests only.** Built by #6; Daylight's colours by #163. One page, two stages:
 
 1. `/reset-password` (from Login): enter your email; the page shows the
    backend's status message.
@@ -143,7 +144,7 @@ Locally `MAIL_MAILER=log`, so the link lands in the backend's
 ## Account — `/account`
 
 **Logged in.** Built by #7 (page, header button, logout) and #23 (edit
-profile). Reached from the header's **Account** button.
+profile); Daylight's colours by #163. Reached from the header's **Account** button.
 
 Shows your name, username, email and description. **Edit profile** turns
 the page into a form for name (at most 50 characters) and description (username and email are
@@ -244,10 +245,15 @@ dealt before Start), bb#77 (bans), bb#121 (stats), bb#131 (`set_minutes`).
 
 **Logged in.** Built by #15; manager Remove by #16; live updates by #21;
 moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
-robots by #53; Start by #68; the set line by #73; away mid-set by #74 (a robot takes the seat instead of a forfeit by #130); admins' seats by #77; Leave and Remove after a set by #121; the time for a set by #143. Reached from a table's **Open** button, by
+robots by #53; Start by #68; the set line by #73; away mid-set by #74 (a robot takes the seat instead of a forfeit by #130); admins' seats by #77; Leave and Remove after a set by #121; the time for a set by #143; the Daylight plates by #163. Reached from a table's **Open** button, by
 taking a seat, or from **Create table**.
 
-The four seats as a compass (N/E/S/W), robots and admins badged. Sit, move or
+The four seats as a compass (N/E/S/W), North and South across the top and
+bottom, each player a navy **plate** as at the game table (#163): their
+initials (a robot's icon), name, "North · you", an amber **ADMIN** tag;
+on a phone the side plates stand upright. An empty seat is the dashed
+orange **Sit here · North** (**Move here · North** when you sit here
+already). Sit, move or
 **Leave** (confirmed; the last player leaving deletes the table and the
 page goes back to `/tables`; if only robots are left the confirmation says
 the table waits 10 minutes for somebody to take over). Managers
@@ -308,7 +314,7 @@ or a finished one whose four players aren't all still in their seats), a
 seated player sees the Start box: **Start**, then **Waiting for the
 others…** with **Cancel**, and a line saying what is missing ("Waiting for
 a fourth player, and for East (bob) to press Start."). Each ready seat on
-the compass is marked **✓ Ready**. Everyone presses their own, the manager
+the compass gets a green tick and "· ready" on its plate. Everyone presses their own, the manager
 included. Between boards with the same four players nothing is pressed:
 the next board of the set comes by itself on the play page (#98), until
 the set of four is over (#73): then it is everyone's Start again. While a set is going on, the table's info
@@ -346,7 +352,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim sheet with scores, the claim banner);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim sheet with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -380,6 +386,20 @@ so far is ringed amber and a dashed place waits for yours. The auction
 grid is a card of chips (green Pass, red X, blue XX), the vulnerable
 side's seats red, the call awaited a "?" ringed orange. **Start** and
 **Deal now** are the orange buttons.
+
+**The wide table** (#163, the design canvas's boards A and B in
+Daylight's colours). On a screen 1100 px wide or more, once the page's
+column has 560 px for it (with the menu pinned and the chat open, from
+about 1240 px), the page is up to 1040 px wide and the table spreads out:
+the board tile in its top-left corner, partner at the top, the opponents'
+plates on the left and right (upright while the table is under 760 px
+wide), you at the bottom with your hand under the table. During the
+auction the auction grid sits in the table's centre with your bidding
+box under it; the centre keeps the height it reached until the next
+board, so the table doesn't shrink once your call is made. During the
+play it is dummy and the trick, as on any screen. The chat stays on the
+right. Narrower, the table keeps the layout it has on a tablet, with the
+auction under it.
 
 **Nothing jumps from card to card** (#133): while a board has a turn,
 every seat keeps a line for the turn label (**Your turn**, **To act**,
@@ -415,7 +435,7 @@ left, with a pill for the whole board (auction, play and once finished):
 **Vulnerable: N-S (you)** for yours, **Both (you too)**. On a phone a
 **Dealer West** pill follows it; from 1100 px wide the **board tile**
 (BBO's: the number in a navy square, the vulnerable sides red, "DEALER W")
-stands before it instead. The plates keep a red/green top edge, and the
+stands before it instead, or in the wide table's corner. The plates keep a red/green top edge, and the
 table's centre says the same words until the first trick takes its
 place.
 
@@ -482,7 +502,8 @@ a failure is toasted and logged, never silent.
 
 What it shows by phase:
 - **waiting**: who's seated, and the same Start box as on the detail page
-  (with each seat's ready mark), so opening the game table early is no dead
+  (with the four seats as plates, #163: a green tick once a player
+  pressed Start, an empty seat dashed orange, **Empty · West**), so opening the game table early is no dead
   end. The last Start deals the board right here. A manager (`can_manage`)
   also gets **Seat a player** and **Add robot** in the box for each empty
   seat, as on the detail page (#117): left alone after the others were
@@ -612,7 +633,9 @@ What it shows by phase:
   page then reads the set again.
 
 **Board chat** (#102): from the first deal on, the board's chat is on
-show beside the table on a screen 1100 px wide or more (#153: the board
+show beside the table on a screen 1100 px wide or more (Daylight's look,
+#163: the others' messages grey, yours on the right in a navy tint, a
+segmented **Table / Opponents** switch over the line to write) (#153: the board
 stays centred in the room left of the chat, menu pinned or not, and
 doesn't move at all where it already clears the chat; #114). The header's
 **Chat** button (with an orange badge counting the others' messages since you
@@ -692,7 +715,7 @@ bb#75 (sets of four boards), bb#76 (away mid-set), bb#120 (the turn clock, a rob
 
 ## My boards — `/history`
 
-**Logged in**, menu item **My boards**. Built by #30; grouped by set by #73.
+**Logged in**, menu item **My boards**. Built by #30; grouped by set by #73; Daylight's colours (a set's header navy-tinted, scores green or red) by #163.
 
 Your finished boards, newest first (20 a page, paged in as you scroll),
 grouped by the set they were dealt in. Each set's header reads **Set 3 ·
@@ -715,7 +738,7 @@ Backend: bb#43.
 ## Set results — `/sets/:id`
 
 **Logged in, and only for a player of that set, or after you finished all
-its boards** (403 otherwise). Built by #73. Reached from a set's header in My
+its boards** (403 otherwise). Built by #73; Daylight's colours by #163. Reached from a set's header in My
 boards (yours or another player's); not in the menu. The backend has
 `GET /sets/{id}`, so the set has a page of its own rather than only showing
 inline. It works the same after the table is gone, and while the set is
@@ -741,7 +764,7 @@ Backend: bb#75, bb#131 (`time_used`).
 ## Board results — `/boards/:id/results`
 
 **Logged in, and only after you finished that board** (403 otherwise).
-Built by #30. Reached from a board's review or **Compare with other tables**.
+Built by #30; Daylight's colours (your tables navy-tinted) by #163. Reached from a board's review or **Compare with other tables**.
 
 The same board at every table, best N-S score first, each with its
 contract, declarer, score and matchpoints. The tables you sat at are
@@ -766,7 +789,7 @@ Backend: bb#43, bb#114 (double dummy).
 ## Board review — `/playings/:id`
 
 **Logged in, and only after you finished that board** (403 otherwise; 404
-for an unknown or unfinished playing). Built by #48. Reached from a history
+for an unknown or unfinished playing). Built by #48; Daylight's colours by #163. Reached from a history
 entry (yours or another player's) or a row of Board results; not in the
 menu. The play page shows the same review in a sheet (#97: `BoardReview`
 and `useBoardExport` serve both). It works the same after the table is gone.
@@ -838,7 +861,7 @@ Backend: bb#60, bb#101 (the chat), bb#114 (double dummy).
 
 ## User profile — `/users/:id`
 
-**Logged in.** Built by #24; "Boards played" by #30; bans by #75; stats by #131. Reached from the
+**Logged in.** Built by #24; "Boards played" by #30; bans by #75; stats by #131; Daylight's colours by #163. Reached from the
 profile sheet (tap a seated player's name on Tables, Table detail or Play,
 then **Full profile**; a robot's sheet has no such link).
 
@@ -894,17 +917,18 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans), bb#
 | `BanUserForm` | User profile, profile sheet (admins) | `users.ban()` → `POST /users/{id}/ban` |
 | `AppMenu` | the app shell | none (reads the auth store; **Your table** first while seated, via `useYourTable`) |
 | `BoardReview` | Board review, Play (`BoardReviewModal`) | none (given the review from `history.loadReview`) |
-| `PlayerProfileSheet` | Tables, Table detail, Play, Board review | `users.load()` → `GET /users/{id}`; one line of stats ("48 boards · 65 % won · avg 56.0 %", none for a robot) via `PlayerStats` → `GET /users/{id}/stats`; **Ban** for admins (`BanUserForm`) |
+| `PlayerProfileSheet` | Tables, Table detail, Play, Board review; headed by the player's avatar (#163) | `users.load()` → `GET /users/{id}`; one line of stats ("48 boards · 65 % won · avg 56.0 %", none for a robot) via `PlayerStats` → `GET /users/{id}/stats`; **Ban** for admins (`BanUserForm`) |
 | `PlayerStats` | User profile, Account, profile sheet (one line) | `users.loadStats()` → `GET /users/{id}/stats` or `GET /api/user/stats` (#131) |
-| `RobotBadge` | Table detail, Play (`BridgeTable`), profile sheet | none (`is_robot` on the user; the lobby's compass shows robots in blue instead) |
-| `AdminBadge` | Table detail, Play (`BridgeTable`, `StartBox`), profile sheet, User profile | none (`is_admin` on the user, #77) |
-| `SeatPlayerSheet` | Table detail (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
+| `SeatPlate`, `PlayerAvatar` | Table detail (compass), Play and Table detail (`StartBox`): a seated player as a navy plate (#163); the avatar also heads the profile sheet and each search result | none |
+| `RobotBadge` | profile sheet | none (`is_robot` on the user; the plates show a robot's icon, the lobby's compass a blue seat) |
+| `AdminBadge` | Table detail and Play (every plate), profile sheet, User profile | none (`is_admin` on the user, #77) |
+| `SeatPlayerSheet` | Table detail and Play (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | `SetResultsPanel` | Play (set over), Set results | none (given the set from `history.loadSet`) |
 | `SetStrip` | Play (finished board), Tables and Home (Your table) | none (the set's tiles, from `history.sets`) |
 | `YourTableHero` | Tables, Home | `history.loadSet()` → `GET /sets/{id}` once a board of the running set is finished |
 | `TableCard` | Tables | none (one open table with its mini compass) |
 | `YourForm`, `RecentBoards` | Tables, Home | `users.loadStats(null)` → `GET /api/user/stats`; `history.loadHistory(null)` → `GET /api/user/playings` |
-| `AwayNotice` | Play, Table detail (one line while others are away, no countdown); Table detail, Tables, Home (your held seat, counting down) | none (reads `away_since` / `replace_at` from the table) |
+| `AwayNotice` | Play, Table detail (one line while others are away, no countdown); Table detail, Tables, Home (your held seat, counting down); an orange-tint banner (#163) | none (reads `away_since` / `replace_at` from the table) |
 | `AwaySeatTag` | Play (`BridgeTable`), Table detail (compass): an away seat's clock | none (`replace_at` via `useAwayTags`) |
 | route progress bar, boot bar, toasts | the app shell | none (#18) |

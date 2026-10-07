@@ -193,7 +193,9 @@ const waitingFor = computed(() =>
   border-top: 1px solid var(--bridge-line);
 }
 
+/* Small, but a 44 px touch target still (#163). */
 .next-leave ion-button {
+  height: 44px;
   margin: 0;
 }
 </style>

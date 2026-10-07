@@ -98,10 +98,10 @@ watch(
   box-sizing: border-box;
   width: 100%;
   padding: 8px;
-  border: 1px solid var(--ion-color-step-300, #b3b3b3);
+  border: 1px solid var(--bridge-control);
   border-radius: 8px;
-  background: var(--ion-background-color, #fff);
-  color: var(--ion-text-color, #1a1a1a);
+  background: var(--bridge-surface);
+  color: var(--bridge-ink);
   font: inherit;
   resize: vertical;
 }

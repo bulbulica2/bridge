@@ -43,6 +43,45 @@
   /* A light navy wash: a table being played, in the lobby. */
   --bridge-navy-tint: #e6ebf2;
   --bridge-navy-tint-text: #1d3a5f;
+  /* On the table (#163): the empty trick slot, the turn label (ours, and a
+     robot thinking), the centre's faint wash and an idle chip (a set clock
+     not running). */
+  --bridge-table-slot: #6b8bb5;
+  --bridge-on-table-turn: #ffb27a;
+  --bridge-on-table-thinking: #b8c8ff;
+  --bridge-on-table-wash: rgba(255, 255, 255, 0.06);
+  --bridge-on-table-chip: rgba(255, 255, 255, 0.14);
+  /* A seat's top edge once a board is dealt: its side vulnerable or not. */
+  --bridge-vul-stripe: #e5484d;
+  --bridge-not-vul-stripe: #3fa45b;
+  /* A vulnerable seat's head in the auction grid. */
+  --bridge-vul-seat: #c8102e;
+  --bridge-on-vul-seat: #ffffff;
+
+  /* Seat plates (#163): the table's and those off it (Start, the table's
+     page), an away seat's red one, the avatar in it (white in both modes),
+     a robot's, an away player's, the green tick of a seat that pressed
+     Start, and a set clock running (light) or under a minute. */
+  --bridge-plate: #1d3a5f;
+  --bridge-on-plate: #ffffff;
+  --bridge-on-plate-muted: #cfdbeb;
+  --bridge-plate-away: #5a1d1a;
+  --bridge-on-plate-away: #ffc2bc;
+  --bridge-avatar: #ffffff;
+  --bridge-avatar-ink: #1d3a5f;
+  --bridge-avatar-robot: #cfe0ff;
+  --bridge-avatar-away: #fde6e4;
+  --bridge-avatar-away-ink: #9f1d17;
+  --bridge-ready: #2f7a5b;
+  --bridge-on-ready: #ffffff;
+  --bridge-bank-running: #ffffff;
+  --bridge-on-bank-running: #142033;
+  --bridge-bank-low: #b3261e;
+  --bridge-on-bank-low: #ffffff;
+
+  /* Shadows: a panel lifted off the ground, a pop-up over it. */
+  --bridge-shadow: rgba(20, 32, 51, 0.12);
+  --bridge-shadow-strong: rgba(0, 0, 0, 0.25);
 
   --bridge-action: #c2410c;
   --bridge-on-action: #ffffff;
@@ -67,6 +106,9 @@
   --bridge-on-popup: #ffffff;
   --bridge-on-popup-muted: #cfdbeb;
   --bridge-popup-button: #2a3a55;
+  /* A pop-up's light button (Ask, Answer): white in both modes. */
+  --bridge-popup-action: #ffffff;
+  --bridge-on-popup-action: #142033;
   /* A banner's countdown and its ticks (a pending claim). */
   --bridge-on-popup-clock: #f8b48a;
   --bridge-on-popup-ok: #8fdca5;
@@ -79,6 +121,15 @@
   --bridge-card-ink: #142033;
   --bridge-card-red: #c8102e;
   --bridge-card-border: #d5d9e0;
+  /* On a card face (white in both modes, never redefined for dark): a
+     faint dash (a void suit), the picked bidding card's navy, an alert's
+     amber wash, the bidding cards' edge, and the shadow under a card. */
+  --bridge-card-muted: #4b5668;
+  --bridge-card-navy: #1d3a5f;
+  --bridge-card-amber-tint: #fff4d6;
+  --bridge-card-edge: #c9d0da;
+  --bridge-card-shadow: rgba(20, 32, 51, 0.3);
+  --bridge-amber-glow: rgba(245, 158, 11, 0.45);
 
   --bridge-radius-button: 12px;
   --bridge-radius-card: 16px;
@@ -200,6 +251,26 @@
     --bridge-on-table-faint: #7f8aa0;
     --bridge-navy-tint: #222a3a;
     --bridge-navy-tint-text: #c7cfdc;
+    --bridge-table-slot: #3a4457;
+    --bridge-on-table-turn: #ffb547;
+    --bridge-on-table-wash: rgba(255, 255, 255, 0.04);
+    --bridge-on-table-chip: #11151d;
+    --bridge-vul-seat: #3a1418;
+    --bridge-on-vul-seat: #ff8a96;
+
+    --bridge-plate: #222a3a;
+    --bridge-on-plate: #e8ecf3;
+    --bridge-on-plate-muted: #a7b0c0;
+    --bridge-plate-away: #3a1418;
+    --bridge-on-plate-away: #ffb3bd;
+    --bridge-ready: #2f7a5b;
+    --bridge-bank-running: #e8ecf3;
+    --bridge-on-bank-running: #0c0f15;
+    --bridge-bank-low: #ff8a96;
+    --bridge-on-bank-low: #0c0f15;
+
+    --bridge-shadow: rgba(0, 0, 0, 0.4);
+    --bridge-shadow-strong: rgba(0, 0, 0, 0.5);
 
     --bridge-action: #ffb547;
     --bridge-on-action: #2b1d00;

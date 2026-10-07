@@ -25,16 +25,18 @@
     <p v-if="recipients.length === 0" class="chat-closed">The chat opens with the first deal.</p>
     <div v-else class="chat-compose">
       <div class="chat-to-row">
-        <button
-          v-for="option in recipients"
-          :key="option"
-          type="button"
-          class="chat-to-option"
-          :aria-pressed="to === option"
-          @click="picked = option"
-        >
-          {{ option === 'table' ? 'Table' : 'Opponents' }}
-        </button>
+        <span class="chat-to-options" role="group" aria-label="Send to">
+          <button
+            v-for="option in recipients"
+            :key="option"
+            type="button"
+            class="chat-to-option"
+            :aria-pressed="to === option"
+            @click="picked = option"
+          >
+            {{ option === 'table' ? 'Table' : 'Opponents' }}
+          </button>
+        </span>
         <span class="chat-to-note">{{ toNote }}</span>
       </div>
       <p v-if="aboutBid" class="chat-about">
@@ -163,10 +165,19 @@ function send() {
   min-height: 0;
 }
 
+/* Daylight (#163, board B's chat): the head, the messages, then the
+   recipient as a segmented switch over the line to write. */
 .chat-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.chat-close {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  --color: var(--bridge-muted);
 }
 
 .chat-title {
@@ -184,12 +195,12 @@ function send() {
 
 .chat-closed {
   text-align: center;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
 }
 
 .chat-compose {
-  border-top: 1px solid var(--ion-color-step-150, #e0e0e0);
-  padding-top: 8px;
+  border-top: 1px solid var(--bridge-line);
+  padding-top: 10px;
 }
 
 .chat-to-row {
@@ -200,24 +211,39 @@ function send() {
   font-size: 0.8rem;
 }
 
+.chat-to-options {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--bridge-radius-button);
+  background: var(--bridge-chip);
+}
+
 .chat-to-option {
-  padding: 2px 10px;
-  border: 1px solid var(--ion-color-primary, #3880ff);
-  border-radius: 999px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
   background: transparent;
-  color: var(--ion-color-primary, #3880ff);
+  color: var(--bridge-muted);
   font: inherit;
-  font-weight: 600;
+  font-size: 0.875rem;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .chat-to-option[aria-pressed='true'] {
-  background: var(--ion-color-primary, #3880ff);
-  color: var(--ion-color-primary-contrast, #fff);
+  background: var(--bridge-plate);
+  color: var(--bridge-on-plate);
+}
+
+.chat-to-option:focus-visible {
+  outline: 2px solid var(--bridge-action);
+  outline-offset: 2px;
 }
 
 .chat-to-note {
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
 }
 
 .chat-about {
@@ -230,13 +256,21 @@ function send() {
 }
 
 .chat-about-clear {
-  padding: 0 6px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border: none;
   border-radius: 50%;
-  background: var(--ion-color-step-150, #e0e0e0);
+  background: transparent;
   color: inherit;
   font: inherit;
+  font-size: 1.1rem;
   cursor: pointer;
+}
+
+.chat-about-clear:hover,
+.chat-about-clear:focus-visible {
+  background: var(--bridge-chip);
 }
 
 .chat-input-row {
@@ -250,19 +284,29 @@ function send() {
   flex: 1;
   box-sizing: border-box;
   min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--ion-color-step-300, #b3b3b3);
-  border-radius: 8px;
-  background: var(--ion-background-color, #fff);
-  color: var(--ion-text-color, #1a1a1a);
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--bridge-control);
+  border-radius: var(--bridge-radius-button);
+  background: var(--bridge-surface);
+  color: var(--bridge-ink);
   font: inherit;
   resize: none;
 }
 
+.chat-input:focus-visible {
+  outline: 2px solid var(--bridge-plate);
+  outline-offset: 1px;
+}
+
+.chat-send {
+  margin: 0;
+}
+
 .chat-count {
   margin: 2px 0 0;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   text-align: right;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
 }
 </style>

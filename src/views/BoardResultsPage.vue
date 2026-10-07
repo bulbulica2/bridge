@@ -335,7 +335,8 @@ async function refresh(event: CustomEvent) {
   margin: 0 0 12px;
   padding: 12px;
   border-radius: 8px;
-  background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.08);
+  background: var(--bridge-navy-tint);
+  color: var(--bridge-navy-tint-text);
   text-align: center;
 }
 
@@ -371,13 +372,13 @@ async function refresh(event: CustomEvent) {
 .result-item {
   --background: transparent;
   margin-bottom: 8px;
-  border: 1px solid var(--ion-color-step-150, #e0e0e0);
+  border: 1px solid var(--bridge-line);
   border-radius: 8px;
 }
 
 /* The viewer's table stands out. */
 .result-item.mine {
-  --background: rgba(var(--ion-color-primary-rgb, 0, 84, 233), 0.1);
+  --background: var(--bridge-navy-tint);
   border-color: var(--ion-color-primary);
 }
 

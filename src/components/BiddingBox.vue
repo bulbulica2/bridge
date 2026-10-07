@@ -288,9 +288,9 @@ watch(
   padding: 0;
   border: 0;
   border-radius: 10px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1.5px #c9d0da;
-  color: #142033;
+  background: var(--bridge-card-face);
+  box-shadow: inset 0 0 0 1.5px var(--bridge-card-edge);
+  color: var(--bridge-card-ink);
   font: inherit;
   font-size: 1.2rem;
   font-weight: 700;
@@ -299,7 +299,7 @@ watch(
 }
 
 .pick.red {
-  color: #c8102e;
+  color: var(--bridge-card-red);
 }
 
 .pick.nt {
@@ -307,7 +307,7 @@ watch(
 }
 
 .pick:not(:disabled):hover {
-  box-shadow: inset 0 0 0 2px var(--bridge-table, #1d3a5f);
+  box-shadow: inset 0 0 0 2px var(--bridge-table);
 }
 
 .pick:focus-visible {
@@ -317,38 +317,38 @@ watch(
 
 /* Picked: solid navy (a red suit solid red). */
 .pick.on {
-  background: #1d3a5f;
+  background: var(--bridge-card-navy);
   box-shadow: none;
-  color: #fff;
+  color: var(--bridge-card-face);
 }
 
 .pick.red.on {
-  background: #c8102e;
+  background: var(--bridge-card-red);
 }
 
 .pick:disabled {
-  background: var(--bridge-chip, #eef1f5);
+  background: var(--bridge-chip);
   box-shadow: none;
-  color: var(--bridge-disabled-text, #8a94a6);
+  color: var(--bridge-disabled-text);
   cursor: default;
 }
 
 .special-p:not(:disabled) {
-  background: var(--bridge-pass-bg, #e3f1e6);
+  background: var(--bridge-pass-bg);
   box-shadow: none;
-  color: var(--bridge-pass-text, #1d6b31);
+  color: var(--bridge-pass-text);
 }
 
 .special-x:not(:disabled) {
-  background: var(--bridge-double-bg, #fde6e4);
+  background: var(--bridge-double-bg);
   box-shadow: none;
-  color: var(--bridge-double-text, #b3261e);
+  color: var(--bridge-double-text);
 }
 
 .special-xx:not(:disabled) {
-  background: var(--bridge-redouble-bg, #e1ebfd);
+  background: var(--bridge-redouble-bg);
   box-shadow: none;
-  color: var(--bridge-redouble-text, #1e4fc2);
+  color: var(--bridge-redouble-text);
 }
 
 .special.on:not(:disabled) {
@@ -369,9 +369,9 @@ watch(
 }
 
 .alert-toggle.on {
-  background: #fff4d6;
-  box-shadow: inset 0 0 0 2px var(--bridge-amber, #f59e0b);
-  color: #142033;
+  background: var(--bridge-card-amber-tint);
+  box-shadow: inset 0 0 0 2px var(--bridge-amber);
+  color: var(--bridge-card-ink);
 }
 
 .alert-mark {
@@ -381,8 +381,8 @@ watch(
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--bridge-amber, #f59e0b);
-  color: var(--bridge-on-amber, #2b1700);
+  background: var(--bridge-amber);
+  color: var(--bridge-on-amber);
   font-size: 0.7rem;
   font-weight: 700;
 }

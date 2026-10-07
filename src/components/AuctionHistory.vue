@@ -122,8 +122,8 @@ th .seat {
 }
 
 th.vul .seat {
-  background: #c8102e;
-  color: #fff;
+  background: var(--bridge-vul-seat);
+  color: var(--bridge-on-vul-seat);
 }
 
 th.mine .seat::after {

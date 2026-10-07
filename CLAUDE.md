@@ -241,8 +241,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   seat (`PublicUser.is_admin`) only for an admin viewer, never the
   moderator (#77, bb#78: only an admin removes an admin, no timer frees
   them, so the tables store's `freedAsIdle` never tells an admin
-  `IDLE_NOTICE`). `AdminBadge.vue` marks admins wherever `RobotBadge`
-  goes, plus `StartBox` and `UserProfilePage`. `TableUpdated` leaves
+  `IDLE_NOTICE`). `AdminBadge.vue` marks admins on every plate
+  (`BridgeTable`, `SeatPlate`), the profile sheet and `UserProfilePage`. `TableUpdated` leaves
   `can_manage` out, so the store's
   `withCanManage` keeps the last HTTP value and refetches the table when
   `moderated_by` changes (taking only `can_manage` from that answer);
@@ -272,10 +272,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   with the store's `seatRobot(id, seat)` ("Add robot" on the detail page).
   The backend moves them (a queued job per `PlayingUpdated`, about 1 s
   apart; `queue:work` must run) through the same rules as a human, so the
-  SPA only shows them: `RobotBadge.vue` next to their name (detail,
-  `BridgeTable`, the profile sheet, which has no "Full profile" link for
-  a robot; the lobby's `TableCard` compass draws a robot's seat blue
-  instead), and `BridgeTable`'s `thinking` prop + "robot-1 is
+  SPA only shows them: a robot's icon as the avatar on every plate
+  (`BridgeTable`, `SeatPlate` + "· robot"), `RobotBadge.vue` on the
+  profile sheet (which has no "Full profile" link for a robot; the
+  lobby's `TableCard` compass draws a robot's seat blue instead), and `BridgeTable`'s `thinking` prop + "robot-1 is
   thinking…" status when `acting_user_id` is a robot. Robots count as
   having asked for the next board, so a lone human's **Deal now** deals
   it at once. A robot declarer hands the play to its human dummy (#95, bb#94):
@@ -354,8 +354,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   `startNeeded(table, playing)` (no board, a finished one whose set is
   over (`currentSet`), or one whose four aren't all still in their seats:
   then Start, not Next; unknown phase says no), `isReady`, `startWaiting` (the "Waiting for …" line).
-  `StartBox.vue` shows it on the detail page (whose compass marks ready
-  seats) and on the play page (`showSeats`), in `waiting` and in place of
+  `StartBox.vue` (a white card, #163) shows it on the detail page (whose
+  compass ticks ready seats) and on the play page (`showSeats`: the four
+  seats as `SeatPlate`s two by two, `li[data-seat]` `.is-ready`, an empty
+  one `.start-empty` dashed orange "Empty · West" holding a manager's
+  `.start-fill[data-fill-seat]` buttons), in `waiting` and in place of
   `NextBoardBox` for a finished board with new players or a set over.
   There (#121) it also carries the play page's only way off the seat
   (`canLeave` → `leave`) and a manager's Remove per seat (`removable` =
@@ -466,7 +469,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   toast. The game store calls `useChatStore()` lazily (its `clear()`
   clears the chat too); the chat store rereads on reconnect. UI: the
   header's **Chat** button (`ion-badge color="action"` with `unread`, only once
-  `playing_id` is set), `BoardChat.vue` (list + recipient switch + "About
+  `playing_id` is set), `BoardChat.vue` (list + recipient switch, a segmented `.chat-to-options`
+  group, #163 + "About
   2♥:" chip + textarea, Enter sends, the page owns `v-model:draft` and
   sending: cleared on success, kept and toasted on any refusal, 401 →
   login) in the content's `slot="fixed"` aside from 1100 px
@@ -780,8 +784,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   same time) feeds `BridgeTable`'s `away` prop (seat → `AwayTag`) on the
   play page and the detail compass, both drawn by `AwaySeatTag.vue` (red
   `away-tag-urgent`; single root, the parent's class lands on it).
-  `AwayNotice.vue` (one line, never a countdown: `awayNote`; `held` for
-  the own seat, counting down with its own `useNow`) on the play page
+  `AwayNotice.vue` (Daylight's orange-tint banner, #163; one line, never a
+  countdown: `awayNote`; `held` for the own seat, counting down with its
+  own `useNow`) on the play page
   above the turn clock, the detail page, Tables and Home. The
   tables store: `leave()` returns `held: true` on the 202 (still seated)
   and sets `heldTableId`, which `shouldBeat()` excludes;
@@ -1055,13 +1060,20 @@ The user's standing rule (#91): **no task may leave code coverage under
   (ground, surface, ink, muted, line, control, chip, table/table-inner,
   on-table, action/on-action/action-text/action-tint, amber, pass/double/
   redouble bg + text, question, popup, red-suit, card-face/ink/red/border,
+  #163's plates (`--bridge-plate`/`-on-plate`(`-muted`)/`-plate-away`,
+  avatar, ready tick, bank running/low), the table's leftovers
+  (`--bridge-table-slot`, `-on-table-turn`/`-thinking`/`-wash`/`-chip`,
+  vul stripes, `--bridge-vul-seat`), `--bridge-card-*` constants on a card
+  face (muted, navy, amber-tint, edge, shadow), popup-action, shadows,
   radii, `--bridge-font` / `--bridge-font-numbers`), mapped onto Ionic's
   colours (`primary` = the table navy, `success`/`danger`/`warning` =
   pass/double/amber, `medium` = muted, `tertiary` = the robot blue) plus a
   custom **`action`** colour (`color="action"`, the one orange primary per
   screen: StartBox's Start, NextBoardBox's Deal now). Components read
-  tokens, never hex, except what stays white in both modes (card faces,
-  the bidding box's cards, the plates' avatars). Dark mode: the same
+  tokens, never hex (none left under `src/` since #163 but the
+  printout's black on white); what stays white in both modes (card
+  faces, the bidding box's cards, the plates' avatars) has tokens that
+  dark mode never redefines. Dark mode: the same
   tokens get the Midnight values under `prefers-color-scheme: dark` on
   `:root, :root.ios, :root.md` (so they beat `dark.system.css`).
   `src/theme/daylight.css`: body font, `ion-button` 48 px (not small,
@@ -1091,7 +1103,29 @@ The user's standing rule (#91): **no task may leave code coverage under
   `--bridge-on-table-good`/`-bad`/`-accent`, `--bridge-table-dim`,
   `--bridge-on-table-faint`, `--bridge-navy-tint`(`-text`),
   `--bridge-action-line`; `.lobby-card` in `daylight.css` is the lobby's
-  white card. Still to come: the side sheets and the wide layout (#163).
+  white card. #163 did the rest: `SeatPlate.vue` (+ `PlayerAvatar.vue`,
+  initials or a robot's icon) is a seated player off the table
+  (`StartBox`, the detail page's compass: N/S across, side plates upright
+  below 576 px; an empty seat is the ion-button `.seat-sit` dashed orange
+  "Sit here · North" / "Move here · North"), `PlayerProfileSheet`'s
+  `.profile-avatar` and `SeatPlayerSheet`'s result avatars, the chat's
+  bubbles, and the small buttons it touched 44 px tall. **The wide
+  table**: `wideTable` on the play page = `chatWide` (≥ 1100 px) and the
+  `.play` column ≥ `WIDE_TABLE_MIN_PX` (560, `src/utils/layout.ts`,
+  measured by `useElementWidth`, a ResizeObserver, 0 without one, so page
+  specs stay narrow unless they stub it); then `.play-wide` (1040 px,
+  the chat `clamp()` at 1040 + 656 = 1696 px), `BridgeTable`'s `wide`
+  (`.table-wide`, `auto minmax(0, 1fr) auto`, its own container
+  `bridge-table`: side plates upright under 760 px) with the
+  `BoardTile` in its `corner` slot (`.with-corner`: top seat in column 2;
+  the board bar's tile hidden), and during the auction (`auctionCentre`)
+  the `#centre` slot is `.centre-auction`: `AuctionHistory` +
+  `BiddingBox` (or `.bids-missing`), shared with the below-table copies
+  through `liveAuctionProps`/`auctionEvents`/`biddingProps`/
+  `biddingEvents`, held at its tallest per board by `useSteadyHeight`
+  (which now follows a `v-if`'d target, `flush: 'sync'`). The play keeps
+  the trick slot. Tests: `tests/unit/wideTable.spec.ts` stubs
+  `ResizeObserver` and `matchMedia`.
 - **Lobby** (#162, the Lobby board): `TablesPage.vue` is 1280 px at most,
   `.lobby-main` + `.lobby-aside` wrapping to one column. `YourTableHero.vue`
   (navy; `useYourTable`'s table/target/status, so nothing for a guest,
@@ -1142,7 +1176,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   below 576 px, so a finished deal's three hands fit 360 px).
   `BridgeTable` below 576 px is `auto minmax(0, 1fr) auto`. The play page,
   `PlayingReviewPage` and `BoardReviewModal` are 720 px wide at most (the
-  chat aside's `clamp()` uses 720 + 2 × 328 = 1376 px).
+  chat aside's `clamp()` uses 720 + 2 × 328 = 1376 px); the play page's
+  wide table 1040 px (1696 px).
 - **Ionic events** (#158): Ionic Vue 8 dispatches every event in
   kebab-case (`ion-change`), but its wrappers declare the camelCase name
   as a component event and only re-emit it from an `ionChange` listener

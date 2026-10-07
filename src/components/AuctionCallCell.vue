@@ -239,7 +239,7 @@ function chatAbout() {
 
 .question-mark {
   background: var(--bridge-question);
-  color: #fff;
+  color: var(--bridge-surface);
 }
 
 .call-popup {
@@ -259,7 +259,7 @@ function chatAbout() {
   border-radius: 12px;
   background: var(--bridge-popup);
   color: var(--bridge-on-popup);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 24px var(--bridge-shadow-strong);
   text-align: left;
   font-size: 0.9rem;
   line-height: 1.4;
@@ -289,8 +289,8 @@ function chatAbout() {
   padding: 0 12px;
   border: 0;
   border-radius: 9px;
-  background: #fff;
-  color: #142033;
+  background: var(--bridge-popup-action);
+  color: var(--bridge-on-popup-action);
   font: inherit;
   font-size: 0.85rem;
   font-weight: 700;

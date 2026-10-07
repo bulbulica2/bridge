@@ -56,11 +56,11 @@ const fillers = computed(
   justify-content: center;
   gap: 2px;
   padding: 4px;
-  border: 1px solid var(--bridge-card-border, #d5d9e0);
+  border: 1px solid var(--bridge-card-border);
   border-radius: 8px;
-  background: var(--bridge-card-face, #fff);
-  color: var(--bridge-card-ink, #142033);
-  box-shadow: 0 1px 2px rgba(20, 32, 51, 0.3);
+  background: var(--bridge-card-face);
+  color: var(--bridge-card-ink);
+  box-shadow: 0 1px 2px var(--bridge-card-shadow);
   font-family: var(--bridge-font-numbers, sans-serif);
   font-size: var(--hand-text);
   font-weight: 700;
@@ -75,7 +75,7 @@ const fillers = computed(
 }
 
 .column.red {
-  color: var(--bridge-card-red, #c8102e);
+  color: var(--bridge-card-red);
 }
 
 .suit {
@@ -88,7 +88,7 @@ const fillers = computed(
 
 /* A rank's line height, so a suit going void doesn't change the hand's. */
 .void {
-  color: #4b5668;
+  color: var(--bridge-card-muted);
 }
 
 /* Three hands side by side on a 360px phone (a finished deal): no larger

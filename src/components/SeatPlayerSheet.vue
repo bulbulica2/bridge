@@ -46,6 +46,7 @@
             :detail="false"
             @click="pick(user)"
           >
+            <PlayerAvatar slot="start" :user="user" class="result-avatar" />
             <ion-label>
               <h3>{{ user.username }}</h3>
               <p>{{ user.name }}</p>
@@ -73,6 +74,7 @@ import {
   IonSpinner,
   IonText,
 } from '@ionic/vue';
+import PlayerAvatar from '@/components/PlayerAvatar.vue';
 import { SEARCH_MIN_LENGTH, useUserSearch } from '@/composables/useUserSearch';
 import type { Seat } from '@/services/tables';
 import type { SearchedUser } from '@/services/users';
@@ -110,8 +112,18 @@ function close() {
 .title {
   margin: 8px 0 4px;
   font-size: 1.2rem;
-  font-weight: 600;
+  font-weight: 700;
   text-align: center;
+}
+
+/* A result: the plate's navy avatar, a row of 56 px to tap. */
+ion-item {
+  --min-height: 56px;
+}
+
+.result-avatar {
+  background: var(--bridge-plate);
+  color: var(--bridge-on-plate);
 }
 
 ion-searchbar {
@@ -121,7 +133,7 @@ ion-searchbar {
 .hint {
   margin: 8px 0;
   font-size: 0.9rem;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
   text-align: center;
 }
 
@@ -135,7 +147,7 @@ ion-text .hint {
   justify-content: center;
   gap: 8px;
   padding: 16px 0;
-  color: var(--ion-color-medium);
+  color: var(--bridge-muted);
   font-size: 0.9rem;
 }
 

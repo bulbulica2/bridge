@@ -78,10 +78,10 @@ const caption = computed(() =>
   box-sizing: border-box;
   height: 22px;
   padding: 0 8px;
-  border: 1px solid var(--ion-color-primary, #3880ff);
-  border-radius: 999px;
-  background: var(--ion-background-color, #fff);
-  color: var(--ion-color-primary, #3880ff);
+  border: 1px solid var(--bridge-control);
+  border-radius: var(--bridge-radius-pill);
+  background: var(--bridge-surface);
+  color: var(--bridge-ink);
   font: inherit;
   font-size: 0.75rem;
   font-weight: 600;
@@ -90,12 +90,12 @@ const caption = computed(() =>
 }
 
 .last-trick-button[aria-expanded='true'] {
-  background: var(--ion-color-primary, #3880ff);
-  color: var(--ion-color-primary-contrast, #fff);
+  background: var(--bridge-plate);
+  color: var(--bridge-on-plate);
 }
 
 .last-trick-button:focus-visible {
-  outline: 2px solid var(--ion-color-primary, #3880ff);
+  outline: 2px solid var(--bridge-amber);
   outline-offset: 2px;
 }
 
@@ -112,10 +112,11 @@ const caption = computed(() =>
 
 .last-trick-box {
   padding: 8px;
-  border: 1px solid var(--ion-color-step-150, #e0e0e0);
-  border-radius: 8px;
-  background: var(--ion-background-color, #fff);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--bridge-line);
+  border-radius: 12px;
+  background: var(--bridge-surface);
+  color: var(--bridge-ink);
+  box-shadow: 0 4px 16px var(--bridge-shadow-strong);
 }
 
 .last-trick-title {

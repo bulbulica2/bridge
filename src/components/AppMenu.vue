@@ -123,8 +123,8 @@ ion-menu::part(container) {
 
 /* The page on screen. */
 ion-item.current {
-  --background: rgba(var(--ion-color-primary-rgb, 56, 128, 255), 0.12);
-  --color: var(--ion-color-primary, #3880ff);
+  --background: var(--bridge-navy-tint);
+  --color: var(--bridge-navy-tint-text);
   font-weight: 600;
 }
 

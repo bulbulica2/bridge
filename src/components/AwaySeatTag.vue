@@ -27,12 +27,12 @@ defineProps<{ tag: AwayTag }>();
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   font-family: var(--bridge-font);
-  color: var(--away-tag-color, var(--bridge-double-text, #b3261e));
+  color: var(--away-tag-color, var(--bridge-double-text));
 }
 
 /* The last seconds before the robot: bold red, or white on the red plate. */
 .away-tag-urgent {
-  color: var(--away-tag-urgent, var(--ion-color-danger, #b3261e));
+  color: var(--away-tag-urgent, var(--ion-color-danger));
   text-decoration: underline;
   text-underline-offset: 2px;
 }

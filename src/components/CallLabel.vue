@@ -46,19 +46,19 @@ const spoken = computed(() => callName(props.bid));
 }
 
 .red {
-  color: var(--bridge-red-suit, #c8102e);
+  color: var(--bridge-red-suit);
 }
 
 .pass {
-  color: var(--bridge-pass-text, #1d6b31);
+  color: var(--bridge-pass-text);
 }
 
 .double {
-  color: var(--bridge-double-text, #b3261e);
+  color: var(--bridge-double-text);
 }
 
 .redouble {
-  color: var(--bridge-redouble-text, #1e4fc2);
+  color: var(--bridge-redouble-text);
 }
 
 /* A chip; whoever holds it may set its neutral colours (the navy table
@@ -72,28 +72,28 @@ const spoken = computed(() => callName(props.bid));
   height: 30px;
   padding: 0 8px;
   border-radius: 8px;
-  background: var(--call-chip-bg, var(--bridge-chip, #eef1f5));
-  color: var(--call-chip-ink, var(--bridge-ink, #142033));
+  background: var(--call-chip-bg, var(--bridge-chip));
+  color: var(--call-chip-ink, var(--bridge-ink));
   font-size: 1rem;
   line-height: 1;
 }
 
 .chip.red {
-  color: var(--call-chip-red, var(--bridge-red-suit, #c8102e));
+  color: var(--call-chip-red, var(--bridge-red-suit));
 }
 
 .chip.pass {
-  background: var(--bridge-pass-bg, #e3f1e6);
-  color: var(--bridge-pass-text, #1d6b31);
+  background: var(--bridge-pass-bg);
+  color: var(--bridge-pass-text);
 }
 
 .chip.double {
-  background: var(--bridge-double-bg, #fde6e4);
-  color: var(--bridge-double-text, #b3261e);
+  background: var(--bridge-double-bg);
+  color: var(--bridge-double-text);
 }
 
 .chip.redouble {
-  background: var(--bridge-redouble-bg, #e1ebfd);
-  color: var(--bridge-redouble-text, #1e4fc2);
+  background: var(--bridge-redouble-bg);
+  color: var(--bridge-redouble-text);
 }
 </style>
