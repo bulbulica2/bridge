@@ -12,11 +12,6 @@ import { contractScore, doubledMark, formatScore, madeSuffix, sideOf } from '@/u
 
 const SEATS: Seat[] = ['N', 'E', 'S', 'W'];
 
-// BRIDGE_CLAIM_SECONDS' default: how long the others have to answer before
-// silence rejects a claim (bb#96). Only the claim sheet quotes it; a
-// countdown always reads the claim's `expires_at`.
-export const CLAIM_SECONDS = 10;
-
 // The tricks still to play: 13 less the complete ones, so a trick in
 // progress still counts. What a claim may take at most.
 export function tricksLeft(state: Pick<PublicPlaying, 'tricks'>): number {
@@ -183,27 +178,4 @@ export function claimOutcome(state: PublicPlaying, seat: Seat, tricks: number): 
     down: made < 0,
     score: formatScore(ours ? score : 0 - score),
   };
-}
-
-// The claim sheet's line under its title: "7 tricks left · you have 4 · 4♠
-// needs 10", the tricks `seat`'s side has taken so far and what declarer
-// needs to make the contract.
-export function claimSummary(state: PublicPlaying, seat: Seat): string {
-  const left = tricksLeft(state);
-  const parts = [`${left} trick${left === 1 ? '' : 's'} left`];
-  const contract = state.contract;
-  if (contract?.bid.level) {
-    parts.push(`you have ${state.tricks_won?.[sideOf(seat)] ?? 0}`);
-    parts.push(`${callLabel(contract.bid)}${doubledMark(contract.doubled)} needs ${contract.bid.level + 6}`);
-  }
-  return parts.join(' · ');
-}
-
-// Who answers a claim by `seat`: declarer's side waits for both opponents,
-// a defender for declarer and their own partner.
-export function claimAnswerersText(state: PublicPlaying, seat: Seat): string {
-  if (!state.contract) {
-    return 'The others';
-  }
-  return sideOf(seat) === sideOf(state.contract.declarer) ? 'Both opponents' : 'Declarer and your partner';
 }

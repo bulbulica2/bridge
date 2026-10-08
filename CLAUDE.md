@@ -613,18 +613,23 @@ The user's standing rule (#91): **no task may leave code coverage under
   `aria-disabled`, and a tap or a mouse hover toggles a `usePopover`
   pop-up above it, `.claim-locked-note` (`role="tooltip"`, kept in the
   DOM with `v-show` as the button's `aria-describedby`) holding
-  `CLAIM_LOCKED_TEXT`; unlocking closes it. `ClaimSheet.vue` is the sheet (#161:
-  `claimSummary` "7 tricks left · you have 4 · 4♠ needs 10", tiles 4 a
+  `CLAIM_LOCKED_TEXT`; unlocking closes it. `ClaimSheet.vue` is a small
+  centred dialog (#173: `ion-modal.claim-dialog`, no breakpoints,
+  `--width: min(400px, calc(100vw - 32px))`, `--height: auto` (Ionic's
+  `ion-modal > .ion-page` lets the plain-div content set it), 16 px
+  corners; title "Claim" / "Claim for North" (`forSeat`) and an X
+  `.claim-close` (`aria-label="Close"`, 44 px) emitting `close`, as the
+  backdrop and Escape do through `did-dismiss`; #161's tiles 4 a
   row from the tricks left down to 0 (`data-tricks`, `.pick-count`), each
   with `claimOutcome(state, seat, n)` (`{result: "4♠ +1", down, score:
   "+450"}`, the claimer's side, from `contractScore` in `result.ts`:
   duplicate scoring, a hint) given `state` + `seat` (`claimSeat`);
-  opening with all of the tricks left picked, #137; the orange send
-  button "Claim all 7 · 4♠ +1 · +450" / "Claim 5 · …" / "Concede · …"
-  for the 0 tile; a trick finishing re-picks the new maximum unless a
-  lower number was picked by hand, kept while still possible; the
-  outlined Concede sends 0; `claimAnswerersText` + `CLAIM_SECONDS`
-  "Both opponents get 10 seconds. No answer counts as no."),
+  opening with all of the tricks left picked, #137; one orange send
+  button `.send-claim` "Claim 7 · 4♠ +1 · +450" / "Claim 5 · …", plain
+  "Concede" for the 0 tile, which sends 0 (no separate Concede button);
+  a trick finishing re-picks the new maximum unless a lower number was
+  picked by hand, kept while still possible; no summary, hand-shown or
+  answer-rule line: those are `ClaimPanel`'s once the claim is out),
   `ClaimPanel.vue` the pending claim as a dark banner (`--bridge-popup`,
   the countdown `.claim-seconds` on the right, Accept / Reject two equal
   buttons, Withdraw). A claim
