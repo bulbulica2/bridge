@@ -3,6 +3,7 @@
     <AppHeader title="Login" />
     <ion-content :fullscreen="true" class="ion-padding">
       <div class="login bridge-form-page">
+        <p class="bridge-form-brand">{{ APP_NAME }}</p>
         <div class="bridge-form-card">
           <form class="bridge-form" @submit.prevent="submit">
             <ion-input
@@ -78,6 +79,7 @@ import {
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
 import { navigateAndSettle } from '@/router/loading';
+import { APP_NAME } from '@/utils/brand';
 import { formErrors } from '@/utils/errors';
 import { showWelcomeToast } from '@/utils/toast';
 import { useAuthStore } from '@/stores/auth';

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { IonInput, IonText } from '@ionic/vue'
 import CreateAccountPage from '@/views/CreateAccountPage.vue'
+import LoginPage from '@/views/LoginPage.vue'
 import ResetPasswordPage from '@/views/ResetPasswordPage.vue'
 import * as authService from '@/services/auth'
 import { navigateAndSettle } from '@/router/loading'
@@ -72,6 +73,19 @@ beforeEach(() => {
   vi.resetAllMocks()
   route.params = {}
   route.query = {}
+})
+
+// A guest who came from a link sees where they are.
+describe("the app's name above the form", () => {
+  test.each([
+    ['LoginPage', LoginPage],
+    ['CreateAccountPage', CreateAccountPage],
+    ['ResetPasswordPage', ResetPasswordPage],
+  ])('%s', (_, page) => {
+    const wrapper = mount(page)
+
+    expect(wrapper.find('.bridge-form-page > .bridge-form-brand').text()).toBe('Bridge4U')
+  })
 })
 
 describe('CreateAccountPage', () => {

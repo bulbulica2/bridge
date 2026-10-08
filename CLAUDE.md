@@ -7,7 +7,18 @@ same PR as the code (see "Keep `docs/` in sync" at the end).
 ## Project
 
 Ionic Vue 3 frontend for the "bridge" card-game project, built with Vite and
-wrapped with Capacitor for native (iOS/Android) builds.
+wrapped with Capacitor for native (iOS/Android) builds. The app is named
+**Bridge4U** (**B4U** for short, tagline "Bridge for you", #198):
+`APP_NAME` / `APP_SHORT_NAME` / `APP_TAGLINE` in `src/utils/brand.ts`, read
+by the guest Home's heading, `AppMenu`'s title, the guest forms'
+`.bridge-form-brand` line above the card (Login, Create account, Reset
+password; `forms.css`) and `turnTitle`. Never hard-code the name in
+`src/`; only `index.html` (title, description, theme colour, icons) and
+`public/manifest.webmanifest` spell it out, and
+`tests/unit/brand.spec.ts` keeps them in step. `public/` holds the B4U
+mark: `favicon.svg` (the source) and the PNGs drawn from its shapes
+(`favicon.png` 64, `apple-touch-icon.png` 180 square, `icon-192.png`,
+`icon-512.png`); change one, redraw them all.
 
 ## Commands
 
@@ -918,9 +929,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   class `turn-urgent` on `HandView` (playing from it) and `BiddingBox`),
   `useYourTable`'s `statusText`, and `useTurnTitle` (`App.vue`: while
   `document.visibilityState` is hidden and the game store's board waits
-  for us, `document.title` = "● Your turn (0:42) – Bridge", put back once
-  the turn is taken or the page shows; `index.html`'s title is
-  "Bridge"). The play page's `useStaleDeadline` rereads the game 2 s
+  for us, `document.title` = `turnTitle(clock)` "● Your turn (0:42) –
+  Bridge4U" (`APP_NAME`), the saved title put back once the turn is taken
+  or the page shows; `index.html`'s title is "Bridge4U"). The play page's `useStaleDeadline` rereads the game 2 s
   after `turn_deadline` (`viewActive` only), as for claims and
   `next_board_at`. **Away**: a seat has `away_since` and `replace_at`
   (`TableSeat`, on payloads and `TableUpdated`, bb#138);
@@ -1482,7 +1493,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   app is broken.
 - **Path alias**: `@/*` maps to `src/*` (configured in both `tsconfig.json`
   and `vite.config.ts` — keep both in sync if it changes).
-- **Capacitor**: `capacitor.config.ts` declares `webDir: 'dist'`, so native
+- **Capacitor**: `capacitor.config.ts` declares `appName: 'Bridge4U'`,
+  `appId: 'com.bridge4u.app'` and `webDir: 'dist'`, so native
   builds sync from the Vite production build, not the dev server.
 - **Tests live under `tests/`, not colocated with source**: `tests/unit/`
   (Vitest) and `tests/e2e/` (Cypress specs/support/fixtures) — see

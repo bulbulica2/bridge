@@ -5,7 +5,8 @@
       <div class="home">
         <template v-if="!auth.isAuthenticated">
           <div class="intro">
-            <h1>Bridge</h1>
+            <h1>{{ APP_NAME }}</h1>
+            <p class="tagline">{{ APP_TAGLINE }}</p>
             <p>
               Play contract bridge online. Four players sit at a table in two
               partnerships, North–South against East–West. Each hand starts with
@@ -124,6 +125,7 @@ import YourForm from '@/components/YourForm.vue';
 import YourTableHero from '@/components/YourTableHero.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useTablesStore } from '@/stores/tables';
+import { APP_NAME, APP_TAGLINE } from '@/utils/brand';
 import { replacedFromText } from '@/utils/sets';
 import { errorMessage } from '@/utils/errors';
 
@@ -199,6 +201,16 @@ async function load() {
 
 .intro {
   text-align: center;
+}
+
+.intro h1 {
+  margin-bottom: 0;
+}
+
+.tagline {
+  margin: 4px 0 0;
+  color: var(--bridge-muted);
+  font-size: 1.0625rem;
 }
 
 .greeting {

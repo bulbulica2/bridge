@@ -98,6 +98,8 @@ describe('HomePage.vue', () => {
   test('explains the app to guests and offers log in and sign up', () => {
     const wrapper = mount(HomePage, { global: { stubs } })
 
+    expect(wrapper.find('.intro h1').text()).toBe('Bridge4U')
+    expect(wrapper.find('.intro .tagline').text()).toBe('Bridge for you')
     expect(wrapper.text()).toContain('13 tricks')
     expect(wrapper.find('.your-form').exists()).toBe(false)
     expect(pageLinks(wrapper).map((l) => l.to)).toEqual(['/login', '/create-account'])

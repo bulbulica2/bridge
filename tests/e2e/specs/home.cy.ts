@@ -9,7 +9,7 @@ describe('Home as a guest', () => {
   it('redirects / to /home and offers Log in and Create account', () => {
     cy.visit('/')
     cy.location('pathname').should('eq', '/home')
-    cy.contains('ion-content h1', 'Bridge').should('be.visible')
+    cy.contains('ion-content h1', 'Bridge4U').should('be.visible')
     cy.contains('ion-button', 'Log in').should('be.visible')
     cy.contains('ion-button', 'Create account').should('be.visible')
   })

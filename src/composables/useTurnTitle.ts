@@ -10,7 +10,7 @@ function isHidden() {
 
 // The "ping" for a player whose turn it is while they look at another tab
 // (bb#120: the clock runs whether they are there or not): the tab's title
-// becomes "● Your turn (0:42) – Bridge" while the page is hidden and the
+// becomes "● Your turn (0:42) – Bridge4U" while the page is hidden and the
 // board we hold waits for us with a clock running, and is put back once the
 // turn is taken or the page shows. App.vue runs it, so it follows the game
 // store whatever page is up.
@@ -22,7 +22,7 @@ export function useTurnTitle() {
     () => game.playing,
     () => auth.user?.id ?? null,
   );
-  // The title to put back, while ours is up.
+  // The title to put back (index.html's, the app's name), while ours is up.
   let saved: string | null = null;
 
   function onVisibilityChange() {
@@ -44,7 +44,7 @@ export function useTurnTitle() {
       return;
     }
     saved ??= document.title;
-    document.title = turnTitle(mine, saved);
+    document.title = turnTitle(mine);
   });
 
   onScopeDispose(() => {

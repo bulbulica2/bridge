@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/110-set-results-under-the-table`._
+_Status as of branch `bulbulica2/113-bridge4u-name`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -38,8 +38,8 @@ logged in:  Home ── Your table / Find a table
 ```
 
 **Menu and Your table** (#99): from 768 px up the side menu stays open
-beside every page; the header's menu button collapses it and brings it
-back, and the browser remembers which. On a phone it slides in as before.
+beside every page, titled **Bridge4U** (#198); the header's menu button
+collapses it and brings it back, and the browser remembers which. On a phone it slides in as before.
 While the user holds a seat, every page's header has a **Your table**
 button (the table's name and a dot: green for a board in progress, blue
 for your turn, amber for an away seat) and the menu lists **Your table**
@@ -57,7 +57,8 @@ a review…) the router asks `GET /tables` once to find the seat. See
 held seat by #74; a robot taking your seat by #130; the Daylight lobby
 look by #162.
 
-- **Guest**: an intro to the app with **Log in** and **Create account**.
+- **Guest**: an intro to the app under its name, **Bridge4U**, and the
+  tagline "Bridge for you" (#198), with **Log in** and **Create account**.
 - **Logged in**: a greeting, then the **Your table** card (navy, as on
   Tables: the table's name, "Set 3 · Board 2 of 4 · you sit South with
   radu", the set's boards so far as tiles B1–B4 with your side's
@@ -93,7 +94,9 @@ Email, password and a **Remember me** checkbox (off by default, #65);
 links to Create account and Reset password. On success it goes to
 `/account` and shows a welcome toast.
 
-The form (#170) is a white card, at most 420 px wide and centred (full
+The form (#170) is a white card under the app's name, **Bridge4U**, small
+(#198: a guest who came from a link sees where they are; Create account
+and Reset password have it too), at most 420 px wide and centred (full
 width less a 16 px gutter on a phone), with Daylight's fields
 (`forms.css`): the password has a show/hide button, a browser's autofill
 looks like typed text (no yellow or blue patch), and a 422 shows under
@@ -416,8 +419,8 @@ or the bidding box is ringed in red too), **Waiting for East** and
 after the deadline, the page rereads the game). No clock or bar while a
 robot or an admin is on turn, and the line is empty while a claim is
 pending; it keeps its height so nothing moves. While the tab is
-hidden on your turn its title becomes **● Your turn (0:42) – Bridge**,
-back to **Bridge** once you have played or look again; the header's
+hidden on your turn its title becomes **● Your turn (0:42) – Bridge4U**,
+back to **Bridge4U** once you have played or look again; the header's
 **Your table** counts down too. Let the clock run out and a **robot takes
 your seat** for the rest of the set: the others get a toast ("East didn't
 play in time: a robot took their seat."), the board goes on with the

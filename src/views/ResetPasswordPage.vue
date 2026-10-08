@@ -3,6 +3,7 @@
     <AppHeader :title="hasToken ? 'Choose a new password' : 'Reset password'" />
     <ion-content :fullscreen="true" class="ion-padding">
       <div class="bridge-form-page">
+        <p class="bridge-form-brand">{{ APP_NAME }}</p>
         <div class="bridge-form-card">
           <!-- Stage 2: a token came from the emailed link, so set the new password. -->
           <form v-if="hasToken" class="bridge-form" @submit.prevent="submitNewPassword">
@@ -123,6 +124,7 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
+import { APP_NAME } from '@/utils/brand';
 import { formErrors } from '@/utils/errors';
 import { useAuthStore } from '@/stores/auth';
 

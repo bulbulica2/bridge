@@ -2,6 +2,7 @@ import type { DeadlineBy, PublicPlaying } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
 import { TURN_SECONDS, formatClock, secondsLeft } from '@/utils/away';
+import { APP_NAME } from '@/utils/brand';
 
 // The turn clock (bridge_backend docs/API.md, Away mid-set, and the turn
 // clock; bb#120): the human the board waits for has a minute to call, play
@@ -93,9 +94,9 @@ export function turnUrgent(clock: TurnClock | null): boolean {
 }
 
 // The tab's title while it is hidden and the board waits for the viewer:
-// "● Your turn (0:42) – Bridge".
-export function turnTitle(clock: TurnClock, title: string): string {
-  return `● Your turn (${formatClock(clock.seconds)}) – ${title}`;
+// "● Your turn (0:42) – Bridge4U".
+export function turnTitle(clock: TurnClock): string {
+  return `● Your turn (${formatClock(clock.seconds)}) – ${APP_NAME}`;
 }
 
 // The turn clock line's right-hand side (Daylight, #161): "0:42", or "Set

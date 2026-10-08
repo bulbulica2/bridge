@@ -4,7 +4,7 @@
   <ion-menu content-id="main-content" type="overlay">
     <ion-header>
       <ion-toolbar>
-        <ion-title>Menu</ion-title>
+        <ion-title>{{ APP_NAME }}</ion-title>
       </ion-toolbar>
     </ion-header>
     <ion-content>
@@ -76,6 +76,7 @@ import { useYourTable } from '@/composables/useYourTable';
 import { STATUS_TEXT } from '@/composables/useYourTable';
 import type { YourTableStatus } from '@/composables/useYourTable';
 import { useAuthStore } from '@/stores/auth';
+import { APP_NAME } from '@/utils/brand';
 
 const STATUS_COLORS: Record<Exclude<YourTableStatus, null>, string> = {
   away: 'warning',

@@ -173,6 +173,18 @@ ion-checkbox.bridge-check {
   margin: 0 auto;
 }
 
+/* The app's name above the card (#198), small: a guest who came from a link
+   sees where they are. */
+.bridge-form-brand {
+  margin: 0 0 12px;
+  text-align: center;
+  font-family: var(--bridge-font-numbers);
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--bridge-navy-tint-text);
+}
+
 .bridge-form-card {
   box-sizing: border-box;
   padding: 24px 20px;

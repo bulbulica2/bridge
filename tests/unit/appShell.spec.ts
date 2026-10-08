@@ -43,6 +43,12 @@ describe('AppMenu', () => {
     expect(menuLinks(wrapper)).toEqual(['/home', '/login'])
   })
 
+  test("is titled with the app's name", () => {
+    const wrapper = mount(AppMenu)
+
+    expect(wrapper.find('ion-title').text()).toBe('Bridge4U')
+  })
+
   test('a logged-in user gets Home, Tables and My boards', async () => {
     const wrapper = mount(AppMenu)
     useAuthStore().user = ana
