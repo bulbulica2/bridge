@@ -899,9 +899,9 @@ describe('TablePlayPage claims', () => {
     const wrapper = await mountPage(state())
     vi.mocked(gameService.makeClaim).mockResolvedValue(state({ claim: pending() }))
 
-    // Claim: solid navy, at its own width under the hand.
-    expect(wrapper.get('.claim-button').text()).toBe('Claim')
-    expect(wrapper.get('.claim-row').classes()).toContain('claim-row')
+    // Claim: small, in the table's bottom-right corner; nothing under the hand.
+    expect(wrapper.get('.bridge-table .corner-bottom-right .claim-button').text()).toBe('Claim')
+    expect(wrapper.find('.claim-row').exists()).toBe(false)
     await wrapper.get('.claim-button').trigger('click')
     expect(wrapper.findAll('.trick-pick .pick-count').map((b) => b.text())).toEqual(['5', '4', '3', '2', '1', '0'])
     expect(wrapper.get('.claim-summary').text()).toBe('5 tricks left · you have 8 · 4♠ needs 10')
@@ -1040,7 +1040,7 @@ describe('TablePlayPage claims', () => {
     expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
   })
 
-  test('after a refused claim, Claim stays disabled with a note until the next card', async () => {
+  test('after a refused claim, Claim stays locked, saying why when tapped, until the next card', async () => {
     logIn(4)
     const wrapper = await mountPage(asSeat('W', { turn: 'W', acting_user_id: 4, claim: pending() }))
     vi.mocked(gameService.respondToClaim).mockResolvedValue(
@@ -1055,13 +1055,19 @@ describe('TablePlayPage claims', () => {
       'warning',
     )
     const claimButton = wrapper.get('.claim-button')
-    expect((claimButton.element as HTMLButtonElement).disabled).toBe(true)
+    expect(claimButton.attributes('aria-disabled')).toBe('true')
+    expect(claimButton.classes()).toContain('is-locked')
     expect(claimButton.text()).toBe('Claim · locked')
-    expect(wrapper.get('.claim-locked-note').text()).toBe(
-      'The claim was refused: play a card before claiming again.',
-    )
+    // The note is the button's description, shown in a pop-up on a tap.
+    const note = wrapper.get('.claim-locked-note')
+    expect(note.text()).toBe('The claim was refused: play a card before claiming again.')
+    expect(claimButton.attributes('aria-describedby')).toBe(note.attributes('id'))
+    const shown = () => !(wrapper.get('.claim-locked-note').element as HTMLElement).style.display
+    expect(shown()).toBe(false)
     await claimButton.trigger('click')
     expect(wrapper.findComponent(ClaimSheet).props('open')).toBe(false)
+    expect(shown()).toBe(true)
+    expect(claimButton.attributes('aria-expanded')).toBe('true')
 
     // West's card clears the lock: Claim is back.
     const played = { seat: 'W' as Seat, card: c('HA') }
@@ -1071,6 +1077,7 @@ describe('TablePlayPage claims', () => {
     await flushPromises()
     expect(wrapper.find('.claim-locked-note').exists()).toBe(false)
     expect((wrapper.get('.claim-button').element as HTMLButtonElement).disabled).toBe(false)
+    expect(wrapper.get('.claim-button').attributes('aria-disabled')).toBeUndefined()
     expect(wrapper.get('.claim-button').text()).toBe('Claim')
   })
 

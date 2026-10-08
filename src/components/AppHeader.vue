@@ -33,7 +33,15 @@
           <span v-if="tableStatus === 'turn'" class="table-shortcut-turn">{{ tableStatusText }}</span>
         </ion-button>
       </ion-buttons>
-      <ion-title>{{ title }}</ion-title>
+      <!-- `subtitle`: a second, smaller line under the title (the play
+           page's "Board 1 of 4 · Set 3", #171). -->
+      <ion-title :class="{ 'with-subtitle': !!subtitle }">
+        <template v-if="subtitle">
+          <span class="title-main">{{ title }}</span>
+          <span class="title-sub">{{ subtitle }}</span>
+        </template>
+        <template v-else>{{ title }}</template>
+      </ion-title>
       <ion-buttons slot="end">
         <slot name="end" />
         <!-- Header account action, only once there is somebody logged in. -->
@@ -62,9 +70,7 @@ import { useYourTable } from '@/composables/useYourTable';
 import { useAuthStore } from '@/stores/auth';
 import { toggleMenu } from '@/utils/menu';
 
-defineProps<{
-  title: string;
-}>();
+withDefaults(defineProps<{ title: string; subtitle?: string | null }>(), { subtitle: null });
 
 const auth = useAuthStore();
 const {
@@ -128,6 +134,26 @@ const {
 
 .status-away {
   background: var(--bridge-amber);
+}
+
+/* The title over its subtitle, each on one line. */
+.with-subtitle .title-main,
+.with-subtitle .title-sub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.with-subtitle .title-main {
+  line-height: 1.2;
+}
+
+.with-subtitle .title-sub {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--bridge-muted);
 }
 
 /* iOS centres the title over the whole toolbar, where the table's button

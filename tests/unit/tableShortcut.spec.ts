@@ -94,13 +94,13 @@ function routerAt(path: string) {
   return router
 }
 
-async function mountHeader(path?: string) {
+async function mountHeader(path?: string, subtitle?: string) {
   const router = path ? routerAt(path) : null
   if (router) {
     await router.isReady()
   }
   return mount(AppHeader, {
-    props: { title: 'My boards' },
+    props: { title: 'My boards', ...(subtitle ? { subtitle } : {}) },
     global: { plugins: router ? [router] : [] },
   })
 }
@@ -298,6 +298,24 @@ describe('the header\'s "Your table"', () => {
     const wrapper = await mountHeader('/tables/2')
 
     expect(shortcut(wrapper)!.props('fill')).toBe('outline')
+  })
+})
+
+describe("the header's title", () => {
+  test('the title alone', async () => {
+    const wrapper = await mountHeader()
+
+    expect(wrapper.get('ion-title').text()).toBe('My boards')
+    expect(wrapper.get('ion-title').classes()).not.toContain('with-subtitle')
+    expect(wrapper.find('.title-sub').exists()).toBe(false)
+  })
+
+  test("a subtitle goes on a line of its own under it (the play page's set)", async () => {
+    const wrapper = await mountHeader(undefined, 'Board 1 of 4 · Set 3')
+
+    expect(wrapper.get('ion-title').classes()).toContain('with-subtitle')
+    expect(wrapper.get('.title-main').text()).toBe('My boards')
+    expect(wrapper.get('.title-sub').text()).toBe('Board 1 of 4 · Set 3')
   })
 })
 

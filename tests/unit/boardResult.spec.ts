@@ -654,7 +654,7 @@ describe('TablePlayPage between boards', () => {
     expect(nextBox(wrapper).get('.next-sub').text()).toBe('Board 3 of 4 · or skip the wait')
     expect(historyService.getBoardResults).toHaveBeenCalledWith(7)
     // Where the table is in its set.
-    expect(wrapper.get('.set-bar').text()).toBe('Board 2 of 4')
+    expect(wrapper.get('.title-sub').text()).toMatch(/^Board 2 of 4 · Set \d+$/)
     // And the same board at the other tables is one tap away.
     const compare = wrapper.findAllComponents({ name: 'IonButton' }).find((b) => b.classes('compare'))
     expect(compare?.props('routerLink')).toMatch(/^\/boards\/\d+\/results$/)
@@ -891,7 +891,7 @@ describe('TablePlayPage between boards', () => {
     vi.mocked(historyService.getSet).mockResolvedValue(over)
     const wrapper = await mountPage(lastBoard())
 
-    expect(wrapper.get('.set-bar').text()).toBe('Board 4 of 4 · set over')
+    expect(wrapper.get('.title-sub').text()).toMatch(/^Board 4 of 4 · Set \d+ · set over$/)
     const panel = wrapper.get('.set-results')
     expect(panel.get('.set-title').text()).toBe('Set 1 over')
     expect(panel.get('.set-winner').text()).toBe('You won the set.')
@@ -917,7 +917,7 @@ describe('TablePlayPage between boards', () => {
 
     expect(tablesService.startTable).toHaveBeenCalledWith(5)
     expect(wrapper.find('.set-results').exists()).toBe(false)
-    expect(wrapper.get('.set-bar').text()).toBe('Board 1 of 4')
+    expect(wrapper.get('.title-sub').text()).toBe('Board 1 of 4 · Set 2')
     expect(wrapper.findAll('.my-hand .playing-card')).toHaveLength(13)
   })
 

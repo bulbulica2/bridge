@@ -22,14 +22,21 @@
        of it, in the room the hand took as dealt). Dummy's and a robot
        declarer's cards read trumps first (`trump`, see suitOrder); the
        claimer's and the deal keep bridge order. With `wide` (the play page
-       on a wide screen, #163) the table takes boards A/B's layout: the
-       `corner` slot (the board tile) top left, partner top centre, the
-       opponents' plates upright where room is short, and a centre wide
-       enough for the auction and the bidding box. -->
-  <div class="bridge-table" :class="{ 'table-wide': wide, 'with-corner': wide && !!$slots.corner }">
-    <div v-if="wide && $slots.corner" class="corner">
-      <slot name="corner" />
-    </div>
+       on a wide screen, #163) the table takes boards A/B's layout:
+       partner top centre, the opponents' plates upright where room is
+       short, and a centre wide enough for the auction and the bidding box.
+       The four corners beside partner and the viewer (#171) hold whatever
+       the page puts in the `top-left`, `top-right`, `bottom-left` and
+       `bottom-right` slots (the play page: who is vulnerable, the contract
+       and the tricks, Auction, Claim). They lie over the panel's corners,
+       so they take no height of their own, and partner's and the viewer's
+       plates keep clear of them. -->
+  <div class="bridge-table" :class="{ 'table-wide': wide, 'with-corners': CORNERS.some((c) => $slots[c]) }">
+    <template v-for="corner in CORNERS" :key="corner">
+      <div v-if="$slots[corner]" class="corner" :class="`corner-${corner}`">
+        <slot :name="corner" />
+      </div>
+    </template>
     <div
       v-for="side in SIDES"
       :key="side"
@@ -84,7 +91,13 @@
             </span>
             <span class="plate-sub">
               <span class="seat-name">{{ SEAT_NAMES[seatOn[side]] }}</span>
-              <span v-if="board?.dealer === seatOn[side]" class="dealer" title="Dealer">D</span>
+              <span
+                v-if="board?.dealer === seatOn[side]"
+                class="dealer"
+                title="Dealer"
+                role="img"
+                aria-label="dealer"
+              >D</span>
               <span v-if="side === 'bottom' && mySeat" class="seat-you">you</span>
               <span v-if="dummy && dummy.seat === seatOn[side] && side !== 'bottom'" class="seat-dummy">
                 dummy
@@ -297,6 +310,7 @@ const props = withDefaults(
 const emit = defineEmits<{ select: [user: PublicUser]; play: [card: Card] }>();
 
 const SIDES: ScreenSide[] = ['top', 'left', 'right', 'bottom'];
+const CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
 
 const seatOn = computed(
   () =>
@@ -376,6 +390,16 @@ function turnLabel(side: ScreenSide): string {
   --call-chip-bg: var(--bridge-card-face);
   --call-chip-ink: var(--bridge-card-ink);
   --call-chip-red: var(--bridge-card-red);
+  /* The corners' room (see .corner): a share of the table's width (a
+     table with corners is its own container), inset by the panel's
+     padding, and the gap partner's and the viewer's plates keep from
+     them. */
+  --corner-w: clamp(84px, 24cqi, 128px);
+  --corner-gap: 8px;
+  --corner-x: 12px;
+  --corner-top: 12px;
+  --corner-bottom: 12px;
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1.1fr 1fr;
   gap: 10px 8px;
@@ -443,7 +467,57 @@ function turnLabel(side: ScreenSide): string {
   align-items: center;
   justify-content: center;
   gap: 6px 8px;
+  box-sizing: border-box;
   max-width: 100%;
+}
+
+/* The corners (#171): laid over the panel's four corners, beside partner
+   and the viewer, so no row grows because of them. Their text wraps to
+   their width rather than widen anything, and partner's and the viewer's
+   plates keep that width (and a gap) clear on both sides, so they stay
+   centred and nothing covers them. A hand across the top or the bottom
+   starts below the plate, lower than a corner reaches. */
+.corner {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  max-width: var(--corner-w);
+}
+
+.bridge-table.with-corners {
+  container-type: inline-size;
+}
+
+.corner-top-left,
+.corner-bottom-left {
+  left: var(--corner-x);
+  align-items: flex-start;
+  text-align: left;
+}
+
+.corner-top-right,
+.corner-bottom-right {
+  right: var(--corner-x);
+  align-items: flex-end;
+  text-align: right;
+}
+
+.corner-top-left,
+.corner-top-right {
+  top: var(--corner-top);
+}
+
+.corner-bottom-left,
+.corner-bottom-right {
+  bottom: var(--corner-bottom);
+}
+
+.with-corners .side-top > .plate-row,
+.with-corners .side-bottom > .plate-row {
+  padding-inline: calc(var(--corner-w) + var(--corner-gap));
 }
 
 /* A seat's plate: avatar, name over seat, the set's clock on the right. */
@@ -746,29 +820,22 @@ function turnLabel(side: ScreenSide): string {
   color: var(--bridge-on-table-muted);
 }
 
-/* A wide screen (#163, boards A/B): roomier, the board tile in the top-left
-   corner beside partner, the side seats as wide as their plates (upright
-   where the table is short of room) and the centre all the rest, room for
-   the auction and the bidding box. The table is its own container, so the
-   seats follow its width rather than the window's (the menu and the chat
-   take their share of a wide screen). */
+/* A wide screen (#163, boards A/B): roomier, the side seats as wide as
+   their plates (upright where the table is short of room) and the centre
+   all the rest, room for the auction and the bidding box. The table is its
+   own container, so the seats follow its width rather than the window's
+   (the menu and the chat take their share of a wide screen); the corners
+   too (cqi resolves against the table where --corner-w is used). */
 .bridge-table.table-wide {
+  --corner-w: clamp(120px, 18cqi, 190px);
+  --corner-x: 24px;
+  --corner-top: 20px;
+  --corner-bottom: 24px;
   container: bridge-table / inline-size;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 16px 20px;
   padding: 20px 24px 24px;
   border-radius: 28px;
-}
-
-.corner {
-  grid-column: 1;
-  grid-row: 1;
-  align-self: start;
-  justify-self: start;
-}
-
-.with-corner .side-top {
-  grid-column: 2;
 }
 
 .table-wide .side-left,
@@ -826,6 +893,10 @@ function turnLabel(side: ScreenSide): string {
    turn label coming and going never moves the centre. */
 @media (max-width: 575px) {
   .bridge-table {
+    --corner-gap: 4px;
+    --corner-x: 8px;
+    --corner-top: 10px;
+    --corner-bottom: 10px;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 8px 6px;
     padding: 10px 8px;

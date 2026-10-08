@@ -181,9 +181,10 @@ describe('the wide table on the play page', () => {
     // Nowhere else: the auction is drawn once.
     expect(wrapper.findAllComponents(AuctionHistory)).toHaveLength(1)
     expect(wrapper.findAll('.bidding-box')).toHaveLength(1)
-    // The board tile in the table's top-left corner, not above it.
-    expect(wrapper.find('.bridge-table .corner .board-tile').exists()).toBe(true)
-    expect(wrapper.find('.board-bar .board-tile').exists()).toBe(false)
+    // The board's details in the table's corners, nothing above it.
+    expect(wrapper.find('.bridge-table .corner-top-left .vul-label').exists()).toBe(true)
+    expect(wrapper.find('.board-bar').exists()).toBe(false)
+    expect(wrapper.find('.board-tile').exists()).toBe(false)
   })
 
   test('a call goes out from the centre, with its alert', async () => {
@@ -229,7 +230,7 @@ describe('the wide table on the play page', () => {
     expect(wrapper.find('.centre-auction .bidding-box').exists()).toBe(true)
   })
 
-  test('the play: the trick in the centre as before, the auction behind the button top left', async () => {
+  test('the play: the trick in the centre as before, the auction behind the button bottom left', async () => {
     const contract = { bid: oneHeart, doubled: '' as const, declarer: 'E' as Seat, dummy: 'W' as Seat }
     const wrapper = await mountPage(
       auction({ phase: 'play', contract, turn: 'S', current_trick: [], tricks: [], tricks_won: { ns: 0, ew: 0 } }),
@@ -238,11 +239,12 @@ describe('the wide table on the play page', () => {
     expect(wrapper.find('.centre-auction').exists()).toBe(false)
     expect(wrapper.find('.bridge-table .centre .trick').exists()).toBe(true)
     expect(wrapper.findComponent(AuctionHistory).exists()).toBe(false)
-    await wrapper.get('.board-bar .auction-button').trigger('click')
+    await wrapper.get('.bridge-table .corner-bottom-left .auction-button').trigger('click')
     const history = wrapper.findComponent(AuctionHistory)
-    expect(history.element.closest('.bridge-table')).toBeNull()
+    expect(history.element.closest('.centre')).toBeNull()
     expect(history.element.closest('.auction-popup')).not.toBeNull()
-    expect(wrapper.find('.bridge-table .corner .board-tile').exists()).toBe(true)
+    expect(wrapper.get('.corner-top-right .contract-line').text().replace(/\s+/g, ' ')).toBe('1♥ by East')
+    expect(wrapper.find('.corner-bottom-right .claim-button').exists()).toBe(true)
   })
 
   test('a column too narrow (menu pinned, chat open) keeps the table it has below 1100 px', async () => {
@@ -253,8 +255,9 @@ describe('the wide table on the play page', () => {
     expect(wrapper.findComponent(BridgeTable).props('wide')).toBe(false)
     expect(wrapper.find('.centre-auction').exists()).toBe(false)
     expect(wrapper.findComponent(AuctionHistory).element.closest('.bridge-table')).toBeNull()
-    expect(wrapper.find('.board-bar .board-tile').exists()).toBe(true)
-    expect(wrapper.find('.corner').exists()).toBe(false)
+    // The corners at every width.
+    expect(wrapper.findAll('.bridge-table .corner')).toHaveLength(4)
+    expect(wrapper.find('.board-tile').exists()).toBe(false)
   })
 
   test('a narrow screen never gets it, however wide the column', async () => {
@@ -269,22 +272,22 @@ describe('the wide table on the play page', () => {
 describe('BridgeTable wide', () => {
   const props = { players: PLAYERS, mySeat: 'S' as Seat, board: auction().board, turn: null }
 
-  test('the corner slot shows only on the wide table', () => {
-    const slots = { corner: '<span class="tile">2</span>' }
+  test('the corners show on the narrow table and the wide one alike', () => {
+    const slots = { 'top-left': '<span class="vul">Vul: E-W</span>' }
     const narrow = mount(BridgeTable, { props, slots })
     const wide = mount(BridgeTable, { props: { ...props, wide: true }, slots })
 
-    expect(narrow.find('.corner').exists()).toBe(false)
+    expect(narrow.get('.corner-top-left .vul').text()).toBe('Vul: E-W')
     expect(narrow.get('.bridge-table').classes()).not.toContain('table-wide')
-    expect(wide.get('.bridge-table').classes()).toEqual(expect.arrayContaining(['table-wide', 'with-corner']))
-    expect(wide.get('.corner .tile').text()).toBe('2')
+    expect(wide.get('.bridge-table').classes()).toEqual(expect.arrayContaining(['table-wide', 'with-corners']))
+    expect(wide.get('.corner-top-left .vul').text()).toBe('Vul: E-W')
   })
 
-  test('wide without a corner: partner keeps the whole top row', () => {
+  test('wide without corners: no room kept for them', () => {
     const wrapper = mount(BridgeTable, { props: { ...props, wide: true } })
 
     expect(wrapper.get('.bridge-table').classes()).toContain('table-wide')
-    expect(wrapper.get('.bridge-table').classes()).not.toContain('with-corner')
+    expect(wrapper.get('.bridge-table').classes()).not.toContain('with-corners')
   })
 })
 

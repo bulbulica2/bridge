@@ -783,8 +783,8 @@ describe('TablePlayPage card play', () => {
     expect(wrapper.get('.last-trick-title').text()).toBe('Trick 1 · E wins')
     expect(wrapper.findAll('.centre > .trick .playing-card')).toHaveLength(0)
     expect(wrapper.get('.trick-caption').text()).toBe('Trick 2')
-    // Nor is it in the contract bar any more.
-    expect(wrapper.get('.outcome').text()).not.toContain('Last trick')
+    // Nor is it in the contract's corner.
+    expect(wrapper.get('.corner-contract').text()).not.toContain('Last trick')
   })
 
   test('no last trick before the first one is won', async () => {
@@ -994,7 +994,7 @@ describe('TablePlayPage card play', () => {
       expect(wrapper.findAll('.my-hand button')).toHaveLength(0)
       expect(wrapper.get('.turn-line-text').text()).toBe("Your turn from North's hand · follow in ♠")
       expect(wrapper.get('.turn-line').classes()).not.toContain('turn-line-robot')
-      expect(wrapper.get('.outcome-you').text()).toBe('robot-1 declares 4♠ — you play the hand')
+      expect(wrapper.get('.corner-top-right .contract-you').text()).toBe('you play it')
     })
 
     test("in 2♥ declarer's hand and the dummy's own both read ♥ ♣ ♦ ♠", async () => {
@@ -1084,7 +1084,7 @@ describe('TablePlayPage card play', () => {
       )
 
       expect(wrapper.find('.declarer-hand').exists()).toBe(false)
-      expect(wrapper.find('.outcome-you').exists()).toBe(false)
+      expect(wrapper.find('.contract-you').exists()).toBe(false)
       // East sees South, dummy, on the left.
       expect(wrapper.find('.side-left .dummy-columns').exists()).toBe(true)
     })

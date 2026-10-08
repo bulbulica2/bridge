@@ -275,39 +275,52 @@ describe('TablePlayPage loading', () => {
 describe('TablePlayPage header', () => {
   const set = { id: 8, number: 3, board: 2, of: 4, finished: false, ended: null, replaced: [] }
 
-  test("the table's name and the board's place in its set, never the board's number", async () => {
+  test("the table's name over the board's place in its set, never the board's number", async () => {
     const wrapper = await mountPage(auction({ set } as Partial<Playing>))
 
-    expect(wrapper.get('ion-title').text()).toBe('Club · Board 2 of 4')
+    expect(wrapper.get('ion-title .title-main').text()).toBe('Club')
+    expect(wrapper.get('ion-title .title-sub').text()).toBe('Board 2 of 4 · Set 3')
     expect(wrapper.get('ion-title').text()).not.toContain('Board 7')
   })
 
-  test('the name alone with no set, or with nothing dealt', async () => {
-    expect((await mountPage(auction())).get('ion-title').text()).toBe('Club')
+  test('the name alone with no set', async () => {
+    const wrapper = await mountPage(auction())
+
+    expect(wrapper.get('ion-title').text()).toBe('Club')
+    expect(wrapper.find('.title-sub').exists()).toBe(false)
+  })
+
+  test('between boards the set stays under the name, "set over" once it is', async () => {
     const waiting = await mountPage(auction({ phase: 'waiting', set } as Partial<Playing>))
-    expect(waiting.get('ion-title').text()).toBe('Club')
+    expect(waiting.get('.title-sub').text()).toBe('Board 2 of 4 · Set 3')
+
+    const over = await mountPage({ ...finished(), set: { ...set, board: 4, finished: true } } as Playing)
+    expect(over.get('.title-sub').text()).toBe('Board 4 of 4 · Set 3 · set over')
+  })
+
+  test('a table without a name is its number', async () => {
+    const wrapper = await mountPage(auction({ set } as Partial<Playing>), makeTable({ name: '' }))
+
+    expect(wrapper.get('.title-main').text()).toBe('Table #5')
   })
 })
 
 describe('TablePlayPage vulnerability label', () => {
-  const label = (wrapper: VueWrapper) => wrapper.get('.board-bar .vul-label')
+  const label = (wrapper: VueWrapper) => wrapper.get('.bridge-table .corner-top-left .vul-label')
 
   test('in the auction: our side, in red', async () => {
     const wrapper = await mountPage(auction({ board: { id: 7, number: 7, dealer: 'S', vulnerable: 'N-S' } }))
 
     expect(label(wrapper).text()).toBe('Vulnerable: N-S (you)')
-    expect(label(wrapper).classes()).toContain('vul-label-red')
+    expect(label(wrapper).classes()).toEqual(expect.arrayContaining(['vul-label-red', 'vul-label-compact']))
     // The table's centre uses the same words.
     expect(wrapper.get('.board-line + .board-line').text()).toBe('Vulnerable: N-S (you)')
-    // The dealer in a pill beside it (a phone), the board tile on a wide
-    // screen (CSS picks one).
-    expect(wrapper.get('.board-bar .dealer-pill').text()).toBe('Dealer South')
-    // Outside a set, never the board's number: the tile names the dealer,
-    // the centre has no board line.
-    expect(wrapper.get('.board-bar .board-tile').attributes('aria-label')).toBe(
-      'Dealer South, vulnerable: N-S',
-    )
-    expect(wrapper.find('.board-bar .tile-number').exists()).toBe(false)
+    // The dealer is the D on their plate; no pill, no tile, no bar.
+    expect(wrapper.get('[data-seat="S"] .dealer').attributes('aria-label')).toBe('dealer')
+    expect(wrapper.find('.dealer-pill').exists()).toBe(false)
+    expect(wrapper.find('.board-tile').exists()).toBe(false)
+    expect(wrapper.find('.board-bar').exists()).toBe(false)
+    // Outside a set, never the board's number: the centre has no board line.
     expect(wrapper.find('.bridge-table .board-number').exists()).toBe(false)
   })
 
@@ -343,13 +356,14 @@ describe('TablePlayPage vulnerability label', () => {
     expect(label(wrapper).text()).toBe('Both (you too)')
   })
 
-  test('nobody vulnerable is green, beside the set', async () => {
+  test('nobody vulnerable is green, the set in the header', async () => {
     const set = { id: 9, number: 1, board: 2, of: 4, finished: false } as Playing['set']
     const wrapper = await mountPage(auction({ set }))
 
     expect(label(wrapper).text()).toBe('Nobody vulnerable')
     expect(label(wrapper).classes()).toContain('vul-label-green')
-    expect(wrapper.get('.board-bar .set-bar').text()).toBe('Board 2 of 4')
+    expect(wrapper.get('.title-sub').text()).toBe('Board 2 of 4 · Set 1')
+    expect(wrapper.find('.set-bar').exists()).toBe(false)
   })
 
   test('nothing dealt yet: no label', async () => {
@@ -362,7 +376,7 @@ describe('TablePlayPage vulnerability label', () => {
   })
 })
 
-describe('TablePlayPage top-left corner (#165)', () => {
+describe('TablePlayPage table corners (#165, #171)', () => {
   const set = { id: 9, number: 3, board: 2, of: 4, finished: false, ended: null, replaced: [] } as Playing['set']
   const contract = {
     bid: { id: 20, call: null, level: 4, strain: 'S' } as unknown as Bid,
@@ -387,19 +401,63 @@ describe('TablePlayPage top-left corner (#165)', () => {
       ...overrides,
     })
 
-  test('the board\'s place in its set under the button: no set number, no board number', async () => {
+  const corner = (wrapper: VueWrapper, which: string) => wrapper.get(`.bridge-table .corner-${which}`)
+
+  test('in the play: vulnerability, contract, Auction and Claim, one per corner', async () => {
     const wrapper = await mountPage(played())
 
-    const corner = wrapper.get('.board-bar .board-corner')
-    expect(corner.classes()).toContain('board-corner-dealt')
-    expect(corner.get('.corner-vul').exists()).toBe(true)
-    expect(corner.get('.corner-auction .auction-button').text()).toBe('Auction')
-    expect(corner.get('.corner-set').text()).toBe('Board 2 of 4')
-    expect(wrapper.get('.board-bar').text()).not.toContain('Set 3')
-    // The tile and the table's centre give the place in the set too.
-    expect(wrapper.get('.board-bar .tile-number').text()).toBe('2')
-    expect(wrapper.get('.board-bar .board-tile').attributes('aria-label')).toContain('Board 2, dealer South')
+    expect(corner(wrapper, 'top-left').get('.vul-label').text()).toBe('Nobody vulnerable')
+    expect(corner(wrapper, 'top-right').get('.contract-line').text().replace(/\s+/g, ' ')).toBe('4♠ by South')
+    expect(corner(wrapper, 'bottom-left').get('.auction-button').text()).toBe('Auction')
+    expect(corner(wrapper, 'bottom-right').get('.claim-button').text()).toBe('Claim')
+    // No bar above the table, no outcome section, no row under the hand.
+    expect(wrapper.find('.board-bar').exists()).toBe(false)
+    expect(wrapper.find('.outcome').exists()).toBe(false)
+    expect(wrapper.find('.claim-row').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Board 7')
+  })
+
+  test('in the auction: the vulnerability and Auction; no contract and no Claim yet', async () => {
+    const wrapper = await mountPage(
+      auction({ set, turn: 'W', acting_user_id: 4, auction: [{ seat: 'S', bid: pass }] as Playing['auction'] }),
+    )
+
+    expect(corner(wrapper, 'top-left').find('.vul-label').exists()).toBe(true)
+    // The live region is there, empty, for the contract to come.
+    expect(corner(wrapper, 'top-right').get('.corner-contract').attributes('aria-live')).toBe('polite')
+    expect(corner(wrapper, 'top-right').text()).toBe('')
+    expect(corner(wrapper, 'bottom-left').find('.auction-button').exists()).toBe(true)
+    expect(corner(wrapper, 'bottom-right').find('.claim-button').exists()).toBe(false)
+  })
+
+  test('once finished: the vulnerability and Auction stay; the contract and Claim go', async () => {
+    const wrapper = await mountPage({
+      ...finished(),
+      set,
+      auction: [{ seat: 'S', bid: pass }] as Playing['auction'],
+    })
+
+    expect(corner(wrapper, 'top-left').find('.vul-label').exists()).toBe(true)
+    expect(corner(wrapper, 'top-right').text()).toBe('')
+    expect(corner(wrapper, 'bottom-left').find('.auction-button').exists()).toBe(true)
+    expect(corner(wrapper, 'bottom-right').find('.claim-button').exists()).toBe(false)
+  })
+
+  test('a doubled contract: the mark after the strain', async () => {
+    const wrapper = await mountPage(played({ contract: { ...contract!, doubled: 1 } }))
+
+    expect(wrapper.get('.contract-line').text().replace(/\s+/g, ' ')).toBe('4♠X by South')
+    expect(wrapper.find('.contract-you').exists()).toBe(false)
+  })
+
+  test('the tricks as they are won', async () => {
+    const wrapper = await mountPage(played({ tricks_won: { ns: 3, ew: 2 } }))
+
+    expect(wrapper.findAll('.corner-top-right .tricks-won span').map((s) => s.text())).toEqual([
+      'NS 3',
+      '·',
+      'EW 2',
+    ])
   })
 
   test("the centre's board line is the place in the set while no trick is shown", async () => {
@@ -411,8 +469,8 @@ describe('TablePlayPage top-left corner (#165)', () => {
   test('the button from the first call on, not before', async () => {
     const wrapper = await mountPage(auction({ set }))
     expect(wrapper.find('.auction-button').exists()).toBe(false)
-    // The row is there anyway (the pill), and the set line under it.
-    expect(wrapper.find('.corner-set').exists()).toBe(true)
+    // The corner is there anyway, empty.
+    expect(wrapper.find('.corner-bottom-left').exists()).toBe(true)
 
     useGameStore().applyPlayingUpdate(5, auction({ set, turn: 'W', acting_user_id: 4, auction: [{ seat: 'S', bid: pass }] as Playing['auction'] }))
     await flushPromises()
@@ -451,7 +509,7 @@ describe('TablePlayPage top-left corner (#165)', () => {
     expect(wrapper.findAll('.auction-popup td .call')).toHaveLength(4)
   })
 
-  test('the contract bar: the contract and the tricks; a robot declarer\'s dummy still told', async () => {
+  test("the contract and the tricks; a robot declarer's dummy told it plays it", async () => {
     const robot = { id: 9, name: 'Robot', username: 'robot-1', is_robot: true }
     const wrapper = await mountPage(
       played({
@@ -463,10 +521,11 @@ describe('TablePlayPage top-left corner (#165)', () => {
       } as Partial<Playing>),
     )
 
-    expect(wrapper.get('.outcome-title').text().replace(/\s+/g, ' ')).toBe('4♠ by North')
-    expect(wrapper.findAll('.tricks-won span').map((s) => s.text())).toEqual(['NS 0', '·', 'EW 0'])
-    expect(wrapper.find('.outcome-detail').exists()).toBe(false)
-    expect(wrapper.get('.outcome-you').text().replace(/\s+/g, ' ')).toBe('robot-1 declares 4♠ — you play the hand')
+    const contractCorner = corner(wrapper, 'top-right')
+    expect(contractCorner.get('.contract-line').text().replace(/\s+/g, ' ')).toBe('4♠ by North')
+    expect(contractCorner.findAll('.tricks-won span').map((s) => s.text())).toEqual(['NS 0', '·', 'EW 0'])
+    expect(contractCorner.get('.contract-you').text()).toBe('you play it')
+    expect(wrapper.text()).not.toContain('you play the hand')
   })
 })
 

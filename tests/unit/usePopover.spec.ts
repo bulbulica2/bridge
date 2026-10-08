@@ -18,18 +18,18 @@ const Popover = defineComponent({
 })
 
 // A screen `screen` px wide, and the pop-up's box as it would first be laid
-// out, centred under the button.
-function layOut(left: number, width: number, screen = 400) {
+// out, centred under (or over) the button, its top `top` px down the screen.
+function layOut(left: number, width: number, screen = 400, top = 100) {
   vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(screen)
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
     left,
     right: left + width,
     width,
-    top: 0,
-    bottom: 0,
+    top,
+    bottom: top,
     height: 0,
     x: left,
-    y: 0,
+    y: top,
     toJSON: () => ({}),
   } as DOMRect)
 }
@@ -99,8 +99,33 @@ describe('usePopover keeps the pop-up on screen', () => {
   })
 
   test('nothing laid out yet: left where it is', async () => {
-    layOut(-30, 0)
+    layOut(-30, 0, 400, -40)
 
-    expect((await opened()).vm.nudge).toBe(0)
+    const wrapper = await opened()
+    expect(wrapper.vm.nudge).toBe(0)
+    expect(wrapper.vm.drop).toBe(0)
+  })
+
+  test("below the screen's top: not moved down", async () => {
+    layOut(100, 200)
+
+    expect((await opened()).vm.drop).toBe(0)
+  })
+
+  test("opening upward across the screen's top: moved down into sight", async () => {
+    layOut(100, 200, 400, -40)
+
+    expect((await opened()).vm.drop).toBe(48)
+  })
+
+  test('opened again lower down: the last drop is forgotten', async () => {
+    layOut(100, 200, 400, -40)
+    const wrapper = await opened()
+    await wrapper.get('button').trigger('click')
+    layOut(100, 200, 400, 100)
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.vm.drop).toBe(0)
   })
 })

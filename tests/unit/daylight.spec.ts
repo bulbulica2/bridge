@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
+import { h } from 'vue'
 import { describe, expect, test } from 'vitest'
 import AdminBadge from '@/components/AdminBadge.vue'
-import BoardTile from '@/components/BoardTile.vue'
 import BridgeTable from '@/components/BridgeTable.vue'
 import CallLabel from '@/components/CallLabel.vue'
 import TrickArea from '@/components/TrickArea.vue'
@@ -9,8 +9,8 @@ import type { AuctionCall, Bid, Card, PlayedCard, Strain, Suit } from '@/service
 import type { Seat } from '@/services/tables'
 import { winningSoFar } from '@/utils/play'
 
-// Daylight (#160): the table's plates and last calls, the trick's ring, the
-// board tile and the call chips.
+// Daylight (#160): the table's plates and last calls, its corners (#171), the
+// trick's ring and the call chips.
 
 const RANKS: Record<string, number> = { J: 12, Q: 13, K: 14, A: 15 }
 function c(name: string): Card {
@@ -117,7 +117,54 @@ describe('BridgeTable plates', () => {
     const west = wrapper.get('.side-left')
     expect(west.find('.admin-badge').exists()).toBe(true)
     expect(west.get('.dealer').text()).toBe('D')
+    expect(west.get('.dealer').attributes('aria-label')).toBe('dealer')
+    expect(west.get('.dealer').attributes('role')).toBe('img')
     expect(wrapper.findAll('.dealer')).toHaveLength(1)
+  })
+
+  test('the dealer badge follows the board, and there is none without one', () => {
+    const wrapper = mountTable({ board: { id: 1, number: 3, dealer: 'S', vulnerable: '' } })
+
+    expect(wrapper.get('[data-seat="S"] .dealer').text()).toBe('D')
+    expect(wrapper.findAll('.dealer')).toHaveLength(1)
+    expect(mountTable().find('.dealer').exists()).toBe(false)
+  })
+
+  test('the four corners hold what the page puts there, and only those it fills', () => {
+    const wrapper = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: null },
+      slots: {
+        'top-left': () => h('span', { class: 'tl' }, 'Vul: E-W'),
+        'top-right': () => h('span', { class: 'tr' }, '2♠ by North'),
+        'bottom-left': () => h('button', { class: 'bl' }, 'Auction'),
+        'bottom-right': () => h('button', { class: 'br' }, 'Claim'),
+      },
+    })
+
+    expect(wrapper.get('.bridge-table').classes()).toContain('with-corners')
+    expect(wrapper.findAll('.corner')).toHaveLength(4)
+    expect(wrapper.get('.corner-top-left .tl').text()).toBe('Vul: E-W')
+    expect(wrapper.get('.corner-top-right .tr').text()).toBe('2♠ by North')
+    expect(wrapper.get('.corner-bottom-left .bl').text()).toBe('Auction')
+    expect(wrapper.get('.corner-bottom-right .br').text()).toBe('Claim')
+    // The corners lie over the panel, outside every seat and the centre.
+    expect(wrapper.find('.seat .corner').exists()).toBe(false)
+    expect(wrapper.find('.centre .corner').exists()).toBe(false)
+
+    const one = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: null, wide: true },
+      slots: { 'bottom-right': () => h('button', 'Claim') },
+    })
+    expect(one.findAll('.corner')).toHaveLength(1)
+    expect(one.find('.corner-bottom-right').exists()).toBe(true)
+    expect(one.get('.bridge-table').classes()).toEqual(expect.arrayContaining(['with-corners', 'table-wide']))
+  })
+
+  test('no corners: nothing laid over the table and no room kept for them', () => {
+    const wrapper = mountTable()
+
+    expect(wrapper.find('.corner').exists()).toBe(false)
+    expect(wrapper.get('.bridge-table').classes()).not.toContain('with-corners')
   })
 
   test('an empty seat is dashed and named', () => {
@@ -170,28 +217,6 @@ describe('BridgeTable plates', () => {
     expect(empty.findAll('.last-call')).toHaveLength(4)
     expect(empty.find('.last-call-chip').exists()).toBe(false)
     expect(mountTable().find('.last-call').exists()).toBe(false)
-  })
-})
-
-describe('BoardTile', () => {
-  test("the board's place in its set, the dealer and the vulnerable sides in red", () => {
-    const wrapper = mount(BoardTile, { props: { board: { dealer: 'W', vulnerable: 'E-W' }, position: 2 } })
-
-    expect(wrapper.get('.tile-number').text()).toBe('2')
-    expect(wrapper.get('.tile-dealer').text()).toBe('DEALER W')
-    expect(wrapper.findAll('.tile-side.vul').map((s) => s.text())).toEqual(['W', 'E'])
-    expect(wrapper.get('.board-tile').attributes('aria-label')).toBe('Board 2, dealer West, vulnerable: E-W')
-
-    const both = mount(BoardTile, { props: { board: { dealer: 'N', vulnerable: 'N-S E-W' } } })
-    expect(both.findAll('.tile-side.vul')).toHaveLength(4)
-  })
-
-  test("outside a set, no number at all: never the board's number in the database", () => {
-    const wrapper = mount(BoardTile, { props: { board: { number: 17, dealer: 'S', vulnerable: '' } as never } })
-
-    expect(wrapper.find('.tile-number').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('17')
-    expect(wrapper.get('.board-tile').attributes('aria-label')).toBe('Dealer South, vulnerable: None')
   })
 })
 

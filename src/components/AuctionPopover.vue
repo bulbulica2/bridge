@@ -1,6 +1,7 @@
 <template>
-  <!-- The auction behind a button in the play page's top-left corner
-       (#165), from the first call to the end of the board: the grid as
+  <!-- The auction behind a button in the table's bottom-left corner on the
+       play page (#165, #171), from the first call to the end of the board,
+       opening upward over the table: the grid as
        AuctionHistory draws it (chips, the vulnerable side's seats red,
        alerts "!", questions "?"), with Ask / Ask in the chat on an
        opponent's call while the board is on. A mouse hovering the button
@@ -32,7 +33,7 @@
       :id="popupId"
       ref="popup"
       class="auction-popup"
-      :style="{ '--nudge': `${nudge}px` }"
+      :style="{ '--nudge': `${nudge}px`, '--drop': `${drop}px` }"
       role="dialog"
       aria-label="Auction"
     >
@@ -84,7 +85,7 @@ const emit = defineEmits<{
   chat: [index: number];
 }>();
 
-const { root, button, popup, open, nudge, hover, toggle } = usePopover();
+const { root, button, popup, open, nudge, drop, hover, toggle } = usePopover();
 const popupId = `auction-${useId()}`;
 </script>
 
@@ -94,23 +95,35 @@ const popupId = `auction-${useId()}`;
   display: inline-flex;
 }
 
-/* As tall as the vulnerability pill beside it. */
+/* A light pill on the table's navy, as small as the vulnerability's. */
 .auction-button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   box-sizing: border-box;
   min-height: 32px;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid var(--bridge-control);
   border-radius: var(--bridge-radius-pill);
   background: var(--bridge-surface);
   color: var(--bridge-ink);
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.auction-button ion-icon {
+  flex: none;
+  font-size: 14px;
+}
+
+/* A narrow table's corner has room for the word alone. */
+@container (max-width: 420px) {
+  .auction-button ion-icon {
+    display: none;
+  }
 }
 
 .auction-button[aria-expanded='true'] {
@@ -123,16 +136,16 @@ const popupId = `auction-${useId()}`;
   outline-offset: 2px;
 }
 
-/* Below the button, over the table; kept clear of the screen's edges. */
+/* Above the button, over the table; kept clear of the screen's edges. */
 .auction-popup {
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 50%;
   z-index: 30;
   box-sizing: border-box;
   width: min(380px, calc(100vw - 16px));
-  padding-top: 6px;
-  transform: translateX(calc(-50% + var(--nudge, 0px)));
+  padding-bottom: 6px;
+  transform: translate(calc(-50% + var(--nudge, 0px)), var(--drop, 0px));
 }
 
 .auction-popup :deep(.auction) {

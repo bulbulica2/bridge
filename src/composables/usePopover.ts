@@ -6,7 +6,8 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 // outside, the button again, or Escape. It stays clear of the screen's
 // edges (`nudge`, in px sideways from under the button's centre); a panel
 // pinned on the right marked `data-right-edge` (the chat beside the table)
-// counts as the right edge.
+// counts as the right edge. One opening upward (a button low on the table)
+// that would cross the screen's top comes down by `drop` px instead.
 //
 // Bind `root` on the element wrapping both button and pop-up (with
 // `hover(true|false, $event)` on its pointerenter/pointerleave), `button` on
@@ -20,6 +21,7 @@ export function usePopover() {
   // Opened by a mouse hovering: leaving closes it. A click pins it open.
   const byHover = ref(false);
   const nudge = ref(0);
+  const drop = ref(0);
   const EDGE = 8;
 
   // Only a mouse hovers: a touch also sends pointerenter/leave around its
@@ -79,6 +81,7 @@ export function usePopover() {
   // Centred on the button, unless that would cross an edge of the screen.
   async function keepOnScreen() {
     nudge.value = 0;
+    drop.value = 0;
     await nextTick();
     const box = popup.value?.getBoundingClientRect();
     if (!box || box.width === 0) {
@@ -89,6 +92,9 @@ export function usePopover() {
       nudge.value = EDGE - box.left;
     } else if (box.right > right) {
       nudge.value = Math.max(right - box.right, EDGE - box.left);
+    }
+    if (box.top < EDGE) {
+      drop.value = EDGE - box.top;
     }
   }
 
@@ -103,5 +109,5 @@ export function usePopover() {
 
   onBeforeUnmount(() => listen(false));
 
-  return { root, button, popup, open, nudge, hover, toggle, close };
+  return { root, button, popup, open, nudge, drop, hover, toggle, close };
 }
