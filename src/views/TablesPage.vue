@@ -20,7 +20,7 @@
           </div>
 
           <!-- Our table, one tap back (a held seat comes back to it). Leaving
-               the table's pages keeps the seat: getting up is Leave, here
+               the game table's page keeps the seat: getting up is Leave, here
                too (#121). -->
           <YourTableHero>
             <template #actions>
@@ -40,7 +40,7 @@
 
           <div v-if="!auth.ban" class="start-cards">
             <!-- Robots fill the other three seats, so one person plays on
-                 their own: their Start, on the table's page, deals. -->
+                 their own: their Start, at the game table, deals. -->
             <section class="lobby-card start-robots" aria-labelledby="start-robots-title">
               <div class="start-head">
                 <h2 id="start-robots-title">Play now with robots</h2>
@@ -308,12 +308,11 @@ async function join(table: Table, seat: Seat) {
     await showToast(errorMessage(e, 'Could not take that seat. Please try again.'), 'danger');
     return;
   }
-  // Taking a seat takes you to the table, like creating one: to the game
-  // when it has a board (the answer says so, the card may be stale), else to
-  // its page. Not awaited, and the seats stay disabled until the page has
-  // gone (onIonViewDidLeave frees them).
-  const path = joined.board_id !== null ? `/tables/${joined.id}/play` : `/tables/${joined.id}`;
-  ionRouter.navigate(path, 'forward', 'push');
+  // Taking a seat takes you to the game table, like creating one (#181):
+  // the board if one is on, else the waiting table with Start. Not awaited,
+  // and the seats stay disabled until the page has gone (onIonViewDidLeave
+  // frees them).
+  ionRouter.navigate(`/tables/${joined.id}/play`, 'forward', 'push');
 }
 
 // Getting up without opening the table: the same confirmation as on its
@@ -357,7 +356,7 @@ function createWithRobots() {
 }
 
 // A named table (the name is optional) for people to join; its time for a
-// set is the backend's default until its manager changes it on its page.
+// set is the backend's default until its manager changes it at the table.
 function createForFriends() {
   return create('friends', { name: name.value.trim() || null, robots: false });
 }
@@ -369,12 +368,12 @@ async function create(kind: CreateKind, payload: CreateTablePayload) {
     const table = await tablesStore.create(payload);
     name.value = '';
     setMinutes.value = DEFAULT_SET_MINUTES;
-    // The creator sits there already: off to the table's page, where Start,
-    // the seats and Seat a player / Add robot are (with robots the table is
-    // full, but nothing is dealt until Start). Not awaited: the page draws
-    // the table the store already holds, so the card has nothing left to
-    // wait for.
-    ionRouter.navigate(`/tables/${table.id}`, 'forward', 'push');
+    // The creator sits there already: straight to the game table (#181),
+    // where Start, the seats and Seat a player / Add robot are (with robots
+    // the table is full, but nothing is dealt until Start). Not awaited: the
+    // page draws the table the store already holds, so the card has nothing
+    // left to wait for.
+    ionRouter.navigate(`/tables/${table.id}/play`, 'forward', 'push');
   } catch (e) {
     createError.value[kind] = errorMessage(e, 'Could not create the table. Please try again.');
   } finally {

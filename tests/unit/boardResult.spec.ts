@@ -839,7 +839,7 @@ describe('TablePlayPage between boards', () => {
     })
   })
 
-  test('a player short: Start on the page, the result with no vote', async () => {
+  test('a player short: Start in the table, the result with no vote', async () => {
     const wrapper = await mountPage(finished(), makeTable(['N', 'E', 'S']))
 
     expect(isOpen(wrapper)).toBe(true)
@@ -847,7 +847,9 @@ describe('TablePlayPage between boards', () => {
     expect(wrapper.find('.vote').exists()).toBe(false)
     const box = wrapper.get('.start-box')
     expect(box.text()).toContain('Waiting for a fourth player, and for North (ann), East (bob) and you to press Start.')
-    expect(box.get('[data-seat="W"]').text()).toBe('Empty · West')
+    // In the table's centre, the empty seat beside it.
+    expect(box.element.closest('.centre')).not.toBeNull()
+    expect(wrapper.get('.bridge-table [data-seat="W"] .seat-empty').text()).toBe('Empty · West')
   })
 
   test('a player replaced after the board: Start, which deals the next one here', async () => {
@@ -872,7 +874,7 @@ describe('TablePlayPage between boards', () => {
     expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
   })
 
-  test('the game table opened before Start shows the same Start box', async () => {
+  test('the game table before Start: the four plates, Start in the centre', async () => {
     const waiting = {
       ...finished(),
       phase: 'waiting',
@@ -892,9 +894,8 @@ describe('TablePlayPage between boards', () => {
     } as Playing
     const wrapper = await mountPage(waiting, { ...makeTable(), board_id: null })
 
-    expect(wrapper.text()).toContain('Waiting for Start')
-    expect(wrapper.get('.start-box').text()).toContain('Ready to play?')
-    expect(wrapper.get('.start-box').findAll('.start-seats li')).toHaveLength(4)
+    expect(wrapper.get('.bridge-table .centre .start-box').text()).toContain('Ready to play?')
+    expect(wrapper.findAll('.bridge-table .plate')).toHaveLength(4)
     expect(isOpen(wrapper)).toBe(false)
   })
 

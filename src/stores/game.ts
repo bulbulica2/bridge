@@ -23,6 +23,7 @@ import type { BoardMessageSentEvent } from '@/services/chat';
 import { leaveUser, listenToUser, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
 import { useChatStore } from '@/stores/chat';
+import { useTablesStore } from '@/stores/tables';
 import {
   answerText,
   emptyBook,
@@ -567,6 +568,8 @@ export const useGameStore = defineStore('game', () => {
       applyCallQuestioned,
       applyBoardMessage,
       applyAuctionAlertsShown,
+      // Our seat taken away (the Start timer): the tables store follows it.
+      (event) => useTablesStore().applyUnseated(event),
     );
   }
 

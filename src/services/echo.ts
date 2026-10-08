@@ -13,7 +13,7 @@ import type {
   DeclarerHandShownEvent,
   HandDealtEvent,
 } from './game';
-import type { BroadcastTable } from './tables';
+import type { BroadcastTable, UnseatedFromTableEvent } from './tables';
 
 // Live updates come over Laravel Reverb, which speaks the Pusher protocol.
 // See bridge_backend docs/AUTH.md (Websocket channels) and API.md (Realtime).
@@ -110,9 +110,10 @@ export function listenToTable(
 // during the auction (anyone's answer, in the play), a question about one of
 // their own calls (`CallQuestioned`), a board chat message they may read
 // (`BoardMessageSent`, never on the table channel, which partner hears too),
-// partner's alerts once the auction is over (`AuctionAlertsShown`), and
+// partner's alerts once the auction is over (`AuctionAlertsShown`),
 // `UserBanned` when an admin bans them (their session is already gone by
-// then).
+// then), and `UnseatedFromTable` when their seat is taken away without them
+// asking (the Start timer ran out, bb#142).
 export function listenToUser(
   userId: number,
   onHandDealt: (event: HandDealtEvent) => void,
@@ -122,6 +123,7 @@ export function listenToUser(
   onCallQuestioned: (event: CallQuestionedEvent) => void,
   onBoardMessage: (event: BoardMessageSentEvent) => void,
   onAlertsShown: (event: AuctionAlertsShownEvent) => void,
+  onUnseated: (event: UnseatedFromTableEvent) => void,
 ) {
   getEcho()
     .private(`App.Models.User.${userId}`)
@@ -131,6 +133,7 @@ export function listenToUser(
     .listen('CallQuestioned', onCallQuestioned)
     .listen('BoardMessageSent', onBoardMessage)
     .listen('AuctionAlertsShown', onAlertsShown)
+    .listen('UnseatedFromTable', onUnseated)
     .listen('UserBanned', onBanned);
 }
 

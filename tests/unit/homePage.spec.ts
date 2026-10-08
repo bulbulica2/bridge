@@ -119,12 +119,12 @@ describe('HomePage.vue', () => {
     expect(pageLinks(wrapper)).toEqual([{ text: 'Back to the table', to: '/tables/7/play' }])
   })
 
-  test("no board yet: back to the table's own page, no partner while the seat is empty", async () => {
+  test('no board yet: back to the game table, where Start is, no partner while the seat is empty', async () => {
     vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(7, { N: 'ana' })])
     const wrapper = await mountLoggedIn()
 
     expect(wrapper.get('.your-table-line').text()).toBe('No set yet · you sit North')
-    expect(pageLinks(wrapper)).toEqual([{ text: 'Back to the table', to: '/tables/7' }])
+    expect(pageLinks(wrapper)).toEqual([{ text: 'Back to the table', to: '/tables/7/play' }])
   })
 
   test('your form and recent boards follow the table lookup', async () => {

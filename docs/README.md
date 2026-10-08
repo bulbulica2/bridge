@@ -33,7 +33,12 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/102-review-on-the-table` (after #180, the board
+> branch `bulbulica2/103-straight-to-the-game-table` (after #181, one
+> page per table: joining or creating a table goes straight to the game
+> table, which is the waiting room before a board, with Start and the
+> Start timer's countdown in its centre, an empty seat's action sheet,
+> Remove in the profile sheet, Leave in the header and the set time
+> behind a manager's gear; after #180, the board
 > review laid out like the play page's table: the vulnerability and the
 > contract with the tricks in its top corners, the auction in its centre
 > and a small double dummy grid bottom right before the opening lead;

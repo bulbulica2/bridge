@@ -6,7 +6,8 @@
        idle, solid while it runs, red under a minute; robots and admins have
        none). The seat on turn is ringed orange, an away seat's plate is red
        with its clock ("away · 0:42", AwaySeatTag), a seat that pressed
-       Start (`ready`) has a green tick and an empty one is dashed. Once a
+       Start (`ready`) has a green tick and an empty one is dashed (a
+       button with `seatable`, the `empty` event). Once a
        board is dealt each seat is striped red when its side is vulnerable
        and green when it is not. During the auction each seat's last call
        sits by its plate (`calls`), an opponent's alerted one with the amber
@@ -132,6 +133,19 @@
             </svg>
           </span>
         </div>
+        <!-- An empty seat, a button where the page offers to fill it
+             (`seatable`: the waiting table's Sit here / Seat a player / Add
+             robot, #181). -->
+        <button
+          v-else-if="seatable"
+          type="button"
+          class="seat-empty seat-empty-button"
+          :aria-label="`Empty seat, ${SEAT_NAMES[seatOn[side]]}`"
+          :disabled="busy"
+          @click="emit('empty', seatOn[side])"
+        >
+          Empty · {{ SEAT_NAMES[seatOn[side]] }}
+        </button>
         <span v-else class="seat-empty">Empty · {{ SEAT_NAMES[seatOn[side]] }}</span>
 
         <!-- The seat's last call in the auction, kept in place (empty) until
@@ -294,6 +308,9 @@ const props = withDefaults(
     wide?: boolean;
     // Room for a larger bottom-right corner (see the comment above).
     bottomRightRoom?: boolean;
+    // Each empty seat is a button (the `empty` event) the page answers with
+    // what may be done with it.
+    seatable?: boolean;
     busy?: boolean;
     sendingId?: number | null;
   }>(),
@@ -319,12 +336,13 @@ const props = withDefaults(
     boardLabel: undefined,
     wide: false,
     bottomRightRoom: false,
+    seatable: false,
     busy: false,
     sendingId: null,
   },
 );
 
-const emit = defineEmits<{ select: [user: PublicUser]; play: [card: Card] }>();
+const emit = defineEmits<{ select: [user: PublicUser]; play: [card: Card]; empty: [seat: Seat] }>();
 
 const SIDES: ScreenSide[] = ['top', 'left', 'right', 'bottom'];
 const CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
@@ -768,6 +786,28 @@ function turnLabel(side: ScreenSide): string {
   color: var(--bridge-action-text);
   font-size: 0.9rem;
   font-weight: 700;
+}
+
+/* An empty seat to fill: the same dashed plate, 44 px tall to tap. */
+.seat-empty-button {
+  min-height: 44px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.seat-empty-button:hover,
+.seat-empty-button:focus-visible {
+  border-style: solid;
+}
+
+.seat-empty-button:focus-visible {
+  outline: 2px solid var(--bridge-amber);
+  outline-offset: 2px;
+}
+
+.seat-empty-button:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 /* The seat's last call, the height of a chip whether it has one or not. */

@@ -231,11 +231,11 @@ describe('YourTableHero', () => {
     expect(over.find('.strip-current').exists()).toBe(false)
   })
 
-  test('no set yet: no strip, the table page', () => {
+  test('no set yet: no strip, the game table', () => {
     const wrapper = mountHero(makeTable(7, { S: 'ana' }))
 
     expect(wrapper.find('.set-strip').exists()).toBe(false)
-    expect(wrapper.getComponent('.your-table-go').props('routerLink')).toBe('/tables/7')
+    expect(wrapper.getComponent('.your-table-go').props('routerLink')).toBe('/tables/7/play')
   })
 
   test('an away seat comes back, its clock counting down', () => {

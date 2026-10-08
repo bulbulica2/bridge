@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/102-review-on-the-table`._
+_Status as of branch `bulbulica2/103-straight-to-the-game-table`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -117,10 +117,8 @@ not the menu.
 **Your table** (#99): while the user holds a seat, the header shows a
 button with the table's name next to the menu button, and the menu lists
 the same entry first. Both come from `src/composables/useYourTable.ts`,
-which reads the tables store's `myTable` and leads to `/tables/:id/play`
-when a board is dealt there (`board_id`) or the seat is away/held (as
-Home's card does), else to `/tables/:id`, the same rule as taking a seat
-on Tables (#67). Its status, most pressing first: **Away** (the seat is
+which reads the tables store's `myTable` and leads to the table's one
+page, the game table `/tables/:id/play`, board or not (#181). Its status, most pressing first: **Away** (the seat is
 held after a Leave mid-set, or marked away), **Your turn**
 (`turnNotice()` on the board the game store holds for that table, or a
 Start the table waits for; "Your turn · 0:42" while your turn clock
@@ -134,19 +132,18 @@ whatever the status says, or with none; "YOUR TABLE" and the name never
 wrap, and a long name (up to 50 characters) ends in "…" with the whole
 name in its `title`. The header's button needs none of this: its name is
 capped at 10em with an ellipsis and its status is the dot. On the page it leads to, the button is marked current and leads
-nowhere; on the table's other page it is highlighted and leads to the
-first. Nothing is shown to a guest, a banned user or somebody not seated.
+nowhere. Nothing is shown to a guest, a banned user or somebody not seated.
 
 `myTable` has to be known on every page, not only after the Tables list
-loaded. Home and Tables load the list, and the table pages open their
+loaded. Home and Tables load the list, and the game table opens its
 table, so those routes carry `meta.findsSeat`. On every other page the
 router's `afterEach` calls the tables store's `findSeat()`, which asks
 `GET /tables` once (nothing while a table held already says where the user
 sits, at most one request at a time, a failure asked again on the next
 page). Its `load()` also follows that table's channel and heartbeat, so
 after a reload on My boards the button keeps up with the table live. The
-detail page calls `findSeat()` too, after opening a table the user may not
-sit at. Logging out empties the store (`clear()`), so the next user starts
+game table calls `findSeat()` too when its board is refused (403: a
+table the user doesn't sit at). Logging out empties the store (`clear()`), so the next user starts
 from nothing.
 
 Dark mode follows the operating system
@@ -239,13 +236,10 @@ cards' own tokens (`--bridge-on-table-good`/`-bad`/`-accent`,
 `--bridge-table-dim`, `--bridge-on-table-faint`, `--bridge-navy-tint`,
 `--bridge-action-line`) have light and Midnight values.
 
-The sheets and the wide table (#163) finish the redesign. Seats off the
-table are **plates** too (`SeatPlate`, `PlayerAvatar`): `StartBox`'s
-four seats (a green tick once a player pressed Start, an empty seat
-dashed orange, **Empty · West**, with a manager's **Seat a player** /
-**Add robot** inside it) and the table page's compass (an empty seat is
-the dashed orange **Sit here · North** button, **Move here · North** when
-you sit there already). `AwayNotice` is the orange-tint banner, the chat
+The sheets and the wide table (#163) finish the redesign. Since #181 the
+seats are only ever drawn on the table itself (an empty one a dashed
+**Empty · West** button); `PlayerAvatar` heads the profile sheet and each
+seat-a-player result. `AwayNotice` is the orange-tint banner, the chat
 has a segmented **Table / Opponents** switch and bubbles (yours on the
 right, navy-tinted), and the profile and seat-a-player sheets show the
 plates' avatar. **The wide table**: on a screen 1100 px wide or more whose
@@ -310,8 +304,8 @@ All routes are flat and lazy loaded, in `src/router/index.ts`:
 | `/password-reset/:token` | `ResetPasswordPage` (choose a new password) | guests only |
 | `/account` | `AccountPage` | logged in |
 | `/tables` | `TablesPage` | logged in |
-| `/tables/:id` | `TableDetailPage` | logged in, not banned |
-| `/tables/:id/play` | `TablePlayPage` | logged in, not banned |
+| `/tables/:id` | redirects to `/tables/:id/play` (the table's old page, #181) | |
+| `/tables/:id/play` | `TablePlayPage`, the game table: the table's one page | logged in, not banned |
 | `/history` | `HistoryPage` | logged in |
 | `/boards/:id/results` | `BoardResultsPage` | logged in |
 | `/sets/:id` | `SetResultsPage` | logged in |
@@ -403,7 +397,7 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 | Store | Holds | Main actions |
 |---|---|---|
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
-| `tables` | `tables` (the list), `currentTable` (the one the detail page shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `replacedFrom` (a set a robot took your seat over in) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `updateSettings` (a manager's time for a set), `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissReplaced`, `clear` (on logout); owns the table channel and the heartbeat |
+| `tables` | `tables` (the list), `currentTable` (the one the game table shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `replacedFrom` (a set a robot took your seat over in) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `updateSettings` (a manager's time for a set), `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissReplaced`, `applyUnseated` (`UnseatedFromTable`), `clear` (on logout); owns the table channel and the heartbeat |
 | `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned` / `AuctionAlertsShown`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
 | `chat` | the chat of the board the play page shows: `tableId`, `playingId`, `messages`, `open` (the panel on show), `keepOpen` (the player's choice beside the table, `bridge.chatOpen`), `about` (the call a message is about), `unread` | `follow` (the play page's board: read, emptied for a new board, read again once finished), `load`, `receive`, `send`, `setOpen`, `setKeepOpen`, `askAbout`, `clear`; see [Board chat](#board-chat) |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, double dummy tables per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadDoubleDummy`, `loadSet`, `loadReview` |
@@ -425,7 +419,7 @@ is never forfeited, and a seat a robot took over counts as an abandon
 (`leaving.abandoned_by_reason` says why).
 
 A table changed by any answer or broadcast is written into both `tables`
-and `currentTable`, so the list and the detail page stay in step. `create`
+and `currentTable`, so the list and the game table stay in step. `create`
 also makes the new table the `currentTable`, so whichever page opens next
 draws it straight away.
 
@@ -435,7 +429,7 @@ so every extra request on the way in delays the one the page needs:
 - `openTable(id)` returns the copy the store already holds when it follows
   that table's channel (the user's own table, after Create, a join or a
   `load`), since `TableUpdated` keeps it current; any other table is read
-  with `loadTable`. The detail and play pages use it on entry; their
+  with `loadTable`. The game table uses it on entry; its
   Refresh (shown only while live updates are off) and pull-to-refresh
   still call `loadTable`.
 - The play page waits only for `GET /tables/{id}/playing` (plus
@@ -444,17 +438,16 @@ so every extra request on the way in delays the one the page needs:
   there: the router reads it, and the card list `PlayingUpdated` needs, in
   the background a second after the first logged-in page shows
   (`prefetchGameLists` in `src/router/index.ts`).
-- Create (with or without robots, #132) closes the modal and moves to the
-  new table's page as soon as `POST /tables` answers; that page draws the
-  table the store already holds (nothing is dealt until Start, #68). The
+- Create (with or without robots, #132) and every seat taken on Tables
+  go straight to the game table (#181) as soon as `POST /tables` (or the
+  seat request) answers; it draws the table the store already holds
+  (nothing is dealt until Start, #68). The
   service seats the creator South (`CREATOR_SEAT`; the backend's default
   is North), since the table is drawn from the viewer's seat at the
   bottom; robots take N, E and W.
 - The Start that deals a board answers with the caller's game state.
   `tables.start` hands it to the game store (`adopt`) before applying the
-  table, so the `board_id` watch on the detail page moves to `/play` with
-  the board already drawn. The play page still reads
-  `GET /tables/{id}/playing` on entry.
+  table, so the game table draws the board at once, with no second read.
 
 ## Services
 
@@ -486,9 +479,9 @@ A few backend rules the stores rely on:
   `can_manage` is taken from that answer). Until an answer for the
   moderator it holds lands, every broadcast asks again, and a failed read
   is retried 3 times, 3 s apart (#117: left alone after three seats were
-  freed in a row, no broadcast may follow). The detail page and the play
-  page's Start box (#117) both show Seat a player and Add robot on each
-  empty seat. Nothing at the
+  freed in a row, no broadcast may follow). At the game table a manager
+  finds Seat a player and Add robot in an empty seat's action sheet, and
+  Remove in a player's profile sheet (#117, #181). Nothing at the
   table moves the others on: within a set the next board comes by itself,
   and **Deal next board** only votes for the player who presses it (#72,
   #98, #174).
@@ -503,9 +496,22 @@ A few backend rules the stores rely on:
   `src/utils/start.ts` holds the hints: `startNeeded()` (does the next
   board wait for Start, given the table and the game state held),
   `isReady()` and `startWaiting()` (the "Waiting for …" line);
-  `StartBox.vue` draws it on the detail and play pages. `tables.start` and
+  `StartBox.vue` draws it in the game table's centre (#181). `tables.start` and
   `cancelStart` skip applying an answer that a `TableUpdated` overtook
   while it was on its way, since two players pressing at once race.
+- **The Start timer** (bb#142, [`API.md`, The Start timer](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md#the-start-timer)):
+  once a full table waits for one person's Start and another person has
+  pressed, that seat carries `start_deadline` (15 s on). `startClock()`
+  and `startClockText()` in `utils/start.ts` count it down from the
+  deadline in `StartBox` ("Press Start · 0:12", red under
+  `START_URGENT_SECONDS` 5, or "Waiting for East · 0:12"). Past it the
+  backend frees the seat: `UnseatedFromTable` on the user channel (below)
+  or the `TableUpdated` freeing a seat that had the deadline, whichever
+  comes first, toasts `START_TIMEOUT_NOTICE` and sends the page to
+  `/tables`. A manager changing `set_minutes` takes every Start back: a
+  `TableUpdated` that clears our own `ready` while `set_minutes` changed
+  toasts `startRevokedText` ("The set time changed to 8 min: press Start
+  again.").
 - **Boards come in sets of four** (#73, bb#75). Start deals a set's first
   board; the other three are dealt by themselves (#98, bb#97): a finished
   board carries `next_board_at`, 15 s after it ended
@@ -574,8 +580,7 @@ A few backend rules the stores rely on:
   manager, or anyone for a robot at an unattended table, never on your own
   seat); `whoIsLeft()` / `leaveNote()` in `utils/seatMove.ts` word what
   leaving does, and `removeCost()` / `confirmRemove()` there word and ask
-  before a Remove (the detail page's compass and the play page's Start
-  box, #121).
+  before a Remove (the game table's profile sheet, #121, #181).
 - **Admins' seats** (#77, bb#78): `is_admin` is public on every seat's
   user. Only another admin may remove an admin, never the moderator, so
   `canRemove()` gives an admin's seat Remove only when the viewer is an
@@ -660,7 +665,7 @@ doesn't send the XSRF header Sanctum wants.
 | Channel | Who owns it | Events |
 |---|---|---|
 | `private-table.{id}` | `tables` store, following your seat | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state in its compact shape, expanded by the `game` store) |
-| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call; in the play, anyone's answer), `CallQuestioned` (an opponent asks what your call means), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read: handed to the `chat` store), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
+| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call; in the play, anyone's answer), `CallQuestioned` (an opponent asks what your call means), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read: handed to the `chat` store), `UnseatedFromTable` (your seat was freed without you asking, the Start timer: handed to `tables.applyUnseated`), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
 
 - The table channel only admits players seated there, and the server never
   ends a subscription. So the `tables` store subscribes and unsubscribes
@@ -668,8 +673,16 @@ doesn't send the XSRF header Sanctum wants.
   load.
 - A `TableUpdated` that no longer seats you (and wasn't your own request)
   means a manager removed you: a toast, the channel is dropped, and the
-  detail page goes back to `/tables` (to the set's results when a robot
-  took your seat over, see Away mid-set below).
+  game table goes back to `/tables` (to the set's results when a robot
+  took your seat over, see Away mid-set below; the Start timer's own
+  words when your seat had its `start_deadline`).
+- `UnseatedFromTable` `{table_id, reason, kibitzing}` (bb#142) comes on
+  your own channel when the backend frees your seat by itself. For
+  `start_timeout`, if the store still follows that table (the
+  `TableUpdated` hasn't come yet), `applyUnseated` drops your seat from
+  its copies, leaves the channel, sets `kickedFrom` and toasts; the
+  `TableUpdated` after it is then ignored. `kibitzing` (watching the table
+  instead) waits for the kibitzers card (#182) and is treated as false.
 - Mid-set, `TableUpdated` also says who is away (`away_since` per seat),
   who is back, and a robot taking a seat over (the seat's new `user`,
   `set.replaced`).
@@ -703,7 +716,7 @@ doesn't send the XSRF header Sanctum wants.
   pull-to-refresh. A board's and a set's results have no channel either
   and keep their Refresh button.
 
-**Live or not** (#76). The detail and play pages show a **Refresh**
+**Live or not** (#76). The game table shows a **Refresh**
 button only while live updates are off. `echo.ts` writes what the socket
 says into `src/services/liveStatus.ts`: Echo's connection status
 (`connecting`, `connected`, `failed`, `disconnected`) and the table whose
@@ -715,9 +728,8 @@ subscribed (`isLive(id)`). `useLiveStatus(tableId)` turns that into
 `offline`, true only after 5 s of not live (`OFFLINE_GRACE_MS`), so the
 first connection or a short reconnect doesn't flash the button.
 `OfflineRefresh.vue` is the note ("Live updates are off. Refresh to see
-the latest.") and the button, under each page's content. A table you
-don't sit at has no channel, so its detail page offers Refresh after
-those 5 s too. Pull-to-refresh stays on both pages whatever the status.
+the latest.") and the button, under the page's content. Pull-to-refresh
+stays whatever the status.
 Known limit: the client can't see the backend's queue worker. With the
 socket up but `queue:work` stopped no event arrives, yet the page counts
 as live and hides the button; pull-to-refresh or a browser reload still
@@ -798,7 +810,7 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   `TableUpdated`), and gives the seat its own clock, `replace_at`
   (`away_since` + 2 minutes, bb#138): it runs whoever's turn it is, every
   away seat's at once, so players who went together are replaced
-  together. `BridgeTable` and the detail page's compass tag every away
+  together. `BridgeTable` tags every away
   seat with it (`AwaySeatTag`: "away · 0:42", red in the last 15 s,
   "replacing…" at 0 until the `TableUpdated` with the robot lands; a
   plain "away" for an admin, who has no `replace_at`). The tags come from
@@ -809,12 +821,12 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   table waits for them.").
 - **Leave mid-set** answers 202 and *holds* the seat for 2 minutes: you
   stay seated, away, with your seat's `replace_at`. Away from the table
-  (detail page, Tables, Home) `AwayNotice held` counts it down: "You're
+  (Tables, Home; at the table until the mark is taken back) `AwayNotice held` counts it down: "You're
   away from Friday club: a robot takes your seat in 0:42 unless you come
   back." The store then sets `heldTableId` and stops beating (a beat would
   bring you back). It also holds a seat it finds away on a fresh load (the
-  tab was closed). Opening the play page, or **Come back** on the detail
-  page, calls `comeBack(id)`: it beats at once and refetches the table.
+  tab was closed). Opening the game table calls `comeBack(id)`: it beats
+  at once and refetches the table.
 - **Back in time**: a `TableUpdated` (or refetch) that clears your own
   `away_since` toasts **Welcome back. The set goes on.** and reloads the
   board. If the backend marks you away while this client still beats (a
@@ -839,7 +851,7 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   each human also has a **time bank for the whole set**, like a chess
   clock: the table's `set_minutes` (8, 12, 16 or 20, 16 by default),
   picked in the create-table form (`POST /tables`) and changed by a
-  manager between sets on the table's page (`PATCH /tables/{id}`, the
+  manager between sets from the game table's gear (`PATCH /tables/{id}`, the
   tables store's `updateSettings`; a 409 mid-set is toasted). A set copies
   it as `set.minutes`; `set.time_left` holds each seat's seconds left as
   of the game state's `turn_started_at` (null for a robot or an admin).
@@ -874,13 +886,13 @@ arrives, and the app falls back to what each request returns.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | Daylight's navy panel (#160) with the four seats, rotated so **you are always at the bottom**, partner and you across its width, the opponents left and right. Each seat is a **plate**: avatar (two initials; a robot's icon, `avatar-robot`), name (opens the profile sheet), seat, the `AdminBadge`, and each human's time for the set as a pill (`banks`: grey idle, white while it runs, red under a minute, none for a robot or an admin). The seat on turn is ringed orange, an away seat's plate is red, a seat that pressed Start gets a green tick (`ready`, the play page's seats while Start is awaited), an empty seat is dashed ("Empty · North"); the plate's top edge is red/green for vulnerability. During the auction each seat's **last call** sits beside its plate as a chip (`calls`), an opponent's alerted one ringed amber with "!" (partner's never during the auction); whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`); the dealer's plate has a **D** (`aria-label` "dealer"); the centre's first line while it shows the board is `boardLabel` (the play page's "Board 2 of 4", none outside a set, #165; left out, "Board 7"); with `wide` (#163) the wide screen's layout; four corner slots, `top-left`, `top-right`, `bottom-left`, `bottom-right` (#171), laid over the panel's corners at every width without taking a row's height, partner's and your plates keeping them clear; with `bottomRightRoom` (the review's double dummy grid, #180) your whole seat, hand included, keeps the larger bottom-right corner's width clear on both sides, and a table under 340 px gives that corner a row of its own under your seat |
+| `BridgeTable` | Daylight's navy panel (#160) with the four seats, rotated so **you are always at the bottom**, partner and you across its width, the opponents left and right. Each seat is a **plate**: avatar (two initials; a robot's icon, `avatar-robot`), name (opens the profile sheet), seat, the `AdminBadge`, and each human's time for the set as a pill (`banks`: grey idle, white while it runs, red under a minute, none for a robot or an admin). The seat on turn is ringed orange, an away seat's plate is red, a seat that pressed Start gets a green tick (`ready`, the play page's seats while Start is awaited), an empty seat is dashed ("Empty · North"; with `seatable` a button emitting `empty` with its seat, the game table's action sheet, #181); the plate's top edge is red/green for vulnerability. During the auction each seat's **last call** sits beside its plate as a chip (`calls`), an opponent's alerted one ringed amber with "!" (partner's never during the auction); whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`); the dealer's plate has a **D** (`aria-label` "dealer"); the centre's first line while it shows the board is `boardLabel` (the play page's "Board 2 of 4", none outside a set, #165; left out, "Board 7"); with `wide` (#163) the wide screen's layout; four corner slots, `top-left`, `top-right`, `bottom-left`, `bottom-right` (#171), laid over the panel's corners at every width without taking a row's height, partner's and your plates keeping them clear; with `bottomRightRoom` (the review's double dummy grid, #180) your whole seat, hand included, keeps the larger bottom-right corner's width clear on both sides, and a table under 340 px gives that corner a row of its own under your seat |
 | `VulnerabilityLabel` | who is vulnerable in words (`vulnerabilityText`), Daylight's pill: green **Nobody vulnerable**, else red with a dot, **Vul: E-W** for the other side, **Vulnerable: N-S (you)** for yours, **Both (you too)**; on the board results page (#151, #160), and `compact` (28 px, smaller words that may wrap, no dot) in the play page's and `BoardReview`'s top-left table corner (#171, #180) |
 | `AuctionPopover` | the play page's **Auction** button in the table's bottom-left corner (#165, #171), from the first call to the end of the board: the `AuctionHistory` grid in a pop-up opening upward (`usePopover`: a mouse hovering opens it, a tap toggles it, a tap outside or Escape closes it), passing on `ask` / `explain` / `chat`, so Ask and Ask in the chat work there while the board is on |
 | `ClaimButton` | the play page's **Claim** in the table's bottom-right corner (#171): a light 36 px button with a 44 px tap area, `claim` on a tap, `disabled` while a card or a claim is in flight; `locked` after a refused claim, it reads **Claim · locked** in grey (`aria-disabled`) and a tap or a hover opens a small pop-up above it with `CLAIM_LOCKED_TEXT` (`usePopover`), always in the DOM as the button's `aria-describedby` |
-| `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
-| `AwayNotice` | Daylight's orange-tint banner (#163): one line while others are away mid-set, with no countdown (the seats' tags have it): "Away players are replaced by a robot when their clock runs out." (only admins away: the table waits for them); with `held`, your own held seat counting down (detail page, Tables, Home) |
-| `AwaySeatTag` | an away seat's tag: "away · 0:42" to its `replace_at`, red in the last 15 s, "replacing…" at 0, a plain "away" for an admin (`BridgeTable`, the detail page's compass) |
+| `OfflineRefresh` | the note and **Refresh** at the bottom of the play page, only after live updates have been off for 5 s (`useLiveStatus`) |
+| `AwayNotice` | Daylight's orange-tint banner (#163): one line while others are away mid-set, with no countdown (the seats' tags have it): "Away players are replaced by a robot when their clock runs out." (only admins away: the table waits for them); with `held`, your own held seat counting down (the play page, Tables, Home) |
+| `AwaySeatTag` | an away seat's tag: "away · 0:42" to its `replace_at`, red in the last 15 s, "replacing…" at 0, a plain "away" for an admin (`BridgeTable`) |
 | `HandView` + `PlayingCard` | your hand, always ♥ ♣ ♦ ♠ (or the suits in `order`). A card face is plain white with a thin border, a big rank over its suit in the top-left corner, no pips (#160). Playable cards become buttons, raised 14 px and ringed orange (amber on the navy table, `--playable-ring`), the rest dim; a forced card (`forcedId`) stands raised with a pulsing amber halo; each card shows at least 44 px of itself, the part a tap reaches, and the hand keeps the height it had as dealt while its cards go (`useSteadyHeight`); see [Card size](#card-size) |
 | `BiddingBox` | on your turn during the auction, **two taps plus confirm** (#160): a level (1–7), then a strain (♣ ♦ ♥ ♠ NT), and only the full-width orange **Bid 2♥** under them sends the call; Pass, X and XX preview as **Pass** / **Double** / **Redouble** and need the confirm too. A level with no legal strain is disabled, and so is a strain too low at the picked level (`isLegalCall`, a hint). The pick resets on a new state and once a call settles (taken or refused). The **Alert** button alerts the next call and opens its explanation above the rows (both owned by the page) |
 | `AuctionHistory` + `AuctionCallCell` + `CallLabel` | the calls so far, four columns rotated like the table, as chips (`CallLabel`'s `chip`: grey bids, green Pass, red X, blue XX); the vulnerable side's seat headers red, the call awaited a "?" ringed orange; an alerted call ringed amber with a "!", one asked about ringed blue with a "?", its explanation in a dark pop-up ("East alerted 2♦", `usePopover`), and with `live` an **Ask** and **Ask in the chat** on the opponents' calls and an **Answer** on yours when asked |
@@ -898,11 +910,12 @@ arrives, and the app falls back to what each request returns.
 | `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the results page, or a note while it is being solved; `compact` (#180) is the grid alone, small, on a white card, no title, note or legend, and nothing at all until it is `ready`: the review's bottom-right table corner; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`), in the same navy card as a board's result: who won from your side, whom a robot replaced and why ("you" for the viewer it replaced), each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score), then each human's time used of their time for the set |
-| `SetMinutesPicker` | the time for a set, 8 / 12 / 16 / 20 minutes, as a four-way segmented control (an `ion-segment`, `v-model`, `label`): the lobby's **Play now with robots** and a manager on the table's page |
-| `StartBox` | before a board, a white card: **Start**, or **Waiting for the others…** with **Cancel**, and what the board still waits for; with `showSeats`, the four seats as `SeatPlate`s, two by two, each with its green tick once pressed (the detail page ticks its compass instead), an empty one dashed orange (**Empty · West**), plus, with `manage`, **Seat a player** / **Add robot** inside each empty seat (`seatPlayer` / `addRobot` events; the play page runs them, #117), **Remove** on each seat in `removable` (`remove` event) and, with `canLeave`, **Leave the table** (`leave` event): the play page's way off the seat between sets (#121) |
-| `SeatPlate` + `PlayerAvatar` | a seated player off the table in the table's plate look (#163): the avatar (two initials, a robot's icon; red while away), the name (a button to the profile with `selectable`), "North · you" / "· robot" / "· ready", the `AdminBadge`, a green tick once they pressed Start, a red plate with **away · 0:42** while away. `StartBox` and the table page's compass use it; `PlayerAvatar` alone heads the profile sheet and each seat-a-player result |
+| `SetMinutesPicker` | the time for a set, 8 / 12 / 16 / 20 minutes, as a four-way segmented control (an `ion-segment`, `v-model`, `label`): the lobby's **Play now with robots** and `TableSettingsDialog` |
+| `TableSettingsDialog` | the game table's settings (#181): a small centred `ion-modal` (`settings-dialog`) with **Table settings**, an X, `SetMinutesPicker` (`minutes`, `busy`, `pickerKey` to put it back after a refusal) and a note that a change takes every Start back; `change` / `close` events, the page sends `tables.updateSettings()`. Opened by a manager's gear in the table's top-right corner while no set runs; the others read the time there ("16 min") |
+| `StartBox` | the game table's centre before a board (#181), on the navy: **Ready to play?** / **Waiting for the others…**, what the board still waits for (`startWaiting`), the orange **Start** or **Cancel**, and while a seat has `start_deadline` the Start timer counting down (`startClock`: "Press Start · 0:12" orange, red under 5 s; "Waiting for East · 0:12"); `start` / `cancel` events. The seats and their ticks are the table's own plates |
+| `PlayerAvatar` | two initials or a robot's icon in a circle: heads the profile sheet and each seat-a-player result |
 | `RobotBadge` | the "robot" mark next to a robot's name (the profile sheet; at the table and on the plates the robot icon says it, in the lobby's compass the blue seat) |
-| `AdminBadge` | the amber **ADMIN** tag next to an admin's name, on every plate (the table's, `SeatPlate`), the profile sheet and the User profile page |
+| `AdminBadge` | the amber **ADMIN** tag next to an admin's name, on every plate at the table, the profile sheet and the User profile page |
 
 The lobby (Tables and Home, #162) has its own pieces:
 
@@ -1236,9 +1249,9 @@ deal (all four hands). Its rules, all in `TablePlayPage`:
 - `resultVote` (`!showStart && !endedSet`): the countdown and **Deal next
   board** only while the same four go on to the set's next board. After
   the set's last board it shows `endedSet` with no countdown and no vote,
-  and `StartBox` stays on the page.
-- Between boards, its **Leave the table** is the play page's way off the
-  seat (`leave()`, as `StartBox`'s Leave once a set is over).
+  and `StartBox` is in the table's centre.
+- Between boards, its **Leave the table** is a second way off the seat
+  (`leave()`, as the header's **Leave**, #181).
 
 ### Reviewing at the table
 

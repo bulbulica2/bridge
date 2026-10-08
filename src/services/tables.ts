@@ -31,7 +31,22 @@ export interface TableSeat {
   // whoever's turn it is, every away seat's at once (bb#138). Null when they
   // are here, and for an admin away, whom the table waits for.
   replace_at: string | null;
+  // The Start timer (bb#142): when this seat is freed unless its player
+  // presses Start (ISO 8601). Set on the last human a full table waits for
+  // once another human has pressed; null otherwise. See bridge_backend
+  // docs/API.md, The Start timer, and startClock in utils/start.
+  start_deadline: string | null;
   user: PublicUser;
+}
+
+// `UnseatedFromTable` on the user's own channel: we were sent away from a
+// table without asking (bridge_backend docs/API.md, Event UnseatedFromTable).
+// `start_timeout`: the Start timer ran out on our seat. `kibitzing`: we now
+// watch the table instead (the kibitzers, #182); until then it is ignored.
+export interface UnseatedFromTableEvent {
+  table_id: number;
+  reason: 'start_timeout' | 'kibitzers_off';
+  kibitzing: boolean;
 }
 
 // A table as `TableUpdated` broadcasts it: every field of the HTTP payload

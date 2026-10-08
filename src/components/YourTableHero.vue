@@ -1,8 +1,8 @@
 <template>
   <!-- The table the user sits at, on the lobby's navy hero card (Tables and
        Home): its name, "Set 3 · Board 2 of 4 · you sit South with radu",
-       the set's boards so far, and one orange way back (the game once a
-       board is dealt, else the table's page: useYourTable). A seat held for
+       the set's boards so far, and one orange way back to the game table
+       (useYourTable). A seat held for
        us (we left mid-set, or were marked away) says so, counting down, and
        the button comes back to it. The page may add actions (`actions`
        slot: the Tables page's Leave). Nothing for a guest, a banned user or

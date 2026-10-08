@@ -143,13 +143,13 @@ describe('the header\'s "Your table"', () => {
     expect(shortcut(wrapper)).toBeUndefined()
   })
 
-  test('with no board, it leads to the table and shows no status', async () => {
+  test('with no board, it leads to the game table and shows no status', async () => {
     seatAt(makeTable(7, full))
     const wrapper = await mountHeader('/history')
 
     const button = shortcut(wrapper)!
     expect(button.text()).toContain('Table 7')
-    expect(button.props('routerLink')).toBe('/tables/7')
+    expect(button.props('routerLink')).toBe('/tables/7/play')
     expect(button.attributes('aria-label')).toBe('Your table: Table 7')
     expect(button.attributes('aria-current')).toBeUndefined()
     expect(button.find('.status-dot').exists()).toBe(false)
@@ -180,7 +180,7 @@ describe('the header\'s "Your table"', () => {
 
     tables.tables = [makeTable(7, full)]
     await nextTick()
-    expect(shortcut(wrapper)!.props('routerLink')).toBe('/tables/7')
+    expect(shortcut(wrapper)!.props('routerLink')).toBe('/tables/7/play')
 
     tables.tables = [makeTable(7, full, { board_id: 3 })]
     await nextTick()
@@ -283,19 +283,9 @@ describe('the header\'s "Your table"', () => {
     expect(button.props('fill')).toBe('solid')
   })
 
-  test('on the table\'s other page it shows as current but still leads to the game', async () => {
-    seatAt(makeTable(7, full, { board_id: 3 }))
-    const wrapper = await mountHeader('/tables/7')
-
-    const button = shortcut(wrapper)!
-    expect(button.attributes('aria-current')).toBeUndefined()
-    expect(button.props('routerLink')).toBe('/tables/7/play')
-    expect(button.props('fill')).toBe('solid')
-  })
-
   test('on another table\'s page it is a plain link', async () => {
     seatAt(makeTable(7, full))
-    const wrapper = await mountHeader('/tables/2')
+    const wrapper = await mountHeader('/tables/2/play')
 
     expect(shortcut(wrapper)!.props('fill')).toBe('outline')
   })
@@ -528,7 +518,7 @@ describe('the menu', () => {
 
   test('marks "Your table" on its pages', async () => {
     seatAt(makeTable(7, full))
-    const wrapper = await mountMenu('/tables/7')
+    const wrapper = await mountMenu('/tables/7/play')
 
     const entry = wrapper.findAllComponents(IonItem)[0]
     expect(entry.attributes('aria-current')).toBe('page')

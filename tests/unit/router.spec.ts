@@ -20,7 +20,6 @@ vi.mock('@/views/LoginPage.vue', () => ({ default: {} }))
 vi.mock('@/views/PlayingReviewPage.vue', () => ({ default: {} }))
 vi.mock('@/views/ResetPasswordPage.vue', () => ({ default: {} }))
 vi.mock('@/views/SetResultsPage.vue', () => ({ default: {} }))
-vi.mock('@/views/TableDetailPage.vue', () => ({ default: {} }))
 vi.mock('@/views/TablePlayPage.vue', () => ({ default: {} }))
 vi.mock('@/views/TablesPage.vue', () => ({ default: {} }))
 vi.mock('@/views/UserProfilePage.vue', () => ({ default: {} }))
@@ -76,6 +75,14 @@ describe('router guard', () => {
     await router.push('/')
 
     expect(router.currentRoute.value.path).toBe('/home')
+  })
+
+  test("a table's old page goes to its game table (#181), with the game table's meta", async () => {
+    asAna()
+    await router.push('/tables/7?from=bookmark')
+
+    expect(router.currentRoute.value.path).toBe('/tables/7/play')
+    expect(router.currentRoute.value.meta).toEqual({ requiresAuth: true, notBanned: true, findsSeat: true })
   })
 
   test('sends a guest from a requiresAuth page to /login', async () => {
