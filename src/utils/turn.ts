@@ -5,9 +5,9 @@ import { handToPlay } from '@/utils/play';
 import { isReady } from '@/utils/start';
 
 // What the game waits for the user to do, if anything: a call, a card (from
-// whichever hand they play), an answer to a claim or their Start. The play
-// page's review modal shows it, so looking back at a board never holds the
-// table up unnoticed. A finished board waits for nobody: the set's next one
+// whichever hand they play), an answer to a claim or their Start. Your
+// table's button and menu entry (src/composables/useYourTable.ts) turn
+// orange on it, wherever the user is. A finished board waits for nobody: the set's next one
 // is dealt by itself (bb#97). `startShown` is the page's
 // StartBox in place of the result dialog's vote (src/utils/start.ts
 // startNeeded).

@@ -2,8 +2,8 @@
   <!-- The play page's look back at the table's finished boards, without
        leaving the table: the same review and export as /playings/:id, with
        a switcher between the running set's boards. The game goes on
-       underneath; when it waits for the user, `notice` says so with a way
-       back. The parent owns whether it is open. -->
+       underneath (the play page's turn line says when it waits for us,
+       #211). The parent owns whether it is open. -->
   <ion-modal :is-open="open" class="board-review-modal" @did-dismiss="emit('close')">
     <template v-if="open">
       <ion-header>
@@ -20,15 +20,6 @@
               <ion-icon slot="icon-only" :icon="shareOutline" />
             </ion-button>
             <ion-button class="close-review" @click="emit('close')">Close</ion-button>
-          </ion-buttons>
-        </ion-toolbar>
-        <!-- Our turn at the table: said here, never by closing the review. -->
-        <ion-toolbar v-if="notice" color="warning" class="turn-notice">
-          <p class="turn-text" role="status">{{ notice }}</p>
-          <ion-buttons slot="end">
-            <ion-button class="back-to-table" fill="solid" @click="emit('close')">
-              To the table
-            </ion-button>
           </ion-buttons>
         </ion-toolbar>
       </ion-header>
@@ -118,17 +109,12 @@ import { seatOfUser } from '@/utils/result';
 import type { ReviewChoice } from '@/utils/review';
 import { boardInSetText } from '@/utils/sets';
 
-const props = withDefaults(
-  defineProps<{
-    open: boolean;
-    // The boards to switch between, oldest first (src/utils/review.ts
-    // reviewChoices); it opens on the last.
-    choices: ReviewChoice[];
-    // What the game waits for us to do (src/utils/turn.ts), if anything.
-    notice?: string | null;
-  }>(),
-  { notice: null },
-);
+const props = defineProps<{
+  open: boolean;
+  // The boards to switch between, oldest first (src/utils/review.ts
+  // reviewChoices); it opens on the last.
+  choices: ReviewChoice[];
+}>();
 
 const emit = defineEmits<{ close: [] }>();
 
@@ -254,12 +240,6 @@ ion-modal.board-review-modal {
 .review {
   max-width: 832px;
   margin: 0 auto;
-}
-
-.turn-text {
-  margin: 0;
-  padding: 0 12px;
-  font-weight: 700;
 }
 
 .board-switch {

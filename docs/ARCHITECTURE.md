@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/116-hcp-with-robots`._
+_Status as of branch `bulbulica2/118-no-turn-bar-in-review`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -1390,10 +1390,10 @@ Each choice (`ReviewChoice`) carries the board's place in its set,
 `playing.set.board`, a history entry's `set.board`; null without a set,
 #189): the segments read "Board 1", "Board 2" ("Board" without one) and
 the title "Board 2 review" ("Board review"), never the board's number.
-Each board loads through `history.loadReview()`, cached. When the game
-waits for you (a call, a card, an answer to a claim or your Start:
-`turnNotice()` in `src/utils/turn.ts`), a banner in the modal says so with
-**To the table**, which closes it; nothing closes it by force. While it is
+Each board loads through `history.loadReview()`, cached. Its header holds
+only the title, Export and Close (#211): when the game waits for you, the
+play page's turn line, the Your table button and the tab title say so,
+and nothing closes the modal by force. While it is
 open the forced card doesn't play itself, and leaving the view closes it
 with its export sheet and any printout.
 

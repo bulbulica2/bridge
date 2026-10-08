@@ -248,11 +248,11 @@ describe('the review modal at the table', () => {
     expect(modal(wrapper).props('choices')).toEqual([{ playingId: 42, position: null }])
     expect(historyService.getPlayingReview).toHaveBeenCalledWith(42)
     expect(wrapper.find('.board-review').exists()).toBe(true)
-    // The next board comes by itself: nothing waits for us meanwhile.
-    expect(wrapper.find('.turn-text').exists()).toBe(false)
+    // No turn bar in the review, whatever the table waits for (#211).
+    expect(wrapper.find('.turn-notice').exists()).toBe(false)
   })
 
-  test('while the next board is bid, the last one is still there, and our turn shows', async () => {
+  test('while the next board is bid, the last one is still there, and no turn bar says our turn', async () => {
     const wrapper = await mountPage(finished())
     const game = useGameStore()
 
@@ -263,15 +263,46 @@ describe('the review modal at the table', () => {
     expect(modal(wrapper).props('choices')).toEqual([{ playingId: 42, position: null }])
     expect(wrapper.find('.turn-notice').exists()).toBe(false)
 
-    // West passes: our call. The modal says so and stays open.
+    // West passes: our call. The modal stays open, with no bar about it
+    // (#211): the turn line, Your table and the tab title tell it.
     game.applyPlayingUpdate(5, { ...auction(), auction: [{ seat: 'W', bid: pass }] })
     await flushPromises()
     expect(modal(wrapper).props('open')).toBe(true)
-    expect(wrapper.get('.turn-text').text()).toBe('Your turn to bid')
+    expect(wrapper.find('.turn-notice').exists()).toBe(false)
+    expect(wrapper.find('.back-to-table').exists()).toBe(false)
 
     await wrapper.get('.close-review').trigger('click')
     expect(modal(wrapper).props('open')).toBe(false)
     expect(wrapper.findComponent({ name: 'BiddingBox' }).exists()).toBe(true)
+  })
+
+  test('a claim to answer while the review is open: still no turn bar, Close is the way back', async () => {
+    const wrapper = await mountPage(finished())
+    const contract = { bid: fourSpades, doubled: 0 as const, declarer: 'W' as Seat, dummy: 'E' as Seat }
+    useGameStore().applyPlayingUpdate(
+      5,
+      auction({
+        phase: 'play',
+        turn: 'N',
+        acting_user_id: 1,
+        contract,
+        tricks: [],
+        current_trick: [],
+        tricks_won: { ns: 0, ew: 0 },
+        dummy_hand: cards('HA'),
+        claim: { seat: 'W', tricks: 13, hand: cards('SA'), accepted: [], expires_at: null },
+      }),
+    )
+    await flushPromises()
+    await openReview(wrapper)
+
+    expect(modal(wrapper).props('open')).toBe(true)
+    expect(modal(wrapper).attributes('notice')).toBeUndefined()
+    expect(wrapper.find('.turn-notice').exists()).toBe(false)
+    expect(wrapper.find('.back-to-table').exists()).toBe(false)
+
+    await wrapper.get('.close-review').trigger('click')
+    expect(modal(wrapper).props('open')).toBe(false)
   })
 
   test("switches between the running set's finished boards", async () => {
@@ -398,13 +429,13 @@ describe('the review modal at the table', () => {
 
     await openReview(wrapper)
     expect(wrapper.find('.forced').exists()).toBe(false)
-    expect(wrapper.get('.turn-text').text()).toBe('Your turn to play')
+    expect(wrapper.find('.turn-notice').exists()).toBe(false)
     vi.advanceTimersByTime(10_000)
     await flushPromises()
     expect(gameService.playCard).not.toHaveBeenCalled()
 
     // Back at the table, the countdown starts again.
-    await wrapper.get('.back-to-table').trigger('click')
+    await wrapper.get('.close-review').trigger('click')
     await flushPromises()
     expect(wrapper.find('.forced').exists()).toBe(true)
     vi.advanceTimersByTime(3000)

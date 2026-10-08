@@ -1123,9 +1123,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   shown choice, else the review's `set`, else "Board review"), opening on
   the last; each via `history.loadReview`. On entry
   `findReviewable()` reads `GET /sets/{id}` mid-set and, if still none and
-  past set 1 board 1, `loadHistory(null)`. `turnNotice()`
-  (`src/utils/turn.ts`: bid, play, answer a claim, Next, Start) shows as a
-  banner in the modal with "To the table" (closes it). `reviewOpen` nulls
+  past set 1 board 1, `loadHistory(null)`. No turn bar in the modal
+  (#211: its header is the title, Export and Close; the turn line, Your
+  table and the tab title say when the table waits for us; `turnNotice()`
+  in `src/utils/turn.ts` stays for `useYourTable`). `reviewOpen` nulls
   `useForcedPlay`'s key; `onIonViewWillLeave` and entering another table
   close it.
 - **Double dummy** (#119, bb#114, backend `docs/API.md`

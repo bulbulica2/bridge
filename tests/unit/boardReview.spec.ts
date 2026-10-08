@@ -641,18 +641,22 @@ describe('BoardReviewModal', () => {
     wrapper.unmount()
   })
 
-  test('our turn shows in the modal, with a way back to the table', async () => {
+  test('its header is the title, Export and Close: no turn bar, no To the table (#211)', async () => {
     answer(review(42, 7))
-    const wrapper = mountModal({ notice: null })
+    const wrapper = mountModal()
     await flushPromises()
+
+    expect(wrapper.findAll('ion-header ion-toolbar')).toHaveLength(1)
+    expect(wrapper.findAll('ion-header ion-button').map((b) => b.classes())).toEqual([
+      expect.arrayContaining(['export-board']),
+      expect.arrayContaining(['close-review']),
+    ])
     expect(wrapper.find('.turn-notice').exists()).toBe(false)
+    expect(wrapper.find('.turn-text').exists()).toBe(false)
+    expect(wrapper.find('.back-to-table').exists()).toBe(false)
 
-    await wrapper.setProps({ notice: 'Your turn to bid' })
-    expect(wrapper.get('.turn-text').text()).toBe('Your turn to bid')
-
-    await wrapper.get('.back-to-table').trigger('click')
     await wrapper.get('.close-review').trigger('click')
-    expect(wrapper.emitted('close')).toHaveLength(2)
+    expect(wrapper.emitted('close')).toHaveLength(1)
     wrapper.unmount()
   })
 
