@@ -209,11 +209,36 @@ async function load() {
 </script>
 
 <style scoped>
-/* Full height on a wide screen too: the table, the stepper and the auction
-   need the room. */
+/* A dialog, not a sheet (#187): centred, 5 % of the screen free above and
+   below at every size (Ionic's own full-screen phone modal and 600 px
+   tablet one both overridden), corners, shadow and backdrop as the result
+   and claim dialogs'. The header stays put, ion-content scrolls. */
 ion-modal.board-review-modal {
-  --height: 100%;
+  --height: 90vh;
   --width: min(100%, 880px);
+  --border-radius: 16px;
+  --box-shadow: 0 12px 40px var(--bridge-shadow-strong);
+  /* Ionic shows no backdrop behind a phone's (full-screen) modal. */
+  --backdrop-opacity: var(--ion-backdrop-opacity, 0.4);
+  /* Off the screen's top and bottom edges, as Ionic's tablet dialog is:
+     no status-bar or home-bar padding inside. */
+  --ion-safe-area-top: 0px;
+  --ion-safe-area-bottom: 0px;
+}
+
+/* A custom property takes any value, so a second declaration is no
+   fallback: only a browser that knows dvh gets it. */
+@supports (height: 1dvh) {
+  ion-modal.board-review-modal {
+    --height: 90dvh;
+  }
+}
+
+/* Below Ionic's tablet size the backdrop shows on the sides too. */
+@media (max-width: 767.98px) {
+  ion-modal.board-review-modal {
+    --width: calc(100% - 16px);
+  }
 }
 
 .review {

@@ -1010,8 +1010,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   **At the table** (#97): the play page's header "Last board" (and the
   result dialog's Review once `finished`; the dialog steps aside while
   the review is open) opens `BoardReviewModal.vue`
-  (full-height `ion-modal`, content only `v-if="open"` since page tests
-  stub `IonModal` with its slot) without navigating; `PlayingUpdated`
+  (a centred `ion-modal.board-review-modal`, #187: `--height` `90vh`,
+  `90dvh` under `@supports (height: 1dvh)` (a custom property takes any
+  value, so a second declaration is no fallback), 5 % free above and
+  below at every size; `--width` `min(100%, 880px)`, below 768 px
+  `calc(100% - 16px)`; 16 px `--border-radius`, the result/claim dialogs'
+  `--box-shadow` and `--backdrop-opacity`, safe-area top/bottom 0; header
+  fixed, `ion-content` scrolls; `did-dismiss` (backdrop, Escape) → `close`
+  as Close does; content only `v-if="open"` since page tests stub
+  `IonModal` with its slot) without navigating; `PlayingUpdated`
   keeps applying underneath. Its boards are `reviewChoices(setResults,
   seen, latest)` in `review.ts` (running set's `boards[].playing_id`, plus
   the page's `seenBoard` (last `finished` playing at this table) if the set
