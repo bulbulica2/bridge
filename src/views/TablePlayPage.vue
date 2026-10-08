@@ -510,7 +510,6 @@
       <BoardReviewModal
         :open="reviewOpen"
         :choices="reviewable"
-        :notice="notice"
         @close="reviewOpen = false"
       />
     </ion-content>
@@ -605,7 +604,6 @@ import { reviewChoices } from '@/utils/review';
 import type { SeenBoard } from '@/utils/review';
 import { startNeeded } from '@/utils/start';
 import { WIDE_TABLE_MIN_PX } from '@/utils/layout';
-import { turnNotice } from '@/utils/turn';
 import { TIME_UP_TEXT, actingSeat, awayOnTurn, turnClockText, turnDeadline } from '@/utils/turnClock';
 import { showToast } from '@/utils/toast';
 
@@ -1269,11 +1267,6 @@ const reviewable = computed(() => {
   const latest = history.listOf(null)?.entries.find((e) => e.table_id === tableId.value) ?? null;
   return reviewChoices(set ? (history.sets[set.id] ?? null) : null, seen, latest);
 });
-
-// What the game waits for us to do, told inside the review modal.
-const notice = computed(() =>
-  turnNotice(playing.value, me.value, table.value, showStart.value),
-);
 
 // The chat is the board's: there is none before the first deal.
 // The players' alone: a kibitzer has none (#182).

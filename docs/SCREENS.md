@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/116-hcp-with-robots`._
+_Status as of branch `bulbulica2/118-no-turn-bar-in-review`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -714,10 +714,10 @@ opens on the latest finished board, with a switcher (**Board 1**,
 **Board 2** …, each board's place in its set, #189) for the set's other
 finished boards; on a set's first board it offers the previous set's
 last. Its title is the board shown, **Board 2 review** ("Board review"
-for a board outside any set); never the board's number in the database. The game goes on underneath; when it
-waits for you ("Your turn to bid", "Your turn to play", "A claim waits for
-your answer", "Your Start: …") a
-banner in the dialog says so with **To the table**. A forced card doesn't
+for a board outside any set); never the board's number in the database. The game goes on underneath; its header
+holds only the title, Export and Close (#211: no turn bar, even when the
+table waits for you; the turn line under the table, the Your table button
+and the tab title say so). A forced card doesn't
 play itself while it is open, and leaving the page closes it. It fits a
 360 px screen.
 
