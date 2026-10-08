@@ -1,14 +1,11 @@
 import { describe, expect, test } from 'vitest'
 import type { PublicPlaying, SetPosition } from '@/services/game'
-import type { SetResults } from '@/services/history'
 import {
   SET_LOW_SECONDS,
   bankLabel,
   bankLeft,
   setBanks,
   setClockText,
-  timeUsedRows,
-  timeUsedText,
 } from '@/utils/setClock'
 
 const NOW = Date.parse('2026-10-05T12:00:00.000Z')
@@ -120,29 +117,5 @@ describe("each seat's time for the set", () => {
   test('words it', () => {
     expect(bankLabel('N', { seconds: 812, running: false, low: false })).toBe("North's time for the set: 13:32")
     expect(setClockText(16)).toBe('16 minutes each for a set of 4 boards')
-    expect(timeUsedText(648, 16)).toBe('10:48 of 16:00')
-  })
-})
-
-describe('time used over a set', () => {
-  const results = {
-    players: PLAYERS,
-    minutes: 12,
-    time_used: { N: 648, E: 720, S: null, W: 300 },
-  } as unknown as SetResults
-
-  test("each human's, in seat order, with the viewer's marked", () => {
-    expect(timeUsedRows(results, 'E')).toEqual([
-      { seat: 'N', who: 'North · ann', text: '10:48 of 12:00' },
-      { seat: 'E', who: 'East (you)', text: '12:00 of 12:00' },
-      // A robot took West over: its player's time, without the robot's name.
-      { seat: 'W', who: 'West', text: '5:00 of 12:00' },
-    ])
-  })
-
-  test('a player gone keeps the seat name, and a set from before the clock has none', () => {
-    const gone = { ...results, players: { ...PLAYERS, N: null } } as unknown as SetResults
-    expect(timeUsedRows(gone, null)[0].who).toBe('North')
-    expect(timeUsedRows({ ...results, time_used: undefined } as unknown as SetResults, null)).toEqual([])
   })
 })

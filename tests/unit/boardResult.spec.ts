@@ -899,7 +899,20 @@ describe('TablePlayPage between boards', () => {
     expect(isOpen(wrapper)).toBe(false)
   })
 
-  test("after the set's last board: the set's results in the dialog, Start on the page", async () => {
+  // The set's results under the table (#191): after its plates, never
+  // above them, and never in the result dialog.
+  function setResultsBelow(wrapper: ReturnType<typeof mount>) {
+    const panels = wrapper.findAll('.set-results')
+    expect(panels).toHaveLength(1)
+    const panel = panels[0]
+    expect(panel.classes()).toContain('set-results-below')
+    expect(wrapper.find('.result-sheet .set-results').exists()).toBe(false)
+    const table = wrapper.get('.bridge-table').element
+    expect(table.compareDocumentPosition(panel.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    return panel
+  }
+
+  test("after the set's last board: the board's result in the dialog, the set's under the table, Start on it", async () => {
     const over = setSoFar({
       finished: true,
       ended: 'completed',
@@ -920,18 +933,77 @@ describe('TablePlayPage between boards', () => {
 
     expect(wrapper.get('.title-sub').text()).toMatch(/^Board 4 of 4 · Set \d+ · set over$/)
     expect(isOpen(wrapper)).toBe(true)
-    const panel = wrapper.get('.result-sheet .set-results')
-    expect(wrapper.get('.result-title').text()).toBe('Set results')
+    // The dialog: this board's result like any other, a line pointing
+    // under the table, no countdown and no vote.
+    expect(wrapper.get('.result-title').text()).toBe('Board result')
+    expect(wrapper.find('.dialog-hero').exists()).toBe(true)
+    expect(wrapper.get('.dialog-set-over').text()).toBe('Set 1 is over: its results are under the table.')
+    expect(dialog(wrapper).props('vote')).toBe(false)
+    expect(wrapper.find('.vote').exists()).toBe(false)
+
+    const panel = setResultsBelow(wrapper)
     expect(panel.get('.set-title').text()).toBe('Set 1 over')
     expect(panel.get('.set-winner').text()).toBe('You won the set.')
     expect(panel.findAll('.set-board')).toHaveLength(4)
-    // The set's matchpoints for our side, not a summed score.
+    // The set's matchpoints for our side, not a summed score, and no time.
     expect(panel.get('.set-total-value').text()).toBe('63 %')
     expect(panel.text()).not.toContain('1160')
-    // No board result, no countdown and no vote: Start deals the next set.
-    expect(wrapper.find('.dialog-hero').exists()).toBe(false)
-    expect(wrapper.find('.vote').exists()).toBe(false)
-    expect(wrapper.get('.start-box').text()).toContain('Ready to play?')
+    expect(panel.text()).not.toContain('Time used')
+    expect(wrapper.get('.bridge-table .start-box').text()).toContain('Ready to play?')
+
+    // Closed: the table, the set's results still under it.
+    await wrapper.get('.result-close').trigger('click')
+    await flushPromises()
+    expect(isOpen(wrapper)).toBe(false)
+    setResultsBelow(wrapper)
+  })
+
+  test('a set abandoned mid-board: its results under the table, never above it, Start in the centre', async () => {
+    const ended = { id: 5, number: 1, board: 2, of: 4, finished: true, ended: 'abandoned' as const, replaced: [] }
+    const waiting = {
+      ...finished(),
+      phase: 'waiting',
+      playing_id: null,
+      set: ended,
+      board: null,
+      players: null,
+      contract: null,
+      tricks: null,
+      current_trick: null,
+      tricks_won: null,
+      dummy_hand: null,
+      result: null,
+      deal: null,
+      ready: null,
+      next_board_at: null,
+      my_seat: null,
+      hand: null,
+    } as Playing
+    vi.mocked(historyService.getSet).mockResolvedValue(
+      setSoFar({ finished: true, ended: 'abandoned', winner: null, boards: [setSoFar().boards[0]] }),
+    )
+    const wrapper = await mountPage(waiting, { ...makeTable(['N', 'S', 'W']), board_id: null, set: ended })
+
+    expect(historyService.getSet).toHaveBeenCalledWith(5)
+    const panel = setResultsBelow(wrapper)
+    expect(panel.get('.set-title').text()).toBe('Set 1 over')
+    expect(panel.get('.set-winner').text()).toBe('Abandoned: no winner.')
+    expect(panel.findAll('.set-board')).toHaveLength(1)
+    expect(wrapper.get('.bridge-table .centre .start-box').exists()).toBe(true)
+    // No board finished here: no dialog.
+    expect(isOpen(wrapper)).toBe(false)
+  })
+
+  test('a set broken off before any board was finished: nothing under the table', async () => {
+    const ended = { id: 5, number: 1, board: 1, of: 4, finished: true, ended: 'abandoned' as const, replaced: [] }
+    vi.mocked(historyService.getSet).mockResolvedValue(
+      setSoFar({ finished: true, ended: 'abandoned', winner: null, boards: [] }),
+    )
+    const waiting = { ...finished(), phase: 'waiting', playing_id: null, set: ended, result: null, deal: null } as Playing
+    const wrapper = await mountPage(waiting, { ...makeTable(['N', 'S', 'W']), board_id: null, set: ended })
+
+    expect(wrapper.find('.set-results').exists()).toBe(false)
+    expect(wrapper.get('.start-box').exists()).toBe(true)
   })
 
   test("the last board's dialog waits for the set's results rather than show the board first", async () => {
@@ -951,6 +1023,7 @@ describe('TablePlayPage between boards', () => {
   test("Start after a set deals board 1 of the next one", async () => {
     vi.mocked(historyService.getSet).mockResolvedValue(setSoFar({ finished: true, ended: 'completed', winner: 'EW' }))
     const wrapper = await mountPage(lastBoard())
+    setResultsBelow(wrapper)
 
     const next = newBoard()
     next.set = { id: 6, number: 2, board: 1, of: 4, finished: false, ended: null, replaced: [] }
@@ -961,6 +1034,8 @@ describe('TablePlayPage between boards', () => {
     expect(tablesService.startTable).toHaveBeenCalledWith(5)
     expect(isOpen(wrapper)).toBe(false)
     expect(wrapper.get('.title-sub').text()).toBe('Board 1 of 4 · Set 2')
+    // The next set's first deal: the last one's results go.
+    expect(wrapper.find('.set-results').exists()).toBe(false)
     expect(wrapper.findAll('.my-hand .playing-card')).toHaveLength(13)
   })
 
@@ -978,8 +1053,9 @@ describe('TablePlayPage between boards', () => {
     await flushPromises()
 
     expect(historyService.getSet).toHaveBeenCalledTimes(2)
-    const panel = wrapper.get('.result-sheet .set-results')
+    const panel = setResultsBelow(wrapper)
     expect(panel.get('.set-winner').text()).toBe('Abandoned: no winner.')
+    expect(wrapper.get('.dialog-set-over').text()).toBe('Set 1 is over: its results are under the table.')
     expect(panel.find('.set-replaced').exists()).toBe(false)
     expect(dialog(wrapper).props('vote')).toBe(false)
     expect(wrapper.get('.start-box').text()).toContain('Waiting for a fourth player')

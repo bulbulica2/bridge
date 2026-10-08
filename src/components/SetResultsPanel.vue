@@ -58,15 +58,6 @@
       </ion-item>
     </ion-list>
 
-    <!-- The set clock (bb#131): how much of their time for the set each
-         human used (for a seat a robot took over, its player up to then). -->
-    <div v-if="timeUsed.length > 0" class="set-time">
-      <p class="set-time-title">Time used · {{ set.minutes }} minutes each</p>
-      <p v-for="row in timeUsed" :key="row.seat" class="set-time-row">
-        <span class="set-time-who">{{ row.who }}</span>
-        <span class="set-time-value">{{ row.text }}</span>
-      </p>
-    </div>
   </section>
 </template>
 
@@ -85,7 +76,6 @@ import {
   percentText,
   scoreFor,
 } from '@/utils/result';
-import { timeUsedRows } from '@/utils/setClock';
 import { replacedText, replacementsOf, setTitle, setTotals, setWinnerText, setWon } from '@/utils/sets';
 
 const props = defineProps<{
@@ -101,8 +91,6 @@ const winner = computed(() => setWinnerText(props.set, props.mySeat));
 const replaced = computed(() =>
   replacementsOf(props.set).map((entry) => replacedText(entry, entry.seat === props.mySeat)),
 );
-// Each human's time used of their time for the set.
-const timeUsed = computed(() => timeUsedRows(props.set, props.mySeat));
 const wonClass = computed(() => {
   const won = setWon(props.set, props.mySeat);
   return won === null ? '' : won ? 'score-plus' : 'score-minus';
@@ -214,30 +202,6 @@ function tone(score: number): string {
 
 .set-totals {
   margin-top: 8px;
-}
-
-.set-time {
-  padding: 12px 14px;
-  border-radius: var(--bridge-radius-card);
-  background: var(--bridge-surface);
-}
-
-.set-results .set-time-title {
-  margin-bottom: 4px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--bridge-muted);
-}
-
-.set-results .set-time-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.9rem;
-}
-
-.set-time-value {
-  font-variant-numeric: tabular-nums;
 }
 
 .set-results .set-total-mine {

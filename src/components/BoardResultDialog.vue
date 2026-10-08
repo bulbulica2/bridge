@@ -5,9 +5,10 @@
        the same board at up to four other tables, one double dummy line,
        then a ring counting down to the next board (`next_board_at`) and
        "Deal next board", our vote to deal it now (robots always count as
-       having voted). After a set's last board (`set`) it shows the set's
-       results instead, with no countdown and no vote: everyone's Start on
-       the page deals the next set. The rows still being read hold their
+       having voted). After a set's last board (`setOver`) it shows that
+       board's result like any other, with no countdown and no vote, and one
+       line saying the set's results are under the table (#191): everyone's
+       Start on the page deals the next set. The rows still being read hold their
        place as a skeleton line, so nothing jumps. The X, the backdrop and
        Escape close it; the parent owns whether it is open. No Leave or
        Review here (#188): leaving mid-set only marks a player away, and 15 s
@@ -15,16 +16,14 @@
   <ion-modal :is-open="open" class="result-dialog" aria-labelledby="result-dialog-title" @did-dismiss="dismissed">
     <div v-if="shown" class="result-sheet">
       <header class="result-head">
-        <h2 id="result-dialog-title" class="result-title">{{ set ? 'Set results' : 'Board result' }}</h2>
+        <h2 id="result-dialog-title" class="result-title">Board result</h2>
         <ion-button fill="clear" size="small" class="result-close" aria-label="Close" @click="emit('close')">
           <ion-icon slot="icon-only" :icon="closeOutline" />
         </ion-button>
       </header>
 
       <div class="result-body">
-        <SetResultsPanel v-if="set" :set="set" :my-seat="mySeat" />
-
-        <template v-else-if="result">
+        <template v-if="result">
           <div class="dialog-hero">
             <div class="dialog-head">
               <div class="dialog-main">
@@ -86,9 +85,11 @@
           <ion-skeleton-text v-if="ddLoading && !ddLine" animated class="dialog-skeleton dd-skeleton" />
           <p v-else-if="ddLine" class="dialog-dd">{{ ddLine }}</p>
         </template>
+
+        <p v-if="setOver !== null" class="dialog-set-over">Set {{ setOver }} is over: its results are under the table.</p>
       </div>
 
-      <footer v-if="vote && !set" class="result-foot">
+      <footer v-if="vote && setOver === null" class="result-foot">
         <div class="vote">
           <div
             v-if="left !== null"
@@ -114,10 +115,9 @@ import { computed, ref, watch } from 'vue';
 import { IonButton, IonIcon, IonModal, IonSkeletonText, IonSpinner } from '@ionic/vue';
 import { closeOutline } from 'ionicons/icons';
 import CallLabel from '@/components/CallLabel.vue';
-import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import { useNow } from '@/composables/useNow';
 import type { BoardResult } from '@/services/game';
-import type { BoardResults, DoubleDummy, SetResults } from '@/services/history';
+import type { BoardResults, DoubleDummy } from '@/services/history';
 import { SEATS } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
@@ -141,10 +141,11 @@ import { NEXT_BOARD_SECONDS } from '@/utils/sets';
 const props = withDefaults(
   defineProps<{
     open: boolean;
-    // The finished board's result; `set` in its place after a set's last
-    // board.
+    // The finished board's result.
     result: BoardResult | null;
-    set?: SetResults | null;
+    // The set's number when this was its last board: its results are under
+    // the table, and no next board is coming.
+    setOver?: number | null;
     mySeat: Seat | null;
     players?: Partial<Record<Seat, PublicUser | null>>;
     // This board's matchpoints against the other tables, when known.
@@ -167,7 +168,7 @@ const props = withDefaults(
     busy?: boolean;
   }>(),
   {
-    set: null,
+    setOver: null,
     players: () => ({}),
     extras: () => ({}),
     others: null,
@@ -305,8 +306,7 @@ ion-modal.result-dialog {
   --color: var(--bridge-muted);
 }
 
-/* A set's results may be taller than a phone: they scroll, the footer
-   stays. */
+/* A short phone: the body scrolls, the footer stays. */
 .result-body {
   display: flex;
   flex-direction: column;
@@ -315,8 +315,9 @@ ion-modal.result-dialog {
   overflow-y: auto;
 }
 
-.result-body :deep(.set-results) {
-  margin: 0;
+.dialog-set-over {
+  font-size: 0.9375rem;
+  font-weight: 700;
 }
 
 /* The navy hero: the contract left, our score big on the right. */

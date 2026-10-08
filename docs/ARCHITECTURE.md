@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/109-no-remove-mid-set`._
+_Status as of branch `bulbulica2/110-set-results-under-the-table`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -553,7 +553,8 @@ A few backend rules the stores rely on:
   they give the set line under a board's result (its position, and the
   board's matchpoints once another table has played it: `playingExtras()`
   in `export.ts` finds this playing's row), and the set-over view
-  (`SetResultsPanel`) once the set is done. Scores are never summed over
+  (`SetResultsPanel`) under the table while it waits for the next set's
+  Start (#191). Scores are never summed over
   a set (#100): its total is the matchpoints (`setTotals()`), shown as a
   percentage when there is anything to compare. `sets.ts` also words the
   winner from your side, whom a robot replaced and why, and groups the
@@ -896,7 +897,7 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   0:42" stays for the header's Your table). Running out is a replacement like a turn timeout,
   with reason `set_time`: "East ran out of time for the set: a robot took
   their seat." / "You ran out of time for the set: …". The set's results
-  list each human's time used (`time_used`, `SetResultsPanel`).
+  show no time used (#191): `time_used` is typed but never drawn.
 - **Leave and move confirmations** say what is at stake (`stakeOf(table)`
   → `setAtStake` in `utils/away.ts`, `held` when a Leave would hold the
   seat): a Leave "Your seat is kept for 2 minutes: come back before
@@ -968,11 +969,11 @@ lobby's cards show with a **Watch** button.
 | `ClaimAnswerDialog` | a pending claim as a centred dialog over the table (#186, replacing #161's banner above it, so the table never moves): an `ion-modal`, class `claim-answer-dialog`, sized like `ClaimSheet`'s; the title "Claim" ("Claim for North" when you claimed for a robot declarer's seat, `actsFor`), the claim in one line (`claimText`: "South claims 9 of 9") with `claimOutcome()` from the claimer's side ("4♠ +1", red going down), a countdown ring like the result dialog's vote ring (`claimSecondsLeft` out of `CLAIM_SECONDS` 10, `role="timer"`, red under `CLAIM_URGENT_SECONDS` 4, ticked by `useNow`, none without `expires_at`), the claimer's cards in a single-row `HandView` in bridge order, the answerers (✓ / …, "you"), **Accept** (orange) / **Reject** or **Withdraw**, disabled while `busy` and once the time is up (a late tap can't earn a 409), "Waiting for West…" (`claimWaitingText`) for anyone without an answer to give. The claimer and an answerer still to answer can't dismiss it (`backdrop-dismiss` false, no X); anyone else has an **X** (`close`, as the backdrop and Escape). It holds the last claim's content until `did-dismiss`, so it never empties while closing. The play page opens it while a claim is pending, the view is shown and the review is closed, unless closed for that claim (`claimDismissed`, keyed by playing, cards played and claimer); `closeOverlays` closes it |
 | `TurnClockLine` | the play page's turn clock line (#161): the words, the clock and the move's minute as a bar, orange for `mine`, red for `urgent`, blue for a `robot`; two lines of room and the bar's track always there, so its height never changes |
 | `BoardResultPanel` | a finished board's result in the review (#162), as a navy hero card: who declared (`declaredText`: "You declared", "radu declared", "E-W declared"), the contract and its result ("2♣ +2", the suffix green, red when down), the tricks ("10 tricks · by claim"), your score big on the right (N-S's, tagged, for someone who didn't play it) and, once another table has played it, "Against the other tables 67 %" with an amber bar |
-| `BoardResultDialog`, `ResultPill` | the play page's finished board (#174): a centred `ion-modal` (`result-dialog`, at most 420 px wide, as tall as its content, no breakpoints) with the result ("4♠ by South +1", "11 tricks · by claim", your side's score big), the matchpoints with a bar (`extras`), up to `OTHER_TABLES_MAX` (4) other tables (`otherTableRows`, yours tinted, **Compare with other tables** when there are more), one `doubleDummyLine` once `ready`, and the footer: a ring counting down `nextBoardAt`, **Deal next board** (`vote`; then "Waiting for bob…", the humans not in `ready`), and nothing else: no Leave or Review (#188, the header has both). `othersLoading` / `ddLoading` hold a skeleton line. With `set` (after a set's last board) it shows `SetResultsPanel` instead, with no countdown and no vote. The X emits `close`, as the backdrop and Escape do (`did-dismiss` while still open); the content stays until it has finished closing. `ResultPill` is the "Result · 0:12" pill in the table's top-right corner that opens it again |
+| `BoardResultDialog`, `ResultPill` | the play page's finished board (#174): a centred `ion-modal` (`result-dialog`, at most 420 px wide, as tall as its content, no breakpoints) with the result ("4♠ by South +1", "11 tricks · by claim", your side's score big), the matchpoints with a bar (`extras`), up to `OTHER_TABLES_MAX` (4) other tables (`otherTableRows`, yours tinted, **Compare with other tables** when there are more), one `doubleDummyLine` once `ready`, and the footer: a ring counting down `nextBoardAt`, **Deal next board** (`vote`; then "Waiting for bob…", the humans not in `ready`), and nothing else: no Leave or Review (#188, the header has both). `othersLoading` / `ddLoading` hold a skeleton line. With `setOver` (the set's number, after its last board) it shows that board's result like any other, with no countdown and no vote, and the line "Set 1 is over: its results are under the table." (#191). The X emits `close`, as the backdrop and Escape do (`did-dismiss` while still open); the content stays until it has finished closing. `ResultPill` is the "Result · 0:12" pill in the table's top-right corner that opens it again |
 | `SetStrip` | a set's boards as tiles, B1–B4: your side's matchpoints on each board finished (`setStripTiles` in `utils/sets.ts`; "—" while no other table has played it), the board on now tinted ("now" until it is finished), light under a board's result or `onTable` on a navy card (Your table) |
 | `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the results page, or a note while it is being solved; `compact` (#180) is the grid alone, small, on a white card, no title, note or legend, and nothing at all until it is `ready`: the review's bottom-right table corner; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
-| `SetResultsPanel` | once the set is over (also on `/sets/:id`), in the same navy card as a board's result: who won from your side, whom a robot replaced and why ("you" for the viewer it replaced), each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score), then each human's time used of their time for the set |
+| `SetResultsPanel` | once the set is over (also on `/sets/:id`), in the same navy card as a board's result: who won from your side, whom a robot replaced and why ("you" for the viewer it replaced), each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score); no time used (#191). The play page draws it under the table (`setResultsBelow`: `endedSet` and `showStart`), never above it |
 | `SetMinutesPicker` | the time for a set, 8 / 12 / 16 / 20 minutes, as a four-way segmented control (an `ion-segment`, `v-model`, `label`): the lobby's **Play now with robots** and `TableSettingsDialog` |
 | `TableSettingsDialog` | the game table's settings (#181): a small centred `ion-modal` (`settings-dialog`) with **Table settings**, an X, `SetMinutesPicker` (`minutes`, `busy`, `pickerKey` to put it back after a refusal) and a note that a change takes every Start back; `change` / `close` events, the page sends `tables.updateSettings()`. Opened by a manager's gear in the table's top-right corner while no set runs; the others read the time there ("16 min") |
 | `StartBox` | the game table's centre before a board (#181), on the navy: **Ready to play?** / **Waiting for the others…**, what the board still waits for (`startWaiting`), the orange **Start** or **Cancel**, and while a seat has `start_deadline` the Start timer counting down (`startClock`: "Press Start · 0:12" orange, red under 5 s; "Waiting for East · 0:12"); `start` / `cancel` events. The seats and their ticks are the table's own plates |
@@ -1042,7 +1043,7 @@ one-line note and your held seat's line, the clock formatting, what
 leaving would put at stake),
 `turnClock.ts` (the turn clock: whose, the seconds left, its wording, red
 in the last 15 s, the tab title), `setClock.ts` (each seat's time for the
-set at a moment, red under a minute, the time used over a set),
+set at a moment, red under a minute),
 `start.ts` (whether
 the next board waits for Start, and who for), `sets.ts` (where the table is
 in its set, the set's winner and matchpoints from your side, a robot
@@ -1311,8 +1312,11 @@ deal (all four hands). Its rules, all in `TablePlayPage`:
   most. Rows still being read hold a skeleton line.
 - `resultVote` (`!showStart && !endedSet`): the countdown and **Deal next
   board** only while the same four go on to the set's next board. After
-  the set's last board it shows `endedSet` with no countdown and no vote,
-  and `StartBox` is in the table's centre.
+  the set's last board it shows that board's result with no countdown and
+  no vote, plus "Set 1 is over: its results are under the table."
+  (`setOver` = `endedSet.number`); `StartBox` is in the table's centre and
+  `SetResultsPanel` under the table (`setResultsBelow`, #191) until the
+  next set's first deal.
 - It offers no way off the seat and no review (#188): leaving mid-set
   only marks a player away until a robot takes the seat, and the next
   board comes 15 s later, no time to step through one. The header's

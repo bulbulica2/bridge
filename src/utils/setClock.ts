@@ -1,5 +1,4 @@
 import type { PublicPlaying } from '@/services/game';
-import type { SetResults } from '@/services/history';
 import { SEATS } from '@/services/tables';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
@@ -73,41 +72,4 @@ export function setClockText(minutes: number): string {
 // "16 min": the same where room is short (the game table's corner, #181).
 export function setMinutesShort(minutes: number): string {
   return `${minutes} min`;
-}
-
-// "10:48 of 16:00", a player's time used of their time for the set.
-export function timeUsedText(seconds: number, minutes: number): string {
-  return `${formatClock(seconds)} of ${formatClock(minutes * 60)}`;
-}
-
-// One row of a set's "Time used": the seat ("North", "South (you)", with
-// the player's username unless a robot sits there now, having taken it
-// over) and "10:48 of 16:00".
-export interface TimeUsedRow {
-  seat: Seat;
-  who: string;
-  text: string;
-}
-
-// Each human's time used of their time for the set, in seat order; none for
-// a seat a robot or an admin played from the start, nor without the clock.
-export function timeUsedRows(
-  set: Pick<SetResults, 'players' | 'minutes' | 'time_used'>,
-  mySeat: Seat | null,
-): TimeUsedRow[] {
-  const used = set.time_used;
-  if (!used) {
-    return [];
-  }
-  return SEATS.filter((seat) => used[seat] != null).map((seat) => {
-    const player = set.players[seat];
-    const name = SEAT_NAMES[seat];
-    let who = name;
-    if (seat === mySeat) {
-      who = `${name} (you)`;
-    } else if (player && !player.is_robot) {
-      who = `${name} · ${player.username}`;
-    }
-    return { seat, who, text: timeUsedText(used[seat]!, set.minutes) };
-  });
 }

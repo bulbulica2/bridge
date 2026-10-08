@@ -406,8 +406,8 @@ describe('SetResultsPanel', () => {
   })
 })
 
-describe("SetResultsPanel's time used", () => {
-  test("each human's time used of their time for the set", () => {
+describe('SetResultsPanel and the set clock', () => {
+  test("no time used (#191), only who ran out of it", () => {
     const set = results({
       minutes: 16,
       time_left: { N: 312, E: 0, S: 405, W: null },
@@ -416,20 +416,12 @@ describe("SetResultsPanel's time used", () => {
     })
     const wrapper = mount(SetResultsPanel, { props: { set, mySeat: 'S' } })
 
-    expect(wrapper.get('.set-time-title').text()).toBe('Time used · 16 minutes each')
-    expect(wrapper.findAll('.set-time-row').map((r) => r.text())).toEqual([
-      'North · ann10:48 of 16:00',
-      'East · bo16:00 of 16:00',
-      'South (you)9:15 of 16:00',
-    ])
+    expect(wrapper.find('.set-time').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Time used')
+    expect(wrapper.text()).not.toContain('of 16:00')
     expect(wrapper.findAll('.set-replaced').map((r) => r.text())).toEqual([
       'East ran out of time for the set: a robot took their seat.',
     ])
-  })
-
-  test('nothing for a set from before the clock', () => {
-    const wrapper = mount(SetResultsPanel, { props: { set: results(), mySeat: 'S' } })
-    expect(wrapper.find('.set-time').exists()).toBe(false)
   })
 })
 
