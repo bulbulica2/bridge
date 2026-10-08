@@ -448,6 +448,34 @@ describe('DoubleDummyTable', () => {
     ).toBe("Double dummy analysis isn't set up on this server.")
     expect(mount(DoubleDummyTable, { props: { analysis: null } }).find('.double-dummy').exists()).toBe(false)
   })
+
+  test('compact: the grid alone, the contract marked, no title, note or legend', () => {
+    const wrapper = mount(DoubleDummyTable, {
+      props: { analysis: READY, highlight: { declarer: 'S', strain: 'S' }, compact: true },
+    })
+
+    expect(wrapper.get('.double-dummy').classes()).toContain('dd-compact')
+    expect(wrapper.find('.dd-title').exists()).toBe(false)
+    expect(wrapper.find('.dd-legend').exists()).toBe(false)
+    // The caption stays for a screen reader.
+    expect(wrapper.get('.dd-caption').classes()).toContain('sr-only')
+    expect(wrapper.findAll('thead th').map((th) => th.text())).toEqual(['Declarer', '♣', '♦', '♥', '♠', 'NT'])
+    expect(wrapper.findAll('tbody tr').map((r) => r.get('th').text())).toEqual(['N', 'E', 'S', 'W'])
+    expect(wrapper.get('.played').attributes('data-cell')).toBe('SS')
+  })
+
+  test('compact: nothing at all until it is ready', () => {
+    const compact = (analysis: DoubleDummy | null) =>
+      mount(DoubleDummyTable, { props: { analysis, compact: true } })
+
+    for (const analysis of [PENDING, { status: 'unavailable', table: null } as DoubleDummy, null]) {
+      const wrapper = compact(analysis)
+      expect(wrapper.find('.double-dummy').exists()).toBe(false)
+      expect(wrapper.text()).toBe('')
+    }
+    // Ready but without its grid: nothing either.
+    expect(compact({ status: 'ready', table: null }).find('.double-dummy').exists()).toBe(false)
+  })
 })
 
 describe('LeadAnalysis', () => {
@@ -481,19 +509,38 @@ describe('LeadAnalysis', () => {
 })
 
 describe('BoardReview double dummy', () => {
-  test('the table with the contract marked, and the opening lead', () => {
+  const corner = (wrapper: ReturnType<typeof mount>) => wrapper.find('.corner-bottom-right')
+  const control = (wrapper: ReturnType<typeof mount>, label: string) =>
+    wrapper.get(`ion-button[aria-label="${label}"]`)
+
+  test('the small grid bottom right, the contract marked, before the lead only; the opening lead below', async () => {
     useAuthStore().user = { ...bo, email: 'bo@example.com' } as never
     const wrapper = mount(BoardReview, { props: { review: review() } })
 
-    expect(wrapper.get('.played').attributes('data-cell')).toBe('NS')
+    expect(wrapper.get('.bridge-table').classes()).toContain('room-bottom-right')
+    const grid = corner(wrapper).get('.double-dummy')
+    expect(grid.classes()).toContain('dd-compact')
+    expect(grid.classes()).not.toContain('layer-off')
+    expect(grid.attributes('aria-hidden')).toBeUndefined()
+    expect(grid.get('.played').attributes('data-cell')).toBe('NS')
+    // Only the one, in the corner.
+    expect(wrapper.findAll('.double-dummy')).toHaveLength(1)
     expect(wrapper.get('.lead-title').text()).toBe('Opening lead · East')
     expect(wrapper.get('.led').attributes('data-card')).toBe('35')
     expect(wrapper.get('.lead-summary').text()).toBe(
       'Your lead ♥A: declarer can make 10. Best was ♣3 or ♠5: 9.',
     )
+
+    // From the first card it keeps its room, unseen.
+    await control(wrapper, 'Next card').trigger('click')
+    expect(corner(wrapper).get('.double-dummy').classes()).toContain('layer-off')
+    expect(corner(wrapper).get('.double-dummy').attributes('aria-hidden')).toBe('true')
+
+    await control(wrapper, 'Before the opening lead').trigger('click')
+    expect(corner(wrapper).get('.double-dummy').classes()).not.toContain('layer-off')
   })
 
-  test('a passed-out board: only the table', () => {
+  test('a passed-out board: only the grid, nothing marked', () => {
     const passed = review({
       auction: [1, 2, 3, 4].map(() => ({ seat: 'N' as Seat, bid: pass })),
       contract: null,
@@ -506,32 +553,37 @@ describe('BoardReview double dummy', () => {
     })
     const wrapper = mount(BoardReview, { props: { review: passed } })
 
-    expect(wrapper.findAll('.dd-table tbody tr')).toHaveLength(4)
+    expect(corner(wrapper).findAll('.dd-table tbody tr')).toHaveLength(4)
     expect(wrapper.find('.played').exists()).toBe(false)
     expect(wrapper.find('.lead-analysis').exists()).toBe(false)
   })
 
-  test('no analysis at all (an older payload): nothing', () => {
+  test('no analysis at all (an older payload): an empty corner', () => {
     const wrapper = mount(BoardReview, { props: { review: review({ double_dummy: undefined }) } })
 
+    expect(corner(wrapper).exists()).toBe(false)
+    expect(wrapper.get('.bridge-table').classes()).not.toContain('room-bottom-right')
     expect(wrapper.find('.double-dummy').exists()).toBe(false)
     expect(wrapper.find('.lead-analysis').exists()).toBe(false)
   })
 
-  test('a server without a solver: the note, no lead analysis, never read again', async () => {
+  test('a server without a solver: an empty corner, no words about it, never read again', async () => {
     vi.useFakeTimers()
     const wrapper = mount(BoardReview, {
       props: { review: review({ double_dummy: { status: 'unavailable', table: null, leads: null } }) },
     })
 
-    expect(wrapper.get('.dd-note').text()).toBe(DOUBLE_DUMMY_UNAVAILABLE)
+    expect(corner(wrapper).exists()).toBe(false)
+    expect(wrapper.find('.double-dummy').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain(DOUBLE_DUMMY_UNAVAILABLE)
+    expect(wrapper.text()).not.toContain('Double dummy')
     expect(wrapper.find('.lead-analysis').exists()).toBe(false)
     vi.advanceTimersByTime(DOUBLE_DUMMY_REREAD_MS)
     await nextTick()
     expect(http.get).not.toHaveBeenCalled()
   })
 
-  test('pending: the note, then the numbers once read again (once)', async () => {
+  test('pending: an empty corner, then the grid once read again (once)', async () => {
     vi.useFakeTimers()
     const store = useHistoryStore()
     store.reviews[42] = review({ double_dummy: { status: 'pending', table: null, leads: null } })
@@ -539,14 +591,15 @@ describe('BoardReview double dummy', () => {
       { components: { BoardReview }, template: '<BoardReview :review="store.reviews[42]" />', setup: () => ({ store }) },
     )
 
-    expect(wrapper.get('.dd-note').text()).toBe(DOUBLE_DUMMY_PENDING)
+    expect(corner(wrapper).exists()).toBe(false)
+    expect(wrapper.text()).not.toContain(DOUBLE_DUMMY_PENDING)
     expect(wrapper.find('.lead-analysis').exists()).toBe(false)
 
     answer(review())
     vi.advanceTimersByTime(DOUBLE_DUMMY_REREAD_MS)
     await flushPromises()
     expect(http.get).toHaveBeenCalledWith('/playings/42')
-    expect(wrapper.findAll('.dd-table tbody tr')).toHaveLength(4)
+    expect(corner(wrapper).findAll('.dd-table tbody tr')).toHaveLength(4)
     expect(wrapper.find('.lead-analysis').exists()).toBe(true)
   })
 
@@ -565,7 +618,7 @@ describe('BoardReview double dummy', () => {
     vi.advanceTimersByTime(DOUBLE_DUMMY_REREAD_MS * 3)
     await flushPromises()
     expect(http.get).toHaveBeenCalledTimes(1)
-    expect(wrapper.get('.dd-note').text()).toBe(DOUBLE_DUMMY_PENDING)
+    expect(corner(wrapper).exists()).toBe(false)
   })
 
   test('leaving before the reread drops it', async () => {

@@ -1,34 +1,12 @@
 <template>
-  <!-- One finished playing replayed (GET /playings/{playing}): the contract,
-       the deal on the table, the card-by-card stepper, the result at its
-       last step, what was possible double dummy and the auction. The review
-       page and the play page's review modal both show it; `step` (cards played) is all it holds, and a new
-       playing starts again before the opening lead. -->
+  <!-- One finished playing replayed (GET /playings/{playing}): the deal on
+       the table with the board's details in its corners, as the play page
+       has them (#171, #180), the card-by-card stepper, then the result at
+       its last step, the opening lead's analysis and the chat. The review
+       page and the play page's review modal both show it; `step` (cards
+       played) is all it holds, and a new playing starts again before the
+       opening lead. -->
   <div class="board-review">
-    <!-- Who is vulnerable, in words, top left above the table (#151). -->
-    <div v-if="review.board" class="board-bar">
-      <VulnerabilityLabel :vulnerable="review.board.vulnerable" :my-seat="mySeat" />
-    </div>
-
-    <!-- The contract, and the tricks each side has won at this step. -->
-    <section class="outcome">
-      <template v-if="review.contract">
-        <p class="outcome-title">
-          <CallLabel :bid="review.contract.bid" />{{ doubledSuffix(review.contract.doubled) }}
-          by {{ SEAT_NAMES[review.contract.declarer] }}
-        </p>
-        <p class="outcome-detail">
-          Declarer {{ who(review.contract.declarer) }} · Dummy {{ who(review.contract.dummy) }}
-        </p>
-        <p v-if="total > 0" class="tricks-won">
-          <span>NS {{ at.tricksWon.ns }}</span>
-          <span aria-hidden="true">·</span>
-          <span>EW {{ at.tricksWon.ew }}</span>
-        </p>
-      </template>
-      <p v-else class="outcome-title">Passed out</p>
-    </section>
-
     <p v-if="!recorded" class="unrecorded">
       The auction and play of this board weren't recorded.
     </p>
@@ -41,11 +19,82 @@
       :deal="total > 0 ? at.hands : review.deal"
       :replay="total > 0"
       :reserve="total > 0 ? review.deal : null"
+      bottom-right-room
       @select="emit('select', $event)"
     >
-      <template v-if="total > 0" #centre>
-        <TrickArea :cards="at.trick" :my-seat="mySeat" :winner="at.winner" />
-        <p class="trick-caption">{{ stepCaption(at) }}</p>
+      <!-- Who is vulnerable, in words (#151), top left. -->
+      <template v-if="review.board" #top-left>
+        <VulnerabilityLabel
+          class="corner-vul"
+          compact
+          :vulnerable="review.board.vulnerable"
+          :my-seat="mySeat"
+        />
+      </template>
+      <!-- The contract, and the tricks each side has won at this step. -->
+      <template #top-right>
+        <div class="corner-contract">
+          <template v-if="review.contract">
+            <p class="contract-line">
+              <CallLabel :bid="review.contract.bid" />{{ doubledMark(review.contract.doubled) }}
+              by {{ SEAT_NAMES[review.contract.declarer] }}
+            </p>
+            <p v-if="total > 0" class="tricks-won">
+              <span>NS {{ at.tricksWon.ns }}</span>
+              <span aria-hidden="true">·</span>
+              <span>EW {{ at.tricksWon.ew }}</span>
+            </p>
+          </template>
+          <p v-else class="contract-line">Passed out</p>
+        </div>
+      </template>
+      <!-- What was possible double dummy (bb#114), small, with this
+           contract marked: only once the backend has solved it, and only
+           before the opening lead. From the first card on it keeps its
+           room unseen, in case the table gave it a row of its own (a
+           narrow phone), so nothing below moves. -->
+      <template v-if="ddReady" #bottom-right>
+        <DoubleDummyTable
+          compact
+          :analysis="doubleDummy"
+          :highlight="played"
+          :class="{ 'layer-off': step > 0 }"
+          :aria-hidden="step > 0 ? 'true' : undefined"
+        />
+      </template>
+
+      <!-- Before the opening lead, the auction; from the first card, the
+           trick. Both lie in the same cell, the one not shown kept unseen,
+           so the centre is as tall as the taller at every step and the
+           stepper below never moves (#133). A passed-out board keeps its
+           auction; an unrecorded one has neither (the board's details). -->
+      <template v-if="auction || total > 0" #centre>
+        <div class="review-centre">
+          <div
+            v-if="auction"
+            class="centre-layer review-auction"
+            :class="{ 'layer-off': step > 0 }"
+            :inert="step > 0"
+            :aria-hidden="step > 0 ? 'true' : undefined"
+          >
+            <AuctionHistory
+              :auction="auction"
+              :board="review.board"
+              :my-seat="mySeat"
+              :turn="null"
+              :players="review.players"
+            />
+          </div>
+          <div
+            v-if="total > 0"
+            class="centre-layer review-trick"
+            :class="{ 'layer-off': auction && step === 0 }"
+            :aria-hidden="auction && step === 0 ? 'true' : undefined"
+          >
+            <TrickArea :cards="at.trick" :my-seat="mySeat" :winner="at.winner" />
+            <p class="trick-caption">{{ stepCaption(at) }}</p>
+          </div>
+        </div>
       </template>
     </BridgeTable>
 
@@ -117,26 +166,14 @@
       :extras="extras"
     />
 
-    <!-- What was possible (bb#114): the double dummy table with this
-         contract marked, and how good each opening lead was. The backend
-         solves them in its queue; while it hasn't, a note, and the
-         playing is read once more. -->
-    <DoubleDummyTable :analysis="doubleDummy" :highlight="played" />
+    <!-- How good each opening lead was, once the backend has solved the
+         board (never on a passed-out one). -->
     <LeadAnalysis
       v-if="leads && review.contract"
       :leads="leads"
       :leader="nextSeat(review.contract.declarer)"
       :lead="openingLead(review)"
       :my-seat="mySeat"
-    />
-
-    <AuctionHistory
-      v-if="recorded && review.auction"
-      :auction="review.auction"
-      :board="review.board"
-      :my-seat="mySeat"
-      :turn="null"
-      :players="review.players"
     />
 
     <!-- The board's chat, all of it: public once the board is over. -->
@@ -178,10 +215,10 @@ import { useHistoryStore } from '@/stores/history';
 import type { PlayingReview } from '@/services/history';
 import type { Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
-import { SEAT_NAMES, doubledSuffix } from '@/utils/auction';
+import { SEAT_NAMES } from '@/utils/auction';
 import { nextSeat, openingLead } from '@/utils/export';
 import type { ExportExtras } from '@/utils/export';
-import { seatOfUser } from '@/utils/result';
+import { doubledMark, seatOfUser } from '@/utils/result';
 import {
   clampStep,
   isRecorded,
@@ -240,7 +277,13 @@ const position = computed(() => {
   return `Trick ${trickNumber} of ${tricks} · card ${trick.length} of 4${ended}`;
 });
 
+// The auction, when recorded (a playing finished before bb#60 has none).
+const auction = computed(() => (recorded.value && props.review.auction?.length ? props.review.auction : null));
+
 const doubleDummy = computed(() => props.review.double_dummy ?? null);
+
+// The grid shows only once solved: pending or unavailable, nothing.
+const ddReady = computed(() => doubleDummy.value?.status === 'ready' && !!doubleDummy.value.table);
 
 // The contract's cell in the double dummy table.
 const played = computed(() => {
@@ -256,7 +299,8 @@ const leads = computed(() => {
 });
 
 // Still being solved: read the playing once more a little later (the
-// history store asks again for a pending one), never in a loop.
+// history store asks again for a pending one), never in a loop; the grid
+// appears if it is ready by then.
 let rereadFor: number | null = null;
 let rereadTimer: ReturnType<typeof setTimeout> | null = null;
 watch(
@@ -284,15 +328,6 @@ function stopReread() {
 
 onBeforeUnmount(stopReread);
 
-// "North (ann)", or "North (you)".
-function who(seat: Seat): string {
-  if (seat === mySeat.value) {
-    return `${SEAT_NAMES[seat]} (you)`;
-  }
-  const user = props.review.players[seat];
-  return user ? `${SEAT_NAMES[seat]} (${user.username})` : SEAT_NAMES[seat];
-}
-
 function go(to: number) {
   step.value = clampStep(to, total.value);
 }
@@ -309,47 +344,116 @@ function go(to: number) {
   font-weight: 700;
 }
 
-.board-bar {
-  margin: 0 0 8px;
-}
-
-.outcome {
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--bridge-navy-tint);
-  color: var(--bridge-navy-tint-text);
-  text-align: center;
-}
-
-.outcome p {
-  margin: 0;
-}
-
-.outcome-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-
-.outcome .outcome-detail {
-  margin-top: 4px;
-  font-size: 0.85rem;
-  color: var(--ion-color-medium);
-}
-
-.outcome .tricks-won {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 6px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 .unrecorded {
   margin: 0 0 12px;
   text-align: center;
   color: var(--ion-color-medium);
+}
+
+/* The auction and the trick in one cell (see the template). */
+.review-centre {
+  display: grid;
+  width: 100%;
+}
+
+.centre-layer {
+  grid-area: 1 / 1;
+  align-self: center;
+  min-width: 0;
+}
+
+.review-auction {
+  color: var(--bridge-ink);
+  text-align: left;
+}
+
+.review-auction :deep(.auction) {
+  margin: 0;
+}
+
+.review-auction :deep(.empty) {
+  color: var(--bridge-muted);
+}
+
+/* A phone's centre, between two hands, is narrow: the grid packs closer,
+   smaller chips and the seats without their players' names, so four
+   columns of calls fit. */
+@container (max-width: 259px) {
+  .review-auction :deep(.auction) {
+    padding: 4px;
+  }
+
+  .review-auction :deep(table) {
+    border-spacing: 2px;
+  }
+
+  .review-auction :deep(.player) {
+    display: none;
+  }
+
+  .review-auction :deep(th.mine .seat::after) {
+    content: none;
+  }
+
+  .review-auction :deep(td) {
+    height: 26px;
+  }
+
+  .review-auction :deep(.chip) {
+    min-width: 0;
+    height: 24px;
+    padding: 0 3px;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+  }
+
+  .review-auction :deep(.mark) {
+    width: 14px;
+    height: 14px;
+    margin-left: 0;
+  }
+}
+
+.layer-off {
+  visibility: hidden;
+}
+
+/* The contract and the tricks, top right: white on the navy, as on the
+   play page. */
+.corner-contract {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  color: var(--bridge-on-table);
+  font-size: 0.875rem;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.corner-contract p {
+  margin: 0;
+}
+
+.contract-line {
+  font-weight: 700;
+}
+
+/* Hearts and diamonds stay readable on the navy. */
+.contract-line :deep(.call.red) {
+  color: var(--bridge-on-table-bad);
+}
+
+.corner-contract .tricks-won {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 6px;
+  font-family: var(--bridge-font-numbers);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .trick-caption {

@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/101-board-result-dialog`._
+_Status as of branch `bulbulica2/102-review-on-the-table`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -874,8 +874,8 @@ arrives, and the app falls back to what each request returns.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | Daylight's navy panel (#160) with the four seats, rotated so **you are always at the bottom**, partner and you across its width, the opponents left and right. Each seat is a **plate**: avatar (two initials; a robot's icon, `avatar-robot`), name (opens the profile sheet), seat, the `AdminBadge`, and each human's time for the set as a pill (`banks`: grey idle, white while it runs, red under a minute, none for a robot or an admin). The seat on turn is ringed orange, an away seat's plate is red, a seat that pressed Start gets a green tick (`ready`, the play page's seats while Start is awaited), an empty seat is dashed ("Empty · North"); the plate's top edge is red/green for vulnerability. During the auction each seat's **last call** sits beside its plate as a chip (`calls`), an opponent's alerted one ringed amber with "!" (partner's never during the auction); whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`); the dealer's plate has a **D** (`aria-label` "dealer"); the centre's first line while it shows the board is `boardLabel` (the play page's "Board 2 of 4", none outside a set, #165; left out, "Board 7"); with `wide` (#163) the wide screen's layout; four corner slots, `top-left`, `top-right`, `bottom-left`, `bottom-right` (#171), laid over the panel's corners at every width without taking a row's height, partner's and your plates keeping them clear |
-| `VulnerabilityLabel` | who is vulnerable in words (`vulnerabilityText`), Daylight's pill: green **Nobody vulnerable**, else red with a dot, **Vul: E-W** for the other side, **Vulnerable: N-S (you)** for yours, **Both (you too)**; in `BoardReview` and on the board results page (#151, #160), and `compact` (28 px, smaller words that may wrap, no dot) in the play page's top-left table corner (#171) |
+| `BridgeTable` | Daylight's navy panel (#160) with the four seats, rotated so **you are always at the bottom**, partner and you across its width, the opponents left and right. Each seat is a **plate**: avatar (two initials; a robot's icon, `avatar-robot`), name (opens the profile sheet), seat, the `AdminBadge`, and each human's time for the set as a pill (`banks`: grey idle, white while it runs, red under a minute, none for a robot or an admin). The seat on turn is ringed orange, an away seat's plate is red, a seat that pressed Start gets a green tick (`ready`, the play page's seats while Start is awaited), an empty seat is dashed ("Empty · North"); the plate's top edge is red/green for vulnerability. During the auction each seat's **last call** sits beside its plate as a chip (`calls`), an opponent's alerted one ringed amber with "!" (partner's never during the auction); whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`); the dealer's plate has a **D** (`aria-label` "dealer"); the centre's first line while it shows the board is `boardLabel` (the play page's "Board 2 of 4", none outside a set, #165; left out, "Board 7"); with `wide` (#163) the wide screen's layout; four corner slots, `top-left`, `top-right`, `bottom-left`, `bottom-right` (#171), laid over the panel's corners at every width without taking a row's height, partner's and your plates keeping them clear; with `bottomRightRoom` (the review's double dummy grid, #180) your whole seat, hand included, keeps the larger bottom-right corner's width clear on both sides, and a table under 340 px gives that corner a row of its own under your seat |
+| `VulnerabilityLabel` | who is vulnerable in words (`vulnerabilityText`), Daylight's pill: green **Nobody vulnerable**, else red with a dot, **Vul: E-W** for the other side, **Vulnerable: N-S (you)** for yours, **Both (you too)**; on the board results page (#151, #160), and `compact` (28 px, smaller words that may wrap, no dot) in the play page's and `BoardReview`'s top-left table corner (#171, #180) |
 | `AuctionPopover` | the play page's **Auction** button in the table's bottom-left corner (#165, #171), from the first call to the end of the board: the `AuctionHistory` grid in a pop-up opening upward (`usePopover`: a mouse hovering opens it, a tap toggles it, a tap outside or Escape closes it), passing on `ask` / `explain` / `chat`, so Ask and Ask in the chat work there while the board is on |
 | `ClaimButton` | the play page's **Claim** in the table's bottom-right corner (#171): a light 36 px button with a 44 px tap area, `claim` on a tap, `disabled` while a card or a claim is in flight; `locked` after a refused claim, it reads **Claim · locked** in grey (`aria-disabled`) and a tap or a hover opens a small pop-up above it with `CLAIM_LOCKED_TEXT` (`usePopover`), always in the DOM as the button's `aria-describedby` |
 | `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
@@ -895,7 +895,7 @@ arrives, and the app falls back to what each request returns.
 | `BoardResultPanel` | a finished board's result in the review (#162), as a navy hero card: who declared (`declaredText`: "You declared", "radu declared", "E-W declared"), the contract and its result ("2♣ +2", the suffix green, red when down), the tricks ("10 tricks · by claim"), your score big on the right (N-S's, tagged, for someone who didn't play it) and, once another table has played it, "Against the other tables 67 %" with an amber bar |
 | `BoardResultDialog`, `ResultPill` | the play page's finished board (#174): a centred `ion-modal` (`result-dialog`, at most 420 px wide, as tall as its content, no breakpoints) with the result ("4♠ by South +1", "11 tricks · by claim", your side's score big), the matchpoints with a bar (`extras`), up to `OTHER_TABLES_MAX` (4) other tables (`otherTableRows`, yours tinted, **Compare with other tables** when there are more), one `doubleDummyLine` once `ready`, and the footer: a ring counting down `nextBoardAt`, **Deal next board** (`vote`; then "Waiting for bob…", the humans not in `ready`) and small **Review** / **Leave the table**. `othersLoading` / `ddLoading` hold a skeleton line. With `set` (after a set's last board) it shows `SetResultsPanel` instead, with no countdown and no vote. The X emits `close`, as the backdrop and Escape do (`did-dismiss` while still open); the content stays until it has finished closing. `ResultPill` is the "Result · 0:12" pill in the table's top-right corner that opens it again |
 | `SetStrip` | a set's boards as tiles, B1–B4: your side's matchpoints on each board finished (`setStripTiles` in `utils/sets.ts`; "—" while no other table has played it), the board on now tinted ("now" until it is finished), light under a board's result or `onTable` on a navy card (Your table) |
-| `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the review and the results page, or a note while it is being solved; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
+| `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the results page, or a note while it is being solved; `compact` (#180) is the grid alone, small, on a white card, no title, note or legend, and nothing at all until it is `ready`: the review's bottom-right table corner; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`), in the same navy card as a board's result: who won from your side, whom a robot replaced and why ("you" for the viewer it replaced), each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score), then each human's time used of their time for the set |
 | `SetMinutesPicker` | the time for a set, 8 / 12 / 16 / 20 minutes, as a four-way segmented control (an `ion-segment`, `v-model`, `label`): the lobby's **Play now with robots** and a manager on the table's page |
@@ -1145,7 +1145,7 @@ never reads during the board**; there is no partner-only message:
   shows it as it was left; closing the page's overlays before a
   confirmation closes a phone's sheet, not the panel beside the table.
 - **After the board**: the review's `messages` is the whole chat;
-  `BoardReview` shows it under the auction and the text export lists it
+  `BoardReview` shows it under the stepper and the text export lists it
   (`chatLines`).
 
 ## The board review
@@ -1157,7 +1157,18 @@ hands left at the current step, `replay` set so they aren't labelled "as
 dealt", and `reserve` = the deal, so each hand keeps the height it had as
 dealt and the replay buttons below the table don't move as cards go),
 `TrickArea`, `AuctionHistory`, `BoardResultPanel` and, under the
-auction, the board's whole chat (`ChatMessageList`). It keeps a
+stepper, the board's whole chat (`ChatMessageList`). Like the play page
+(#171) it puts the board's details in the table's corners (#180):
+`VulnerabilityLabel` (`compact`) top left; the contract ("4♠X by South",
+or "Passed out") and the tricks won at the step shown top right; and,
+only before the opening lead and only once the analysis is `ready`, a
+`compact` `DoubleDummyTable` bottom right (`BridgeTable`'s
+`bottomRightRoom`). The table's centre holds the auction before the
+opening lead and the trick from the first card on: both lie in one grid
+cell, the one not shown `visibility: hidden` (`layer-off`, `aria-hidden`),
+so the centre is as tall as the taller at every step; the grid in the
+corner keeps its room the same way once hidden. A passed-out board keeps
+its auction in the centre; an unrecorded one has neither. It keeps a
 single number, how many cards have been played, and `reviewAt()` in
 `src/utils/review.ts` works out everything else from the deal and the
 tricks. The review is cached in the `history` store by playing id and never
@@ -1185,7 +1196,8 @@ board's results they are refused (403) until you have finished the board.
 - The review (`GET /playings/{id}`) carries `double_dummy`: the table plus
   `leads` (null on a passed-out board). `loadReview` reads a review again
   if its analysis was still pending.
-- **Pending** shows "Double dummy analysis is being worked out…" and is read
+- **Pending** shows "Double dummy analysis is being worked out…" (on the
+  results page; the review shows nothing until it is ready) and is read
   **once** more 5 s later (`DOUBLE_DUMMY_REREAD_MS`): `useDoubleDummy` for
   the table, `BoardReview` itself for a review. No polling loop; a refresh or
   another visit asks afresh.
@@ -1195,8 +1207,9 @@ board's results they are refused (403) until you have finished the board.
   in the table, and is never read again.
 
 Where it shows: `BoardReview` (the review page and the play page's review
-modal) has `DoubleDummyTable`, the contract played marked, and
-`LeadAnalysis`; `BoardResultsPage` has the table above the results, your
+modal) has a `compact` `DoubleDummyTable` in the table's bottom-right
+corner before the opening lead, the contract played marked (nothing while
+pending or unavailable, #180), and `LeadAnalysis` under the stepper; `BoardResultsPage` has the table above the results, your
 contract marked; the play page, once a board is `finished`, reads the table
 and the result dialog gives one line, "Double dummy: 4♠ by South makes 10",
 once it is ready (a skeleton line until `useDoubleDummy`'s `settled`: ready,

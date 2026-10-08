@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/101-board-result-dialog`._
+_Status as of branch `bulbulica2/102-review-on-the-table`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -850,13 +850,21 @@ entry (yours or another player's) or a row of Board results; not in the
 menu. The play page shows the same review in a sheet (#97: `BoardReview`
 and `useBoardExport` serve both). It works the same after the table is gone.
 
-One table's playing of a board, replayed: who is vulnerable, top left, as
-on the play page (#151; "(you)" only if you played it), the contract and the tricks each
-side has won so far, the four hands face up (you at the bottom if you
-played it, otherwise South), the trick in the middle, and the auction
-below, with every alert of the board (public once it is over) marked and
-popped up as on the play page, and under it the board's whole chat (#102),
-partner's messages to the opponents included, since the board is over. A stepper moves card by card or a trick at a time (start, previous
+One table's playing of a board, replayed, with the board's details in
+the table's corners as on the play page (#180; nothing above the table):
+who is vulnerable top left (#151; "(you)" only if you played it), the
+contract top right ("4♠X by South", or "Passed out") with the tricks each
+side has won at the step shown under it ("NS 3 · EW 2"), and the four
+hands face up (you at the bottom if you played it, otherwise South).
+Before the opening lead the middle of the table holds the **auction**,
+with every alert of the board (public once it is over) marked and popped
+up as on the play page, and the bottom-right corner a small **double
+dummy** grid (declarers N E S W down, ♣ ♦ ♥ ♠ NT across, this contract's
+cell marked), only once the backend has solved it. From the first card
+the middle shows the trick instead and the grid goes; back at the start
+both return. The middle keeps one height for both, and the grid's corner
+keeps its room (beside your hand, or on a narrow phone in a row of its own
+under it), so nothing moves. A stepper moves card by card or a trick at a time (start, previous
 trick, previous card, next card, next trick, end); the hands lose their
 cards as they go but keep the room they took as dealt, so the buttons stay
 in the same place at every step (#59). The line saying where you are
@@ -865,22 +873,23 @@ replay reaches the end, and **Results** (header) / **Results at every
 table** go back to the board's results. The page is as wide as the play
 page (832 px at most), so the table reads the same.
 
-Under the result, what was possible double dummy (#119): the board's double
-dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks
-not levels) with this contract's cell marked, then the **opening lead**:
-the leader's cards as the hand is held, each with the tricks declarer makes
-after that lead, the lead made raised, the best leads (fewest tricks for
-declarer) ringed green, and in words ("Your lead ♠K: declarer can make 10.
-Best was ♥2: 9."). While the backend is still solving it the page says
-"Double dummy analysis is being worked out…" and reads the board once more
-5 s later; on a server without the solver it says "Double dummy analysis
-isn't set up on this server." (every board alike, #138). A passed-out board has only its
-auction, the deal, the result and the double dummy table; a board that ended by a claim stops where
-the claim was made.
+Under the stepper, the result (at the end), then the **opening lead**
+(#119), once the double dummy analysis is ready: the leader's cards as the
+hand is held, each with the tricks declarer makes after that lead, the
+lead made raised, the best leads (fewest tricks for declarer) ringed
+green, and in words ("Your lead ♠K: declarer can make 10. Best was ♥2:
+9."), and the board's whole chat (#102), partner's messages to the
+opponents included, since the board is over. While the backend is still
+solving the board, or on a server without the solver, the review says
+nothing about it (the corner stays empty); a pending one is read once
+more 5 s later and appears if ready. A passed-out board has only the deal,
+its auction in the middle for good, the result and the double dummy grid;
+a board that ended by a claim stops where the claim was made.
 
 Boards finished before the backend kept their calls and cards (before
-bb#60) say "The auction and play of this board weren't recorded" and show
-only the deal and the result.
+bb#60) say "The auction and play of this board weren't recorded" above
+the table and show only the deal, the contract and the result (the
+middle of the table keeps the board's dealer and vulnerability).
 
 **Export** (header, #71) opens a menu to take the board out of the app:
 

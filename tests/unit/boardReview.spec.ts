@@ -309,24 +309,73 @@ describe('BoardReview', () => {
     expect(wrapper.find('.result-mp').exists()).toBe(false)
   })
 
-  test('names the viewer as declarer, and a seat whose account is gone plainly', () => {
-    useAuthStore().user = { ...ann, email: 'ann@example.com' } as never
-    const wrapper = mount(BoardReview, { props: { review: { ...review(), players: { ...PLAYERS, S: null } } } })
+  test('the contract top right, with the tricks won at the step shown; nothing above the table', async () => {
+    const wrapper = mount(BoardReview, { props: { review: review() } })
 
-    expect(wrapper.find('.outcome-detail').text()).toBe('Declarer North (you) · Dummy South')
+    const contract = wrapper.get('.corner-top-right .corner-contract')
+    expect(contract.get('.contract-line').text()).toBe('4♠ by North')
+    expect(contract.get('.tricks-won').text()).toBe('NS 0·EW 0')
+    expect(wrapper.find('.board-bar').exists()).toBe(false)
+    expect(wrapper.find('.outcome').exists()).toBe(false)
+    expect(wrapper.find('.unrecorded').exists()).toBe(false)
+    expect(wrapper.get('.board-review').element.firstElementChild?.classList.contains('bridge-table')).toBe(true)
+
+    await control(wrapper, 'Next trick').trigger('click')
+    expect(wrapper.get('.corner-contract .tricks-won').text()).toBe('NS 1·EW 0')
   })
 
-  test("says who is vulnerable, from the viewer's side", () => {
+  test('a doubled contract reads X, a redoubled one XX', () => {
+    const doubled = (n: 1 | 2) =>
+      mount(BoardReview, { props: { review: { ...review(), contract: { ...review().contract!, doubled: n } } } })
+        .get('.contract-line')
+        .text()
+
+    expect(doubled(1)).toBe('4♠X by North')
+    expect(doubled(2)).toBe('4♠XX by North')
+  })
+
+  test('the auction in the centre before the lead, the trick from the first card, the auction again at the start', async () => {
+    const wrapper = mount(BoardReview, { props: { review: review() } })
+    const auction = () => wrapper.get('.centre .review-auction')
+    const trick = () => wrapper.get('.centre .review-trick')
+
+    // Both share the centre's one cell; only one is seen.
+    expect(wrapper.findAllComponents({ name: 'AuctionHistory' })).toHaveLength(1)
+    expect(auction().findComponent({ name: 'AuctionHistory' }).exists()).toBe(true)
+    expect(auction().classes()).not.toContain('layer-off')
+    expect(auction().attributes('aria-hidden')).toBeUndefined()
+    expect(trick().classes()).toContain('layer-off')
+    expect(trick().attributes('aria-hidden')).toBe('true')
+
+    await control(wrapper, 'Next card').trigger('click')
+    expect(auction().classes()).toContain('layer-off')
+    expect(auction().attributes('aria-hidden')).toBe('true')
+    expect(trick().classes()).not.toContain('layer-off')
+    expect(trick().attributes('aria-hidden')).toBeUndefined()
+    expect(wrapper.get('.trick-caption').text()).toBe('S to play')
+
+    await control(wrapper, 'Next trick').trigger('click')
+    await control(wrapper, 'Previous trick').trigger('click')
+    expect(auction().classes()).not.toContain('layer-off')
+    expect(trick().classes()).toContain('layer-off')
+
+    await control(wrapper, 'End of the play').trigger('click')
+    await control(wrapper, 'Before the opening lead').trigger('click')
+    expect(auction().classes()).not.toContain('layer-off')
+  })
+
+  test("says who is vulnerable top left, from the viewer's side", () => {
     const vul = (vulnerable: string) => {
       const board = { id: 7, number: 7, dealer: 'N', vulnerable }
       return mount(BoardReview, { props: { review: { ...review(), board } as never } }).get(
-        '.board-bar .vul-label',
+        '.corner-top-left .vul-label',
       )
     }
 
     // bo sat East.
     expect(vul('').text()).toBe('Nobody vulnerable')
     expect(vul('').classes()).toContain('vul-label-green')
+    expect(vul('').classes()).toContain('vul-label-compact')
     expect(vul('E-W').text()).toBe('Vulnerable: E-W (you)')
     expect(vul('N-S').text()).toBe('Vul: N-S')
     expect(vul('N-S').classes()).toContain('vul-label-red')
@@ -343,7 +392,7 @@ describe('BoardReview', () => {
     expect(wrapper.emitted('select')).toEqual([[ann]])
   })
 
-  test('a passed-out board has nobody declaring', () => {
+  test('a passed-out board: "Passed out" top right and its auction in the centre for good', () => {
     const passed = {
       ...review(),
       contract: null,
@@ -353,8 +402,32 @@ describe('BoardReview', () => {
     }
     const wrapper = mount(BoardReview, { props: { review: passed } })
 
-    expect(wrapper.find('.outcome-title').text()).toBe('Passed out')
+    expect(wrapper.get('.corner-contract').text()).toBe('Passed out')
+    expect(wrapper.find('.tricks-won').exists()).toBe(false)
     expect(wrapper.find('.stepper').exists()).toBe(false)
+    expect(wrapper.get('.review-auction').classes()).not.toContain('layer-off')
+    expect(wrapper.get('.review-auction').findAll('.call')).toHaveLength(4)
+    expect(wrapper.find('.review-trick').exists()).toBe(false)
+  })
+
+  test("an unrecorded board: its notice, no auction, the board's details in the centre", () => {
+    const unrecorded = { ...review(), auction: [], tricks: [], current_trick: [] }
+    const wrapper = mount(BoardReview, { props: { review: unrecorded } })
+
+    expect(wrapper.get('.unrecorded').text()).toBe("The auction and play of this board weren't recorded.")
+    expect(wrapper.findComponent({ name: 'AuctionHistory' }).exists()).toBe(false)
+    expect(wrapper.find('.review-centre').exists()).toBe(false)
+    expect(wrapper.get('.centre').text()).toContain('Dealer N')
+    // The contract stays, without tricks to count.
+    expect(wrapper.get('.contract-line').text()).toBe('4♠ by North')
+    expect(wrapper.find('.tricks-won').exists()).toBe(false)
+  })
+
+  test('no board: no vulnerability corner', () => {
+    const wrapper = mount(BoardReview, { props: { review: { ...review(), board: null } as never } })
+
+    expect(wrapper.find('.corner-top-left').exists()).toBe(false)
+    expect(wrapper.find('.corner-contract').exists()).toBe(true)
   })
 })
 
