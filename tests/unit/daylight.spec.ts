@@ -252,6 +252,21 @@ describe('BridgeTable plates', () => {
     expect(empty.find('.last-call-chip').exists()).toBe(false)
     expect(mountTable().find('.last-call').exists()).toBe(false)
   })
+
+  test("a robot partner's alerted last call is marked during the auction (#203)", () => {
+    const calls: AuctionCall[] = [
+      { seat: 'N', bid: bid('1NT', 2) },
+      { seat: 'E', bid: bid('P', 1) },
+      { seat: 'S', bid: bid('2C', 3) },
+      { seat: 'W', bid: bid('P', 1) },
+      { seat: 'N', bid: bid('2D', 4), alert: { explanation: 'No four-card major' } },
+    ]
+    const robot = { ...PLAYERS.N, is_robot: true }
+    const wrapper = mountTable({ calls, players: { ...PLAYERS, N: robot } })
+
+    expect(wrapper.get('[data-seat="N"] .last-call-chip').classes()).toContain('alerted')
+    expect(wrapper.get('[data-seat="N"] .alert-mark').text()).toBe('!')
+  })
 })
 
 describe('CallLabel chips', () => {

@@ -4,9 +4,11 @@ import type { AuctionCall, CallAlert, CallQuestion, PublicPlaying } from '@/serv
 import { SEAT_NAMES, callLabel } from '@/utils/auction';
 
 // Alerts (bridge_backend docs/API.md, Alerts; GAME-RULES.md §4): a bidder
-// marks their own call for the opponents, never for partner while the
-// auction lasts (partner sees them once it is over), and the opponents may
-// ask about any call of the other side until the board is over.
+// marks their own call for the opponents, never for a human partner while
+// the auction lasts (partner sees them once it is over), and the opponents
+// may ask about any call of the other side until the board is over. A
+// robot's alerts reach its human partner at once (bb#152, #203): playing
+// with a robot, one has to learn its system at the table.
 
 // What an alert with nothing written says.
 export const NO_EXPLANATION = 'Alerted, no explanation given.';
@@ -28,6 +30,13 @@ export function isOpponent(seat: Seat, mySeat: Seat | null): boolean {
 // Is `seat` the partner of `mySeat`? Never for a viewer not seated.
 export function isPartner(seat: Seat, mySeat: Seat | null): boolean {
   return mySeat !== null && seat !== mySeat && !isOpponent(seat, mySeat);
+}
+
+// Does the viewer at `mySeat` keep from seeing the alert on `seat`'s call
+// while the auction lasts? Only a human partner's: a robot partner's shows
+// like an opponent's (`robot`: the caller is one).
+export function hidesPartnerAlert(seat: Seat, mySeat: Seat | null, robot: boolean): boolean {
+  return isPartner(seat, mySeat) && !robot;
 }
 
 // The alert and open question known about one call of the board.
@@ -58,8 +67,8 @@ function callsFor(book: AlertBook, playingId: number): Record<number, CallNote> 
 }
 
 // Take the notes a state answered over HTTP carries into the book: it has
-// every alert the viewer may see (partner's too once the auction is over)
-// and the open questions. An alert never goes
+// every alert the viewer may see (partner's too once the auction is over,
+// a robot partner's all along) and the open questions. An alert never goes
 // away, so a known one stays when the state has none on that call; a new
 // board starts a new book.
 export function takeNotes(book: AlertBook, state: PublicPlaying): AlertBook {

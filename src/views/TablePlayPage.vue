@@ -354,9 +354,9 @@
             :robot="robotActing && !pendingClaim"
           />
 
-          <!-- Alerted calls stand out (partner's only once the auction is
-               over); until the board is over, an opponent's call may be
-               asked about and ours answered. -->
+          <!-- Alerted calls stand out (a human partner's only once the
+               auction is over); until the board is over, an opponent's call
+               may be asked about and ours answered. -->
           <AuctionHistory
             v-if="playing.phase === 'auction' && playing.auction && !auctionCentre"
             v-bind="liveAuctionProps"

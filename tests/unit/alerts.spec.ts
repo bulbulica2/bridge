@@ -20,6 +20,7 @@ import {
   alertText,
   answerText,
   emptyBook,
+  hidesPartnerAlert,
   isOpponent,
   isPartner,
   noteAlert,
@@ -180,6 +181,26 @@ describe('alert helpers', () => {
     expect(isPartner('N', null)).toBe(false)
   })
 
+  test("only a human partner's alert is kept from us while bidding", () => {
+    expect(hidesPartnerAlert('N', 'S', false)).toBe(true)
+    expect(hidesPartnerAlert('N', 'S', true)).toBe(false)
+    expect(hidesPartnerAlert('E', 'S', false)).toBe(false)
+    expect(hidesPartnerAlert('S', 'S', false)).toBe(false)
+    expect(hidesPartnerAlert('N', null, false)).toBe(false)
+  })
+
+  test("a robot partner's alert comes with the auction's state and stays (#203)", () => {
+    let book = takeNotes(
+      emptyBook(),
+      state({ auction: noted('N 1NT, E P, S 2C, W P, N 2D', { 4: { alert: { explanation: 'No major' } } }) }),
+    )
+    expect(book.calls[4]).toEqual({ alert: { explanation: 'No major' }, question: null })
+
+    // A later state without it (it never goes away) keeps it.
+    book = takeNotes(book, state({ auction: noted('N 1NT, E P, S 2C, W P, N 2D, E P') }))
+    expect(book.calls[4].alert).toEqual({ explanation: 'No major' })
+  })
+
   test("partner's alerts come with the play's state and stay", () => {
     // During the auction partner's call has none for us.
     let book = takeNotes(emptyBook(), state({ auction: noted('N 2C, E P, S 2D, W P') }))
@@ -321,6 +342,24 @@ describe('game store alerts', () => {
     expect(game.playing?.auction?.[0].alert).toEqual({ explanation: '15-17' })
     expect(game.playing?.auction?.[1].alert).toBeNull()
     expect(showToast).not.toHaveBeenCalled()
+  })
+
+  test("CallAlerted puts a robot partner's alert on the board, quietly (#203)", async () => {
+    const robotPartner = { ...PLAYERS, N: { ...PLAYERS.N, is_robot: true } }
+    const game = await loaded(state({ players: robotPartner, auction: noted('N 1NT, E P, S 2C, W P, N 2D') }))
+
+    game.applyCallAlerted({ table_id: 5, playing_id: 42, index: 4, explanation: 'No four-card major' })
+
+    expect(game.playing?.auction?.[4].alert).toEqual({ explanation: 'No four-card major' })
+    expect(game.playing?.auction?.[4].question).toBeNull()
+    expect(showToast).not.toHaveBeenCalled()
+
+    // A PlayingUpdated (no alerts) keeps it on the call.
+    game.applyPlayingUpdate(
+      5,
+      publicState({ players: robotPartner, auction: calls('N 1NT, E P, S 2C, W P, N 2D, E P') }),
+    )
+    expect(game.playing?.auction?.[4].alert).toEqual({ explanation: 'No four-card major' })
   })
 
   test('CallAlerted that beats its call shows once the call arrives', async () => {
@@ -591,6 +630,32 @@ describe('AuctionHistory alerts', () => {
     // Partner's 2♣ is plain; West's 2♥ is alerted, East's pass askable.
     expect(w.findAll('.call-button').map((b) => b.text())).toEqual(['Pass', '2♥!'])
     expect(w.findAll('.alert-mark')).toHaveLength(1)
+  })
+
+  test("a robot partner's alert shows during the auction, with no Ask (#203)", async () => {
+    const w = mountAuction(
+      noted('N 1NT, E P, S 2C, W P, N 2D', { 4: { alert: { explanation: 'No four-card major' } } }),
+      { live: true, bidding: true, players: { ...PLAYERS, N: { ...PLAYERS.N, is_robot: true } } },
+    )
+
+    const c = cell(w, '2♦')
+    const button = c.get('.call-button')
+    expect(button.classes()).toContain('alerted')
+    expect(button.get('.alert-mark').text()).toBe('!')
+
+    await button.trigger('click')
+    expect(w.get('.call-title').text()).toBe('Partner alerted 2♦')
+    expect(w.get('.alert-text').text()).toBe('No four-card major')
+    expect(w.find('.popup-action').exists()).toBe(false)
+  })
+
+  test("a human partner's alert stays hidden while a robot's would show", () => {
+    const w = mountAuction(
+      noted('N 2C, E P', { 0: { alert: { explanation: 'Strong' } } }),
+      { live: true, bidding: true, players: { ...PLAYERS, E: { ...PLAYERS.E, is_robot: true } } },
+    )
+
+    expect(w.findAll('.alert-mark')).toHaveLength(0)
   })
 
   test("once the auction is over partner's alert shows, with no Ask", async () => {

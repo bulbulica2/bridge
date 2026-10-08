@@ -443,8 +443,8 @@ export const useGameStore = defineStore('game', () => {
   }
 
   // An opponent alerted or explained one of their calls (`CallAlerted`, on
-  // our own channel; in the play, anyone's answer, partner's or our own
-  // too): into the book, and onto the table if it is the board we hold. The
+  // our own channel; a robot partner's alert too, during the auction, #203;
+  // in the play, anyone's answer, partner's or our own too): into the book, and onto the table if it is the board we hold. The
   // answer to a question we (or partner) asked is also told, never our own.
   function applyCallAlerted(event: CallAlertedEvent) {
     if (tableId.value !== event.table_id) {

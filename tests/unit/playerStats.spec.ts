@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 import PlayerStats from '@/components/PlayerStats.vue'
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue'
+import { ROBOT_ALERTS_NOTE, ROBOT_SYSTEM, ROBOT_SYSTEM_TITLE } from '@/utils/robots'
 import AccountPage from '@/views/AccountPage.vue'
 import {
   NO_FIGURE,
@@ -464,6 +465,30 @@ describe('PlayerProfileSheet stats', () => {
     expect(http.get).not.toHaveBeenCalledWith('/users/9/stats')
     expect(wrapper.get('.profile-avatar').classes()).toContain('player-avatar-robot')
     expect(wrapper.find('.profile-avatar svg').exists()).toBe(true)
+  })
+
+  test("a robot's sheet says how robots bid (#203)", async () => {
+    const robot: PublicUser = { id: 9, name: 'Robot 1', username: 'robot-1', description: null, is_robot: true }
+    serve({ '/users/9': robot })
+    const wrapper = mountSheet(robot)
+    await flushPromises()
+
+    const system = wrapper.get('.robot-system')
+    const title = system.get('.robot-system-title')
+    expect(title.text()).toBe(ROBOT_SYSTEM_TITLE)
+    expect(system.attributes('aria-labelledby')).toBe(title.attributes('id'))
+    expect(system.findAll('li').map((li) => li.text())).toEqual([...ROBOT_SYSTEM])
+    expect(system.text()).toContain('15–17 1NT')
+    expect(system.text()).toContain('Stayman and Jacoby transfers')
+    expect(system.get('.robot-system-note').text()).toBe(ROBOT_ALERTS_NOTE)
+  })
+
+  test("a human's sheet has no robot system", async () => {
+    serve({ '/users/3': ann, '/users/3/stats': statsOf(3) })
+    const wrapper = mountSheet(ann)
+    await flushPromises()
+
+    expect(wrapper.find('.robot-system').exists()).toBe(false)
   })
 
   test('nothing for an account that is gone', async () => {

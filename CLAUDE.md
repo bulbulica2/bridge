@@ -326,7 +326,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   apart; `queue:work` must run) through the same rules as a human, so the
   SPA only shows them: a robot's icon as the avatar on every plate
   (`BridgeTable`), `RobotBadge.vue` on the
-  profile sheet (which has no "Full profile" link for a robot; the
+  profile sheet (which has no "Full profile" link for a robot and,
+  instead of stats, `.robot-system` **How robots bid**:
+  `ROBOT_SYSTEM_TITLE` / `ROBOT_SYSTEM` / `ROBOT_ALERTS_NOTE` in
+  `src/utils/robots.ts`, static text from backend `docs/ROBOTS.md`
+  Bidding, #203; the
   lobby's `TableCard` compass draws a robot's seat blue instead), and `BridgeTable`'s `thinking` prop + "robot-1 is
   thinking…" status when `acting_user_id` is a robot. Robots count as
   having voted for the next board, so a lone human's **Deal next board**
@@ -506,7 +510,13 @@ The user's standing rule (#91): **no task may leave code coverage under
   contract (or "Passed out") and toasts it when the last call arrives live.
 - **Alerts** (#101, #135, bb#100, bb#124, backend `docs/API.md` Alerts):
   a self-alert for the **opponents only** during the auction; partner sees
-  it once the auction is over. `BiddingBox`'s Alert button and field
+  it once the auction is over. **A robot's alerts are the exception**
+  (#203, bb#152): its human partner gets them at once (`CallAlerted`,
+  `alert` in the state), so `hidesPartnerAlert(seat, mySeat, robot)`
+  hides only a **human** partner's while `bidding` (`AuctionCallCell`'s
+  `robot` prop, from `AuctionHistory`'s `players[seat].is_robot`;
+  `BridgeTable`'s `lastCallAlerted` from its `players`); still no Ask on
+  partner's calls, and no toast for it (the "!" is enough). `BiddingBox`'s Alert button and field
   (`v-model:alert` / `v-model:explanation`, owned by the play page's
   `alertDraft`; the field shows only while `alert` is on, turning it off
   drops the text;

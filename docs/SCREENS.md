@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/114-trick-in-play-order`._
+_Status as of branch `bulbulica2/115-robot-partner-alerts`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -286,7 +286,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140), #186 (a pending claim in a dialog, so the table never moves), #196 (Last trick in the table's top-right corner);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140), #186 (a pending claim in a dialog, so the table never moves), #196 (Last trick in the table's top-right corner), #203 (a robot partner's alerts during the auction, needs bb#152);
 **Compare** by #30; the table's one page (the waiting table, Remove in the
 profile, Leave in the header, the set time's gear, the Start timer) by
 #181, needs bb#142; watching mode (kibitzers) by #182, needs bb#143.
@@ -519,8 +519,12 @@ What it shows by phase:
   In the grid an alerted call is ringed amber with a "!"; hovering it
   (or a tap) pops up a dark card, "East alerted 2♦", with its explanation,
   or "Alerted, no explanation given."; your own reads "You alerted 2♣".
-  Partner's alerts don't show while the auction lasts; once the play
-  starts they do, as "Partner alerted 2♣" (with no Ask). Any
+  A human partner's alerts don't show while the auction lasts; once the
+  play starts they do, as "Partner alerted 2♣" (with no Ask). A **robot**
+  partner's show at once, during the auction (#203, bb#152), the same
+  way and with no Ask, both in the grid and on its last-call chip by the
+  plate: playing with a robot, you learn its system as you go. Nothing
+  pops up for them; the "!" is enough. Any
   opponent's call, alerted or not, pops up **Ask what it means** until the
   board is over: a robot answers at once in the pop-up; a person gets a
   toast and a sheet to type the answer, which then shows like an
@@ -836,7 +840,7 @@ watching mode instead.
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create or a join) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
-| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a robot taking a seat over), `PlayingUpdated` (with `turn_deadline`); `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer; in the play, anyone's answer), `CallQuestioned` (a question about your call), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read), `UnseatedFromTable` (the Start timer freed your seat, maybe leaving you watching; kibitzers turned off). A kibitzer gets only the table channel and `UnseatedFromTable` |
+| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a robot taking a seat over), `PlayingUpdated` (with `turn_deadline`); `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer, a robot partner's alert; in the play, anyone's answer), `CallQuestioned` (a question about your call), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read), `UnseatedFromTable` (the Start timer freed your seat, maybe leaving you watching; kibitzers turned off). A kibitzer gets only the table channel and `UnseatedFromTable` |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
 reloads (after a set's last board, the vote 409s: "The set is over: press Start
@@ -847,7 +851,7 @@ Start once the table is full again).
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
 bb#40 (next board; bb#74 dropped its `everyone`; bb#97 deals it by itself), bb#43 (results), bb#59 (claims), bb#96 (claims expire), bb#115 (claims answered at once, the claim lock),
-bb#75 (sets of four boards), bb#76 (away mid-set), bb#120 (the turn clock, a robot taking the seat of a player who walks out), bb#100 (alerts), bb#124 (partner's alerts after the auction), bb#101 (board chat),
+bb#75 (sets of four boards), bb#76 (away mid-set), bb#120 (the turn clock, a robot taking the seat of a player who walks out), bb#100 (alerts), bb#124 (partner's alerts after the auction), bb#152 (a robot's alerts to its partner at once), bb#101 (board chat),
 bb#10 and bb#11 (seat others, kick or quit), bb#25 (moves), bb#44 (user
 search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#78
 (only an admin removes an admin), bb#131 (the set clock, `PATCH
@@ -1075,7 +1079,7 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans), bb#
 | `BanUserForm` | User profile, profile sheet (admins) | `users.ban()` → `POST /users/{id}/ban` |
 | `AppMenu` | the app shell | none (reads the auth store; **Your table** first while seated, via `useYourTable`) |
 | `BoardReview` | Board review, Play (`BoardReviewModal`) | none (given the review from `history.loadReview`) |
-| `PlayerProfileSheet` | Tables, Play, Board review; headed by the player's avatar (#163) | `users.load()` → `GET /users/{id}`; one line of stats ("48 boards · 65 % won · avg 56.0 %", none for a robot) via `PlayerStats` → `GET /users/{id}/stats`; **Ban** for admins (`BanUserForm`); at the game table a manager's **Remove from the table** (`removable`, the page sends it, #181), greyed out mid-set with the reason in a pop-up (`removeBlocked`, #190) |
+| `PlayerProfileSheet` | Tables, Play, Board review; headed by the player's avatar (#163) | `users.load()` → `GET /users/{id}`; one line of stats ("48 boards · 65 % won · avg 56.0 %", none for a robot) via `PlayerStats` → `GET /users/{id}/stats`; for a robot instead, **How robots bid** (SAYC-style, 15–17 1NT, Stayman and transfers…, and that its special calls are alerted to its partner too: static text in `utils/robots.ts`, #203); **Ban** for admins (`BanUserForm`); at the game table a manager's **Remove from the table** (`removable`, the page sends it, #181), greyed out mid-set with the reason in a pop-up (`removeBlocked`, #190) |
 | `PlayerStats` | User profile, Account, profile sheet (one line) | `users.loadStats()` → `GET /users/{id}/stats` or `GET /api/user/stats` (#131) |
 | `PlayerAvatar` | profile sheet, each search result (#163) | none |
 | `StartBox` | Play (the table's centre while the next board waits for Start, #181): the waiting line, **Start** / **Cancel**, the Start timer's countdown | none (the page sends Start; reads `ready` / `start_deadline` from the table) |
