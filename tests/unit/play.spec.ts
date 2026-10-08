@@ -21,6 +21,7 @@ import {
   legalCards,
   playsForDeclarer,
   trickBySide,
+  trickOrder,
 } from '@/utils/play'
 import { FORCED_PLAY_SECONDS, useForcedPlay } from '@/composables/useForcedPlay'
 import { showToast } from '@/utils/toast'
@@ -495,6 +496,72 @@ describe('trick layout by seat', () => {
     })
   })
 
+  test('the order of play by side, whoever leads', () => {
+    // South at the bottom: West left, North top, East right.
+    expect(trickOrder(played('W SK, N S2, E SA, S S9'), 'S')).toEqual({ left: 0, top: 1, right: 2, bottom: 3 })
+    expect(trickOrder(played('N S2, E SA, S S9, W SK'), 'S')).toEqual({ top: 0, right: 1, bottom: 2, left: 3 })
+    expect(trickOrder(played('E SA, S S9, W SK, N S2'), 'S')).toEqual({ right: 0, bottom: 1, left: 2, top: 3 })
+    expect(trickOrder(played('S S9, W SK, N S2, E SA'), 'S')).toEqual({ bottom: 0, left: 1, top: 2, right: 3 })
+    // Turned for East: South on the left, West on top.
+    expect(trickOrder(played('S S9, W SK, N S2, E SA'), 'E')).toEqual({ left: 0, top: 1, right: 2, bottom: 3 })
+  })
+
+  test('a trick in progress has no order yet for the seats still to play', () => {
+    expect(trickOrder([], 'S')).toEqual({ bottom: null, left: null, top: null, right: null })
+    expect(trickOrder(played('E HQ, S H2'), 'S')).toEqual({ right: 0, bottom: 1, left: null, top: null })
+    // Not seated: South at the bottom.
+    expect(trickOrder(played('N HQ'), null)).toEqual({ top: 0, bottom: null, left: null, right: null })
+  })
+
+  // Each side's z-index as TrickArea draws it.
+  function layers(wrapper: ReturnType<typeof mount>) {
+    return Object.fromEntries(
+      wrapper
+        .findAll('.slot')
+        .map((slot) => [slot.attributes('data-side'), (slot.element as HTMLElement).style.zIndex]),
+    )
+  }
+
+  test('TrickArea stacks the cards in the order of play, the last card on top', () => {
+    const leaders: [string, Record<string, string>][] = [
+      ['S S9, W SK, N S2, E SA', { bottom: '1', left: '2', top: '3', right: '4' }],
+      ['W SK, N S2, E SA, S S9', { left: '1', top: '2', right: '3', bottom: '4' }],
+      ['N S2, E SA, S S9, W SK', { top: '1', right: '2', bottom: '3', left: '4' }],
+      ['E SA, S S9, W SK, N S2', { right: '1', bottom: '2', left: '3', top: '4' }],
+    ]
+    for (const [trick, expected] of leaders) {
+      const wrapper = mount(TrickArea, { props: { cards: played(trick), mySeat: 'S', winner: 'E' } })
+      expect(layers(wrapper)).toEqual(expected)
+      // The viewer's card is on top only when they played last.
+      expect(wrapper.get('[data-side="bottom"]').attributes('data-order')).toBe(String(Number(expected.bottom) - 1))
+    }
+  })
+
+  test("TrickArea in progress: the cards so far stacked, the empty slots and the viewer's dashed place under them", () => {
+    const wrapper = mount(TrickArea, { props: { cards: played('N HQ, E HK'), mySeat: 'S', mySlot: true } })
+
+    expect(layers(wrapper)).toEqual({ top: '1', right: '2', left: '0', bottom: '0' })
+    expect(wrapper.get('[data-side="bottom"] .my-slot').exists()).toBe(true)
+    expect(wrapper.get('[data-side="bottom"]').attributes('data-order')).toBeUndefined()
+  })
+
+  test("TrickArea rings the winner over every card, the winning card left in its place", () => {
+    // North led, South played last and lies on top; East won.
+    const wrapper = mount(TrickArea, {
+      props: { cards: played('N S2, E SA, S S9, W SK'), mySeat: 'S', winner: 'E' },
+    })
+
+    const ring = wrapper.get('.win-ring')
+    expect(ring.attributes('data-side')).toBe('right')
+    expect(ring.classes()).toContain('slot-right')
+    expect(Number((ring.element as HTMLElement).style.zIndex)).toBeGreaterThan(4)
+    expect(wrapper.get('.slot.won').attributes('data-side')).toBe('right')
+    expect((wrapper.get('.slot.won').element as HTMLElement).style.zIndex).toBe('2')
+
+    const none = mount(TrickArea, { props: { cards: played('N S2'), mySeat: 'S' } })
+    expect(none.find('.win-ring').exists()).toBe(false)
+  })
+
   test('TrickArea draws the trick rotated for the viewer and rings the winner', () => {
     const wrapper = mount(TrickArea, {
       props: { cards: played('W SK, N S2, E SA, S S9'), mySeat: 'N', winner: 'E' },
@@ -528,6 +595,9 @@ describe('trick layout by seat', () => {
     expect(wrapper.findAll('.won')).toHaveLength(1)
     expect(wrapper.get('.won').attributes('data-seat')).toBe('E')
     expect(wrapper.get('.won .seat-tag').text()).toBe('E')
+    // The same order of play as on the table: West (right) led, South (top) last.
+    expect(layers(wrapper)).toEqual({ right: '1', bottom: '2', left: '3', top: '4' })
+    expect(wrapper.get('.win-ring').attributes('data-side')).toBe('left')
   })
 })
 

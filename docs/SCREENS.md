@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/112-last-trick-in-the-corner`._
+_Status as of branch `bulbulica2/114-trick-in-play-order`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -532,7 +532,13 @@ What it shows by phase:
 - **play**: in the table's top-right corner the contract, **5♣ by
   East** (**5♣X**, **5♣XX** when doubled or redoubled), and the tricks
   won, **NS 0 · EW 0**, with no declarer/dummy line (#165, #171), the current trick in the
-  centre, dummy's cards once the opening lead is made, trumps on the left
+  centre (#201: each card in front of its seat, stacked in the order they
+  were played, the lead at the bottom and the last card on top, whoever
+  played it; the cards sit in a pinwheel, the top one a little to the
+  left and the bottom one a little to the right, so they barely overlap
+  and every rank and suit shows whatever the order; the winning card's
+  amber ring is drawn over everything, the card itself left in its place;
+  the box is the same size from the first card to the fourth), dummy's cards once the opening lead is made, trumps on the left
   and the colours still alternating (4♠: ♠ ♥ ♣ ♦, 3♦: ♦ ♠ ♥ ♣, NT: ♥ ♣ ♦
   ♠; a robot declarer's cards, for its dummy, the same way). From the second
   trick on, a **Last trick** button sits in the table's top-right corner,
