@@ -21,6 +21,7 @@ import {
   replacedTogetherText,
   replacementOf,
   seatInSet,
+  boardInSetText,
   boardPosition,
   setLabel,
   setTitle,
@@ -165,6 +166,15 @@ describe('set helpers', () => {
   test("the set bar, and the board's place alone", () => {
     expect(setLabel(position())).toBe('Board 2 of 4 · Set 3')
     expect(boardPosition(position())).toBe('Board 2 of 4')
+  })
+
+  test("the board's place in its set, never its number in the database", () => {
+    expect(boardInSetText(position())).toBe('Board 2 of 4')
+    expect(boardInSetText(position(), false)).toBe('Board 2')
+    // Without `of`, the place alone.
+    expect(boardInSetText({ board: 3 })).toBe('Board 3')
+    expect(boardInSetText(null)).toBe('Board')
+    expect(boardInSetText(undefined, false)).toBe('Board')
   })
 
   test("the table's set and the board's agree on whatever either knows", () => {
@@ -322,7 +332,7 @@ describe('SetResultsPanel', () => {
     const rows = wrapper.findAllComponents({ name: 'IonItem' })
     expect(rows).toHaveLength(4)
     expect(rows[0].props('routerLink')).toBe('/playings/41')
-    expect(rows[0].text()).toContain('1. Board 11')
+    expect(rows[0].get('.set-row-board').text()).toBe('Board 1')
     expect(rows[0].text()).toContain('4♠ by N =')
     expect(rows[0].get('.set-row-score').text()).toBe('−420')
     expect(rows[0].get('.set-row-mp').text()).toBe('MP 0 %')

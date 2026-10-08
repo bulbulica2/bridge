@@ -5,6 +5,7 @@ import type { PlayingReview } from '@/services/history';
 import { copyText, downloadFile } from '@/utils/download';
 import { boardJson, boardPbn, boardText, exportFileName, playingExtras } from '@/utils/export';
 import type { ExportExtras } from '@/utils/export';
+import { boardInSetText } from '@/utils/sets';
 import { showToast } from '@/utils/toast';
 
 // Taking a reviewed board out of the app (src/utils/export.ts): the Export
@@ -56,7 +57,7 @@ export function useBoardExport(review: () => PlayingReview | null) {
     }
     try {
       await copyText(boardText(board, extras.value));
-      await showToast(`Board ${board.board?.number ?? ''} copied as text.`, 'success');
+      await showToast(`${boardInSetText(board.set)} copied as text.`, 'success');
     } catch {
       await showToast('Could not copy to the clipboard. Try Download .txt instead.', 'danger');
     }

@@ -283,6 +283,8 @@ describe('BoardResultsPage', () => {
     // Both sides vulnerable, bo's too, and who dealt.
     expect(wrapper.get('.board-info .vul-label').text()).toBe('Both (you too)')
     expect(wrapper.get('.board-info').text()).toContain('Dealer South')
+    // Played at several tables, in a different place in each set: no number.
+    expect(wrapper.find('ion-title').text()).toBe('Board results')
   })
 
   test('says there is nothing to compare when only one table has finished', async () => {
@@ -320,6 +322,10 @@ describe('BoardResultsPage', () => {
 })
 
 describe('HistoryPage', () => {
+  // An entry's board line, less when it was played.
+  const boardOf = (item: { get: (selector: string) => { text: () => string } }) =>
+    item.get('.entry-board').text().replace(item.get('.entry-when').text(), '').trim()
+
   test('lists the finished boards, each opening its replay', async () => {
     loginAs(bo)
     answer(
@@ -346,6 +352,30 @@ describe('HistoryPage', () => {
     expect(items[0].text()).toContain('−620')
     expect(items[1].get('.entry-contract').text()).toBe('Passed out')
     expect(items[2].get('.entry-contract').text()).toBe('4♠X by N +2')
+    // Outside any set: plain Board, never the board's number in the database.
+    expect(boardOf(items[0])).toBe('Board')
+  })
+
+  test("each entry names its board by its place in the set", async () => {
+    loginAs(bo)
+    answer(
+      page(
+        [
+          entry(42, { set: { id: 5, number: 3, board: 2, of: 4 }, board: { ...board, id: 137, number: 137 } }),
+          entry(41, { set: { id: 5, number: 3, board: 1, of: 4 }, board: { ...board, id: 136, number: 136 } }),
+        ],
+        1,
+        1,
+      ),
+    )
+
+    const wrapper = mount(HistoryPage)
+    await flushPromises()
+
+    // Under the set's header, so the place alone.
+    const items = wrapper.findAll('.entry')
+    expect(items.map(boardOf)).toEqual(['Board 2', 'Board 1'])
+    expect(wrapper.text()).not.toContain('137')
   })
 
   test('shows the empty state', async () => {

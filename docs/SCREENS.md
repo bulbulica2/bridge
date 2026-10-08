@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/107-no-leave-or-review-in-result-dialog`._
+_Status as of branch `bulbulica2/108-board-number-in-set`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -194,7 +194,8 @@ watching a table (kibitzers) by #182.
 
 The lobby, up to 1280 px wide: the list on the left and, beside it from
 about 1000 px (below it on a phone), **Your form** and **Recent boards**
-(as on Home).
+(as on Home; each board "Set 2 · B3", or plain "Board" outside a set,
+#189).
 
 - **Your table** (navy, while you sit somewhere): the table's name, "Set
   3 · Board 2 of 4 · you sit South with radu", the set's boards as tiles
@@ -672,9 +673,11 @@ corners, the page dimmed around it; up to 880 px wide, below 768 px 8 px
 of backdrop each side; the header stays put and the review scrolls inside;
 Close, the backdrop or Escape close it): the same replay and Export as
 [Board review](#board-review--playingsid), without leaving the table. It
-opens on the latest finished board, with a switcher (**Board 5**,
-**Board 6** …) for the set's other finished boards; on a set's first board
-it offers the previous set's last. The game goes on underneath; when it
+opens on the latest finished board, with a switcher (**Board 1**,
+**Board 2** …, each board's place in its set, #189) for the set's other
+finished boards; on a set's first board it offers the previous set's
+last. Its title is the board shown, **Board 2 review** ("Board review"
+for a board outside any set); never the board's number in the database. The game goes on underneath; when it
 waits for you ("Your turn to bid", "Your turn to play", "A claim waits for
 your answer", "Your Start: …") a
 banner in the dialog says so with **To the table**. A forced card doesn't
@@ -828,7 +831,9 @@ table 5**, how many of its boards are listed ("2 of 4 boards") and, if the
 set's results have been read (its page, or the play page) and another
 table has played its boards, your matchpoints over it ("62 %"); never a
 summed score (#100). It opens the [set's results](#set-results--setsid). Under
-it, each board: board number, contract and result in table notation
+it, each board: its place in the set ("Board 2", #189; plain "Board"
+outside a set, never the board's number in the database), contract and
+result in table notation
 ("4♠X by N −1"), the seat you sat and
 your partner, the table, and the score from your side. Tapping one opens
 its [review](#board-review--playingsid). Boards played before sets existed
@@ -852,8 +857,8 @@ still going on (with the boards finished so far).
 The table and when the set finished (or started), the two pairs, and the
 same set view as on the play page: who won (from your side if you played
 it, else N-S's, also when a robot finished it for you), whom a robot
-replaced and why, each board opening its review (contract in
-table notation, your side's score and matchpoints), and the set's
+replaced and why, each board ("Board 1"…"Board 4", its place in the set,
+#189) opening its review (contract in table notation, your side's score and matchpoints), and the set's
 matchpoints for your side ("62 %", with "5 of 8") instead of a summed
 score, or "No other table has played these boards yet." (#100). Under it,
 **Time used**: each person's time used of their time for the set ("10:48
@@ -870,6 +875,8 @@ Backend: bb#75, bb#131 (`time_used`).
 
 **Logged in, and only after you finished that board** (403 otherwise).
 Built by #30; Daylight's colours (your tables navy-tinted) by #163. Reached from a board's review or the result dialog's **Compare with other tables**.
+Titled **Board results** (#189): a board can be played at several tables,
+in a different place in each set, so no number.
 
 The same board at every table, best N-S score first, each with its
 contract, declarer, score and matchpoints. The tables you sat at are
@@ -898,6 +905,10 @@ for an unknown or unfinished playing). Built by #48; Daylight's colours by #163.
 entry (yours or another player's) or a row of Board results; not in the
 menu. The play page shows the same review in a sheet (#97: `BoardReview`
 and `useBoardExport` serve both). It works the same after the table is gone.
+
+Titled **Board 2 of 4 review**, the board's place in its set (the
+review's `set`, bb#146; #189), or **Board review** for a board outside any
+set; never the board's number in the database.
 
 One table's playing of a board, replayed, with the board's details in
 the table's corners as on the play page (#180; nothing above the table):
@@ -942,7 +953,8 @@ middle of the table keeps the board's dealer and vulnerability).
 
 **Export** (header, #71) opens a menu to take the board out of the app:
 
-- **Copy as text**: a plain summary for a chat: board, dealer and
+- **Copy as text**: a plain summary for a chat: board ("Board 2 of 4",
+  its place in the set, #189), dealer and
   vulnerability, the players (robots marked "(robot)"), the four hands as
   dealt, the auction as a W N E S grid, contract, declarer and opening
   lead, one line per trick (leader, the four cards in the order played,
@@ -959,7 +971,7 @@ middle of the table keeps the board's dealer and vulnerability).
 - **Download .json**: the review exactly as the backend sent it, for
   debugging and for work on the robots.
 - **Print / Save as PDF**: the browser's print dialog with a paper layout
-  of the board (no app menu or header): the board line (dealer and
+  of the board (no app menu or header): "Board 2 of 4", the board line (dealer and
   "Vulnerable: E-W (you)" in plain text, black and white) and result, the
   hands round a compass, the auction (alerted calls marked "!" and listed
   under it) and a trick-by-trick table.

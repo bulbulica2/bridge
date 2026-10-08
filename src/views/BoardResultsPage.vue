@@ -1,6 +1,6 @@
 <template>
   <ion-page>
-    <AppHeader :title="data ? `Board ${data.board.number}` : 'Board results'" />
+    <AppHeader title="Board results" />
     <ion-content :fullscreen="true" class="ion-padding">
       <ion-refresher slot="fixed" v-ion-event:ion-refresh="refresh">
         <ion-refresher-content />

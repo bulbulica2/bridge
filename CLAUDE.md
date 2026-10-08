@@ -809,7 +809,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   longer `replaced`). The
   play page shows `setLabel` ("Board 2 of 4 · Set 3") under the table's
   name in the header and `boardPosition` ("Board 2 of 4") in the table's
-  centre line. `getSet(id)` (`GET /sets/{id}`, in
+  centre line. **Never show `board.number`** (#189: the board's place in
+  the backend's global sequence): `boardInSetText(set, withOf = true)`
+  ("Board 2 of 4" / "Board 2" without `of` or with `withOf` false /
+  "Board" for no set) words the board's place instead; history rows
+  (`SetPlace` `{id, number, board, of}`) and `HistoryEntryItem` say
+  "Board 2", `RecentBoards` "Set 2 · B3" or "Board", `SetResultsPanel`
+  "Board 1", `BoardResultsPage` is titled "Board results", and the Leave
+  / Watch confirmations get `playing.set.board` (`seatMove.ts`'s
+  `boardInSet`: "Board 2 is in progress…"). `getSet(id)` (`GET /sets/{id}`, in
   `src/services/history.ts`: finished `boards` with `matchpoints`/`top`,
   `totals`, `winner`; 403 unless a player of it or finished all its
   boards) is cached by the history store's `loadSet` (replaced on every
@@ -970,7 +978,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   "Boards played". `BoardResultsPage.vue` highlights the tables the viewer
   sat at (`seatOfUser`) with their side's `matchpointPercent`.
 - **Board review**: `GET /playings/{id}` (`getPlayingReview`, typed
-  `PlayingReview` = `PublicPlaying` less `ready` and `set`, players nullable) is one
+  `PlayingReview` = `PublicPlaying` less `ready`, players nullable, `set`
+  the history row's `SetPlace` or null, optional since bb#146: the page's
+  title "Board 2 of 4 review", else "Board review"; an unrecorded
+  review's centre line `boardInSetText(set)`) is one
   finished playing with its auction and tricks, for anyone who finished
   that board (403 otherwise, 404 unknown or unfinished), even once the
   table is gone. The history store's `loadReview` caches it by playing id
@@ -1024,8 +1035,13 @@ The user's standing rule (#91): **no task may leave code coverage under
   seen, latest)` in `review.ts` (running set's `boards[].playing_id`, plus
   the page's `seenBoard` (last `finished` playing at this table) if the set
   read lags; else `seenBoard` (the previous set's last); else the history
-  store's latest `listOf(null)` entry with this `table_id`), segment
-  switcher, opening on the last; each via `history.loadReview`. On entry
+  store's latest `listOf(null)` entry with this `table_id`; each
+  `ReviewChoice` `{playingId, position}`, the place in the set from
+  `boards[].position`, `seenBoard`'s `playing.set.board` or the entry's
+  `set?.board`, null without a set, #189), segment switcher ("Board 1",
+  "Board 2", "Board" without a position; title "Board 2 review" from the
+  shown choice, else the review's `set`, else "Board review"), opening on
+  the last; each via `history.loadReview`. On entry
   `findReviewable()` reads `GET /sets/{id}` mid-set and, if still none and
   past set 1 board 1, `loadHistory(null)`. `turnNotice()`
   (`src/utils/turn.ts`: bid, play, answer a claim, Next, Start) shows as a
@@ -1072,7 +1088,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   scope dispose): Copy as text, Download .txt/.pbn/.json, Print / Save
   as PDF (only Copy on a native platform, `Capacitor.isNativePlatform()`:
   WebViews ignore `download` links and `window.print()`).
-  `src/utils/export.ts` is pure: `boardText(review, extras)` (the chat
+  `src/utils/export.ts` is pure: `boardText(review, extras)` (its first
+  line "Board 2 of 4 (playing #42)" from `review.set`, #189, as the
+  "copied as text" toast and `BoardPrintout`'s heading; the chat
   after the alerts via `chatLines`; the double dummy table and
   `leadSummary` at the end once ready; the alerts
   listed under the auction via `alertLines`; matchpoints
@@ -1085,7 +1103,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   table is ready), Play, Score; play lines in fixed seat
   columns from the opening leader, a claim leaves `-` and ends with `*`;
   CRLF line ends), `boardJson`, `trickRows`, `claimNote` (the review
-  doesn't say who claimed: told from declarer's side), `exportFileName`.
+  doesn't say who claimed: told from declarer's side), `exportFileName`
+  (`board-7-playing-42.pbn`). Only the PBN `Board` tag and the file name
+  keep `board.number`: PBN readers check it against dealer and
+  vulnerability, which the backend derives from it.
   `src/utils/download.ts`: `downloadFile`, `copyText`. Print: the page (or modal) adds
   `printing-board` to `<body>`, teleports `BoardPrintout.vue` there,
   `window.print()`, and drops it on `afterprint`/view leave/modal close;
@@ -1350,8 +1371,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   Auction button only), the contract only "5♣ by East" + `tricks_won`,
   no declarer/dummy line, and no
   `board.number` anywhere on the play page: `BridgeTable`'s
-  `boardLabel` (the centre's first line; left out "Board 7", the play
-  page passes `boardPosition` or null). #162 did the finished board and the lobby
+  `boardLabel` (the centre's first line; left out or null, no line, never
+  `board.number`, #189; the play page passes `boardPosition` or null). #162 did the finished board and the lobby
   (Board result above; **Lobby** below); tokens
   `--bridge-on-table-good`/`-bad`/`-accent`, `--bridge-table-dim`,
   `--bridge-on-table-faint`, `--bridge-navy-tint`(`-text`),

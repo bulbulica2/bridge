@@ -28,6 +28,19 @@ export function boardPosition(set: Pick<SetPosition, 'board' | 'of'>): string {
   return `Board ${set.board} of ${set.of}`;
 }
 
+// The board's place in its set, never its number in the database (#189):
+// "Board 2 of 4", "Board 2" without `of` or where the set is already named
+// (`withOf` false), plain "Board" with no set.
+export function boardInSetText(
+  set: { board: number; of?: number } | null | undefined,
+  withOf = true,
+): string {
+  if (!set) {
+    return 'Board';
+  }
+  return withOf && set.of !== undefined ? boardPosition({ board: set.board, of: set.of }) : `Board ${set.board}`;
+}
+
 // "Board 2 of 4 · Set 3".
 export function setLabel(set: Pick<SetPosition, 'number' | 'board' | 'of'>): string {
   return `${boardPosition(set)} · Set ${set.number}`;

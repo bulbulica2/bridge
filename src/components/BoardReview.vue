@@ -15,6 +15,7 @@
       :players="review.players"
       :my-seat="mySeat"
       :board="review.board"
+      :board-label="review.set ? boardInSetText(review.set) : null"
       :turn="null"
       :deal="total > 0 ? at.hands : review.deal"
       :replay="total > 0"
@@ -219,6 +220,7 @@ import { SEAT_NAMES } from '@/utils/auction';
 import { nextSeat, openingLead } from '@/utils/export';
 import type { ExportExtras } from '@/utils/export';
 import { doubledMark, seatOfUser } from '@/utils/result';
+import { boardInSetText } from '@/utils/sets';
 import {
   clampStep,
   isRecorded,

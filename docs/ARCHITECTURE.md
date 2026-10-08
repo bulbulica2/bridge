@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/107-no-leave-or-review-in-result-dialog`._
+_Status as of branch `bulbulica2/108-board-number-in-set`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -288,8 +288,17 @@ The board's place in its set is the header's second line,
 the dealer is the **D** on their plate (`aria-label` "dealer"). The board
 tile and the dealer pill are gone, and so is the board's number in the
 database: `BridgeTable`'s centre line is `boardLabel` ("Board 2 of 4",
-none outside a set; a review keeps "Board 7"). The review keeps its own
-bar above its table.
+none outside a set, and none when it is left out). **No page shows
+`board.number`** (#189): it is the board's place in the backend's global
+sequence, which means nothing to a player. `boardInSetText(set, withOf)` in
+`src/utils/sets.ts` words the board's place instead ("Board 2 of 4",
+"Board 2" where the set is already named, plain "Board" without a set):
+the review page's title and an unrecorded review's centre line (from the
+review's `set`, bb#146), history entries, the export's first line, the
+"copied" toast and the printout. Only the PBN export's `Board` tag (PBN
+readers check it against the dealer and vulnerability) and the export's
+file name keep the number. The Leave and Watch confirmations name the
+board by its place in the set too ("Board 2 is in progress…").
 
 ## Routes and the guard
 
@@ -932,7 +941,7 @@ lobby's cards show with a **Watch** button.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | Daylight's navy panel (#160) with the four seats, rotated so **you are always at the bottom**, partner and you across its width, the opponents left and right. Each seat is a **plate**: avatar (two initials; a robot's icon, `avatar-robot`), name (opens the profile sheet), seat, the `AdminBadge`, and each human's time for the set as a pill (`banks`: grey idle, white while it runs, red under a minute, none for a robot or an admin). The seat on turn is ringed orange, an away seat's plate is red, a seat that pressed Start gets a green tick (`ready`, the play page's seats while Start is awaited), an empty seat is dashed ("Empty · North"; with `seatable` a button emitting `empty` with its seat, the game table's action sheet, #181); the plate's top edge is red/green for vulnerability. During the auction each seat's **last call** sits beside its plate as a chip (`calls`), an opponent's alerted one ringed amber with "!" (partner's never during the auction); whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`); the dealer's plate has a **D** (`aria-label` "dealer"); the centre's first line while it shows the board is `boardLabel` (the play page's "Board 2 of 4", none outside a set, #165; left out, "Board 7"); with `wide` (#163) the wide screen's layout; four corner slots, `top-left`, `top-right`, `bottom-left`, `bottom-right` (#171), laid over the panel's corners at every width without taking a row's height, partner's and your plates keeping them clear; with `bottomRightRoom` (the review's double dummy grid, #180) your whole seat, hand included, keeps the larger bottom-right corner's width clear on both sides, and a table under 340 px gives that corner a row of its own under your seat |
+| `BridgeTable` | Daylight's navy panel (#160) with the four seats, rotated so **you are always at the bottom**, partner and you across its width, the opponents left and right. Each seat is a **plate**: avatar (two initials; a robot's icon, `avatar-robot`), name (opens the profile sheet), seat, the `AdminBadge`, and each human's time for the set as a pill (`banks`: grey idle, white while it runs, red under a minute, none for a robot or an admin). The seat on turn is ringed orange, an away seat's plate is red, a seat that pressed Start gets a green tick (`ready`, the play page's seats while Start is awaited), an empty seat is dashed ("Empty · North"; with `seatable` a button emitting `empty` with its seat, the game table's action sheet, #181); the plate's top edge is red/green for vulnerability. During the auction each seat's **last call** sits beside its plate as a chip (`calls`), an opponent's alerted one ringed amber with "!" (partner's never during the auction); whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`); the dealer's plate has a **D** (`aria-label` "dealer"); the centre's first line while it shows the board is `boardLabel` (the play page's "Board 2 of 4", none outside a set, #165; left out, no such line: never the board's number, #189); with `wide` (#163) the wide screen's layout; four corner slots, `top-left`, `top-right`, `bottom-left`, `bottom-right` (#171), laid over the panel's corners at every width without taking a row's height, partner's and your plates keeping them clear; with `bottomRightRoom` (the review's double dummy grid, #180) your whole seat, hand included, keeps the larger bottom-right corner's width clear on both sides, and a table under 340 px gives that corner a row of its own under your seat |
 | `VulnerabilityLabel` | who is vulnerable in words (`vulnerabilityText`), Daylight's pill: green **Nobody vulnerable**, else red with a dot, **Vul: E-W** for the other side, **Vulnerable: N-S (you)** for yours, **Both (you too)**; on the board results page (#151, #160), and `compact` (28 px, smaller words that may wrap, no dot) in the play page's and `BoardReview`'s top-left table corner (#171, #180) |
 | `AuctionPopover` | the play page's **Auction** button in the table's bottom-left corner (#165, #171), from the first call to the end of the board: the `AuctionHistory` grid in a pop-up opening upward (`usePopover`: a mouse hovering opens it, a tap toggles it, a tap outside or Escape closes it), passing on `ask` / `explain` / `chat`, so Ask and Ask in the chat work there while the board is on |
 | `ClaimButton` | the play page's **Claim** in the table's bottom-right corner (#171): a light 36 px button with a 44 px tap area, `claim` on a tap, `disabled` while a card or a claim is in flight; `locked` after a refused claim, it reads **Claim · locked** in grey (`aria-disabled`) and a tap or a hover opens a small pop-up above it with `CLAIM_LOCKED_TEXT` (`usePopover`), always in the DOM as the button's `aria-describedby` |
@@ -1326,6 +1335,11 @@ Which boards it offers is `reviewChoices()` in `src/utils/review.ts`:
   table (`GET /api/user/playings`, read only when a board may have been
   finished here: past the first board of the first set).
 
+Each choice (`ReviewChoice`) carries the board's place in its set,
+`position` (the set's `boards[].position`, the seen board's
+`playing.set.board`, a history entry's `set.board`; null without a set,
+#189): the segments read "Board 1", "Board 2" ("Board" without one) and
+the title "Board 2 review" ("Board review"), never the board's number.
 Each board loads through `history.loadReview()`, cached. When the game
 waits for you (a call, a card, an answer to a claim or your Start:
 `turnNotice()` in `src/utils/turn.ts`), a banner in the modal says so with

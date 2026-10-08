@@ -47,7 +47,7 @@
               :key="choice.playingId"
               :value="String(choice.playingId)"
             >
-              <ion-label>Board {{ choice.number ?? '?' }}</ion-label>
+              <ion-label>{{ boardInSetText(positionOf(choice)) }}</ion-label>
             </ion-segment-button>
           </ion-segment>
 
@@ -116,6 +116,7 @@ import { useHistoryStore } from '@/stores/history';
 import { errorMessage } from '@/utils/errors';
 import { seatOfUser } from '@/utils/result';
 import type { ReviewChoice } from '@/utils/review';
+import { boardInSetText } from '@/utils/sets';
 
 const props = withDefaults(
   defineProps<{
@@ -152,9 +153,18 @@ const mySeat = computed(() =>
   review.value ? seatOfUser(review.value.players, auth.user?.id) : null,
 );
 
-const title = computed(() =>
-  review.value?.board ? `Board ${review.value.board.number} review` : 'Board review',
-);
+// "Board 2" for a choice with a place in its set, else plain "Board".
+function positionOf(choice: ReviewChoice) {
+  return choice.position === null ? null : { board: choice.position };
+}
+
+// "Board 2 review": the shown board's place in its set (the review's own
+// `set` if the choice doesn't know it), never its number in the database.
+const title = computed(() => {
+  const choice = props.choices.find((c) => c.playingId === shownId.value);
+  const position = choice?.position ?? review.value?.set?.board ?? null;
+  return position === null ? 'Board review' : `Board ${position} review`;
+});
 
 const exporter = useBoardExport(() => review.value);
 

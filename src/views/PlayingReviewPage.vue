@@ -1,6 +1,6 @@
 <template>
   <ion-page>
-    <AppHeader :title="review?.board ? `Board ${review.board.number} review` : 'Board review'">
+    <AppHeader :title="review?.set ? `${boardInSetText(review.set)} review` : 'Board review'">
       <template #end>
         <ion-button v-if="review && !gone" aria-haspopup="menu" @click="exporter.open.value = true">
           <ion-icon slot="start" :icon="shareOutline" />
@@ -109,6 +109,7 @@ import { useHistoryStore } from '@/stores/history';
 import type { PublicUser } from '@/services/users';
 import { errorMessage, statusOf } from '@/utils/errors';
 import { seatOfUser } from '@/utils/result';
+import { boardInSetText } from '@/utils/sets';
 
 const route = useRoute();
 const ionRouter = useIonRouter();

@@ -340,7 +340,7 @@ describe('YourForm and RecentBoards', () => {
     const rows = wrapper.findAll('.recent-row')
     expect(rows).toHaveLength(3)
     expect(rows.map((r) => r.get('.recent-contract').text())).toEqual(['Passed out', '3NT N −1', 'Passed out'])
-    expect(rows.map((r) => r.get('.recent-where').text())).toEqual(['Board 12', 'Set 1 · B4', 'Board 12'])
+    expect(rows.map((r) => r.get('.recent-where').text())).toEqual(['Board', 'Set 1 · B4', 'Board'])
     expect(rows[1].get('.recent-score').text()).toBe('−50')
     expect(wrapper.findAllComponents(RouterLinkStub).map((l) => l.props('to'))).toEqual([
       '/playings/1',

@@ -459,14 +459,19 @@ describe('TablesPage.vue your table', () => {
     const wrapper = mountWith([mine()])
     const game = useGameStore()
     game.tableId = 1
-    game.playing = { phase: 'play', board: { id: 18, number: 2 } } as unknown as typeof game.playing
+    game.playing = {
+      phase: 'play',
+      board: { id: 18, number: 137 },
+      set: { id: 3, number: 1, board: 2, of: 4 },
+    } as unknown as typeof game.playing
     const clear = vi.spyOn(game, 'clear')
     vi.spyOn(useTablesStore(), 'leave').mockResolvedValue({ tableDeleted: false, held: true })
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
     await leave(wrapper)
 
-    expect(confirmLeave).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 1, 'play', 2, null)
+    // The board's place in its set, never its number in the database.
+    expect(vi.mocked(confirmLeave).mock.calls[0].slice(0, 4)).toEqual([expect.objectContaining({ id: 1 }), 1, 'play', 2])
     expect(clear).toHaveBeenCalled()
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Your seat is kept for 2 minutes'), 'warning')
   })

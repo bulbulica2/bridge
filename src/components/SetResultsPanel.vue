@@ -37,7 +37,7 @@
         <div class="set-row">
           <div class="set-row-main">
             <p class="set-row-board">
-              {{ row.position }}. Board {{ row.board.number }}
+              Board {{ row.position }}
             </p>
             <p class="set-row-contract">
               <template v-if="row.contract && row.declarer">

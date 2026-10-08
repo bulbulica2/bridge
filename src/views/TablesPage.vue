@@ -398,7 +398,7 @@ async function leaveToWatch(table: Table): Promise<boolean> {
     await showToast(watchBlockedText(from, stake), 'warning');
     return false;
   }
-  const board = game.tableId === from.id ? (game.playing?.board?.number ?? null) : null;
+  const board = game.tableId === from.id ? (game.playing?.set?.board ?? null) : null;
   if (!(await confirmWatch(from, table, me.value, game.phaseOf(from.id), board, stake))) {
     return false;
   }
@@ -412,7 +412,7 @@ async function leave(table: Table) {
   player.value = null;
   try {
     const stake = tablesStore.stakeOf(table);
-    const board = game.tableId === table.id ? (game.playing?.board?.number ?? null) : null;
+    const board = game.tableId === table.id ? (game.playing?.set?.board ?? null) : null;
     if (!(await confirmLeave(table, me.value, game.phaseOf(table.id), board, stake))) {
       return;
     }

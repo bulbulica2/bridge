@@ -29,13 +29,25 @@ interface ApiResponse<T> {
 // One finished board the user played (played out or passed out; a board
 // they left before the end isn't there). `contract`…`made_by` are the game
 // state's `result`; `score` is `score_ns` turned round for the user's side.
+// Which board of its set a finished playing was (bridge_backend docs/API.md,
+// GET /users/{user}/playings and GET /playings/{playing}): the set's id and
+// number at the table, `board` this playing's place in it (1–`of`) and `of`.
+// Show it, never `board.number` (the board's place in the backend's global
+// sequence, which means nothing to a player).
+export interface SetPlace {
+  id: number;
+  number: number;
+  board: number;
+  of: number;
+}
+
 export interface PlayingHistoryEntry {
   playing_id: number;
   // Null once the table has been deleted.
   table_id: number | null;
   // The set the board was dealt in and its place in it, to group the
   // history by set. Null only for a playing made outside the game services.
-  set: { id: number; number: number; board: number; of: number } | null;
+  set: SetPlace | null;
   board: Board;
   seat: Seat;
   // Null only if the partner's account is gone.
@@ -164,6 +176,9 @@ export interface PlayingReview extends Omit<
 > {
   // From the seat snapshot; null only if that player's account is gone.
   players: Record<Seat, PublicUser | null>;
+  // Which board of its set this was (bb#146), null outside any set; left
+  // out by a backend from before it.
+  set?: SetPlace | null;
   // The board's whole chat, oldest first: every message, the opponents-only
   // ones too, since the board is over (bb#101). Empty when nobody wrote.
   messages?: BoardMessage[];

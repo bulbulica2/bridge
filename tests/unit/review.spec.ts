@@ -277,6 +277,31 @@ function control(wrapper: VueWrapper, label: string) {
 }
 
 describe('PlayingReviewPage', () => {
+  test("the title is the board's place in its set, never its number", async () => {
+    loginAs(bo)
+    answer(claimed({ set: { id: 5, number: 3, board: 2, of: 4 }, board: { id: 137, number: 137, dealer: 'N', vulnerable: '' } }))
+
+    const wrapper = mount(PlayingReviewPage)
+    await flushPromises()
+
+    expect(wrapper.find('ion-title').text()).toBe('Board 2 of 4 review')
+    expect(wrapper.text()).not.toContain('137')
+  })
+
+  test('without a set (or from a backend before bb#146) the title is plain Board review', async () => {
+    loginAs(bo)
+    answer(claimed({ set: null }))
+    let wrapper = mount(PlayingReviewPage)
+    await flushPromises()
+    expect(wrapper.find('ion-title').text()).toBe('Board review')
+    wrapper.unmount()
+
+    answer(claimed())
+    wrapper = mount(PlayingReviewPage)
+    await flushPromises()
+    expect(wrapper.find('ion-title').text()).toBe('Board review')
+  })
+
   test('steps through the play, with the result at the end', async () => {
     loginAs(bo)
     answer(claimed())
@@ -360,6 +385,18 @@ describe('PlayingReviewPage', () => {
     expect(wrapper.findAll('.dealt-hand')).toHaveLength(4)
     // Nothing to step through, so nothing to keep room for.
     expect(wrapper.find('.dealt-hand .filler').exists()).toBe(false)
+    // No set: the centre has no board line, and never the board's number.
+    expect(wrapper.find('.board-number').exists()).toBe(false)
+  })
+
+  test("an unrecorded playing's centre names the board by its place in the set", async () => {
+    loginAs(bo)
+    answer({ ...unrecorded(), set: { id: 5, number: 3, board: 2, of: 4 } })
+
+    const wrapper = mount(PlayingReviewPage)
+    await flushPromises()
+
+    expect(wrapper.get('.board-number').text()).toBe('Board 2 of 4')
   })
 
   test('links back to the board results', async () => {

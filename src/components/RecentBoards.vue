@@ -35,9 +35,10 @@ const history = useHistoryStore();
 const list = computed(() => history.listOf(null));
 const entries = computed(() => list.value?.entries.slice(0, props.count) ?? []);
 
-// "Set 2 · B3", or the board's number for a board outside any set.
+// "Set 2 · B3", or plain "Board" for a board outside any set (never its
+// number in the database, #189).
 function where(entry: PlayingHistoryEntry): string {
-  return entry.set ? `Set ${entry.set.number} · B${entry.set.board}` : `Board ${entry.board.number}`;
+  return entry.set ? `Set ${entry.set.number} · B${entry.set.board}` : 'Board';
 }
 
 // Failures stay quiet: the lobby works without it.

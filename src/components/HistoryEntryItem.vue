@@ -7,7 +7,7 @@
     <div class="entry">
       <div class="entry-main">
         <p class="entry-board">
-          Board {{ entry.board.number }}
+          {{ boardInSetText(entry.set, false) }}
           <span class="entry-when">{{ when }}</span>
         </p>
         <p class="entry-contract">
@@ -37,6 +37,7 @@ import CallLabel from '@/components/CallLabel.vue';
 import type { PlayingHistoryEntry } from '@/services/history';
 import { SEAT_NAMES } from '@/utils/auction';
 import { doubledMark, formatScore, madeSuffix } from '@/utils/result';
+import { boardInSetText } from '@/utils/sets';
 
 const props = withDefaults(
   defineProps<{
