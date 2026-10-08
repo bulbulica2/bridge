@@ -775,10 +775,15 @@ describe('TablePlayPage alerts', () => {
   const modalStub = { template: '<div><slot /></div>' }
   let wrapper: VueWrapper | null = null
 
+  // The page is attached to the document, where a real ion-searchbar (the
+  // Seat a player sheet's, open in the modal stub) starts a 300 ms timer
+  // that can fire after the file's environment is torn down: stubbed.
   async function mountPage(playing: Playing) {
     vi.mocked(gameService.getPlaying).mockResolvedValue(playing)
     wrapper = mount(TablePlayPage, {
-      global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } },
+      global: {
+        stubs: { IonModal: modalStub, 'ion-modal': modalStub, IonSearchbar: true, 'ion-searchbar': true },
+      },
       attachTo: document.body,
     })
     await flushPromises()
