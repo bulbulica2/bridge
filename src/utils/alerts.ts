@@ -11,6 +11,10 @@ import { SEAT_NAMES, callLabel } from '@/utils/auction';
 // What an alert with nothing written says.
 export const NO_EXPLANATION = 'Alerted, no explanation given.';
 
+// What a kibitzer (#182) reads about an alerted call while the board is on:
+// the backend keeps the explanation from them until it is over.
+export const KIBITZER_ALERT = 'Alerted. What it means shows once the board is over.';
+
 // What the opponents were told about an alerted call.
 export function alertText(alert: CallAlert): string {
   return alert.explanation?.trim() || NO_EXPLANATION;

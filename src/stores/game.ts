@@ -211,7 +211,10 @@ export const useGameStore = defineStore('game', () => {
   }
 
   // The HTTP snapshot is the whole truth (hand included), so it replaces
-  // everything: this is also how a reload or a reconnect catches up.
+  // everything: this is also how a reload or a reconnect catches up. A
+  // kibitzer's (#182) is the public state, `my_seat` and `hand` null: no
+  // HandDealt or DeclarerHandShown ever comes for it, and PlayingUpdated
+  // carries no hand over.
   async function load(id: number) {
     const state = await gameService.getPlaying(id);
     tableId.value = id;
@@ -518,8 +521,10 @@ export const useGameStore = defineStore('game', () => {
     if (tableId.value !== table.id || !current) {
       return;
     }
-    if (!table.seats.some((s) => s.user_id === auth.user?.id)) {
-      // We left or were kicked: nothing here is ours to show any more.
+    const watching = useTablesStore().kibitzingId === table.id;
+    if (!watching && !table.seats.some((s) => s.user_id === auth.user?.id)) {
+      // We left or were kicked: nothing here is ours to show any more. (A
+      // kibitzer, #182, sits nowhere and keeps watching.)
       clear();
       return;
     }

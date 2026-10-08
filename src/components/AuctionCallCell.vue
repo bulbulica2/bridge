@@ -7,8 +7,9 @@
        the board lasts, any opponent's call also pops up an Ask button (and
        Ask in the chat, to ask in one's own words), and a call of ours an
        opponent asked about an Answer button. Partner's alerts show only
-       once the auction is over (`bidding` hides them). Any other call is
-       just its label. -->
+       once the auction is over (`bidding` hides them). A kibitzer (no
+       seat, #182) gets no buttons, and no explanation while it lasts. Any
+       other call is just its label. -->
   <span
     v-if="interactive"
     ref="root"
@@ -45,7 +46,7 @@
     >
       <div class="call-box">
         <p class="call-title">{{ title }}</p>
-        <p v-if="alert" class="alert-text">{{ alertText(alert) }}</p>
+        <p v-if="alert" class="alert-text">{{ watching ? KIBITZER_ALERT : alertText(alert) }}</p>
         <p v-else class="no-alert">Not alerted.</p>
         <p v-if="call.question" class="question-text">{{ questionLine }}</p>
         <button
@@ -87,7 +88,7 @@ import { usePopover } from '@/composables/usePopover';
 import type { AuctionCall } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES, callLabel, callName } from '@/utils/auction';
-import { alertText, isOpponent, isPartner } from '@/utils/alerts';
+import { KIBITZER_ALERT, alertText, isOpponent, isPartner } from '@/utils/alerts';
 
 const props = withDefaults(
   defineProps<{
@@ -122,6 +123,9 @@ const alert = computed(() => (props.bidding && partner.value ? null : props.call
 const canAsk = computed(() => props.live && opponents.value && !props.call.question);
 const canAnswer = computed(() => props.live && mine.value && !!props.call.question);
 const canChat = computed(() => props.live && opponents.value);
+// A kibitzer (no seat) while the board is on: alerted calls are marked, but
+// what they mean is the players' until the board is over.
+const watching = computed(() => props.live && props.mySeat === null);
 const interactive = computed(
   () => !!alert.value || (props.live && opponents.value) || canAnswer.value,
 );

@@ -36,3 +36,12 @@ export async function fireIonEvent(wrapper: Found, selector: string, event: stri
 
 export const pullToRefresh = (wrapper: Found, complete: () => void) =>
   fireIonEvent(wrapper, 'ion-refresher', 'ion-refresh', complete)
+
+// A switch flipped: the toggle takes the new `checked`, then fires
+// `ion-change`; the wrapper's v-model hook reads `checked` off the element.
+export async function flipToggle(wrapper: Found, checked: boolean, selector = 'ion-toggle') {
+  const toggle = wrapper.find(selector).element as HTMLElement & { checked?: boolean }
+  toggle.checked = checked
+  toggle.dispatchEvent(new CustomEvent('ion-change', { bubbles: true, detail: { checked } }))
+  await flushPromises()
+}

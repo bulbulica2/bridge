@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, test } from 'vitest'
-import { pickSegment } from './ionEvents'
+import { flipToggle, pickSegment } from './ionEvents'
 import TableSettingsDialog from '@/components/TableSettingsDialog.vue'
 
 // The game table's settings (#181): a small dialog with the time for a set,
@@ -48,5 +48,27 @@ describe('TableSettingsDialog.vue', () => {
     await flushPromises()
     expect(wrapper.find('.settings-sheet').exists()).toBe(false)
     expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  test("Allow kibitzers (#182): the switch shows the table's choice and sends a flip", async () => {
+    const wrapper = mountDialog({ allowKibitzers: false })
+    const toggle = () => wrapper.getComponent({ name: 'IonToggle' })
+
+    expect(toggle().text()).toBe('Allow kibitzers')
+    expect(toggle().props('checked')).toBe(false)
+    expect(wrapper.text()).toContain('People without a seat may watch the game, never a hidden hand.')
+
+    await flipToggle(wrapper, true, '.kibitzers-toggle')
+    expect(wrapper.emitted('kibitzers')).toEqual([[true]])
+
+    // Busy holds it too; a new key puts it back on the table's value.
+    await wrapper.setProps({ busy: true })
+    expect(toggle().props('disabled')).toBe(true)
+    await wrapper.setProps({ busy: false, pickerKey: 1 })
+    expect(toggle().props()).toEqual(expect.objectContaining({ disabled: false, checked: false }))
+  })
+
+  test('kibitzers are allowed unless told otherwise', () => {
+    expect(mountDialog().getComponent({ name: 'IonToggle' }).props('checked')).toBe(true)
   })
 })

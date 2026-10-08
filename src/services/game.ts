@@ -315,8 +315,10 @@ export interface CallQuestionedEvent {
 }
 
 // The table's current board with the caller's own hand: enough to render the
-// table from scratch after a reload or a reconnect. 403 unless the caller sits
-// at this table, 404 for an unknown table.
+// table from scratch after a reload or a reconnect. A kibitzer (#182) gets
+// the public state: `my_seat`, `hand` and `declarer_hand` null, an alerted
+// call's explanation null until the board is over. 403 unless the caller
+// sits at (or watches) this table, 404 for an unknown table.
 export async function getPlaying(tableId: number): Promise<Playing> {
   const { data } = await http.get<ApiResponse<Playing>>(`/tables/${tableId}/playing`);
   return data.data;

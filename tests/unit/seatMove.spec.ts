@@ -4,6 +4,7 @@ import {
   confirmLeave,
   confirmMove,
   confirmRemove,
+  confirmWatch,
   heldNotice,
   leaveMessage,
   leaveNote,
@@ -248,6 +249,20 @@ describe('confirmation alerts', () => {
     ).resolves.toBe(false)
     expect(lastAlert().header).toBe('Move to Late night and leave set 2?')
     expect(lastAlert().buttons[1].text).toBe('Move anyway')
+  })
+
+  test('confirmWatch (#182) asks before leaving a seat to watch, in the words of Leave', async () => {
+    const from = makeTable({ N: 1, E: 2 })
+    dismissedWith = 'destructive'
+
+    await expect(confirmWatch(from, { id: 9, name: 'Late night' }, 1, 'finished', 3)).resolves.toBe(true)
+    expect(lastAlert().header).toBe('Leave Friday club to watch Late night?')
+    expect(lastAlert().message).toBe(leaveMessage(from, 1, 'finished', 3))
+    expect(lastAlert().buttons.map((b) => b.text)).toEqual(['Cancel', 'Leave and watch'])
+
+    dismissedWith = 'cancel'
+    await expect(confirmWatch(from, { id: 9, name: null }, 1)).resolves.toBe(false)
+    expect(lastAlert().header).toBe('Leave Friday club to watch table #9?')
   })
 
   test('confirmLeave asks before leaving and says yes only on Leave', async () => {

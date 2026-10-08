@@ -2,10 +2,11 @@
   <!-- The table's settings, a small dialog in the middle of the screen
        (#181), opened by the gear in the game table's top-right corner while
        no set runs and the viewer manages the table: each player's time for
-       a set (the set clock, bb#131). Picking a time sends it at once; the
-       parent owns whether it is open, sends the change and bumps `pickerKey`
-       to put the picker back after a refusal. The X, the backdrop and Escape
-       close it. -->
+       a set (the set clock, bb#131) and whether people without a seat may
+       watch (kibitzers, #182). Picking a time or flipping the switch sends
+       it at once; the parent owns whether it is open, sends the change and
+       bumps `pickerKey` to put both back after a refusal. The X, the
+       backdrop and Escape close it. -->
   <ion-modal
     :is-open="open"
     class="settings-dialog"
@@ -32,13 +33,26 @@
       <!-- A change takes back every Start pressed for the old time
            (bb#142): the players press again. -->
       <p class="settings-note">Changing it takes back every Start already pressed.</p>
+
+      <!-- Turning it off sends everyone watching back to the lobby. -->
+      <ion-toggle
+        :key="pickerKey"
+        class="kibitzers-toggle"
+        :checked="allowKibitzers"
+        :disabled="busy"
+        justify="space-between"
+        @update:model-value="emit('kibitzers', $event)"
+      >
+        Allow kibitzers
+      </ion-toggle>
+      <p class="settings-note">People without a seat may watch the game, never a hidden hand.</p>
     </div>
   </ion-modal>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { IonModal, IonButton, IonIcon } from '@ionic/vue';
+import { IonModal, IonButton, IonIcon, IonToggle } from '@ionic/vue';
 import { closeOutline } from 'ionicons/icons';
 import SetMinutesPicker from '@/components/SetMinutesPicker.vue';
 import type { SetMinutes } from '@/services/tables';
@@ -47,14 +61,16 @@ const props = withDefaults(
   defineProps<{
     open: boolean;
     minutes: SetMinutes;
+    // Whether people without a seat may watch the table.
+    allowKibitzers?: boolean;
     // A change on its way.
     busy?: boolean;
     pickerKey?: number;
   }>(),
-  { busy: false, pickerKey: 0 },
+  { allowKibitzers: true, busy: false, pickerKey: 0 },
 );
 
-const emit = defineEmits<{ change: [minutes: SetMinutes]; close: [] }>();
+const emit = defineEmits<{ change: [minutes: SetMinutes]; kibitzers: [allow: boolean]; close: [] }>();
 
 const shown = ref(props.open);
 watch(
@@ -114,6 +130,13 @@ ion-modal.settings-dialog {
   height: 44px;
   margin: 0;
   --color: var(--bridge-muted);
+}
+
+/* The switch's row, 44 px to tap, a little apart from the time above. */
+.kibitzers-toggle {
+  min-height: 44px;
+  margin-top: 8px;
+  font-weight: 700;
 }
 
 .settings-note {

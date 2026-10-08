@@ -405,8 +405,8 @@ describe('tables store: the Start timer and the set time (bb#142)', () => {
     const store = await watching(timed(makeTable(TWO_HUMANS, ['bob']), 'S', '2026-10-08T12:00:15Z'))
     store.tables = [store.currentTable!]
 
-    // `kibitzing` waits for the kibitzers (#182): treated as false.
-    store.applyUnseated({ table_id: 5, reason: 'start_timeout', kibitzing: true })
+    // A table that doesn't allow kibitzers (#182): back to the lobby.
+    store.applyUnseated({ table_id: 5, reason: 'start_timeout', kibitzing: false })
 
     expect(echo.leaveTable).toHaveBeenCalledWith(5)
     expect(store.watchedTableId).toBeNull()

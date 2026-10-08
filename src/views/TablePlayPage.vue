@@ -23,6 +23,16 @@
         <ion-button v-if="seatedHere" class="leave-table" :disabled="asking" @click="leave">
           Leave
         </ion-button>
+        <!-- Watching without a seat (#182): said, and the way out. -->
+        <template v-if="watching">
+          <span class="watching-pill" role="status" aria-label="Watching">
+            <ion-icon :icon="eyeOutline" aria-hidden="true" />
+            <span>Watching</span>
+          </span>
+          <ion-button class="stop-watching" :disabled="asking" @click="stopWatching">
+            Stop watching
+          </ion-button>
+        </template>
       </template>
     </AppHeader>
     <ion-content :fullscreen="true" class="ion-padding">
@@ -84,6 +94,15 @@
             </BridgeTable>
           </template>
           <p v-else>You don't sit at this table, so you can't see its board.</p>
+          <!-- A table that allows it may be watched without a seat (#182). -->
+          <ion-button
+            v-if="table?.allow_kibitzers && !auth.isBanned && !seatedElsewhere"
+            class="watch-table"
+            :disabled="asking"
+            @click="watchHere"
+          >
+            Watch
+          </ion-button>
           <ion-button fill="outline" router-link="/tables" router-direction="back">Back to tables</ion-button>
         </div>
 
@@ -135,7 +154,7 @@
                an empty seat a tap away from being filled, a player's plate
                from their profile (and a manager's Remove). -->
           <BridgeTable
-            :players="showStart ? tablePlayers : players"
+            :players="waitingRoom ? tablePlayers : players"
             :my-seat="showStart ? tableSeat : mySeat"
             :board="playing.board"
             :turn="playing.turn"
@@ -157,7 +176,7 @@
             :calls="playing.phase === 'auction' ? (playing.auction ?? []) : null"
             :board-label="playing.set ? boardPosition(playing.set) : null"
             :wide="wideTable"
-            :seatable="showStart"
+            :seatable="waitingRoom"
             :busy="sendingCard !== null || seatBusy"
             :sending-id="sendingCard"
             @select="player = $event"
@@ -213,6 +232,9 @@
                 </button>
                 <p v-else class="corner-minutes" :title="setClockText(tableMinutes)">
                   <span class="sr-only">Time for a set: </span>{{ setMinutesShort(tableMinutes) }}
+                </p>
+                <p class="corner-kibitzers">
+                  {{ table!.allow_kibitzers ? 'Kibitzers allowed' : 'No kibitzers' }}
                 </p>
               </template>
               <!-- The result dialog closed to look at the deal: this opens
@@ -292,7 +314,7 @@
                 :my-seat="mySeat"
                 :winner="shownTrick.winner"
                 :trump="playing.contract!.bid.strain"
-                :my-slot="playing.phase === 'play'"
+                :my-slot="playing.phase === 'play' && !watching"
               />
               <div class="trick-foot">
                 <p class="trick-caption" aria-live="polite">{{ shownTrick.caption }}</p>
@@ -343,7 +365,7 @@
 
           <!-- A finished board shows every hand on the table instead. -->
           <section
-            v-if="playing.phase === 'auction' || playing.phase === 'play'"
+            v-if="(playing.phase === 'auction' || playing.phase === 'play') && !watching"
             class="my-hand"
           >
             <HandView
@@ -399,9 +421,11 @@
       <TableSettingsDialog
         :open="settingsOpen"
         :minutes="tableMinutes"
+        :allow-kibitzers="table?.allow_kibitzers ?? true"
         :busy="savingMinutes"
         :picker-key="minutesKey"
         @change="changeMinutes"
+        @kibitzers="changeKibitzers"
         @close="settingsOpen = false"
       />
       <ClaimSheet
@@ -493,7 +517,7 @@ import {
 } from '@ionic/vue';
 import type { ActionSheetButton } from '@ionic/vue';
 import { vIonEvent } from '@/directives/ionEvent';
-import { chatbubblesOutline, settingsOutline } from 'ionicons/icons';
+import { chatbubblesOutline, eyeOutline, settingsOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
 import AuctionHistory from '@/components/AuctionHistory.vue';
 import AuctionPopover from '@/components/AuctionPopover.vue';
@@ -555,7 +579,7 @@ import { playingExtras } from '@/utils/export';
 import { doubledMark, resultSummary } from '@/utils/result';
 import { confirmLeave, confirmMove, confirmRemove, heldNotice, removeCost } from '@/utils/seatMove';
 import { setClockText, setMinutesShort } from '@/utils/setClock';
-import { boardPosition, currentSet, setLabel } from '@/utils/sets';
+import { boardPosition, currentSet, runningSet, setLabel } from '@/utils/sets';
 import { reviewChoices } from '@/utils/review';
 import type { SeenBoard } from '@/utils/review';
 import { startNeeded } from '@/utils/start';
@@ -671,6 +695,11 @@ const tableSeat = computed<Seat | null>(
 );
 const seatedHere = computed(() => tableSeat.value !== null);
 
+// Watching the table without a seat, as a kibitzer (#182): the same table,
+// read-only. The game state is the public one (no seat, no hand); no
+// bidding box, Claim or chat, and the result without the vote.
+const watching = computed(() => tablesStore.kibitzingId === tableId.value && !seatedHere.value);
+
 // Another table the user sits at, which sitting down here gives up.
 const seatedElsewhere = computed(() =>
   tablesStore.myTable && tablesStore.myTable.id !== tableId.value ? tablesStore.myTable : null,
@@ -683,6 +712,10 @@ const notSeatedText = computed(() =>
 );
 
 const mySeat = computed<Seat | null>(() => {
+  // Watching: no seat, even on a board we held one on (#182).
+  if (watching.value) {
+    return null;
+  }
   if (playing.value?.my_seat) {
     return playing.value.my_seat;
   }
@@ -986,10 +1019,19 @@ const showStart = computed(
   () => !!table.value && seatedHere.value && startNeeded(table.value, playing.value),
 );
 
+// A kibitzer between sets (no set running): the table's free seats are
+// theirs to take, like anyone's. Mid-set, no Sit.
+const watchSit = computed(
+  () => watching.value && !!table.value && !runningSet(table.value, playing.value),
+);
+
+// The waiting table: its own seats with their ticks, an empty one a button.
+const waitingRoom = computed(() => showStart.value || watchSit.value);
+
 // The seats that pressed Start, ticked on the table while a Start is
 // awaited.
 const readySeats = computed<Seat[]>(() =>
-  showStart.value && table.value ? table.value.seats.filter((s) => s.ready).map((s) => s.seat) : [],
+  waitingRoom.value && table.value ? table.value.seats.filter((s) => s.ready).map((s) => s.seat) : [],
 );
 
 // The player whose profile is open, if they sit here and the viewer may
@@ -1143,7 +1185,7 @@ const resultOpen = computed(
 // The same four go on to the set's next board: the dialog counts down to it
 // and takes our vote. Not once the set is over or the players changed:
 // everyone's Start on the page deals then.
-const resultVote = computed(() => !showStart.value && !endedSet.value);
+const resultVote = computed(() => !showStart.value && !endedSet.value && !watching.value);
 
 // How long a finished board's dialog waits for its other tables at most.
 const RESULT_WAIT_MS = 1000;
@@ -1162,6 +1204,11 @@ watch(
 // The finished boards the review modal offers: the running set's, else the
 // last one seen here, else (after a reload) the latest in our history.
 const reviewable = computed(() => {
+  // A kibitzer may review only boards they finished themselves (403
+  // otherwise): none of this table's, as far as we can tell.
+  if (watching.value) {
+    return [];
+  }
   const set = shownSet.value;
   const seen = seenBoard.value?.tableId === tableId.value ? seenBoard.value : null;
   const latest = history.listOf(null)?.entries.find((e) => e.table_id === tableId.value) ?? null;
@@ -1174,7 +1221,8 @@ const notice = computed(() =>
 );
 
 // The chat is the board's: there is none before the first deal.
-const chatOn = computed(() => !!playing.value?.playing_id);
+// The players' alone: a kibitzer has none (#182).
+const chatOn = computed(() => !!playing.value?.playing_id && seatedHere.value);
 // On show while the page is: beside the table as the player left it (open
 // until they collapse it), a phone's sheet only when they open it.
 const chatWanted = computed(
@@ -1278,11 +1326,11 @@ function askInChat(index: number) {
 
 // The chat follows the board on show: read on entering the table, emptied
 // for a new board, read again once a board is finished (its every message
-// is public then).
+// is public then). Only from a seat: a kibitzer has none (#182).
 watch(
-  () => [tableId.value, playing.value?.playing_id ?? null, playing.value?.phase ?? null] as const,
+  () => [tableId.value, playing.value?.playing_id ?? null, playing.value?.phase ?? null, seatedHere.value] as const,
   ([id, playingId, phase]) => {
-    if (id && playing.value) {
+    if (id && playing.value && seatedHere.value) {
       chat.follow(id, playingId, phase);
     }
   },
@@ -1441,7 +1489,8 @@ watch(
   () => {
     const set = shownSet.value;
     const state = playing.value;
-    if (!set || !state || (state.phase !== 'finished' && !set.finished)) {
+    // A kibitzer's read is a 403 (not a player of the set).
+    if (!set || !state || watching.value || (state.phase !== 'finished' && !set.finished)) {
       return null;
     }
     return `${set.id}:${set.finished}:${state.playing_id}:${state.phase}`;
@@ -1514,6 +1563,11 @@ async function load(refetchTable = true) {
     const id = tableId.value;
     const table = refetchTable ? tablesStore.loadTable(id) : tablesStore.openTable(id);
     await Promise.all([table, game.load(id)]);
+    // The board answered us without a seat here: we watch the table (a
+    // reload while watching, #182), so its channel is followed again.
+    if (!seatedHere.value) {
+      tablesStore.resumeWatching(id);
+    }
     // Opening the game is coming back: a seat held after a Leave mid-set, or
     // marked away, is ours again (the store greets us once the backend agrees).
     tablesStore.comeBack(id);
@@ -1546,7 +1600,7 @@ async function load(refetchTable = true) {
 // for a newcomer's set) only leaves the review out.
 async function findReviewable() {
   const set = shownSet.value;
-  if (!set || (set.number === 1 && set.board === 1)) {
+  if (!set || (set.number === 1 && set.board === 1) || watching.value) {
     return;
   }
   // A finished board or set is read by the watch above already.
@@ -1906,6 +1960,74 @@ async function changeMinutes(minutes: SetMinutes) {
   }
 }
 
+// A manager allows kibitzers or stops allowing them (#182), between sets
+// like the time for a set. Turned off, everyone watching is sent back to
+// the lobby (the backend tells them). Refused like the time.
+async function changeKibitzers(allow: boolean) {
+  if (savingMinutes.value) {
+    return;
+  }
+  savingMinutes.value = true;
+  try {
+    await tablesStore.updateSettings(tableId.value, { allow_kibitzers: allow });
+    showToast(allow ? 'Kibitzers may watch this table.' : 'Kibitzers are no longer allowed here.', 'success');
+  } catch (e) {
+    if (statusOf(e) === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+      return;
+    }
+    minutesKey.value++;
+    showToast(errorMessage(e, 'Could not change the table settings. Please try again.'), 'danger');
+    await tablesStore.loadTable(tableId.value).catch(() => {
+      // The next update or refresh says how the table stands.
+    });
+  } finally {
+    savingMinutes.value = false;
+  }
+}
+
+// Stop watching (#182): back to the lobby, whatever the backend says (a 409
+// or 404 is the same already; anything else is told on the way).
+async function stopWatching() {
+  if (asking.value) {
+    return;
+  }
+  asking.value = true;
+  try {
+    await tablesStore.stopWatching();
+  } catch (e) {
+    logUnexpected(e);
+    showToast(errorMessage(e, 'Could not stop watching the table.'), 'danger');
+  } finally {
+    asking.value = false;
+  }
+  game.clear();
+  ionRouter.navigate('/tables', 'back', 'replace');
+}
+
+// Watch this table from its page (a link to a table we don't sit at): its
+// board then shows as a kibitzer's.
+async function watchHere() {
+  if (asking.value) {
+    return;
+  }
+  asking.value = true;
+  try {
+    await tablesStore.watch(tableId.value);
+    notSeated.value = false;
+  } catch (e) {
+    if (statusOf(e) === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+      return;
+    }
+    showToast(errorMessage(e, 'Could not watch this table. Please try again.'), 'danger');
+    return;
+  } finally {
+    asking.value = false;
+  }
+  await load(false);
+}
+
 // Our own sheets and modals go before a confirmation, so nothing of the
 // page's stands over the alert (#121): closed, and drawn closed.
 async function closeOverlays() {
@@ -2218,6 +2340,35 @@ async function refresh(event: CustomEvent) {
   font-family: var(--bridge-font-numbers);
   font-size: 0.95rem;
   font-weight: 700;
+}
+
+/* Whether the table may be watched (#182), small under the set time. */
+.corner-kibitzers {
+  margin: 4px 0 0;
+  color: var(--bridge-on-table-muted);
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+/* The header's "Watching" (#182): a quiet navy pill beside Stop watching. */
+.watching-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--bridge-radius-pill);
+  background: var(--bridge-navy-tint);
+  color: var(--bridge-navy-tint-text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (max-width: 575px) {
+  .watching-pill span {
+    display: none;
+  }
 }
 
 .sr-only {

@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/103-straight-to-the-game-table`._
+_Status as of branch `bulbulica2/104-kibitzers`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -189,7 +189,8 @@ stats with bb#121.
 **Logged in**, menu item **Tables**. Built by #8; seat moves by #22;
 profile sheet by #24; robots by #53; a seat opening the table by #67;
 Start by #68; held seat by #74; banned users by #75; your seat with Leave
-by #121; the time for a set by #143; the Daylight lobby by #162.
+by #121; the time for a set by #143; the Daylight lobby by #162;
+watching a table (kibitzers) by #182.
 
 The lobby, up to 1280 px wide: the list on the left and, beside it from
 about 1000 px (below it on a phone), **Your form** and **Recent boards**
@@ -214,7 +215,9 @@ about 1000 px (below it on a phone), **Your form** and **Recent boards**
   **Create table**: you sit South, the other three seats are free for
   players to take, or for you to fill with **Seat a player** / **Add
   robot** (its time for a set is the backend's default until you change
-  it from the game table's gear). Either way the page goes straight to
+  it from the game table's gear). Both cards have an **Allow kibitzers**
+  switch, on by default: whether people without a seat may watch the
+  table (#182). Either way the page goes straight to
   the new table's game table as soon as it exists (#55, #132, #181),
   where your **Start** deals the first board (robots are always ready). A
   refusal shows under the card it came from.
@@ -237,17 +240,29 @@ about 1000 px (below it on a phone), **Your form** and **Recent boards**
   your seat can abandon a board there; in the middle of a set it says a
   robot takes your seat there for the rest of the set and you can't sit
   down there again until it is over (bb#120).
+  Under the compass, how many people watch the table ("2 watching") and,
+  where the table allows it and you don't sit there, **Watch** (#182):
+  you watch the table without a seat and go to its game table in
+  watching mode (below, Play). The table you watch reads **Watching**
+  (a tap goes back to it). Watching is never done from a seat: sitting
+  at another table, Watch asks to leave it first ("Leave Club to watch
+  Late night?", with Leave's own words for what that costs); in the
+  middle of a set your seat would only be held, so it says "You're in
+  the middle of set 2 at Club: you can watch another table once it's
+  over." instead. A refusal (the table doesn't allow kibitzers) is
+  toasted.
 
 No live updates on this page: pull to refresh.
 
 A **banned** user still sees the list, but the ban (reason and end date)
 takes the place of the two start cards, every **Sit** is disabled and the
-tables' names don't open their game tables.
+tables' names don't open their game tables, and there is no **Watch**.
 
 | Calls | Endpoint |
 |---|---|
 | `tables.load()` | `GET /tables` |
-| `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` (`seat: 'S'`; **Deal me in**: `robots: true` and `set_minutes`; **Create table**: `robots: false`) |
+| `tables.create()` | `GET /sanctum/csrf-cookie`, `POST /tables` (`seat: 'S'` and `allow_kibitzers`; **Deal me in**: `robots: true` and `set_minutes`; **Create table**: `robots: false`) |
+| `tables.watch()` (**Watch**) | `POST /tables/{id}/kibitzers` (a 409 reads `GET /tables` and asks to leave your seat first) |
 | `tables.join()` | `GET /sanctum/csrf-cookie`, `POST /tables/{id}/seats`, then `GET /tables` after a move |
 | `tables.leave()` (Your table · Leave) | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `users.loadStats(null)` (Your form), `history.loadHistory(null)` (Recent boards), once the list is in | `GET /api/user/stats`, `GET /api/user/playings`; failures are quiet |
@@ -255,11 +270,13 @@ tables' names don't open their game tables.
 
 Backend: bb#9 (create table, 3 active per creator), bb#12 (join a seat),
 bb#25 (joining elsewhere moves you), bb#65 (robots), bb#73 (nothing is
-dealt before Start), bb#77 (bans), bb#121 (stats), bb#131 (`set_minutes`).
+dealt before Start), bb#77 (bans), bb#121 (stats), bb#131 (`set_minutes`),
+bb#143 (kibitzers).
 
 ## Play — `/tables/:id/play`
 
-**Logged in, seated at that table** (403 otherwise). Built by #26 (game
+**Logged in, seated at that table or watching it** (403 otherwise).
+Built by #26 (game
 table), #27 (bidding), #28 (card play), #29 (board result and next board),
 #47 (claims), #96 (claims expire after 10 s, needs bb#96), #120 (both answer a claim at once, and a refused claim locks claims until the next card, needs bb#115), #98 (the next board by itself, needs bb#97), #53 (robots), #57 (forced cards play themselves), #56 (last trick
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
@@ -268,7 +285,8 @@ mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131
 #101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140);
 **Compare** by #30; the table's one page (the waiting table, Remove in the
 profile, Leave in the header, the set time's gear, the Start timer) by
-#181, needs bb#142. Reached from **Deal me in**, **Create table**, every
+#181, needs bb#142; watching mode (kibitzers) by #182, needs bb#143.
+Reached from **Deal me in**, **Create table**, every
 **Sit** on Tables, a table's name, and the header's **Your table**:
 there is no separate table page any more, and the old `/tables/:id`
 address goes here.
@@ -686,14 +704,57 @@ their seats, or a set over), the game table shows it on the table itself:
   again." and their tick goes. Once the set runs the corner has the
   contract again.
 
+### Watching without a seat (#182)
+
+A **kibitzer** watches the table without a seat: from a card's **Watch**
+on Tables, the **Watch** button here when not seated, or after the Start
+timer freed their seat at a table that allows kibitzers ("You didn't
+press Start in time: you're watching the table now.": the page stays).
+It is the same table, read-only:
+
+- **The table** is drawn from South's side (nobody is "you"), with the
+  plates, the set clocks and the away tags as usual.
+- **The auction**: in the centre on a wide screen, under the table
+  otherwise, then behind the **Auction** button. An alerted call shows
+  its "!", but its pop-up says "Alerted. What it means shows once the
+  board is over.": the backend keeps the explanation from kibitzers
+  until then. No **Ask**.
+- **The play**: dummy at its seat once the opening lead is made (South's
+  dummy across the bottom), the trick, the last trick, the vulnerability
+  and the contract in the corners, a pending claim's banner and cards.
+- **The end**: the result dialog, without the vote (no **Deal next
+  board**, no **Review**: a kibitzer may only review boards they played).
+- **Not shown**: no hand of your own, no bidding box, no Claim, no chat
+  (no header **Chat** button), nothing about your turn (the turn clock
+  line's "Waiting for East" stays).
+- **The header**: a **Watching** pill and **Stop watching** (back to
+  Tables).
+- **Sitting down**: between sets an empty seat is a button, **Sit here ·
+  West**, which ends watching and makes you a player. Mid-set, no Sit.
+- **Sent away**: a manager turning kibitzers off tells you "This table
+  no longer allows kibitzers." and takes you to Tables; so does a place
+  dropped as idle ("You stopped watching the table after being
+  inactive.") or the table going ("The table you watched is gone.").
+  A reload keeps watching: the board answering without a seat says so.
+
+**Allow kibitzers** (managers, between sets): the gear's **Table
+settings** dialog has an **Allow kibitzers** switch under the time;
+flipping it is sent at once ("Kibitzers are no longer allowed here.",
+"Kibitzers may watch this table."), a refusal toasted, the table read
+again and the switch put back. Turning it off sends everyone watching
+back to the lobby; it takes nobody's Start back. The corner says
+**Kibitzers allowed** or **No kibitzers** under the time, for everyone.
+
 **Not seated here** (a link, a table's name on Tables): the board is only
-for the four players (403), but the table shows with its plates and
+for the four players and the table's kibitzers (403), but the table shows with its plates and
 free seats ("You don't sit at this table. Take a free seat to play."),
 "You sit at Home. Taking a seat here moves you." when you sit elsewhere,
 and while only robots sit there "Robots only — sit down to take over.
 You'll manage the table, and it is deleted 10 minutes after the last
 player left if nobody does." Sitting down opens the board to you; the
-first person to sit at an unattended table becomes its moderator.
+first person to sit at an unattended table becomes its moderator. Where
+the table allows it (and you sit nowhere), **Watch** opens its board in
+watching mode instead.
 
 | Calls | Endpoint |
 |---|---|
@@ -710,7 +771,9 @@ first person to sit at an unattended table becomes its moderator.
 | `tables.join()` (an empty seat's Sit here / Move here) | `POST /tables/{id}/seats` (then `GET /tables` after a move off another table, and the board read again) |
 | `tables.seatRobot()`, `tables.seatUser()` (managers, an empty seat's action sheet, #117) | `POST /tables/{id}/seats/robots`, `GET /users?search=` + `POST /tables/{id}/seats/users` (picking yourself is `tables.join()`, `POST /tables/{id}/seats`); a refusal toasts and rereads the table |
 | `tables.removePlayer()` (the profile sheet's Remove) | `DELETE /tables/{id}/seats/{user}` |
-| `tables.updateSettings()` (the gear's dialog) | `PATCH /tables/{id}` |
+| `tables.updateSettings()` (the gear's dialog) | `PATCH /tables/{id}` (`set_minutes` or `allow_kibitzers`) |
+| `tables.watch()` (**Watch** when not seated), `tables.stopWatching()` (**Stop watching**) | `POST /tables/{id}/kibitzers`, `DELETE /tables/{id}/kibitzers` |
+| `tables.resumeWatching()` (the board answered without a seat: a reload while watching) | none: follows `private-table.{id}` and the heartbeat again |
 | `tables.findSeat()` (not seated here) | `GET /tables`, to know where you sit |
 | `game.load()` 2 s after a claim's or the next board's deadline with no update | `GET /tables/{id}/playing` |
 | `history.loadSet()` (after each finished board, when the set ends, and on entry mid-set) | `GET /sets/{id}` |
@@ -721,7 +784,7 @@ first person to sit at an unattended table becomes its moderator.
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create or a join) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
-| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a robot taking a seat over), `PlayingUpdated` (with `turn_deadline`); `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer; in the play, anyone's answer), `CallQuestioned` (a question about your call), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read), `UnseatedFromTable` (the Start timer freed your seat) |
+| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a robot taking a seat over), `PlayingUpdated` (with `turn_deadline`); `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer; in the play, anyone's answer), `CallQuestioned` (a question about your call), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read), `UnseatedFromTable` (the Start timer freed your seat, maybe leaving you watching; kibitzers turned off). A kibitzer gets only the table channel and `UnseatedFromTable` |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
 reloads (after a set's last board, the vote 409s: "The set is over: press Start
@@ -737,7 +800,7 @@ bb#10 and bb#11 (seat others, kick or quit), bb#25 (moves), bb#44 (user
 search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#78
 (only an admin removes an admin), bb#131 (the set clock, `PATCH
 /tables/{id}`), bb#142 (the Start timer, a set time change revoking
-Start).
+Start), bb#143 (kibitzers).
 
 ## My boards — `/history`
 

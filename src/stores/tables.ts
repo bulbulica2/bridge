@@ -38,6 +38,17 @@ export const WELCOME_BACK = 'Welcome back. The set goes on.';
 // nothing is held against us.
 export const START_TIMEOUT_NOTICE = "You didn't press Start in time: your seat is free for someone else.";
 
+// The same at a table that allows kibitzers: we stay, watching (#182).
+export const START_WATCHING_NOTICE = "You didn't press Start in time: you're watching the table now.";
+
+// A manager stopped allowing kibitzers while we watched.
+export const KIBITZERS_OFF_NOTICE = 'This table no longer allows kibitzers.';
+
+// Our place as a kibitzer went while we weren't looking (an idle one is
+// dropped like an idle seat), or the table did.
+export const WATCH_IDLE_NOTICE = 'You stopped watching the table after being inactive.';
+export const WATCHED_GONE_NOTICE = 'The table you watched is gone.';
+
 // A manager changed the set time, which takes every Start back (bb#142).
 export function startRevokedText(minutes: number): string {
   return `The set time changed to ${minutes} min: press Start again.`;
@@ -89,8 +100,12 @@ export const useTablesStore = defineStore('tables', () => {
   // tell "nothing loaded yet" (skeleton) from "loaded, and empty".
   const loaded = ref(false);
   // The table whose channel we are subscribed to. Only one: a user sits at
-  // one table at most, and the channel refuses anyone not seated there.
+  // (or watches) one table at most, and the channel refuses anyone else.
   const watchedTableId = ref<number | null>(null);
+  // The table we watch without a seat, as a kibitzer (#182): its channel and
+  // heartbeat are followed as for a seat (`watchedTableId`). Never while we
+  // sit anywhere: sitting down ends it. `myTable` stays the seated table.
+  const kibitzingId = ref<number | null>(null);
   // Set when a live update shows the user was kicked from that table (or the
   // Start timer freed their seat), so the table's page can leave it.
   const kickedFrom = ref<number | null>(null);
@@ -272,6 +287,9 @@ export const useTablesStore = defineStore('tables', () => {
     if (watchedTableId.value === tableId) {
       unwatchTable();
     }
+    if (kibitzingId.value === tableId) {
+      kibitzingId.value = null;
+    }
     tables.value = tables.value.filter((t) => t.id !== tableId);
     if (currentTable.value?.id === tableId) {
       currentTable.value = null;
@@ -279,7 +297,7 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   // Subscribes to the table's channel. Only call it while the user is seated
-  // there: the backend answers anyone else with a 403. Moving to another table
+  // (or watching) there: the backend answers anyone else with a 403. Moving to another table
   // leaves the old channel first. `away`: our seat there is away and we
   // weren't following the table, so it is held, not reclaimed (heldTableId).
   function watchTable(tableId: number, away = false) {
@@ -301,11 +319,13 @@ export const useTablesStore = defineStore('tables', () => {
     startHeartbeat();
   }
 
-  // Leaving, a kick, a move and logout all end here, and so does the heartbeat.
+  // Leaving, a kick, a move and logout all end here, and so does the heartbeat
+  // (and watching: a kibitzer's place is that channel).
   function unwatchTable() {
     stopHeartbeat();
     stopCanManageRetry();
     heldTableId.value = null;
+    kibitzingId.value = null;
     if (watchedTableId.value !== null) {
       leaveTable(watchedTableId.value);
       watchedTableId.value = null;
@@ -320,11 +340,14 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   // Whether we vouch for the watched table now: never for a held seat, and
-  // while the page is hidden only in the middle of a set.
+  // while the page is hidden only in the middle of a set, for a seat (a
+  // kibitzer has no seat to be marked away from).
   function shouldBeat() {
     const tableId = watchedTableId.value;
     return (
-      tableId !== null && heldTableId.value !== tableId && (!pageHidden() || midSet(tableId))
+      tableId !== null &&
+      heldTableId.value !== tableId &&
+      (!pageHidden() || (kibitzingId.value !== tableId && midSet(tableId)))
     );
   }
 
@@ -359,10 +382,36 @@ export const useTablesStore = defineStore('tables', () => {
       await tablesService.sendHeartbeat(tableId);
     } catch (e) {
       const status = statusOf(e);
-      if (status === 403 || status === 404) {
+      if (!lostWatch(tableId, e) && (status === 403 || status === 404)) {
         await catchUp(tableId, true);
       }
     }
+  }
+
+  // A heartbeat refused while we watch the table: our place went (dropped as
+  // idle, 403) or the table did (404), and the table itself can't tell which
+  // (a kibitzer isn't in it). Told, and the page leaves (`kickedFrom`).
+  function lostWatch(tableId: number, e: unknown): boolean {
+    const status = statusOf(e);
+    if (kibitzingId.value !== tableId || (status !== 403 && status !== 404)) {
+      return false;
+    }
+    if (status === 404) {
+      forget(tableId);
+    }
+    sendAway(tableId, status === 404 ? WATCHED_GONE_NOTICE : WATCH_IDLE_NOTICE);
+    return true;
+  }
+
+  // We watch the table no more, without having asked: say so, and the page
+  // goes back to the lobby.
+  function sendAway(tableId: number, notice: string) {
+    if (watchedTableId.value === tableId) {
+      unwatchTable();
+    }
+    kibitzingId.value = null;
+    kickedFrom.value = tableId;
+    announceRemoval(notice);
   }
 
   // Back from the background: vouch for the seat at once, then catch up with
@@ -372,13 +421,18 @@ export const useTablesStore = defineStore('tables', () => {
     const tableId = watchedTableId.value;
     if (tableId !== null) {
       const held = heldTableId.value === tableId;
+      let lost = false;
       if (!held) {
         startHeartbeat();
-        await tablesService.sendHeartbeat(tableId).catch(() => {
-          // The refetch below tells whether we still sit there.
+        await tablesService.sendHeartbeat(tableId).catch((e) => {
+          // The refetch below tells whether we still sit there; a kibitzer's
+          // place only this answer tells.
+          lost = lostWatch(tableId, e);
         });
       }
-      await catchUp(tableId, true);
+      if (!lost) {
+        await catchUp(tableId, true);
+      }
       const game = useGameStore();
       if (!held && watchedTableId.value === tableId && game.tableId === tableId) {
         await game.load(tableId).catch(() => {
@@ -432,9 +486,12 @@ export const useTablesStore = defineStore('tables', () => {
         return;
       }
       // Gone with us still in it as far as we knew: we were the last one
-      // there, and our seat went too.
+      // there, and our seat went too (or, watching, our place with it).
+      const watching = kibitzingId.value === tableId;
       forget(tableId);
-      if (ownSeatRequests === 0) {
+      if (watching) {
+        sendAway(tableId, WATCHED_GONE_NOTICE);
+      } else if (ownSeatRequests === 0) {
         kickedFrom.value = tableId;
         announceRemoval(freedAsIdle(idle) ? IDLE_NOTICE : 'The table you sat at is gone.');
       }
@@ -443,11 +500,14 @@ export const useTablesStore = defineStore('tables', () => {
 
   // A table fresh from the backend: follow its channel while we sit there, and
   // drop it once we don't.
+  // (A table we watch without a seat stays followed.)
   function followSeat(table: Table) {
     if (seatsMe(table)) {
+      // Seated: whatever we watched, we watch no more (the backend ends it).
+      kibitzingId.value = null;
       watchTable(table.id, !!myAwaySeat(table, auth.user?.id ?? null));
       rememberSet(table);
-    } else if (watchedTableId.value === table.id) {
+    } else if (watchedTableId.value === table.id && kibitzingId.value !== table.id) {
       unwatchTable();
     }
   }
@@ -580,9 +640,33 @@ export const useTablesStore = defineStore('tables', () => {
     const before = heldTable(update.id);
     const wasAway = !!before && !!myAwaySeat(before, me);
     const table = withCanManage(update);
+    const seated = seatsMe(table);
+    // Our seat had the Start timer running: that freed it, not a kick. At a
+    // table that allows kibitzers we stay, watching (#182), so the game
+    // store keeps the table too.
+    const timedOut =
+      !seated && ownSeatRequests === 0 && !!before?.seats.some((s) => s.user_id === me && s.start_deadline);
+    const nowWatching = timedOut && table.allow_kibitzers && kibitzingId.value !== table.id;
+    if (nowWatching) {
+      kibitzingId.value = table.id;
+    }
     syncTable(table);
     useGameStore().applyTableUpdate(table);
-    if (seatsMe(table)) {
+    if (nowWatching) {
+      startWatchingHere(table.id);
+      return;
+    }
+    if (!seated && kibitzingId.value === table.id) {
+      // Watching: the table going on without us is what we came for, unless
+      // it no longer allows us (its UnseatedFromTable may come second).
+      if (!table.allow_kibitzers) {
+        sendAway(table.id, KIBITZERS_OFF_NOTICE);
+      }
+      return;
+    }
+    if (seated) {
+      // A manager seated us at the table we watched: we play now.
+      kibitzingId.value = null;
       rememberSet(table);
       if (startRevoked(before, table, me)) {
         showToast(startRevokedText(table.set_minutes), 'warning');
@@ -607,8 +691,7 @@ export const useTablesStore = defineStore('tables', () => {
         announceRemoval(replacedFromText(replaced));
         return;
       }
-      // Our seat had the Start timer running: that freed it, not a kick.
-      if (before?.seats.some((s) => s.user_id === me && s.start_deadline)) {
+      if (timedOut) {
         announceRemoval(START_TIMEOUT_NOTICE);
         return;
       }
@@ -637,22 +720,47 @@ export const useTablesStore = defineStore('tables', () => {
     return { ...table, seats, free_seats: SEATS.filter((seat) => !seats.some((s) => s.seat === seat)) };
   }
 
-  // `UnseatedFromTable` on our own channel: the Start timer ran out on our
-  // seat and the backend freed it (bb#142). The table's TableUpdated may come
-  // first, and says so itself (applyTableUpdate); otherwise this does: our
-  // copies drop the seat, the channel goes, and the table's page leaves
-  // (`kickedFrom`). Watching the table instead (`kibitzing`, #182) isn't
-  // offered yet, so it counts as not. A kibitzer sent away has nothing here.
+  // The Start timer freed our seat at a table that allows kibitzers: we
+  // watch it now (the channel stays), so the page stays, and the game state
+  // is read again as a kibitzer's (no seat, no hand).
+  function startWatchingHere(tableId: number) {
+    announceRemoval(START_WATCHING_NOTICE);
+    const game = useGameStore();
+    if (game.tableId === tableId) {
+      game.load(tableId).catch(() => {
+        // The page reads it again on its next load.
+      });
+    }
+  }
+
+  // `UnseatedFromTable` on our own channel. `start_timeout`: the Start timer
+  // ran out on our seat and the backend freed it (bb#142). The table's
+  // TableUpdated may come first, and says so itself (applyTableUpdate);
+  // otherwise this does: our copies drop the seat and, unless we now watch
+  // the table (`kibitzing`, #182), the channel goes and the table's page
+  // leaves (`kickedFrom`). `kibitzers_off`: a manager stopped allowing
+  // kibitzers while we watched: back to the lobby.
   function applyUnseated(event: UnseatedFromTableEvent) {
     const tableId = event.table_id;
-    if (event.reason !== 'start_timeout' || watchedTableId.value !== tableId) {
+    if (event.reason === 'kibitzers_off') {
+      if (kibitzingId.value === tableId) {
+        sendAway(tableId, KIBITZERS_OFF_NOTICE);
+      }
       return;
     }
-    unwatchTable();
+    if (watchedTableId.value !== tableId || kibitzingId.value === tableId) {
+      return;
+    }
     const held = heldTable(tableId);
     if (held) {
       syncTable(withoutMe(held));
     }
+    if (event.kibitzing) {
+      kibitzingId.value = tableId;
+      startWatchingHere(tableId);
+      return;
+    }
+    unwatchTable();
     kickedFrom.value = tableId;
     announceRemoval(START_TIMEOUT_NOTICE);
   }
@@ -682,10 +790,17 @@ export const useTablesStore = defineStore('tables', () => {
     const mine = tables.value.find(seatsMe);
     if (mine) {
       followSeat(mine);
-    } else {
+    } else if (!stillWatchable()) {
       unwatchTable();
     }
     checkReplaced();
+  }
+
+  // The table we watch is still listed and still allows us. Gone, or turned
+  // off, while nothing told us: we watch it no more.
+  function stillWatchable() {
+    const watched = tables.value.find((t) => t.id === kibitzingId.value);
+    return !!watched?.allow_kibitzers;
   }
 
   async function loadTable(tableId: number) {
@@ -726,6 +841,52 @@ export const useTablesStore = defineStore('tables', () => {
     return table;
   }
 
+  // Watch a table without a seat (#182): its channel and heartbeat as for a
+  // seat, and any other table watched given up (the backend moves us). The
+  // table is also the one the game table's page shows next, without a GET.
+  // 403 when it doesn't allow kibitzers, 409 while we sit anywhere.
+  async function watch(tableId: number) {
+    const table = await tablesService.watchTable(tableId);
+    syncTable(table);
+    currentTable.value = table;
+    watchTable(tableId);
+    kibitzingId.value = tableId;
+    return table;
+  }
+
+  // Back from a reload: the game state answered us without a seat here, so we
+  // watch this table (the backend keeps it across page loads).
+  function resumeWatching(tableId: number) {
+    const table = heldTable(tableId);
+    if (kibitzingId.value === tableId || (table && seatsMe(table))) {
+      return;
+    }
+    watchTable(tableId);
+    kibitzingId.value = tableId;
+  }
+
+  // Stop watching: the channel and heartbeat go at once, then the backend is
+  // told. A 409 (we weren't watching any more) or a 404 (the table is gone)
+  // is the same outcome.
+  async function stopWatching() {
+    const tableId = kibitzingId.value;
+    if (tableId === null) {
+      return;
+    }
+    if (watchedTableId.value === tableId) {
+      unwatchTable();
+    }
+    kibitzingId.value = null;
+    try {
+      syncTable(await tablesService.unwatchTable(tableId));
+    } catch (e) {
+      const status = statusOf(e);
+      if (status !== 409 && status !== 404) {
+        throw e;
+      }
+    }
+  }
+
   // Replaces the table in place so the page doesn't have to reload the list.
   // Taking a seat while holding one is a move: within the same table it is a
   // plain seat change, but a move off another table frees the old seat (maybe
@@ -733,7 +894,8 @@ export const useTablesStore = defineStore('tables', () => {
   // describes the table joined. followSeat() switches channels, and the list is
   // reloaded so the old table's row changes or disappears.
   async function join(tableId: number, seat: Seat) {
-    const movedFrom = myTable.value?.id ?? watchedTableId.value;
+    // A table we only watched is no seat to move off.
+    const movedFrom = myTable.value?.id ?? (kibitzingId.value === null ? watchedTableId.value : null);
     const table = await ownSeatRequest(() => tablesService.joinSeat(tableId, seat));
     syncTable(table);
     if (movedFrom !== null && movedFrom !== tableId) {
@@ -856,6 +1018,7 @@ export const useTablesStore = defineStore('tables', () => {
     loaded,
     myTable,
     watchedTableId,
+    kibitzingId,
     kickedFrom,
     heldTableId,
     replacedFrom,
@@ -866,6 +1029,9 @@ export const useTablesStore = defineStore('tables', () => {
     findSeat,
     clear,
     create,
+    watch,
+    resumeWatching,
+    stopWatching,
     join,
     leave,
     removePlayer,
