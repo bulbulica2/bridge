@@ -22,9 +22,11 @@
        pending, the claimer's cards lie face up at their seat (the viewer's
        own are below the table already). Once the board is over, the whole
        deal lies face up, each hand at its seat (in a replay, what is left
-       of it, in the room the hand took as dealt). Dummy's and a robot
-       declarer's cards read trumps first (`trump`, see suitOrder) and lie
-       on one row whatever the width (HandView's `singleRow`, #172); the
+       of it, in the room the hand took as dealt; before a review's opening
+       lead, the leader's cards with their pills, `leadMarks`, #212).
+       Dummy's and a robot declarer's cards read trumps first (`trump`, see
+       suitOrder) and lie on one row whatever the width (HandView's
+       `singleRow`, #172); the
        claimer's and the deal keep bridge order. With `wide` (the play page
        on a wide screen, #163) the table takes boards A/B's layout:
        partner top centre, the opponents' plates upright where room is
@@ -229,6 +231,7 @@
         :cards="deal[seatOn[side]]"
         :rows="reserve ? longestSuit(reserve[seatOn[side]]) : 0"
         :label="`${SEAT_NAMES[seatOn[side]]}'s ${replay ? 'cards left' : 'hand as dealt'}`"
+        :marks="leadMarks?.seat === seatOn[side] ? leadMarks.marks : null"
       />
     </div>
 
@@ -263,6 +266,7 @@ import { formatClock } from '@/utils/away';
 import type { AwayTag } from '@/utils/away';
 import { hidesPartnerAlert } from '@/utils/alerts';
 import { isVulnerable, longestSuit, seatAt, suitOrder, vulnerabilityText } from '@/utils/cards';
+import type { LeadMark } from '@/utils/doubleDummy';
 import { bankLabel } from '@/utils/setClock';
 import type { SeatBank } from '@/utils/setClock';
 import type { ScreenSide } from '@/utils/cards';
@@ -308,6 +312,9 @@ const props = withDefaults(
     // hand keeps the height it had as dealt, so the table doesn't shrink as
     // the cards go.
     reserve?: Record<Seat, Card[]> | null;
+    // The opening leader's seat in `deal` and each of its cards' pill (a
+    // review before the lead, #212: the defence's tricks after that lead).
+    leadMarks?: { seat: Seat; marks: Record<number, LeadMark> } | null;
     // Seats whose players are away mid-set, each with its tag (its clock
     // to the robot taking the seat, utils/away).
     away?: Partial<Record<Seat, AwayTag>>;
@@ -352,6 +359,7 @@ const props = withDefaults(
     deal: null,
     replay: false,
     reserve: null,
+    leadMarks: null,
     away: () => ({}),
     banks: () => ({}),
     ready: () => [],
@@ -511,6 +519,20 @@ function turnLabel(side: ScreenSide): string {
 .claim-hand,
 .dealt-hand {
   margin-top: 4px;
+}
+
+/* The opening leader's hand with its pills (a review, #212) on a side seat
+   of a narrow table: its suits two by two, so it is no wider than a hand
+   without them and the centre keeps its room. The review holds the
+   table's height when the pills go. */
+@container (max-width: 599px) {
+  .side-left .dealt-hand.with-marks,
+  .side-right .dealt-hand.with-marks {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    justify-content: center;
+    row-gap: 4px;
+  }
 }
 
 .seat,

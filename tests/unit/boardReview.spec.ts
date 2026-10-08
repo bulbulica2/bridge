@@ -332,7 +332,9 @@ describe('BoardReview', () => {
     expect(wrapper.find('.board-bar').exists()).toBe(false)
     expect(wrapper.find('.outcome').exists()).toBe(false)
     expect(wrapper.find('.unrecorded').exists()).toBe(false)
-    expect(wrapper.get('.board-review').element.firstElementChild?.classList.contains('bridge-table')).toBe(true)
+    const first = wrapper.get('.board-review').element.firstElementChild
+    expect(first?.classList.contains('review-table')).toBe(true)
+    expect(first?.firstElementChild?.classList.contains('bridge-table')).toBe(true)
 
     await control(wrapper, 'Next trick').trigger('click')
     expect(wrapper.get('.corner-contract .tricks-won').text()).toBe('NS 1·EW 0')

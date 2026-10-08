@@ -6,7 +6,6 @@ import { pickSegment } from './ionEvents'
 import AccountPage from '@/views/AccountPage.vue'
 import DummyColumns from '@/components/DummyColumns.vue'
 import HandView from '@/components/HandView.vue'
-import LeadAnalysis from '@/components/LeadAnalysis.vue'
 import PlayingCard from '@/components/PlayingCard.vue'
 import TrickArea from '@/components/TrickArea.vue'
 import type { Card } from '@/services/game'
@@ -136,17 +135,10 @@ describe('cards drawn at the set size', () => {
     expect(cssVar(root, '--card-step')).toBe('max(44px, calc(var(--card-w) * 0.46))')
   })
 
-  test('the trick and the opening lead analysis use the same width', () => {
+  test('the trick uses the same width', () => {
     const trick = mount(TrickArea, { props: { cards: [], mySeat: 'S' } })
-    const leads = mount(LeadAnalysis, {
-      props: { leads: [{ card: aceOfSpades, tricks: 9 }], leader: 'W', lead: null, mySeat: 'S' },
-    })
 
     expect(cssVar(trick.find('.trick').element, '--card-w')).toBe(cardWidthCss.value)
-    expect(cssVar(leads.find('.leads').element, '--card-w')).toBe(cardWidthCss.value)
-    expect(cssVar(leads.find('.leads').element, '--card-step')).toBe(
-      'max(44px, calc(var(--card-w) * 0.46))',
-    )
   })
 
   test("DummyColumns' ranks follow the setting", async () => {

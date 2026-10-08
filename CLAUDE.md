@@ -1099,8 +1099,17 @@ The user's standing rule (#91): **no task may leave code coverage under
   `.review-trick` (`TrickArea` + caption), the one not shown `layer-off`
   (auction at `step === 0`, trick after; a passed-out board the auction
   only; unrecorded neither, so the centre shows the board). Under the
-  stepper: `BoardResultPanel`, `LeadAnalysis` (ready only), the chat; no
-  double dummy text anywhere in the review.
+  stepper: `BoardResultPanel`, `.lead-summary` (ready only), the chat; no
+  double dummy text anywhere in the review. **Lead pills** (#212): at
+  `step === 0`, ready with `leads`, `marks` = `{seat: nextSeat(declarer),
+  marks: leadMarks(leads, openingLead)}` → `BridgeTable`'s `leadMarks` →
+  that seat's `DummyColumns` `marks` (every hand in a review is
+  `DummyColumns`, the bottom one too); none from step 1, pending,
+  unavailable or passed out. The table sits in `.review-table`
+  (`tableBox`): leaving step 0 with pills, a `flush: 'pre'` watch on
+  `step` sets its `min-height` to the step-0 height (measured before the
+  DOM changes), so the stepper never moves; step 0, another card size or
+  a new window **width** (not height: a phone's address bar) let it go.
   The viewer sits at the bottom if they played it (`seatOfUser`), else
   South. An empty `auction` (`isRecorded`) means a playing finished before
   bb#60: only the deal and the result, with a notice. `HistoryEntryItem`
@@ -1154,15 +1163,27 @@ The user's standing rule (#91): **no task may leave code coverage under
   "…isn't set up on this server.": `unavailable` is the server without a
   solver, bb#125, never the board, #138), `leadsInHandOrder`
   (`HAND_SUITS`), `bestLeads`, `leadSummary` ("Your lead ♠K: declarer can
-  make 10. Best was ♥2: 9."), `doubleDummyLines` (text export),
+  make 10. Best was ♥2: 9."; with `side` `'defence'` "…the defence can
+  make 3. Best was ♥2: 4.", the review's line; the exports keep
+  declarer's), `defenceTricks` (13 − declarer's), `leadMarks(leads,
+  lead)` (card id → `LeadMark` `{tricks (the defence's), best, led}`),
+  `leadMarkLabel` ("King of spades: the defence makes 4, the lead made,
+  a best lead", from `rank_name`), `doubleDummyLines` (text export),
   `pbnOptimumResultTable`. `DoubleDummyTable.vue` (N E S W down, ♣ ♦ ♥ ♠
   NT across, `highlight` {declarer, strain} + `highlightNote`, the pending
   / unavailable note, nothing while `analysis` is null; `compact`, #180:
   `.dd-compact`, the grid alone on a white card in Barlow, the caption
   `sr-only`, no title/note/legend, nothing unless `ready` with a table)
   sits `compact` in `BoardReview`'s bottom-right corner before the lead,
-  and `LeadAnalysis.vue` (`PlayingCard`s with tricks under them, `led`
-  raised, `best` ringed) under its stepper; `BoardResultsPage`
+  and the leader's hand carries the lead pills before the lead
+  (`DummyColumns`' `marks`: `.with-marks` a step larger, 1.15 ×
+  `--hand-text`, at most 1.2rem under 576 px; each `.rank.marked`
+  `role="img"` with `.rank-text` + `.lead-pill`, Barlow, tabular, on the
+  hand's white face, `.best` green `--ion-color-success`, `.led` an
+  amber outline; `BridgeTable` lays a side seat's marked hand 2 × 2 in a
+  table container under 600 px, so the centre keeps its width) with the
+  line in words under its stepper (no `LeadAnalysis` since #212);
+  `BoardResultsPage`
   shows the table above the list (read after `loadResults` succeeds, the
   viewer's contract marked); the play page reads it once `finished`
   (`finishedBoardId`) and the result dialog gives one line once it is
@@ -1518,7 +1539,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   `localStorage` `bridge.cardSize` (try/catch, like `bridge.menuPinned`;
   anything else reads as Large). `cardWidthCss` (`min(<width>px,
   var(--card-max, <width>px))`) is bound as `--card-w` on `PlayingCard`,
-  `HandView`, `TrickArea` and `LeadAnalysis`; everything a card draws
+  `HandView` and `TrickArea`; everything a card draws
   (height 17/12 of it, the corner: rank 0.38 and suit 0.32 of the width,
   no pip since #160) and every overlap or slot is a
   `calc()` of `--card-w`, never a fixed px. Playable cards rise 14 px with

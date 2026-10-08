@@ -23,18 +23,22 @@ import {
   DOUBLE_DUMMY_UNAVAILABLE,
   bestLeads,
   ddTricks,
+  defenceTricks,
   doubleDummyDiff,
   doubleDummyLine,
   doubleDummyLines,
   doubleDummyVerdict,
+  leadMarkLabel,
+  leadMarks,
   leadSummary,
   leadsInHandOrder,
   pbnOptimumResultTable,
 } from '@/utils/doubleDummy'
 import BoardReview from '@/components/BoardReview.vue'
 import DoubleDummyTable from '@/components/DoubleDummyTable.vue'
-import LeadAnalysis from '@/components/LeadAnalysis.vue'
+import DummyColumns from '@/components/DummyColumns.vue'
 import BoardResultsPage from '@/views/BoardResultsPage.vue'
+import { setCardSize } from '@/utils/cardSize'
 
 vi.mock('@/services/http', () => ({
   default: { get: vi.fn() },
@@ -283,6 +287,57 @@ describe('double dummy wording', () => {
     expect(leadSummary([], null, null)).toBeNull()
   })
 
+  test('the opening lead in words, counted for the defence', () => {
+    const ace = lead('E', card('H', 15))
+    expect(leadSummary(LEADS, ace, 'E', 'defence')).toBe(
+      'Your lead ♥A: the defence can make 3. Best was ♣3 or ♠5: 4.',
+    )
+    expect(leadSummary(LEADS, lead('E', card('S', 5)), null, 'defence')).toBe(
+      "East's lead ♠5: the defence can make 4. That was one of the best leads.",
+    )
+    expect(leadSummary(LEADS, null, null, 'defence')).toBe('Best lead ♣3 or ♠5: 4.')
+    expect(leadSummary([{ card: card('S', 5), tricks: 9 }], null, null, 'defence')).toBe(
+      'Every lead lets the defence make 4.',
+    )
+    expect(leadSummary([], null, null, 'defence')).toBeNull()
+  })
+
+  test("the defence's tricks: 13 less declarer's", () => {
+    expect(defenceTricks(10)).toBe(3)
+    expect(defenceTricks(0)).toBe(13)
+    expect(defenceTricks(13)).toBe(0)
+  })
+
+  test("each lead's mark: the defence's tricks, the best, the lead made", () => {
+    const marks = leadMarks(LEADS, lead('E', card('H', 15)))
+
+    expect(marks).toEqual({
+      5: { tricks: 4, best: true, led: false },
+      35: { tricks: 3, best: false, led: true },
+      22: { tricks: 3, best: false, led: false },
+      53: { tricks: 3, best: false, led: false },
+      63: { tricks: 4, best: true, led: false },
+    })
+    // No lead made: nothing marked as made.
+    expect(Object.values(leadMarks(LEADS, null)).some((m) => m.led)).toBe(false)
+    expect(leadMarks([], null)).toEqual({})
+  })
+
+  test('a marked card in words', () => {
+    const king: Card = { id: 14, suit: 'S', rank: 14, rank_name: 'King' }
+
+    expect(leadMarkLabel(king, { tricks: 4, best: true, led: false })).toBe(
+      'King of spades: the defence makes 4, a best lead',
+    )
+    expect(leadMarkLabel(king, { tricks: 3, best: false, led: true })).toBe(
+      'King of spades: the defence makes 3, the lead made',
+    )
+    expect(leadMarkLabel(king, { tricks: 4, best: true, led: true })).toBe(
+      'King of spades: the defence makes 4, the lead made, a best lead',
+    )
+    expect(leadMarkLabel(king, { tricks: 2, best: false, led: false })).toBe('King of spades: the defence makes 2')
+  })
+
   test('the text and PBN tables', () => {
     expect(doubleDummyLines(TABLE)[0]).toBe('       ♣   ♦   ♥   ♠  NT')
     expect(doubleDummyLines(TABLE)[3]).toBe('S      7   5   6   9   6')
@@ -478,33 +533,40 @@ describe('DoubleDummyTable', () => {
   })
 })
 
-describe('LeadAnalysis', () => {
-  test("the leader's cards as held, the lead made marked, the best ringed, then in words", () => {
-    const wrapper = mount(LeadAnalysis, {
-      props: { leads: LEADS, leader: 'E', lead: lead('E', card('H', 15)), mySeat: 'E' },
-    })
+describe('DummyColumns with lead marks', () => {
+  const cards = [card('S', 14), card('S', 10), card('H', 3), card('C', 12)]
+  const marks = {
+    [card('S', 14).id]: { tricks: 4, best: true, led: false },
+    [card('S', 10).id]: { tricks: 3, best: false, led: true },
+    [card('H', 3).id]: { tricks: 10, best: false, led: false },
+  }
 
-    expect(wrapper.get('.lead-title').text()).toBe('Opening lead · East')
-    const leads = wrapper.findAll('.lead')
-    expect(leads.map((l) => l.attributes('data-card'))).toEqual(['35', '22', '63', '53', '5'])
-    expect(leads.map((l) => l.get('.lead-tricks').text())).toEqual(['10', '10', '9', '10', '9'])
-    expect(wrapper.findAll('.lead-suit')).toHaveLength(4)
-    expect(leads[0].classes()).toContain('led')
-    expect(leads[0].attributes('aria-label')).toBe('A of hearts: declarer makes 10, the lead made')
-    expect(wrapper.findAll('.best').map((l) => l.attributes('data-card'))).toEqual(['63', '5'])
-    expect(leads[2].attributes('aria-label')).toBe('3 of clubs: declarer makes 9, a best lead')
-    expect(wrapper.get('.lead-legend').text()).toContain('the lead made is raised')
-    expect(wrapper.get('.lead-summary').text()).toBe(
-      'Your lead ♥A: declarer can make 10. Best was ♣3 or ♠5: 9.',
-    )
+  test('a pill right after each marked rank, best green, the lead made ringed, said in words', () => {
+    const wrapper = mount(DummyColumns, { props: { cards, marks } })
+
+    expect(wrapper.get('.dummy-columns').classes()).toContain('with-marks')
+    const marked = wrapper.findAll('.marked')
+    expect(marked.map((m) => m.attributes('data-card'))).toEqual(['14', '10', '23'])
+    expect(marked.map((m) => m.get('.rank-text').text())).toEqual(['K', '10', '3'])
+    expect(marked.map((m) => m.get('.lead-pill').text())).toEqual(['4', '3', '10'])
+    expect(marked[0].classes()).toContain('best')
+    expect(marked[0].classes()).not.toContain('led')
+    expect(marked[1].classes()).toContain('led')
+    expect(marked[2].classes()).not.toContain('best')
+    expect(marked[0].attributes('role')).toBe('img')
+    expect(marked[0].attributes('aria-label')).toBe('14 of spades: the defence makes 4, a best lead')
+    expect(marked[1].attributes('aria-label')).toBe('10 of spades: the defence makes 3, the lead made')
+    // A card without a mark is a plain rank.
+    const plain = wrapper.findAll('.rank:not(.marked)')
+    expect(plain.map((r) => r.text())).toEqual(['J'])
   })
 
-  test('no lead made: only the best', () => {
-    const wrapper = mount(LeadAnalysis, { props: { leads: LEADS, leader: 'E', lead: null, mySeat: null } })
+  test('without marks: plain ranks, no pills, the usual size', () => {
+    const wrapper = mount(DummyColumns, { props: { cards } })
 
-    expect(wrapper.find('.led').exists()).toBe(false)
-    expect(wrapper.get('.lead-legend').text()).not.toContain('raised')
-    expect(wrapper.get('.lead-summary').text()).toBe('Best lead ♣3 or ♠5: 9.')
+    expect(wrapper.get('.dummy-columns').classes()).not.toContain('with-marks')
+    expect(wrapper.find('.lead-pill').exists()).toBe(false)
+    expect(wrapper.findAll('.rank').map((r) => r.text())).toEqual(['K', '10', '3', 'J'])
   })
 })
 
@@ -525,10 +587,8 @@ describe('BoardReview double dummy', () => {
     expect(grid.get('.played').attributes('data-cell')).toBe('NS')
     // Only the one, in the corner.
     expect(wrapper.findAll('.double-dummy')).toHaveLength(1)
-    expect(wrapper.get('.lead-title').text()).toBe('Opening lead · East')
-    expect(wrapper.get('.led').attributes('data-card')).toBe('35')
     expect(wrapper.get('.lead-summary').text()).toBe(
-      'Your lead ♥A: declarer can make 10. Best was ♣3 or ♠5: 9.',
+      'Your lead ♥A: the defence can make 3. Best was ♣3 or ♠5: 4.',
     )
 
     // From the first card it keeps its room, unseen.
@@ -538,6 +598,117 @@ describe('BoardReview double dummy', () => {
 
     await control(wrapper, 'Before the opening lead').trigger('click')
     expect(corner(wrapper).get('.double-dummy').classes()).not.toContain('layer-off')
+  })
+
+  // Every card East held, ♥A to ♥2: declarer makes 10 after the honours,
+  // 9 after the small ones.
+  const EAST_LEADS: LeadTricks[] = DEAL.E.map((c) => ({ card: c, tricks: c.rank > 10 ? 10 : 9 }))
+  const withEast = () =>
+    review({ double_dummy: { status: 'ready', table: TABLE, leads: EAST_LEADS } })
+  const seatOf = (wrapper: ReturnType<typeof mount>, seat: Seat) => wrapper.get(`.seat[data-seat="${seat}"]`)
+
+  test("before the lead, a pill on each of the leader's cards: the leader at the bottom", async () => {
+    useAuthStore().user = { ...bo, email: 'bo@example.com' } as never
+    const wrapper = mount(BoardReview, { props: { review: withEast() } })
+
+    const east = seatOf(wrapper, 'E')
+    expect(east.classes()).toContain('side-bottom')
+    const marked = east.findAll('.marked')
+    expect(marked).toHaveLength(13)
+    expect(marked.map((m) => m.get('.lead-pill').text())).toEqual([
+      '3', '3', '3', '3', '4', '4', '4', '4', '4', '4', '4', '4', '4',
+    ])
+    expect(marked[0].classes()).toContain('led')
+    expect(marked[0].classes()).not.toContain('best')
+    expect(marked[0].attributes('aria-label')).toBe('15 of hearts: the defence makes 3, the lead made')
+    expect(marked[4].classes()).toContain('best')
+    expect(marked[4].attributes('aria-label')).toBe('10 of hearts: the defence makes 4, a best lead')
+    expect(east.get('.dummy-columns').classes()).toContain('with-marks')
+    // Only the leader's hand.
+    expect(wrapper.findAll('.with-marks')).toHaveLength(1)
+    expect(wrapper.get('.lead-summary').text()).toBe(
+      'Your lead ♥A: the defence can make 3. Best was ♥10, ♥9, ♥8, ♥7, ♥6, ♥5, ♥4, ♥3 or ♥2: 4.',
+    )
+
+    // From the first card on, none, and the hand its usual size; back
+    // before the lead, there again.
+    await control(wrapper, 'Next card').trigger('click')
+    expect(wrapper.find('.marked').exists()).toBe(false)
+    expect(wrapper.find('.with-marks').exists()).toBe(false)
+    expect(wrapper.find('.lead-summary').exists()).toBe(true)
+    await control(wrapper, 'End of the play').trigger('click')
+    expect(wrapper.find('.marked').exists()).toBe(false)
+    await control(wrapper, 'Before the opening lead').trigger('click')
+    expect(seatOf(wrapper, 'E').findAll('.marked')).toHaveLength(13)
+  })
+
+  test('the leader on a side seat (the viewer declared) and at the top (partner led)', () => {
+    useAuthStore().user = { ...ann, email: 'ann@example.com' } as never
+    const declarer = mount(BoardReview, { props: { review: withEast() } })
+
+    expect(seatOf(declarer, 'E').classes()).toContain('side-left')
+    expect(seatOf(declarer, 'E').findAll('.marked')).toHaveLength(13)
+    expect(declarer.get('.lead-summary').text()).toContain("East's lead ♥A")
+
+    useAuthStore().user = { ...di, email: 'di@example.com' } as never
+    const partner = mount(BoardReview, { props: { review: withEast() } })
+
+    expect(seatOf(partner, 'E').classes()).toContain('side-top')
+    expect(seatOf(partner, 'E').findAll('.marked')).toHaveLength(13)
+  })
+
+  test('leaving the step before the lead, the table keeps its height there, until let go', async () => {
+    const wrapper = mount(BoardReview, { props: { review: withEast() }, attachTo: document.body })
+    const box = () => wrapper.get('.review-table').element as HTMLElement
+    vi.spyOn(box(), 'getBoundingClientRect').mockReturnValue({ height: 612 } as DOMRect)
+
+    expect(box().style.minHeight).toBe('')
+    await control(wrapper, 'Next card').trigger('click')
+    expect(box().style.minHeight).toBe('612px')
+    // Further on, still held.
+    await control(wrapper, 'Next trick').trigger('click')
+    expect(box().style.minHeight).toBe('612px')
+
+    // A phone's address bar (the height alone) keeps it; a new width lets go.
+    window.dispatchEvent(new Event('resize'))
+    expect(box().style.minHeight).toBe('612px')
+    const width = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width + 100 })
+    window.dispatchEvent(new Event('resize'))
+    expect(box().style.minHeight).toBe('')
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+
+    // Back before the lead, let go; held again on leaving it; another card
+    // size lets go.
+    await control(wrapper, 'Next card').trigger('click')
+    expect(box().style.minHeight).toBe('')
+    await control(wrapper, 'Before the opening lead').trigger('click')
+    await control(wrapper, 'Next card').trigger('click')
+    expect(box().style.minHeight).toBe('612px')
+    await control(wrapper, 'Before the opening lead').trigger('click')
+    expect(box().style.minHeight).toBe('')
+    await control(wrapper, 'Next card').trigger('click')
+    setCardSize('xlarge')
+    await nextTick()
+    expect(box().style.minHeight).toBe('')
+    setCardSize('large')
+    wrapper.unmount()
+  })
+
+  test('no pills, nothing held', async () => {
+    const wrapper = mount(BoardReview, {
+      props: { review: review({ double_dummy: { status: 'pending', table: null, leads: null } }) },
+    })
+
+    await control(wrapper, 'Next card').trigger('click')
+    expect((wrapper.get('.review-table').element as HTMLElement).style.minHeight).toBe('')
+  })
+
+  test('nobody seated: South at the bottom, the leader on the right', () => {
+    const wrapper = mount(BoardReview, { props: { review: withEast() } })
+
+    expect(seatOf(wrapper, 'E').classes()).toContain('side-right')
+    expect(seatOf(wrapper, 'E').findAll('.marked')).toHaveLength(13)
   })
 
   test('a passed-out board: only the grid, nothing marked', () => {
@@ -555,7 +726,8 @@ describe('BoardReview double dummy', () => {
 
     expect(corner(wrapper).findAll('.dd-table tbody tr')).toHaveLength(4)
     expect(wrapper.find('.played').exists()).toBe(false)
-    expect(wrapper.find('.lead-analysis').exists()).toBe(false)
+    expect(wrapper.find('.lead-summary').exists()).toBe(false)
+    expect(wrapper.find('.marked').exists()).toBe(false)
   })
 
   test('no analysis at all (an older payload): an empty corner', () => {
@@ -564,7 +736,7 @@ describe('BoardReview double dummy', () => {
     expect(corner(wrapper).exists()).toBe(false)
     expect(wrapper.get('.bridge-table').classes()).not.toContain('room-bottom-right')
     expect(wrapper.find('.double-dummy').exists()).toBe(false)
-    expect(wrapper.find('.lead-analysis').exists()).toBe(false)
+    expect(wrapper.find('.marked').exists()).toBe(false)
   })
 
   test('a server without a solver: an empty corner, no words about it, never read again', async () => {
@@ -577,7 +749,7 @@ describe('BoardReview double dummy', () => {
     expect(wrapper.find('.double-dummy').exists()).toBe(false)
     expect(wrapper.text()).not.toContain(DOUBLE_DUMMY_UNAVAILABLE)
     expect(wrapper.text()).not.toContain('Double dummy')
-    expect(wrapper.find('.lead-analysis').exists()).toBe(false)
+    expect(wrapper.find('.marked').exists()).toBe(false)
     vi.advanceTimersByTime(DOUBLE_DUMMY_REREAD_MS)
     await nextTick()
     expect(http.get).not.toHaveBeenCalled()
@@ -593,14 +765,16 @@ describe('BoardReview double dummy', () => {
 
     expect(corner(wrapper).exists()).toBe(false)
     expect(wrapper.text()).not.toContain(DOUBLE_DUMMY_PENDING)
-    expect(wrapper.find('.lead-analysis').exists()).toBe(false)
+    expect(wrapper.find('.marked').exists()).toBe(false)
 
     answer(review())
     vi.advanceTimersByTime(DOUBLE_DUMMY_REREAD_MS)
     await flushPromises()
     expect(http.get).toHaveBeenCalledWith('/playings/42')
     expect(corner(wrapper).findAll('.dd-table tbody tr')).toHaveLength(4)
-    expect(wrapper.find('.lead-analysis').exists()).toBe(true)
+    expect(wrapper.find('.lead-summary').exists()).toBe(true)
+    // The leads that are in East's hand: ♥A and ♥2.
+    expect(wrapper.findAll('.marked').map((m) => m.attributes('data-card'))).toEqual(['35', '22'])
   })
 
   test('pending again after the reread, or a failed one: no loop', async () => {
