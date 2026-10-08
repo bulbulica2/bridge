@@ -298,7 +298,9 @@ describe('watching mode', () => {
     expect(wrapper.get('.corner-contract .contract-line').text()).toContain('by North')
     expect(wrapper.get('.corner-contract .tricks-won').text()).toContain('NS 1')
     expect(wrapper.find('.corner-contract .contract-you').exists()).toBe(false)
-    expect(wrapper.find('.trick-peek .last-trick-button, .trick-peek button').exists()).toBe(true)
+    // Last trick in the same place as for a player: the top-right corner.
+    expect(wrapper.find('.side-top > .corner-top-right .last-trick-button').exists()).toBe(true)
+    expect(wrapper.find('.centre .last-trick-button').exists()).toBe(false)
     expect(wrapper.find('.claim-button').exists()).toBe(false)
     expect(wrapper.find('.my-slot').exists()).toBe(false)
   })

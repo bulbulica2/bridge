@@ -158,6 +158,7 @@
             :calls="playing.phase === 'auction' ? (playing.auction ?? []) : null"
             :board-label="playing.set ? boardPosition(playing.set) : null"
             :wide="wideTable"
+            :top-right-room="playing.phase === 'play'"
             :seatable="waitingRoom"
             :menu-seat="seatMenu?.seat ?? null"
             :busy="sendingCard !== null || seatBusy"
@@ -203,6 +204,23 @@
                   <p v-if="forDeclarer" class="contract-you">you play it</p>
                 </template>
               </div>
+              <!-- The last trick in a pop-up under the contract (#196), from
+                   the second trick on, so the centre keeps the trick in
+                   progress and its caption to itself. Its room is kept all
+                   through the play (the first trick, a trick held), so the
+                   corner, which partner's seat makes room for, never grows
+                   from card to card. -->
+              <LastTrickPopover
+                v-if="peekTrick"
+                class="corner-last-trick"
+                :trick="peekTrick"
+                :my-seat="mySeat"
+              />
+              <span
+                v-else-if="playing.phase === 'play'"
+                class="corner-last-trick-room"
+                aria-hidden="true"
+              />
               <!-- Between sets the corner has the table's time for a set
                    instead (#181): a manager's gear opens the settings, the
                    others read it. -->
@@ -303,15 +321,10 @@
                 :trump="playing.contract!.bid.strain"
                 :my-slot="playing.phase === 'play' && !watching"
               />
+              <!-- Always a caption ("Trick 3", "East wins"), so its line
+                   is there from card to card. -->
               <div class="trick-foot">
                 <p class="trick-caption" aria-live="polite">{{ shownTrick.caption }}</p>
-                <!-- The last trick in a pop-up, so the trick in progress
-                     stays in the middle. Its row stays when it has no pill
-                     (the first trick, a trick held), so the centre keeps its
-                     height. -->
-                <span class="trick-peek">
-                  <LastTrickPopover v-if="peekTrick" :trick="peekTrick" :my-seat="mySeat" />
-                </span>
               </div>
             </template>
           </BridgeTable>
@@ -945,7 +958,7 @@ const shownTrick = computed<{ cards: PlayedCard[]; winner: Seat | null; caption:
   return { cards: state?.current_trick ?? [], winner: null, caption: `Trick ${(state?.tricks?.length ?? 0) + 1}` };
 });
 
-// The last trick, on demand beside the trick in progress: from the second
+// The last trick, on demand in the top-right corner: from the second
 // trick of the play on, but not while that trick is still held up anyway.
 const peekTrick = computed(() =>
   playing.value?.phase === 'play' && !heldTrick.value ? (playing.value.tricks?.at(-1) ?? null) : null,
@@ -2439,26 +2452,23 @@ async function refresh(event: CustomEvent) {
   color: var(--ion-color-medium);
 }
 
-/* The caption over the Last trick pill, on two rows wherever it is: a
-   centre cell too narrow for both on one row would wrap only while the
-   pill shows. */
-.trick-foot {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
+/* Last trick's height in the top-right corner while it is away. */
+.corner-last-trick-room {
+  display: block;
+  height: 32px;
 }
 
-/* The pill's height (LastTrickPopover), with or without it. */
-.trick-peek {
+/* The caption under the trick; the Last trick button is in the top-right
+   corner (#196). One line, never wrapped, so the centre keeps its height. */
+.trick-foot {
   display: flex;
   justify-content: center;
-  height: 22px;
+  margin-top: 4px;
 }
 
 .trick-caption {
   margin: 0;
+  white-space: nowrap;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--ion-color-medium);

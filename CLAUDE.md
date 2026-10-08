@@ -395,7 +395,16 @@ The user's standing rule (#91): **no task may leave code coverage under
   top-right `.corner-contract` (`aria-live`, always there, empty but in
   the play): `.contract-line` `CallLabel` + `doubledMark` ("4♥X by
   East", red strains `--bridge-on-table-bad`), `.tricks-won` "NS 0 · EW
-  0" in Barlow, `.contract-you` "you play it" for `forDeclarer`;
+  0" in Barlow, `.contract-you` "you play it" for `forDeclarer`; after
+  it, outside the live region, `LastTrickPopover` `.corner-last-trick`
+  while `peekTrick`, else in the play the 32 px
+  `.corner-last-trick-room` (#196: its room kept on the first trick and
+  while a trick is held); in the play the page passes `BridgeTable`'s
+  `topRightRoom` (`room-top-right`: that corner is rendered inside
+  `.side-top`, a grid of `--corner-w` / `minmax(0, 1fr)` / `--corner-w`,
+  plate-row and turn-slot in the middle, the corner rows 1-2 on the
+  right, any hand row 3, `.single-row` stretched), so the right seat and
+  a hand across the top start below it (measured at 360/390/768/1366);
   bottom-left `AuctionPopover.vue` (the **Auction** button,
   `auctionButton`: from the first call to the end of the board, the
   `AuctionHistory` grid in a `usePopover` pop-up opening upward, `live`
@@ -639,20 +648,24 @@ The user's standing rule (#91): **no task may leave code coverage under
   it". `current_trick` empties as soon
   as a trick's fourth card lands, so the page holds that trick (the last of
   `tricks`) with its winner for 2 s before clearing it, but only when seen
-  live. The contract's top-right corner carries `tricks_won`. Under the
-  trick in progress, `LastTrickPopover.vue` (from the second trick on, not
-  while a trick is held) pops up the last of `tricks` in a `TrickArea`
-  with `spread` (#70: no overlap, a seat tag per card, nudged sideways to
-  stay on screen):
+  live. The contract's top-right corner carries `tricks_won`. Under it
+  (#196, not in the centre any more), `LastTrickPopover.vue` (from the
+  second trick on, not while a trick is held; `peekTrick`) is a 32 px
+  light pill (44 px tap area, icon + `.last-trick-label`, the label
+  hidden under a 420 px table, `aria-label` "Last trick") that pops up
+  the last of `tricks` in a `TrickArea` with `spread` (#70: no overlap, a
+  seat tag per card), opening downward and to the left (`top: 100%;
+  right: 0`, nudged sideways to stay on screen):
   mouse hover opens it and leaving closes it (`pointerType === 'mouse'`
   only), a click toggles it, a pointerdown outside or Escape closes it.
   The centre keeps the trick in progress meanwhile. Nothing changes height
   from card to card (#133): `BridgeTable` gives every seat a `.turn-slot`
   while `turn` is set (the label only on the seat on turn), the page's
   `TurnClockLine` is rendered for all of `auction`/`play` (empty during a
-  claim) with two lines of room and its bar's track, and `.trick-foot`
-  stacks the caption over `.trick-peek`,
-  the 22 px pill row kept without the pill. One card is in flight
+  claim) with two lines of room and its bar's track, `.trick-foot` holds
+  only the caption (one line, `nowrap`), and the top-right corner keeps
+  Last trick's room all through the play (`.corner-last-trick-room`).
+  One card is in flight
   at a time; a 409 toasts and reloads, as for calls.
 - **Claims**: during `play` any player but dummy (except a robot
   declarer's human dummy, who claims, answers and withdraws for

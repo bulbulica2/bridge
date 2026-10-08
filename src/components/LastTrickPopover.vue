@@ -1,10 +1,13 @@
 <template>
-  <!-- The last trick on demand, next to the trick in progress (which stays
-       where it is). Hovering the button with a mouse opens a small pop-up
-       with its four cards spread apart, each at its seat (named) and rotated
-       like the table, the winner ringed; moving away closes it. A tap or a
-       key (touch has no hover) opens it until a tap outside, the button
-       again, or Escape. It stays clear of the screen's edges. -->
+  <!-- The last trick on demand, in the table's top-right corner under the
+       contract and the tricks on the play page (#196), so the centre keeps
+       the trick in progress to itself. Hovering the button with a mouse
+       opens a small pop-up with its four cards spread apart, each at its
+       seat (named) and rotated like the table, the winner ringed; moving
+       away closes it. A tap or a key (touch has no hover) opens it until a
+       tap outside, the button again, or Escape. It opens downward and to
+       the left, over the top and right seats, and stays clear of the
+       screen's edges. -->
   <span
     ref="root"
     class="last-trick"
@@ -15,13 +18,14 @@
       ref="button"
       type="button"
       class="last-trick-button"
+      aria-label="Last trick"
       aria-haspopup="dialog"
       :aria-expanded="open"
       :aria-controls="popupId"
       @click="toggle"
     >
       <ion-icon :icon="albumsOutline" aria-hidden="true" />
-      Last trick
+      <span class="last-trick-label">Last trick</span>
     </button>
     <!-- Padded rather than offset, so the pointer crosses no gap on its way
          from the button to the pop-up. -->
@@ -70,23 +74,54 @@ const caption = computed(() =>
   display: inline-flex;
 }
 
-/* 22px tall: the play page keeps that room for it while it is away. */
+/* A light pill on the table's navy like Auction's, 32 px to see and 44 px
+   to tap (the ::before reaches 6 px past its top and bottom). */
 .last-trick-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   box-sizing: border-box;
-  height: 22px;
-  padding: 0 8px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 10px;
   border: 1px solid var(--bridge-control);
   border-radius: var(--bridge-radius-pill);
   background: var(--bridge-surface);
   color: var(--bridge-ink);
   font: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.last-trick-button::before {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
+}
+
+.last-trick-button ion-icon {
+  flex: none;
+  font-size: 14px;
+}
+
+/* A narrow table's corner has room for the icon alone (the button keeps
+   its name in aria-label). */
+@container (max-width: 420px) {
+  .last-trick-label {
+    display: none;
+  }
+
+  .last-trick-button {
+    padding: 0;
+  }
+
+  .last-trick-button ion-icon {
+    font-size: 16px;
+  }
 }
 
 .last-trick-button[aria-expanded='true'] {
@@ -99,15 +134,15 @@ const caption = computed(() =>
   outline-offset: 2px;
 }
 
-/* Below the button, over the bottom seat, so the trick in progress above
-   stays in sight. */
+/* Below the button and to its left, over the top and right seats, so the
+   trick in progress stays in sight where there is room. */
 .last-trick-popup {
   position: absolute;
   top: 100%;
-  left: 50%;
+  right: 0;
   z-index: 20;
   padding-top: 6px;
-  transform: translateX(calc(-50% + var(--nudge, 0px)));
+  transform: translateX(var(--nudge, 0px));
 }
 
 .last-trick-box {

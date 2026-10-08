@@ -162,6 +162,38 @@ describe('BridgeTable plates', () => {
     expect(one.get('.bridge-table').classes()).toEqual(expect.arrayContaining(['with-corners', 'table-wide']))
   })
 
+  test("topRightRoom: the top-right corner lies in partner's seat, the others over the panel", () => {
+    const slots = {
+      'top-left': () => h('span', { class: 'tl' }, 'Vul: E-W'),
+      'top-right': () => h('span', { class: 'tr' }, '2♠ by North'),
+    }
+    const wrapper = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: 'W', topRightRoom: true },
+      slots,
+    })
+
+    expect(wrapper.get('.bridge-table').classes()).toEqual(expect.arrayContaining(['with-corners', 'room-top-right']))
+    expect(wrapper.findAll('.corner-top-right')).toHaveLength(1)
+    const seat = wrapper.get('.side-top')
+    expect(seat.get('.corner-top-right .tr').text()).toBe('2♠ by North')
+    // After the plate and the turn line, before any hand.
+    expect([...seat.element.children].map((el) => el.className)).toEqual([
+      'plate-row',
+      'corner corner-top-right',
+      'turn-slot',
+    ])
+    expect(wrapper.find('.bridge-table > .corner-top-left .tl').exists()).toBe(true)
+    expect(wrapper.findAll('.seat .corner')).toHaveLength(1)
+
+    // Nothing to make room for: no class, and no corner in the seat.
+    const empty = mount(BridgeTable, {
+      props: { players: PLAYERS, mySeat: 'S', board: null, turn: null, topRightRoom: true },
+      slots: { 'top-left': slots['top-left'] },
+    })
+    expect(empty.get('.bridge-table').classes()).not.toContain('room-top-right')
+    expect(empty.find('.corner-top-right').exists()).toBe(false)
+  })
+
   test('no corners: nothing laid over the table and no room kept for them', () => {
     const wrapper = mountTable()
 

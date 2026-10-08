@@ -1,10 +1,13 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils'
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import LastTrickPopover from '@/components/LastTrickPopover.vue'
 import type { Card, PlayedCard, Suit, Trick } from '@/services/game'
 import type { Seat } from '@/services/tables'
 
 enableAutoUnmount(afterEach)
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 // "SA" is the ace of spades, "H10" the ten of hearts; ids are unique per card.
 const RANKS: Record<string, number> = { J: 12, Q: 13, K: 14, A: 15 }
@@ -49,6 +52,43 @@ describe('LastTrickPopover', () => {
     expect(button.text()).toBe('Last trick')
     expect(button.attributes('aria-expanded')).toBe('false')
     expect(wrapper.find('.last-trick-popup').exists()).toBe(false)
+  })
+
+  test('compact for the corner: the icon and a label that a narrow table hides, the name kept', () => {
+    const button = mountPopover().get('.last-trick-button')
+
+    // The icon first, then the words in a span of their own: under a
+    // 420 px table only the icon shows, so the name is in aria-label.
+    expect(button.element.children[0]!.tagName).toBe('ION-ICON')
+    expect(button.get('ion-icon').attributes('aria-hidden')).toBe('true')
+    expect(button.get('.last-trick-label').text()).toBe('Last trick')
+    expect(button.attributes('aria-label')).toBe('Last trick')
+    expect(button.attributes('aria-haspopup')).toBe('dialog')
+  })
+
+  test('opens from the corner downward and to the left, nudged back on screen', async () => {
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(360)
+    // Laid out from the button's right edge, it would cross the left one.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: -30,
+      right: 320,
+      width: 350,
+      top: 172,
+      bottom: 520,
+      height: 348,
+      x: -30,
+      y: 172,
+      toJSON: () => ({}),
+    } as DOMRect)
+    const wrapper = mountPopover()
+
+    await wrapper.get('.last-trick-button').trigger('click')
+    await new Promise((resolve) => setTimeout(resolve))
+
+    const popup = wrapper.get('.last-trick-popup')
+    expect(popup.attributes('style')).toContain('--nudge: 38px')
+    // Its controls point at it while open.
+    expect(wrapper.get('.last-trick-button').attributes('aria-controls')).toBe(popup.attributes('id'))
   })
 
   test('a tap shows the four cards, each at its seat, rotated for the viewer', async () => {

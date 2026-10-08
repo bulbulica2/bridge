@@ -663,11 +663,16 @@ describe('TablePlayPage card play', () => {
   })
 
   describe('a steady layout', () => {
-    test("the trick's foot keeps a row for the Last trick pill, shown or not", async () => {
+    test("Last trick is in the top-right corner under the contract, its room kept on the first trick", async () => {
       const first = await mountPage(state())
-      expect(first.get('.trick-foot .trick-caption').text()).toBe('Trick 1')
-      expect(first.find('.trick-foot .trick-peek').exists()).toBe(true)
-      expect(first.find('.trick-peek .last-trick-button').exists()).toBe(false)
+      // The centre has the trick and its caption only.
+      expect(first.get('.trick-foot').text()).toBe('Trick 1')
+      expect(first.find('.trick-peek').exists()).toBe(false)
+      expect(first.find('.last-trick-button').exists()).toBe(false)
+      // The corner, in partner's seat, keeps the button's room meanwhile.
+      expect(first.get('.bridge-table').classes()).toContain('room-top-right')
+      const firstCorner = first.get('.side-top > .corner-top-right')
+      expect(firstCorner.get('.corner-last-trick-room').attributes('aria-hidden')).toBe('true')
       first.unmount()
 
       const second = await mountPage(
@@ -676,8 +681,32 @@ describe('TablePlayPage card play', () => {
           current_trick: played('E S3'),
         }),
       )
-      expect(second.get('.trick-foot .trick-caption').text()).toBe('Trick 2')
-      expect(second.get('.trick-foot .trick-peek .last-trick-button').text()).toBe('Last trick')
+      expect(second.get('.trick-foot').text()).toBe('Trick 2')
+      expect(second.find('.centre .last-trick-button').exists()).toBe(false)
+      const corner = second.get('.side-top > .corner-top-right')
+      // Right after the contract and the tricks, in the room kept for it.
+      const kids = corner.element.children
+      expect(kids[0]!.classList.contains('corner-contract')).toBe(true)
+      expect(kids[1]!.classList.contains('corner-last-trick')).toBe(true)
+      expect(kids).toHaveLength(2)
+      expect(corner.get('.last-trick-button').attributes('aria-label')).toBe('Last trick')
+      expect(corner.find('.corner-last-trick-room').exists()).toBe(false)
+    })
+
+    test('the corner makes room in the seat only during the play', async () => {
+      const auction = await mountPage(
+        state({ phase: 'auction', contract: null, current_trick: [], dummy_hand: null, turn: 'S' }),
+      )
+      expect(auction.get('.bridge-table').classes()).not.toContain('room-top-right')
+      expect(auction.find('.side-top .corner').exists()).toBe(false)
+      expect(auction.find('.bridge-table > .corner-top-right').exists()).toBe(true)
+      expect(auction.find('.corner-last-trick-room').exists()).toBe(false)
+      auction.unmount()
+
+      const finished = await mountPage(state({ phase: 'finished', turn: null, current_trick: [] }))
+      expect(finished.get('.bridge-table').classes()).not.toContain('room-top-right')
+      expect(finished.find('.corner-last-trick-room').exists()).toBe(false)
+      expect(finished.find('.last-trick-button').exists()).toBe(false)
     })
 
     test('the turn line is there during the auction and the play, not once the board is over', async () => {
@@ -768,22 +797,24 @@ describe('TablePlayPage card play', () => {
     await flushPromises()
     expect(wrapper.findAll('.centre > .trick .playing-card')).toHaveLength(4)
     expect(wrapper.get('.trick-caption').text()).toBe('E wins')
-    // That trick is on show already: no last-trick button meanwhile.
+    // That trick is on show already: no last-trick button meanwhile, its
+    // room kept in the corner.
     expect(wrapper.find('.last-trick-button').exists()).toBe(false)
+    expect(wrapper.find('.corner-top-right .corner-last-trick-room').exists()).toBe(true)
 
     vi.advanceTimersByTime(2000)
     await flushPromises()
     expect(wrapper.findAll('.centre > .trick .playing-card')).toHaveLength(0)
     expect(wrapper.get('.trick-caption').text()).toBe('Trick 2')
 
-    // The last trick can still be looked at, in a pop-up: the trick in
-    // progress stays in the middle.
-    await wrapper.get('.last-trick-button').trigger('click')
+    // The last trick can still be looked at, in a pop-up from the corner:
+    // the trick in progress stays in the middle.
+    await wrapper.get('.corner-top-right .last-trick-button').trigger('click')
     expect(wrapper.findAll('.last-trick-popup .playing-card')).toHaveLength(4)
     expect(wrapper.get('.last-trick-title').text()).toBe('Trick 1 · E wins')
     expect(wrapper.findAll('.centre > .trick .playing-card')).toHaveLength(0)
     expect(wrapper.get('.trick-caption').text()).toBe('Trick 2')
-    // Nor is it in the contract's corner.
+    // Under the contract, not inside its live region.
     expect(wrapper.get('.corner-contract').text()).not.toContain('Last trick')
   })
 

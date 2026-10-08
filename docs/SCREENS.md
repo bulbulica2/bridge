@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/111-seat-menu-at-the-seat`._
+_Status as of branch `bulbulica2/112-last-trick-in-the-corner`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -286,7 +286,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140), #186 (a pending claim in a dialog, so the table never moves);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140), #186 (a pending claim in a dialog, so the table never moves), #196 (Last trick in the table's top-right corner);
 **Compare** by #30; the table's one page (the waiting table, Remove in the
 profile, Leave in the header, the set time's gear, the Start timer) by
 #181, needs bb#142; watching mode (kibitzers) by #182, needs bb#143.
@@ -344,9 +344,10 @@ every seat keeps a line for the turn label (**Your turn**, **To act**,
 **Thinking…**), filled only on the seat on turn; the turn clock line
 under the table is there for the whole auction and play with room for two
 lines over its bar (empty while a claim's dialog says what is going on);
-and the trick's caption sits over the **Last trick** button's row, which
-keeps its height while the button is hidden. So the table and your hand
-stay put on a phone as on a desktop.
+and the trick's caption is always there under the trick. **Last trick**
+lives in the top-right corner, whose room is kept from the first card of
+the play (#196). So the table and your hand stay put on a phone as on a
+desktop.
 
 **Large cards** (#136): the cards are twice the old size unless the
 Account page's **Card size** says otherwise, in your hand, dummy's and a
@@ -381,15 +382,22 @@ the navy table, beside partner and you, on a phone as on a desktop, so
 the table, the trick, your hand and the bidding box fit one screen. They
 take no room of their own (the table keeps its height from card to card)
 and never cover a seat, dummy or the trick; on a phone their words wrap to
-two short lines.
+two short lines. The top-right corner is the exception during the play:
+it is taller than partner's plate, so partner's seat makes room for it
+beside the plate (#196), and the right-hand seat and a hand across the
+top start below it rather than under it. That room is there from the
+first card, so nothing moves when **Last trick** appears.
 - **Top left**, from the deal to the end of the board: who is
   vulnerable, in words, as a small pill: **Nobody vulnerable** in green,
   else red: **Vul: E-W** for the other side, **Vulnerable: N-S (you)**
   for yours, **Both (you too)**.
 - **Top right**, through the play: the contract, **2♠ by North**
   (**4♥X by East** doubled), and the tricks, **NS 3 · EW 2**; for a robot
-  declarer's dummy a third line, **you play it**. Empty during the
-  auction.
+  declarer's dummy a third line, **you play it**; under them, from the
+  second trick on, the **Last trick** button (#196: its icon and words,
+  the icon alone on a table under 420 px wide), whose pop-up opens
+  downward and to the left over the top and right seats. Empty during
+  the auction.
 - **Bottom left**, from the first call until the board is over: the
   **Auction** button. Hovering it with a mouse pops up the auction grid
   above it (chips, the vulnerable side's seats red, alerts "!", questions
@@ -527,13 +535,15 @@ What it shows by phase:
   centre, dummy's cards once the opening lead is made, trumps on the left
   and the colours still alternating (4♠: ♠ ♥ ♣ ♦, 3♦: ♦ ♠ ♥ ♣, NT: ♥ ♣ ♦
   ♠; a robot declarer's cards, for its dummy, the same way). From the second
-  trick on, a **Last trick** button sits under the trick in progress:
-  hovering it with a mouse pops up the last trick's four cards (each at its
-  seat, turned like the table and tagged N/E/S/W or **You**, spread apart
-  so every rank and suit shows, the winner ringed), and moving away hides
-  it; on a phone a tap opens it and a tap outside (or Escape) closes it.
-  The trick in progress stays in the centre meanwhile. The button is hidden
-  for the 2 s the trick just won is still shown in the centre.
+  trick on, a **Last trick** button sits in the table's top-right corner,
+  under the contract and the tricks (#196; the centre holds only the trick
+  in progress and its caption): hovering it with a mouse pops up the last
+  trick's four cards below it and to its left (each at its seat, turned
+  like the table and tagged N/E/S/W or **You**, spread apart so every rank
+  and suit shows, the winner ringed), and moving away hides it; on a phone
+  a tap opens it and a tap outside (or Escape) closes it. The trick in
+  progress stays in the centre meanwhile. The button is hidden for the 2 s
+  the trick just won is still shown in the centre, its place kept.
   You tap a card from your own hand, or from dummy's if you're declarer.
   As declarer, when only one card may follow suit (say dummy holds a
   single card in the suit led), it pulses and plays itself after 3 s, with
@@ -755,8 +765,8 @@ It is the same table, read-only:
   board is over.": the backend keeps the explanation from kibitzers
   until then. No **Ask**.
 - **The play**: dummy at its seat once the opening lead is made (South's
-  dummy across the bottom), the trick, the last trick, the vulnerability
-  and the contract in the corners, a pending claim's cards and its
+  dummy across the bottom), the trick, the vulnerability and the contract
+  in the corners, **Last trick** under the contract as for a player, a pending claim's cards and its
   dialog, without buttons (the **X** closes it).
 - **The end**: the result dialog, without the vote (no **Deal next
   board**, no **Review**: a kibitzer may only review boards they played).
