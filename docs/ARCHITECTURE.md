@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/98-board-info-in-the-table-corners`._
+_Status as of branch `bulbulica2/99-dummy-on-one-row`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -35,9 +35,9 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board and each seat's time for the set, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button, the play page's Auction and locked Claim buttons and the auction's calls, kept off the screen's edges and a `data-right-edge` panel, and brought down below the screen's top when it opens upward), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved), `useElementWidth` (an element's width as it is resized: the play page's column, for the wide table), `useSteadyHeight` (an element held at its tallest: a hand, the wide table's auction) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board and each seat's time for the set, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button, the play page's Auction and locked Claim buttons and the auction's calls, kept off the screen's edges and a `data-right-edge` panel, and brought down below the screen's top when it opens upward), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved), `useElementWidth` (an element's width as it is resized: the play page's column, for the wide table, and dummy's single row), `useSteadyHeight` (an element held at its tallest: a hand, the wide table's auction) |
 | `src/directives/` | `ionEvent.ts`: `v-ion-event:ion-refresh="refresh"` listens for an Ionic event on the element itself (pull-to-refresh, the history's infinite scroll); see [Ionic events](#ionic-events) |
-| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), the set clock (`setClock.ts`), a player's stats in words (`stats.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`), the wide table's minimum column (`layout.ts`) |
+| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), the set clock (`setClock.ts`), a player's stats in words (`stats.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`), the wide table's minimum column (`layout.ts`), dummy's single row (`handRow.ts`) |
 | `src/theme/` | the Daylight design tokens (`variables.css`), the shared button and font rules (`daylight.css`), the global toast styles, the shared form fields (`forms.css`) and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
@@ -1000,9 +1000,22 @@ any hand need, and the centre the rest. In a hand each card shows `--card-step`
 of itself, never less than 44 px (`MIN_TARGET_PX`, the touch-target
 minimum), so a 13-card hand wraps whole suits onto two or three rows;
 `useSteadyHeight` then holds the hand at the height it had as dealt, so
-it doesn't shrink under the page as cards go (#133). The play page, the
-review page and the review modal are 720 px wide at most, room for a
-trick of Extra large cards; the play page's wide table is 1040 px (#163). The printout is text and doesn't follow the
+it doesn't shrink under the page as cards go (#133).
+
+Dummy's cards across the top of the table, and a robot declarer's for its
+dummy, never wrap (#172): `BridgeTable` gives that `HandView` `singleRow`,
+which measures the row's width (`useElementWidth`) and lays the cards out
+from `src/utils/handRow.ts`. The usual step where 13 cards fit; else the
+cards overlap more, down to their corner (0.42 of the card, "10" included,
+never under 22 px), and if even that doesn't fit, the cards get smaller.
+The card size is worked out for a full hand of four suits, so it stays the
+same as the cards are played; the row always keeps room for cards to rise,
+so it never changes height and the table never moves. A card that can be
+tapped on dummy's turn keeps the usual step (at least 44 px) where the row
+allows it. The play page, the review page and the review modal are 832 px
+wide at most: 13 Extra large cards at their usual step (120 + 12 × 55.2 +
+3 × 4 px between the suits) plus the table's padding; the play page's wide
+table is 1040 px (#163). The printout is text and doesn't follow the
 setting.
 
 ## Alerts
@@ -1106,7 +1119,7 @@ never reads during the board**; there is no partner-only message:
   reserves the chat's room as right padding, so it is centred in what the
   chat leaves; a CSS `clamp()` drops that padding once the content (menu
   pinned or not) is wide enough for the page-centred board to clear the
-  chat, so opening the chat doesn't move it (#114): 720 + 2 × 328 px, or
+  chat, so opening the chat doesn't move it (#114): 832 + 2 × 328 px, or
   1040 + 2 × 328 px for the wide table (#163). The panel carries
   `data-right-edge`, which `usePopover` treats as the screen's right edge,
   so the auction's and the last trick's pop-ups stay off it. On

@@ -10,12 +10,16 @@
        3" on it while `forcedSeconds` counts down. The cards
        are the card size setting's (cardSize.ts), smaller on a phone, and
        each shows at least 44 px of itself to tap. The hand keeps the height
-       it had as dealt while its cards go (useSteadyHeight). -->
+       it had as dealt while its cards go (useSteadyHeight). With
+       `singleRow` (dummy across the top, #172) the suits lie on one row
+       whatever the width: the cards overlap more where it is short of room,
+       then get smaller (handRow.ts), and the row always keeps room for
+       cards to rise, so it never changes height. -->
   <div
     ref="root"
     class="hand"
-    :class="{ active: playable }"
-    :style="{ '--card-w': cardWidthCss, '--card-step': cardStep }"
+    :class="{ active: playable, 'single-row': singleRow }"
+    :style="rootStyle"
     :aria-label="label"
     :aria-busy="busy"
   >
@@ -32,6 +36,7 @@
             forced: card.id === forcedId,
           }"
           :data-card="card.id"
+          :style="cardStyle(card.id)"
           :disabled="busy || !playable.includes(card.id)"
           @click="emit('play', card)"
         >
@@ -43,7 +48,13 @@
         </button>
       </template>
       <template v-else>
-        <PlayingCard v-for="card in group.cards" :key="card.id" :card="card" class="card" />
+        <PlayingCard
+          v-for="card in group.cards"
+          :key="card.id"
+          :card="card"
+          class="card"
+          :style="cardStyle(card.id)"
+        />
       </template>
     </div>
     <p v-if="cards.length === 0" class="empty">No cards left.</p>
@@ -53,10 +64,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import PlayingCard from '@/components/PlayingCard.vue';
+import { useElementWidth } from '@/composables/useElementWidth';
 import { useSteadyHeight } from '@/composables/useSteadyHeight';
 import type { Card, Suit } from '@/services/game';
 import { groupBySuit, HAND_SUITS } from '@/utils/cards';
-import { MIN_TARGET_PX, cardSize, cardWidthCss } from '@/utils/cardSize';
+import { MIN_TARGET_PX, cardSize, cardWidthCss, cardWidthPx } from '@/utils/cardSize';
+import { SUIT_GAP_PX, naturalStep, rowCardWidth, rowSteps } from '@/utils/handRow';
 
 const props = withDefaults(
   defineProps<{
@@ -73,6 +86,9 @@ const props = withDefaults(
     forcedSeconds?: number | null;
     // The suits left to right: trumps first for dummy (see suitOrder).
     order?: readonly Suit[];
+    // One row, never wrapping (dummy's and a robot declarer's cards across
+    // the top of the table).
+    singleRow?: boolean;
   }>(),
   {
     label: 'Your hand',
@@ -82,6 +98,7 @@ const props = withDefaults(
     forcedId: null,
     forcedSeconds: null,
     order: () => HAND_SUITS,
+    singleRow: false,
   },
 );
 
@@ -93,9 +110,48 @@ const groups = computed(() => groupBySuit(props.cards, props.order));
 // and never less than a finger's width.
 const cardStep = `max(${MIN_TARGET_PX}px, calc(var(--card-w) * 0.46))`;
 
+const root = ref<HTMLElement | null>(null);
+
+// A single row's layout, from the width it has (0 until measured, and then
+// the usual cards and steps, kept to one row by the CSS): the cards' width,
+// and each card's left margin, which sets how much of the one before it
+// shows (and leaves the gap between two suits).
+const rowWidth = useElementWidth(computed(() => (props.singleRow ? root.value : null)));
+const row = computed(() => {
+  if (!props.singleRow || rowWidth.value <= 0) {
+    return null;
+  }
+  const width = rowCardWidth(rowWidth.value, cardWidthPx.value);
+  const cards = groups.value.flatMap((group) => group.cards);
+  const firsts = new Set(groups.value.map((group) => group.cards[0]!.id));
+  const steps = rowSteps(
+    rowWidth.value,
+    width,
+    groups.value.length,
+    cards.map((card) => !!props.playable?.includes(card.id)),
+  );
+  const margins = new Map<number, number>();
+  cards.forEach((card, i) => {
+    if (i > 0) {
+      margins.set(card.id, steps[i - 1]! - width + (firsts.has(card.id) ? SUIT_GAP_PX : 0));
+    }
+  });
+  return { width, step: naturalStep(width), margins };
+});
+
+const rootStyle = computed(() =>
+  row.value
+    ? { '--card-max': `${row.value.width}px`, '--card-w': cardWidthCss.value, '--card-step': `${row.value.step}px` }
+    : { '--card-w': cardWidthCss.value, '--card-step': cardStep },
+);
+
+function cardStyle(id: number) {
+  const margin = row.value?.margins.get(id);
+  return margin === undefined ? undefined : { marginLeft: `${margin}px` };
+}
+
 // A new deal (more cards than before) or another card size: the hand's
 // height is measured afresh, then held while the cards are played.
-const root = ref<HTMLElement | null>(null);
 const deals = ref(0);
 watch(
   () => props.cards.length,
@@ -121,6 +177,22 @@ useSteadyHeight(root, () => [deals.value, cardSize.value]);
 /* Room for the playable cards to rise (14 px) with their ring. */
 .hand.active {
   padding-top: 18px;
+}
+
+/* One row (#172): the suits side by side, never wrapping, their cards
+   spaced by the margins worked out in script, room kept for cards to rise
+   whether any can be played or not. The row's width is the seat's, never
+   its cards': they fit it. */
+.hand.single-row {
+  flex-wrap: nowrap;
+  align-self: stretch;
+  gap: 0;
+  padding-top: 18px;
+  contain: inline-size;
+}
+
+.single-row .suit-group {
+  display: contents;
 }
 
 /* A phone: 1.5 times the old card, so two suits share a row (about six

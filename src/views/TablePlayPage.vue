@@ -1744,10 +1744,14 @@ async function refresh(event: CustomEvent) {
 </script>
 
 <style scoped>
-/* Wide enough for the table's centre to hold a trick of Extra large cards
-   (cardSize.ts); a hand of large cards wraps two suits to a row. */
+/* Wide enough for dummy's 13 cards on one row across the top of the table
+   at their usual overlap, Extra large ones included (#172): 120 + 12 x 55.2
+   px (the card, then the strip each other one shows, cardSize.ts and
+   handRow.ts) + 3 x 4 px between the suits = 794.4 px, plus the table's
+   padding (2 x 12 px) = 818.4 px, rounded up. Narrower, dummy's cards
+   overlap more instead (HandView's `singleRow`). */
 .play {
-  max-width: 720px;
+  max-width: 832px;
   margin: 0 auto;
 }
 
@@ -1756,12 +1760,12 @@ async function refresh(event: CustomEvent) {
    16 px, so reserving 328 px of padding (outside `max-width`, hence
    content-box) centres the column in what the chat leaves, as far from the
    chat as from the left edge. Where the column centred on the whole content
-   already clears the chat by that much (100 % >= 720 + 2 x 328 px), the
+   already clears the chat by that much (100 % >= 832 + 2 x 328 px), the
    clamp() steps the padding down to 0, so opening the chat doesn't move the
    board. 100 % is the content's width, with or without the side menu. */
 .play.with-chat-side {
   box-sizing: content-box;
-  padding-right: calc(328px - clamp(0px, (100% - 1376px) * 1000, 328px));
+  padding-right: calc(328px - clamp(0px, (100% - 1488px) * 1000, 328px));
 }
 
 /* A wide table (#163): room for side plates and the auction in the centre.

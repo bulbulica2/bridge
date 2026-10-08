@@ -33,7 +33,10 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/98-board-info-in-the-table-corners` (after
+> branch `bulbulica2/99-dummy-on-one-row` (after #172, dummy's cards
+> across the top always on one row: the play page and the review 832 px
+> wide, and narrower the cards overlap more, then get smaller, so the
+> table never moves as dummy's cards go; after
 > #171, the play page's board details in the table's four corners: who
 > is vulnerable top left, the contract and the tricks top right, the
 > **Auction** button bottom left and a small **Claim** bottom right (its
