@@ -5,16 +5,23 @@
        and ♣ ♦ ♥ ♠ NT across, as it is usually drawn. Plain tricks, not
        levels. `highlight` marks one cell, the contract played; while the
        backend is still solving it, a note instead. Nothing before it is
-       read. -->
-  <section v-if="analysis" class="double-dummy" aria-label="Double dummy">
-    <h3 class="dd-title">Double dummy</h3>
-    <p v-if="analysis.status === 'pending'" class="dd-note" aria-live="polite">
+       read. `compact` (the review's table corner, #180): the grid alone,
+       small, once it is ready; no title, note or legend, and nothing at
+       all while it is pending or unavailable. -->
+  <section
+    v-if="compact ? table : analysis"
+    class="double-dummy"
+    :class="{ 'dd-compact': compact }"
+    aria-label="Double dummy"
+  >
+    <h3 v-if="!compact" class="dd-title">Double dummy</h3>
+    <p v-if="analysis!.status === 'pending'" class="dd-note" aria-live="polite">
       {{ DOUBLE_DUMMY_PENDING }}
     </p>
     <p v-else-if="!table" class="dd-note">{{ DOUBLE_DUMMY_UNAVAILABLE }}</p>
     <template v-else>
       <table class="dd-table">
-        <caption class="dd-caption">
+        <caption class="dd-caption" :class="{ 'sr-only': compact }">
           Tricks each declarer makes with every card in view and best play on both sides.
         </caption>
         <thead>
@@ -50,7 +57,7 @@
           </tr>
         </tbody>
       </table>
-      <p v-if="highlight" class="dd-legend">
+      <p v-if="highlight && !compact" class="dd-legend">
         <span class="dd-swatch" aria-hidden="true" />{{ highlightNote }}
       </p>
     </template>
@@ -79,8 +86,10 @@ const props = withDefaults(
     highlight?: { declarer: Seat; strain: Strain } | null;
     // What the marked cell is, said under the grid.
     highlightNote?: string;
+    // The grid alone, small (see above).
+    compact?: boolean;
   }>(),
-  { highlight: null, highlightNote: 'The contract played at this table' },
+  { highlight: null, highlightNote: 'The contract played at this table', compact: false },
 );
 
 const table = computed(() =>
@@ -172,6 +181,50 @@ function strainName(strain: Strain): string {
   height: 12px;
   border: 2px solid var(--ion-color-primary);
   background: var(--bridge-navy-tint);
+}
+
+/* Compact: a small white card on the table's navy, in the numbers' font,
+   as wide as its corner allows. */
+.dd-compact {
+  margin: 0;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--bridge-card-face);
+  color: var(--bridge-card-ink);
+  box-shadow: 0 1px 2px var(--bridge-card-shadow);
+}
+
+.dd-compact .dd-table {
+  width: auto;
+  font-family: var(--bridge-font-numbers);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.dd-compact .dd-table th,
+.dd-compact .dd-table td {
+  min-width: 1.35em;
+  padding: 1px 2px;
+  border-color: var(--bridge-card-border);
+}
+
+.dd-compact .dd-strain,
+.dd-compact .dd-cell {
+  font-size: inherit;
+}
+
+.dd-compact .dd-strain.red {
+  color: var(--bridge-card-red);
+}
+
+.dd-compact .dd-seat {
+  color: var(--bridge-card-muted);
+}
+
+.dd-compact .dd-cell.played {
+  background: var(--bridge-card-amber-tint);
+  outline-color: var(--bridge-card-navy);
 }
 
 .sr-only {

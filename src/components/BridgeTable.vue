@@ -31,8 +31,19 @@
        `bottom-right` slots (the play page: who is vulnerable, the contract
        and the tricks, Auction, Claim). They lie over the panel's corners,
        so they take no height of their own, and partner's and the viewer's
-       plates keep clear of them. -->
-  <div class="bridge-table" :class="{ 'table-wide': wide, 'with-corners': CORNERS.some((c) => $slots[c]) }">
+       plates keep clear of them. With `bottomRightRoom` (the review's
+       double dummy grid, #180) the bottom-right corner is larger than a
+       button: the viewer's whole seat, hand included, keeps clear of it,
+       and a table too narrow for that gives it a row of its own under the
+       seat instead. -->
+  <div
+    class="bridge-table"
+    :class="{
+      'table-wide': wide,
+      'with-corners': CORNERS.some((c) => $slots[c]),
+      'room-bottom-right': bottomRightRoom && !!$slots['bottom-right'],
+    }"
+  >
     <template v-for="corner in CORNERS" :key="corner">
       <div v-if="$slots[corner]" class="corner" :class="`corner-${corner}`">
         <slot :name="corner" />
@@ -281,6 +292,8 @@ const props = withDefaults(
     boardLabel?: string | null;
     // A wide screen's layout (see the comment above).
     wide?: boolean;
+    // Room for a larger bottom-right corner (see the comment above).
+    bottomRightRoom?: boolean;
     busy?: boolean;
     sendingId?: number | null;
   }>(),
@@ -305,6 +318,7 @@ const props = withDefaults(
     calls: null,
     boardLabel: undefined,
     wide: false,
+    bottomRightRoom: false,
     busy: false,
     sendingId: null,
   },
@@ -521,6 +535,45 @@ function turnLabel(side: ScreenSide): string {
 .with-corners .side-top > .plate-row,
 .with-corners .side-bottom > .plate-row {
   padding-inline: calc(var(--corner-w) + var(--corner-gap));
+}
+
+/* A larger bottom-right corner (`bottomRightRoom`): the viewer's seat,
+   plate and hand, keeps its width clear on both sides, so it stays centred
+   and the corner lies beside the hand, never over it. */
+.bridge-table.room-bottom-right {
+  --corner-room: max(var(--corner-w), 112px);
+}
+
+.room-bottom-right .corner-bottom-right {
+  max-width: var(--corner-room);
+}
+
+.room-bottom-right .side-bottom {
+  padding-inline: calc(var(--corner-room) + var(--corner-gap));
+}
+
+.room-bottom-right .side-bottom > .plate-row {
+  padding-inline: 0;
+}
+
+/* Too narrow for the corner beside the hand (a small phone): it takes a
+   row of its own under the seat, on the right. */
+@container (max-width: 339px) {
+  .room-bottom-right .corner-bottom-right {
+    position: static;
+    grid-column: 1 / 4;
+    grid-row: 4;
+    justify-self: end;
+    max-width: none;
+  }
+
+  .room-bottom-right .side-bottom {
+    padding-inline: 0;
+  }
+
+  .room-bottom-right .side-bottom > .plate-row {
+    padding-inline: calc(var(--corner-w) + var(--corner-gap));
+  }
 }
 
 /* A seat's plate: avatar, name over seat, the set's clock on the right. */

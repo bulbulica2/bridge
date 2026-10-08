@@ -923,6 +923,23 @@ The user's standing rule (#91): **no task may leave code coverage under
   `longestSuit` so the stepper below never moves; its position line sits
   under the buttons since it may wrap),
   `TrickArea`, `AuctionHistory` and, at the last step, `BoardResultPanel`.
+  **Its corners** (#180, as the play page's #171; no `.board-bar` or
+  `.outcome`): top-left `VulnerabilityLabel` `compact` (`.corner-vul`);
+  top-right `.corner-contract` (`.contract-line` "4♠X by South" with
+  `doubledMark`, or "Passed out"; `.tricks-won` `at.tricksWon` when
+  `total > 0`); bottom-right, when `double_dummy` is `ready`, a
+  `compact` `DoubleDummyTable` (`highlight` = `played`), `layer-off`
+  (`visibility: hidden`, `aria-hidden`) once `step > 0` so its room stays,
+  with `BridgeTable`'s `bottomRightRoom` (the bottom seat padded by
+  `--corner-room` = max(`--corner-w`, 112 px) both sides; a table under
+  340 px puts the corner in a row 4 of its own). The `#centre` is
+  `.review-centre`, one grid cell holding `.review-auction`
+  (`AuctionHistory`, packed small under a 260 px centre) and
+  `.review-trick` (`TrickArea` + caption), the one not shown `layer-off`
+  (auction at `step === 0`, trick after; a passed-out board the auction
+  only; unrecorded neither, so the centre shows the board). Under the
+  stepper: `BoardResultPanel`, `LeadAnalysis` (ready only), the chat; no
+  double dummy text anywhere in the review.
   The viewer sits at the bottom if they played it (`seatOfUser`), else
   South. An empty `auction` (`isRecorded`) means a playing finished before
   bb#60: only the deal and the result, with a notice. `HistoryEntryItem`
@@ -966,9 +983,12 @@ The user's standing rule (#91): **no task may leave code coverage under
   make 10. Best was ♥2: 9."), `doubleDummyLines` (text export),
   `pbnOptimumResultTable`. `DoubleDummyTable.vue` (N E S W down, ♣ ♦ ♥ ♠
   NT across, `highlight` {declarer, strain} + `highlightNote`, the pending
-  / unavailable note, nothing while `analysis` is null) and
-  `LeadAnalysis.vue` (`PlayingCard`s with tricks under them, `led` raised,
-  `best` ringed) sit in `BoardReview` under the result; `BoardResultsPage`
+  / unavailable note, nothing while `analysis` is null; `compact`, #180:
+  `.dd-compact`, the grid alone on a white card in Barlow, the caption
+  `sr-only`, no title/note/legend, nothing unless `ready` with a table)
+  sits `compact` in `BoardReview`'s bottom-right corner before the lead,
+  and `LeadAnalysis.vue` (`PlayingCard`s with tricks under them, `led`
+  raised, `best` ringed) under its stepper; `BoardResultsPage`
   shows the table above the list (read after `loadResults` succeeds, the
   viewer's contract marked); the play page reads it once `finished`
   (`finishedBoardId`) and the result dialog gives one line once it is
