@@ -194,7 +194,7 @@ describe('echo service', () => {
     expect(liveStatus.subscribedTable).toBeNull()
   })
 
-  test('listenToUser follows HandDealt, DeclarerHandShown, the alerts, the chat, partner alerts and UserBanned on the user channel', () => {
+  test('listenToUser follows HandDealt, DeclarerHandShown, the alerts, the chat, partner alerts, UnseatedFromTable and UserBanned on the user channel', () => {
     const onHandDealt = vi.fn()
     const onBanned = vi.fn()
     const onDeclarerHand = vi.fn()
@@ -202,6 +202,7 @@ describe('echo service', () => {
     const onCallQuestioned = vi.fn()
     const onBoardMessage = vi.fn()
     const onAlertsShown = vi.fn()
+    const onUnseated = vi.fn()
     listenToUser(
       1,
       onHandDealt,
@@ -211,6 +212,7 @@ describe('echo service', () => {
       onCallQuestioned,
       onBoardMessage,
       onAlertsShown,
+      onUnseated,
     )
 
     expect(getEcho().private).toHaveBeenCalledWith('App.Models.User.1')
@@ -220,6 +222,7 @@ describe('echo service', () => {
     expect(channel.listen).toHaveBeenCalledWith('CallQuestioned', onCallQuestioned)
     expect(channel.listen).toHaveBeenCalledWith('BoardMessageSent', onBoardMessage)
     expect(channel.listen).toHaveBeenCalledWith('AuctionAlertsShown', onAlertsShown)
+    expect(channel.listen).toHaveBeenCalledWith('UnseatedFromTable', onUnseated)
     expect(channel.listen).toHaveBeenCalledWith('UserBanned', onBanned)
   })
 

@@ -42,15 +42,15 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true, findsSeat: true }
   },
   {
-    // One table: its four seats and the actions on them. Reached from the
-    // Tables list, not from the menu.
+    // The table's own page is the game table now (#181): old links and
+    // bookmarks of a table go there.
     path: '/tables/:id',
-    component: () => import('@/views/TableDetailPage.vue'),
-    meta: { requiresAuth: true, notBanned: true, findsSeat: true }
+    redirect: (to) => `/tables/${to.params.id}/play`
   },
   {
-    // The game at one table: the board, the four players and your own hand.
-    // Entered from the detail page (automatically when a board is dealt).
+    // The game at one table: its four seats, the board and your own hand,
+    // and before a board the waiting table with Start. Joining or creating
+    // a table (the Tables list) lands here.
     path: '/tables/:id/play',
     component: () => import('@/views/TablePlayPage.vue'),
     meta: { requiresAuth: true, notBanned: true, findsSeat: true }

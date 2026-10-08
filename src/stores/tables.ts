@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import * as tablesService from '@/services/tables';
-import type { BroadcastTable, CreateTablePayload, Seat, Table } from '@/services/tables';
+import { SEATS } from '@/services/tables';
+import type {
+  BroadcastTable,
+  CreateTablePayload,
+  Seat,
+  Table,
+  UnseatedFromTableEvent,
+} from '@/services/tables';
 import { leaveTable, listenToTable, onReconnect } from '@/services/echo';
 import { useAuthStore } from '@/stores/auth';
 import { useGameStore } from '@/stores/game';
@@ -26,6 +33,15 @@ export const CAN_MANAGE_RETRY_MS = 3_000;
 export const CAN_MANAGE_RETRIES = 3;
 
 export const WELCOME_BACK = 'Welcome back. The set goes on.';
+
+// The Start timer ran out on our seat (bb#142): the seat is free again, and
+// nothing is held against us.
+export const START_TIMEOUT_NOTICE = "You didn't press Start in time: your seat is free for someone else.";
+
+// A manager changed the set time, which takes every Start back (bb#142).
+export function startRevokedText(minutes: number): string {
+  return `The set time changed to ${minutes} min: press Start again.`;
+}
 
 // The set the user was last in the middle of, kept across visits: if a robot
 // took their seat in it while they were gone (the tab closed, their turn
@@ -66,8 +82,8 @@ function pageHidden() {
 
 export const useTablesStore = defineStore('tables', () => {
   const tables = ref<Table[]>([]);
-  // The table the detail page is showing, held next to the list so both stay
-  // truthful when a seat changes from either page.
+  // The table the game table's page is showing, held next to the list so
+  // both stay truthful when a seat changes from either page.
   const currentTable = ref<Table | null>(null);
   // Whether `tables` has come from the backend at least once, so the page can
   // tell "nothing loaded yet" (skeleton) from "loaded, and empty".
@@ -75,14 +91,14 @@ export const useTablesStore = defineStore('tables', () => {
   // The table whose channel we are subscribed to. Only one: a user sits at
   // one table at most, and the channel refuses anyone not seated there.
   const watchedTableId = ref<number | null>(null);
-  // Set when a live update shows the user was kicked from that table, so the
-  // detail page can leave it.
+  // Set when a live update shows the user was kicked from that table (or the
+  // Start timer freed their seat), so the table's page can leave it.
   const kickedFrom = ref<number | null>(null);
   // The watched table where our seat is *held* rather than ours: we left in
   // the middle of a set (the backend's 202), or found the seat away when we
   // weren't following the table (the tab was closed). No heartbeat goes out
-  // for it, since one would bring us back behind the user's back; the play
-  // page, or the detail page's "Come back", does that (comeBack).
+  // for it, since one would bring us back behind the user's back; opening
+  // the play page does that (comeBack).
   const heldTableId = ref<number | null>(null);
   // A set a robot took our seat over in (our turn clock ran out, or a kick
   // while away), told on Home until dismissed (and the pages showing that
@@ -129,7 +145,7 @@ export const useTablesStore = defineStore('tables', () => {
   });
 
   // The table the user sits at, loading the list first if nothing we hold says
-  // so yet (a detail page opened by URL knows only its own table). Pages ask
+  // so yet (a table page opened by URL knows only its own table). Pages ask
   // before a seat request so a move to another table can be confirmed.
   async function seatedTable(): Promise<Table | null> {
     if (!myTable.value && !loaded.value) {
@@ -177,7 +193,7 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
-  // Our freshest copy of a table: the detail page's, else the list's.
+  // Our freshest copy of a table: the table page's, else the list's.
   function heldTable(tableId: number): Table | null {
     if (currentTable.value?.id === tableId) {
       return currentTable.value;
@@ -437,7 +453,7 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   // Coming back to a table whose seat is held, or that has us down as away
-  // (the play page on entry, the detail page's "Come back"): vouch at once,
+  // (the play page on entry): vouch at once,
   // then refetch, so the seat cleared of `away_since` greets us
   // (applyTableUpdate) even if its TableUpdated went by before the channel
   // was up.
@@ -568,6 +584,9 @@ export const useTablesStore = defineStore('tables', () => {
     useGameStore().applyTableUpdate(table);
     if (seatsMe(table)) {
       rememberSet(table);
+      if (startRevoked(before, table, me)) {
+        showToast(startRevokedText(table.set_minutes), 'warning');
+      }
       const away = !!myAwaySeat(table, me);
       if (wasAway && !away) {
         welcomeBack(table.id);
@@ -588,10 +607,54 @@ export const useTablesStore = defineStore('tables', () => {
         announceRemoval(replacedFromText(replaced));
         return;
       }
+      // Our seat had the Start timer running: that freed it, not a kick.
+      if (before?.seats.some((s) => s.user_id === me && s.start_deadline)) {
+        announceRemoval(START_TIMEOUT_NOTICE);
+        return;
+      }
       announceRemoval(
         freedAsIdle(idle) ? IDLE_NOTICE : `You were removed from ${table.name || `table #${table.id}`}.`,
       );
     }
+  }
+
+  // We had pressed Start and a change of the set time took it back (the old
+  // and new copies differ in `set_minutes`): told, since the tick just goes.
+  function startRevoked(before: Table | null, table: Table, me: number | null) {
+    if (!before || before.set_minutes === table.set_minutes) {
+      return false;
+    }
+    const was = before.seats.find((s) => s.user_id === me);
+    const now = table.seats.find((s) => s.user_id === me);
+    return !!was?.ready && !!now && !now.ready;
+  }
+
+  // Our copy of a table with our seat freed, as the TableUpdated on its way
+  // will show it.
+  function withoutMe(table: Table): Table {
+    const me = auth.user?.id;
+    const seats = table.seats.filter((s) => s.user_id !== me);
+    return { ...table, seats, free_seats: SEATS.filter((seat) => !seats.some((s) => s.seat === seat)) };
+  }
+
+  // `UnseatedFromTable` on our own channel: the Start timer ran out on our
+  // seat and the backend freed it (bb#142). The table's TableUpdated may come
+  // first, and says so itself (applyTableUpdate); otherwise this does: our
+  // copies drop the seat, the channel goes, and the table's page leaves
+  // (`kickedFrom`). Watching the table instead (`kibitzing`, #182) isn't
+  // offered yet, so it counts as not. A kibitzer sent away has nothing here.
+  function applyUnseated(event: UnseatedFromTableEvent) {
+    const tableId = event.table_id;
+    if (event.reason !== 'start_timeout' || watchedTableId.value !== tableId) {
+      return;
+    }
+    unwatchTable();
+    const held = heldTable(tableId);
+    if (held) {
+      syncTable(withoutMe(held));
+    }
+    kickedFrom.value = tableId;
+    announceRemoval(START_TIMEOUT_NOTICE);
   }
 
   // Events sent while the socket was down are gone for good, so catch up once.
@@ -653,7 +716,7 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   // The list is newest first (as the backend orders it), so a new table goes on
-  // top. It is also the table the next page shows (the detail page, after
+  // top. It is also the table the next page shows (the game table, after
   // Create with robots), so that page can draw it without a GET.
   async function create(payload: CreateTablePayload) {
     const table = await ownSeatRequest(() => tablesService.createTable(payload));
@@ -753,8 +816,7 @@ export const useTablesStore = defineStore('tables', () => {
 
   // Our Start: the board is dealt once the table is full and every human has
   // pressed it. The answer that deals carries our game state, which goes to
-  // the game store first, so the board_id it brings takes the page to /play
-  // with the board already there. Everyone else learns it from TableUpdated
+  // the game store first, so the game table shows the board at once. Everyone else learns it from TableUpdated
   // (and PlayingUpdated + HandDealt when it deals).
   async function start(tableId: number) {
     const seen = tableUpdates;
@@ -816,6 +878,7 @@ export const useTablesStore = defineStore('tables', () => {
     watchTable,
     unwatchTable,
     applyTableUpdate,
+    applyUnseated,
     comeBack,
     dismissReplaced,
     stakeOf,

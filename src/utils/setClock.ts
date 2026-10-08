@@ -70,6 +70,11 @@ export function setClockText(minutes: number): string {
   return `${minutes} minutes each for a set of 4 boards`;
 }
 
+// "16 min": the same where room is short (the game table's corner, #181).
+export function setMinutesShort(minutes: number): string {
+  return `${minutes} min`;
+}
+
 // "10:48 of 16:00", a player's time used of their time for the set.
 export function timeUsedText(seconds: number, minutes: number): string {
   return `${formatClock(seconds)} of ${formatClock(minutes * 60)}`;

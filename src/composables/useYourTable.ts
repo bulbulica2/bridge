@@ -42,25 +42,15 @@ export function useYourTable() {
     return !!t && (tables.heldTableId === t.id || !!myAwaySeat(t, auth.user?.id ?? null));
   });
 
-  // The play page once a board is dealt (and to come back to an away seat, as
-  // Home's card does), else the table's own page: a seat's rule on Tables.
-  const target = computed(() => {
-    const t = table.value;
-    if (!t) {
-      return null;
-    }
-    return away.value || t.board_id !== null ? `/tables/${t.id}/play` : `/tables/${t.id}`;
-  });
+  // The game table, the table's one page (#181): the board, or the waiting
+  // table with Start, or coming back to an away seat.
+  const target = computed(() => (table.value ? `/tables/${table.value.id}/play` : null));
 
   // The page the shortcut leads to is the one on screen.
   const current = computed(() => !!target.value && route?.path === target.value);
 
-  // On either page of the table (the other one may still be a tap away).
-  const atTable = computed(() => {
-    const t = table.value;
-    const path = route?.path;
-    return !!t && (path === `/tables/${t.id}` || path === `/tables/${t.id}/play`);
-  });
+  // At the table: the same page now that it has only one.
+  const atTable = current;
 
   const label = computed(() => {
     const t = table.value;

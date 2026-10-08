@@ -1,5 +1,5 @@
 <template>
-  <!-- One open table in the lobby: its name (opening the table's page), a
+  <!-- One open table in the lobby: its name (opening the game table), a
        meta line ("16 min · set 2 · board 2/4", or "left 3 min ago · closes
        in 7" while only robots are left), a status pill, and a mini compass
        of the four seats: names, robots blue, away players red, the viewer
@@ -9,7 +9,7 @@
   <article class="table-card" :class="{ 'table-card-mine': mine }">
     <div class="table-card-head">
       <div class="table-card-title">
-        <router-link v-if="!banned" class="table-card-name" :to="`/tables/${table.id}`">
+        <router-link v-if="!banned" class="table-card-name" :to="`/tables/${table.id}/play`">
           {{ name }}
         </router-link>
         <span v-else class="table-card-name">{{ name }}</span>

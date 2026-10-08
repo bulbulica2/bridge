@@ -451,6 +451,7 @@ describe('route guard for a banned user', () => {
     await router.push('/tables/5/play')
     expect(router.currentRoute.value.path).toBe('/tables')
 
+    // The table's old page goes to the game table first, then to the lobby.
     await router.push('/tables/5')
     expect(router.currentRoute.value.path).toBe('/tables')
 

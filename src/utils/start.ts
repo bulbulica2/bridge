@@ -2,7 +2,11 @@ import type { PublicPlaying } from '@/services/game';
 import { SEATS } from '@/services/tables';
 import type { BroadcastTable, TableSeat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
+import { formatClock, secondsLeft } from '@/utils/away';
 import { currentSet } from '@/utils/sets';
+
+// Under this many seconds our own Start countdown turns red.
+export const START_URGENT_SECONDS = 5;
 
 // Start (bridge_backend docs/API.md, Dealing): a board is dealt once the table
 // is full and every human seated there has pressed it. These are hints for
@@ -62,4 +66,31 @@ export function startWaiting(table: BroadcastTable, me: number | null): string |
     parts.push(`${listOf(names)} to press Start`);
   }
   return parts.length > 0 ? `Waiting for ${parts.join(', and for ')}.` : null;
+}
+
+// The Start timer (bridge_backend docs/API.md, The Start timer): the one
+// seat a full table still waits for, once another human has pressed, has
+// until its `start_deadline` or the seat is freed. Counted from the
+// deadline, never from when the payload came. Null while no seat has one.
+export interface StartClock {
+  seat: TableSeat['seat'];
+  seconds: number;
+  mine: boolean;
+  urgent: boolean;
+}
+
+export function startClock(table: BroadcastTable, me: number | null, now: number): StartClock | null {
+  const timed = table.seats.find((s) => s.start_deadline);
+  if (!timed) {
+    return null;
+  }
+  const seconds = secondsLeft(timed.start_deadline!, now);
+  const mine = timed.user_id === me;
+  return { seat: timed.seat, seconds, mine, urgent: mine && seconds < START_URGENT_SECONDS };
+}
+
+// "Press Start · 0:12" for us, "Waiting for East · 0:12" for the others.
+export function startClockText(clock: StartClock): string {
+  const time = formatClock(clock.seconds);
+  return clock.mine ? `Press Start · ${time}` : `Waiting for ${SEAT_NAMES[clock.seat]} · ${time}`;
 }

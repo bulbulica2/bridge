@@ -209,6 +209,23 @@ describe('PlayerProfileSheet', () => {
     expect(wrapper.find('.admin-badge').exists()).toBe(false)
     expect(wrapper.text()).toContain('Full profile')
   })
+
+  // #181: at the game table a manager takes a player out from here.
+  test('Remove only when the page allows it, spinning while it goes', async () => {
+    answer(ann)
+    const wrapper = mountSheet(ann)
+    await flushPromises()
+    expect(wrapper.find('.profile-remove').exists()).toBe(false)
+
+    await wrapper.setProps({ removable: true })
+    expect(wrapper.get('.profile-remove').text()).toBe('Remove from the table')
+    await wrapper.get('.profile-remove').trigger('click')
+    expect(wrapper.emitted('remove')).toEqual([[ann]])
+
+    await wrapper.setProps({ busy: true })
+    expect(wrapper.getComponent('.profile-remove').props('disabled')).toBe(true)
+    expect(wrapper.get('.profile-remove').find('ion-spinner').exists()).toBe(true)
+  })
 })
 
 const jo: SearchedUser = {

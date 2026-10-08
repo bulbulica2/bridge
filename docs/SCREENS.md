@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/102-review-on-the-table`._
+_Status as of branch `bulbulica2/103-straight-to-the-game-table`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -15,7 +15,7 @@ Every page also goes through the router guard, which calls
 
 **Banned users** (#75, bb#77): while the logged-in user is banned, every
 page's header shows **You are banned until 12 Oct 2026: <reason>**, and
-the guard sends them from Table detail and Play to Tables. A ban that
+the guard sends them from the game table to Tables. A ban that
 lands while the app is open (`UserBanned`) ends the session at once: the
 app goes to Login under a dialog with the reason and the end date, which
 stays until **OK**. See [`ARCHITECTURE.md`](ARCHITECTURE.md#bans).
@@ -28,12 +28,12 @@ guest:      Home ─┬─ Login ─┬─ Create account
                   └─ Create account
 
 logged in:  Home ── Your table / Find a table
-            Menu: Tables ─▶ Table detail ─▶ Play ─▶ Board results ⇄ Board review
-                                 │            │      (set over: each board ─▶ Board review)
-                                 └── player ──┴──▶ profile sheet ─▶ User profile ─▶ Board review
+            Menu: Tables ─▶ Play (the game table) ─▶ Board results ⇄ Board review
+                                 │      (set over: each board ─▶ Board review)
+                                 └── player ──▶ profile sheet ─▶ User profile ─▶ Board review
             Menu: My boards ─┬▶ Board review ⇄ Board results
                              └▶ Set results ─▶ Board review
-            Header: Your table (while seated: Play, or Table detail before a board)
+            Header: Your table (while seated: Play)
             Header: Account (view / edit profile, log out)
 ```
 
@@ -46,8 +46,8 @@ for your turn, amber for an away seat) and the menu lists **Your table**
 first with the same status as a badge ("Your turn · 0:42" while your
 turn clock runs, #130); the menu is 320 px wide so the
 entry stays on one row and the same size whatever the badge says (#134),
-a long table name ending in "…". One tap goes to Play once a board is dealt,
-else to Table detail. On pages that load no table (My boards, a profile,
+a long table name ending in "…". One tap goes to the game table (Play),
+board or not (#181). On pages that load no table (My boards, a profile,
 a review…) the router asks `GET /tables` once to find the seat. See
 [`ARCHITECTURE.md`](ARCHITECTURE.md#app-shell).
 
@@ -62,7 +62,7 @@ look by #162.
   Tables: the table's name, "Set 3 · Board 2 of 4 · you sit South with
   radu", the set's boards so far as tiles B1–B4 with your side's
   matchpoints and the board on now in amber, and an orange **Back to the
-  table**: the game once a board is dealt, else the table's page) or
+  table**, the game table) or
   "You're not at a table" with **Find a table**. Then **Your form** (your
   average board %, sets won of sets played, boards played) and **Recent
   boards** (your last three, each opening its review, then **All my
@@ -201,7 +201,7 @@ about 1000 px (below it on a phone), **Your form** and **Recent boards**
   on the board being played), an orange **Back to the table** and
   **Leave**. Going to another page never gets you up from a table, so
   Leave is the way to leave it without opening it: the same confirmation
-  as on the table's pages, then a toast. While your seat is held after a
+  as at the game table, then a toast. While your seat is held after a
   Leave mid-set (or you were marked away) the card counts down the 2
   minutes it is kept ("You're away from Club: a robot takes your seat in
   1:42 unless you come back.", #150) and the button reads **Come back**
@@ -214,24 +214,23 @@ about 1000 px (below it on a phone), **Your form** and **Recent boards**
   **Create table**: you sit South, the other three seats are free for
   players to take, or for you to fill with **Seat a player** / **Add
   robot** (its time for a set is the backend's default until you change
-  it on the table's page). Either way the page goes to the new table's
-  page as soon as it exists (#55, #132), where your **Start** deals the
-  first board (robots are always ready). A refusal shows under the card
-  it came from.
+  it from the game table's gear). Either way the page goes straight to
+  the new table's game table as soon as it exists (#55, #132, #181),
+  where your **Start** deals the first board (robots are always ready). A
+  refusal shows under the card it came from.
 - **Open tables**, with filter chips counted over the list: **All**,
   **Seat free**, **Playing** (a board on) and **Robots only** (the last
   person left: anyone may sit down and run the table). Each table is a
-  card: its name (opening its page), a line with the time for a set and
+  card: its name (opening its game table), a line with the time for a set and
   where it is ("16 min · set 2 · board 2/4", "16 min · no set yet", or
   "left 3 min ago · closes in 7" while only robots are left), a pill ("1
   seat free", "Playing", "Full", "Robots only") and a mini compass of the
   four seats: names, robots in blue, away players in red ("nick · away"),
   you in orange, and an empty seat as a dashed **Sit N**. Tap a name to
   open that player's profile sheet, **Sit N** to sit. Taking a seat takes
-  you to the table as soon as the seat request answers: to `/play` when
-  the table the answer describes has a board (`board_id` set: a finished
-  board still on it, waiting for its seats to be refilled), otherwise to
-  its page, where you press **Start**. Sitting down never deals a board.
+  you straight to the game table, `/tables/:id/play`, as soon as the seat
+  request answers (#181): the board if one is on, else the waiting table,
+  where you press **Start**. Sitting down never deals a board.
   The seat's spinner and the disabled seats stay until the page has
   changed. A cancelled move or a seat taken meanwhile (409, toasted) keeps
   you on the list. Moving to another table asks first, because leaving
@@ -243,7 +242,7 @@ No live updates on this page: pull to refresh.
 
 A **banned** user still sees the list, but the ban (reason and end date)
 takes the place of the two start cards, every **Sit** is disabled and the
-tables' names don't open their pages.
+tables' names don't open their game tables.
 
 | Calls | Endpoint |
 |---|---|
@@ -258,109 +257,6 @@ Backend: bb#9 (create table, 3 active per creator), bb#12 (join a seat),
 bb#25 (joining elsewhere moves you), bb#65 (robots), bb#73 (nothing is
 dealt before Start), bb#77 (bans), bb#121 (stats), bb#131 (`set_minutes`).
 
-## Table detail — `/tables/:id`
-
-**Logged in.** Built by #15; manager Remove by #16; live updates by #21;
-moves by #22; profile sheet by #24; heartbeat by #31; Seat a player by #32;
-robots by #53; Start by #68; the set line by #73; away mid-set by #74 (a robot takes the seat instead of a forfeit by #130); admins' seats by #77; Leave and Remove after a set by #121; the time for a set by #143; the Daylight plates by #163. Reached from a table's **Open** button, by
-taking a seat, or from **Create table**.
-
-The four seats as a compass (N/E/S/W), North and South across the top and
-bottom, each player a navy **plate** as at the game table (#163): their
-initials (a robot's icon), name, "North · you", an amber **ADMIN** tag;
-on a phone the side plates stand upright. An empty seat is the dashed
-orange **Sit here · North** (**Move here · North** when you sit here
-already). Sit, move or
-**Leave** (confirmed; the last player leaving deletes the table and the
-page goes back to `/tables`; if only robots are left the confirmation says
-the table waits 10 minutes for somebody to take over). Managers
-(`can_manage` in the payload: the moderator or an admin, bb#74) also get **Remove** on each other player, and on
-an empty seat **Seat a player** (a search sheet over all users, robots
-never listed) and **Add robot**. While only robots sit there
-(`unattended_since`), a note says so and **anyone** gets **Remove** on the
-robots; the first person to sit down becomes the moderator. An **admin**'s
-seat has **Remove** only for another admin, never for the moderator
-(bb#78); a 403 still toasts the backend's reason. Updates live
-over the table channel; if you are removed, a toast and back to `/tables`.
-While live updates work there is no Refresh button, only pull to refresh;
-once they have been off for 5 s (Reverb down, the channel refused, or a
-table you don't sit at, which has no channel) a note says **Live updates
-are off. Refresh to see the latest.** above a **Refresh** button (#76).
-
-**Away mid-set** (#74, bb#76; #130, bb#120; #150, bb#138). A player
-quiet for a minute in the middle of a set is tagged on the compass with
-their seat's own clock, **away · 1:42**, counting down to the robot
-taking it (red in the last 15 s, **replacing…** at 0; an admin's is a
-plain **away**: the table waits for them). Seats away together count
-down together. Under it one line, however many are away, with no
-countdown: "Away players are replaced by a robot when their clock runs
-out." A tag clears the moment its player is back. **Leave** mid-set is
-confirmed more sternly ("Your seat is kept for 2 minutes: come back
-before then, or a robot takes it for the rest of the set. Your time for
-the set keeps running when it's your turn."): the backend holds the seat
-(202), the page goes to `/tables` with a toast, and the store stops the
-heartbeat. Opening this page again shows your held seat counting down
-("You're away from Club: a robot takes your seat in 1:12 unless you come
-back."), with **Come back** (no Leave or seat buttons meanwhile). Not
-back in time, a robot takes your seat for the rest of the set and you are
-sent to the set's results. Removing a player mid-set says what it costs:
-a robot takes the seat of a player who is away, while removing one who is
-there ends the set with no winner.
-
-**Time for a set** (#143, bb#131). Under the compass: each player's time
-for a set at this table ("16 minutes each for a set of 4 boards"). A
-manager gets the 8 / 12 / 16 / 20 minutes picker instead while no set is
-going on; a change is toasted ("Each player now has 8 minutes for a
-set."), and a refusal (409 once a set has started meanwhile, 403) is
-toasted with the backend's reason and the table read again. Mid-set the
-manager reads it with "You can change it once this set is over." A set
-keeps the time it opened with.
-
-**After a set** (#121). Once the set's last board is finished nothing is
-at stake: **Leave** says only that the board is over and what becomes of
-the table, and frees the seat at once (a toast says so); a manager's
-**Remove** takes each robot out with no word of a set. Leave and Remove
-close the page's sheets before asking, and anything that goes wrong on
-the way, even before a request is sent, is toasted ("Could not leave the
-table. Please try again.") and logged to the console.
-
-**Start.** A board is dealt only once the table is full and every person
-seated there has pressed **Start**; robots are always ready. While the
-next board waits for it (no board yet, one abandoned when somebody left,
-or a finished one whose four players aren't all still in their seats), a
-seated player sees the Start box: **Start**, then **Waiting for the
-others…** with **Cancel**, and a line saying what is missing ("Waiting for
-a fourth player, and for East (bob) to press Start."). Each ready seat on
-the compass gets a green tick and "· ready" on its plate. Everyone presses their own, the manager
-included. Between boards with the same four players nothing is pressed:
-the next board of the set comes by itself on the play page (#98), until
-the set of four is over (#73): then it is everyone's Start again. While a set is going on, the table's info
-says where it is: **Board 2 of 4 · Set 3**. When a board is dealt (`board_id` changes
-to a new board, from the Start answer or a `TableUpdated`) a seated player
-is taken to `/play`, the one whose Start dealt it included.
-
-| Calls | Endpoint |
-|---|---|
-| `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh or Refresh (offline only) | `GET /tables/{id}`, skipped on entry for the table you sit at (it is followed live) |
-| `tables.join()` | `POST /tables/{id}/seats` |
-| `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
-| `tables.comeBack()` (Come back) | `POST /tables/{id}/heartbeat`, `GET /tables/{id}` |
-| `tables.removePlayer()` | `DELETE /tables/{id}/seats/{user}` |
-| `tables.seatUser()` (Seat a player sheet) | `GET /users?search=`, `POST /tables/{id}/seats/users` |
-| `tables.seatRobot()` (Add robot) | `POST /tables/{id}/seats/robots` |
-| `tables.updateSettings()` (time for a set) | `PATCH /tables/{id}` |
-| `tables.start()`, `tables.cancelStart()` (Start box) | `POST /tables/{id}/start`, `DELETE /tables/{id}/start` |
-| `game.load()` (when seated at a dealt table) | `GET /tables/{id}/playing` |
-| heartbeat, while seated | `POST /tables/{id}/heartbeat` every 30 s |
-| channel | `private-table.{id}`: `TableUpdated` |
-
-Backend: bb#10 and bb#11 (seat others, kick or quit), bb#22
-(Reverb), bb#25 (moves), bb#41 (idle seats, heartbeat), bb#44 (user
-search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#73
-(Start), bb#76 (away mid-set, Leave holds the seat), bb#120 (a robot takes the seat of a player who walks out), bb#78
-(only an admin removes an admin; `is_admin` public on every seat), bb#131
-(the set clock, `PATCH /tables/{id}`).
-
 ## Play — `/tables/:id/play`
 
 **Logged in, seated at that table** (403 otherwise). Built by #26 (game
@@ -370,10 +266,12 @@ pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
 #101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140);
-**Compare** by #30. Entered from the detail page,
-automatically when a board is dealt, or from **Open the game table** before
-anyone has pressed Start. The header's **Table** button goes back to the
-detail page.
+**Compare** by #30; the table's one page (the waiting table, Remove in the
+profile, Leave in the header, the set time's gear, the Start timer) by
+#181, needs bb#142. Reached from **Deal me in**, **Create table**, every
+**Sit** on Tables, a table's name, and the header's **Your table**:
+there is no separate table page any more, and the old `/tables/:id`
+address goes here.
 
 Robots play by themselves: each of their calls, cards, claim answers and
 "ready"s arrives as an ordinary `PlayingUpdated` about a second apart, so
@@ -445,7 +343,7 @@ more, down to each card's rank and suit, and on a small phone the cards
 get smaller rather than wrap. On dummy's turn the cards you may play keep
 a full 44 px to tap where the row has room.
 
-Like the detail page, it shows **Refresh** (under a note, **Live updates
+It shows **Refresh** (under a note, **Live updates
 are off. Refresh to see the latest.**) only once live updates have been
 off for 5 s; while they work, pull to refresh is the only manual reload
 (#76).
@@ -536,24 +434,40 @@ player is back. Opening this page is
 coming back: a seat held after a Leave, or marked away, is yours again,
 with a **Welcome back. The set goes on.** toast and the board reloaded.
 Mid-set the heartbeat keeps going while the tab is hidden, so switching
-tabs is not going away (but the turn clock runs either way). **Leave the
-table** mid-set (in the next-board box) is confirmed more sternly, as on
-the detail page. Between sets, and before the first, the Start box has
-its own **Leave the table**, and a manager gets **Remove** on each other
-seat there (a robot, say), so finishing a set is no dead end (#121).
-Leave and Remove close the review, a phone's chat sheet and any other sheet before asking;
-a failure is toasted and logged, never silent.
+tabs is not going away (but the turn clock runs either way). While the
+backend still has you down as away, a banner says so ("You're away from
+Club: a robot takes your seat in 1:12 unless you come back.") until the
+mark is taken back. **Leave** mid-set is confirmed more sternly ("Your
+seat is kept for 2 minutes: come back before then, or a robot takes it
+for the rest of the set. Your time for the set keeps running when it's
+your turn."): the backend holds the seat (202), the page goes to
+`/tables` with a toast, and the store stops the heartbeat. Not back in
+time, a robot takes your seat for the rest of the set and you are sent to
+the set's results. Removing a player mid-set says what it costs: a robot
+takes the seat of a player who is away, while removing one who is there
+ends the set with no winner.
+
+**Leave** (#121, #181) is one small button in the header, whatever the
+board is doing, never on the table: its confirmation says what leaving
+costs now (nothing between sets; mid-board the board is abandoned; mid-set
+the seat is held, above). The result dialog keeps its own **Leave the
+table**. Leave and Remove close the review, the profile sheet, a phone's
+chat sheet and any other sheet before asking; a failure is toasted and
+logged, never silent.
+
+**Players and Remove** (#24, #16, #77, #181). Tapping a player's name on
+the table opens their profile sheet. For a manager (`can_manage`: the
+moderator or an admin, bb#74) it has **Remove from the table** for
+everyone but yourself, confirmed first; an **admin**'s seat only for
+another admin, never the moderator (bb#78); while only robots sit at a
+table (`unattended_since`), anyone may remove a robot. A 403 or 404 toasts
+the backend's reason and reads the table again; removing the last robot of
+an unattended table deletes it and goes back to `/tables`. Nothing on the
+table itself removes anybody.
 
 What it shows by phase:
-- **waiting**: who's seated, and the same Start box as on the detail page
-  (with the four seats as plates, #163: a green tick once a player
-  pressed Start, an empty seat dashed orange, **Empty · West**), so opening the game table early is no dead
-  end. The last Start deals the board right here. A manager (`can_manage`)
-  also gets **Seat a player** and **Add robot** in the box for each empty
-  seat, as on the detail page (#117): left alone after the others were
-  freed or the set broken off, they fill the table without leaving the
-  game, and get **Remove** on each other seat (#121). Everyone sees
-  **Leave the table** under Start.
+- **waiting**: the table itself is the waiting room (below, **Before a
+  board**).
 - **auction**: your hand (always ♥ ♣ ♦ ♠, red and black alternating), the auction grid, and on your turn the bidding
   box: **two taps plus confirm** (#160). Tap a level (1–7), then a strain
   (♣ ♦ ♥ ♠ NT), and the orange **Bid 2♥** under them sends it; **Pass**,
@@ -669,8 +583,8 @@ What it shows by phase:
   board is still finished shows it again. If nothing has arrived 2 s
   after the countdown ends, the page rereads the game. If one of the four
   has left or been replaced since, the dialog shows the result with no
-  countdown and no vote, and the Start box under the table deals the
-  next board once everyone has pressed Start. The header's **Last board**
+  countdown and no vote, and Start in the table's centre deals the
+  next board once everyone has pressed it. The header's **Last board**
   reviews the board just played at any time.
 - **set over** (after the fourth board, or earlier when it is broken off
   between boards): the same dialog shows the set's results instead of the
@@ -680,9 +594,9 @@ What it shows by phase:
   (number, contract and declarer, result, your side's score and
   matchpoint %, each opening its review), the totals and the time each
   player used, with no countdown and no vote (after the set's last board
-  it waits for the set's results rather than show the board first). The
-  Start box stays on the page under the table: everyone's Start opens
-  the next set, **Board 1 of 4**. A set that ended mid-board (a player
+  it waits for the set's results rather than show the board first).
+  Start is in the table's centre: everyone's Start opens the next set,
+  **Board 1 of 4**. A set that ended mid-board (a player
   taken out of it) shows its results on the page once the table is back
   to waiting. They update live for all four: the set ending arrives with
   the last card's `PlayingUpdated` (or the `TableUpdated` that broke it
@@ -734,6 +648,53 @@ banner in the sheet says so with **To the table**. A forced card doesn't
 play itself while it is open, and leaving the page closes it. It fits a
 360 px screen.
 
+### Before a board: the waiting table (#181)
+
+Whenever the next board waits for Start (no board yet, one abandoned when
+somebody left, a finished one whose four players aren't all still in
+their seats, or a set over), the game table shows it on the table itself:
+
+- **The seats** are the table's own: the four plates, a robot's icon,
+  away tags, and a green tick on each seat that pressed Start (robots
+  always have).
+- **The centre**: **Ready to play?** (or **Waiting for the others…**
+  once you pressed), what is missing ("Waiting for a fourth player, and
+  for East (bob) to press Start."), and the orange **Start** (or
+  **Cancel**). Everyone presses their own, the manager included; the last
+  Start deals the board right there. **The Start timer** (bb#142): once
+  the table is full, every seat but one is ready and another person has
+  pressed, the one left has 15 s: **Press Start · 0:12** in orange (red
+  under 5 s) for them, **Waiting for East · 0:12** for the others. Not
+  pressed in time, their seat is freed: they are told "You didn't press
+  Start in time: your seat is free for someone else." and go back to
+  Tables (the backend's `UnseatedFromTable`, or the `TableUpdated` that
+  frees the seat, whichever comes first).
+- **An empty seat** is a dashed **Empty · West** button: tapping it
+  opens a small action sheet with **Sit here · West** (**Move here ·
+  West** when you sit here already; moving off another table asks first)
+  and, for a manager, **Seat a player** (a search over all users, robots
+  never listed) and **Add robot**. A refusal is toasted and the table
+  read again.
+- **The time for a set** (#143, bb#131) sits in the table's top-right
+  corner while no set runs: a manager's **gear** ("⚙ 16 min") opens a
+  small **Table settings** dialog with the 8 / 12 / 16 / 20 minutes
+  picker, a change toasted ("Each player now has 8 minutes for a set."),
+  a refusal (409 once a set has started, 403) toasted with the backend's
+  reason, the table read again and the picker put back. Everyone else
+  reads **16 min** there. Changing it takes back every Start (bb#142):
+  whoever had pressed is told "The set time changed to 8 min: press Start
+  again." and their tick goes. Once the set runs the corner has the
+  contract again.
+
+**Not seated here** (a link, a table's name on Tables): the board is only
+for the four players (403), but the table shows with its plates and
+free seats ("You don't sit at this table. Take a free seat to play."),
+"You sit at Home. Taking a seat here moves you." when you sit elsewhere,
+and while only robots sit there "Robots only — sit down to take over.
+You'll manage the table, and it is deleted 10 minutes after the last
+player left if nobody does." Sitting down opens the board to you; the
+first person to sit at an unattended table becomes its moderator.
+
 | Calls | Endpoint |
 |---|---|
 | `game.load()` | `GET /tables/{id}/playing`, the only request the page waits for on entry |
@@ -746,17 +707,21 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
 | `game.next()` (**Deal next board**, the result dialog's vote, optional) | `POST /tables/{id}/playing/next` |
 | `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
-| `tables.seatRobot()`, `tables.seatUser()` (managers, Start box, #117) | `POST /tables/{id}/seats/robots`, `GET /users?search=` + `POST /tables/{id}/seats/users` (picking yourself is `tables.join()`, `POST /tables/{id}/seats`); a refusal toasts and rereads the table |
+| `tables.join()` (an empty seat's Sit here / Move here) | `POST /tables/{id}/seats` (then `GET /tables` after a move off another table, and the board read again) |
+| `tables.seatRobot()`, `tables.seatUser()` (managers, an empty seat's action sheet, #117) | `POST /tables/{id}/seats/robots`, `GET /users?search=` + `POST /tables/{id}/seats/users` (picking yourself is `tables.join()`, `POST /tables/{id}/seats`); a refusal toasts and rereads the table |
+| `tables.removePlayer()` (the profile sheet's Remove) | `DELETE /tables/{id}/seats/{user}` |
+| `tables.updateSettings()` (the gear's dialog) | `PATCH /tables/{id}` |
+| `tables.findSeat()` (not seated here) | `GET /tables`, to know where you sit |
 | `game.load()` 2 s after a claim's or the next board's deadline with no update | `GET /tables/{id}/playing` |
 | `history.loadSet()` (after each finished board, when the set ends, and on entry mid-set) | `GET /sets/{id}` |
 | `history.loadReview()` (the board review) | `GET /playings/{id}`, once per board per session (again while its double dummy analysis is pending) |
 | `history.loadDoubleDummy()` (once a board is finished; once more 5 s later if pending) | `GET /boards/{id}/double-dummy` |
 | `history.loadResults()` (once a board is finished: the result dialog's other tables) | `GET /boards/{id}/results`; failures are quiet |
 | `history.loadHistory()` (on entry, only when no board to review is known but one may have been finished here) | `GET /api/user/playings` |
-| `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
+| `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create or a join) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
 | `tables.comeBack()` on entry | `POST /tables/{id}/heartbeat` and `GET /tables/{id}`, only when your seat was held or away |
-| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a robot taking a seat over), `PlayingUpdated` (with `turn_deadline`); `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer; in the play, anyone's answer), `CallQuestioned` (a question about your call), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read) |
+| channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a robot taking a seat over), `PlayingUpdated` (with `turn_deadline`); `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer; in the play, anyone's answer), `CallQuestioned` (a question about your call), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read), `UnseatedFromTable` (the Start timer freed your seat) |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
 reloads (after a set's last board, the vote 409s: "The set is over: press Start
@@ -767,7 +732,12 @@ Start once the table is full again).
 Backend: bb#18 (deal a board), bb#73 (only after everyone's Start), bb#36 (game state),
 bb#37 (auction), bb#56 (`GET /bids`), bb#38 (card play), bb#39 (scoring),
 bb#40 (next board; bb#74 dropped its `everyone`; bb#97 deals it by itself), bb#43 (results), bb#59 (claims), bb#96 (claims expire), bb#115 (claims answered at once, the claim lock),
-bb#75 (sets of four boards), bb#76 (away mid-set), bb#120 (the turn clock, a robot taking the seat of a player who walks out), bb#100 (alerts), bb#124 (partner's alerts after the auction), bb#101 (board chat).
+bb#75 (sets of four boards), bb#76 (away mid-set), bb#120 (the turn clock, a robot taking the seat of a player who walks out), bb#100 (alerts), bb#124 (partner's alerts after the auction), bb#101 (board chat),
+bb#10 and bb#11 (seat others, kick or quit), bb#25 (moves), bb#44 (user
+search), bb#45 (`can_manage`), bb#65 (robots, unattended tables), bb#78
+(only an admin removes an admin), bb#131 (the set clock, `PATCH
+/tables/{id}`), bb#142 (the Start timer, a set time change revoking
+Start).
 
 ## My boards — `/history`
 
@@ -928,7 +898,7 @@ Backend: bb#60, bb#101 (the chat), bb#114 (double dummy).
 ## User profile — `/users/:id`
 
 **Logged in.** Built by #24; "Boards played" by #30; bans by #75; stats by #131; Daylight's colours by #163. Reached from the
-profile sheet (tap a seated player's name on Tables, Table detail or Play,
+profile sheet (tap a seated player's name on Tables or Play,
 then **Full profile**; a robot's sheet has no such link).
 
 A player's public profile (name, username with the **Admin** badge for an
@@ -983,18 +953,20 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans), bb#
 | `BanUserForm` | User profile, profile sheet (admins) | `users.ban()` → `POST /users/{id}/ban` |
 | `AppMenu` | the app shell | none (reads the auth store; **Your table** first while seated, via `useYourTable`) |
 | `BoardReview` | Board review, Play (`BoardReviewModal`) | none (given the review from `history.loadReview`) |
-| `PlayerProfileSheet` | Tables, Table detail, Play, Board review; headed by the player's avatar (#163) | `users.load()` → `GET /users/{id}`; one line of stats ("48 boards · 65 % won · avg 56.0 %", none for a robot) via `PlayerStats` → `GET /users/{id}/stats`; **Ban** for admins (`BanUserForm`) |
+| `PlayerProfileSheet` | Tables, Play, Board review; headed by the player's avatar (#163) | `users.load()` → `GET /users/{id}`; one line of stats ("48 boards · 65 % won · avg 56.0 %", none for a robot) via `PlayerStats` → `GET /users/{id}/stats`; **Ban** for admins (`BanUserForm`); at the game table a manager's **Remove from the table** (`removable`, the page sends it, #181) |
 | `PlayerStats` | User profile, Account, profile sheet (one line) | `users.loadStats()` → `GET /users/{id}/stats` or `GET /api/user/stats` (#131) |
-| `SeatPlate`, `PlayerAvatar` | Table detail (compass), Play and Table detail (`StartBox`): a seated player as a navy plate (#163); the avatar also heads the profile sheet and each search result | none |
+| `PlayerAvatar` | profile sheet, each search result (#163) | none |
+| `StartBox` | Play (the table's centre while the next board waits for Start, #181): the waiting line, **Start** / **Cancel**, the Start timer's countdown | none (the page sends Start; reads `ready` / `start_deadline` from the table) |
+| `TableSettingsDialog` | Play (the gear in the table's corner, a manager's, between sets) | none (the page sends `tables.updateSettings()` → `PATCH /tables/{id}`) |
 | `RobotBadge` | profile sheet | none (`is_robot` on the user; the plates show a robot's icon, the lobby's compass a blue seat) |
-| `AdminBadge` | Table detail and Play (every plate), profile sheet, User profile | none (`is_admin` on the user, #77) |
-| `SeatPlayerSheet` | Table detail and Play (managers) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
+| `AdminBadge` | Play (every plate), profile sheet, User profile | none (`is_admin` on the user, #77) |
+| `SeatPlayerSheet` | Play (managers, an empty seat's action sheet) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | `SetResultsPanel` | Play (set over), Set results | none (given the set from `history.loadSet`) |
 | `SetStrip` | Play (finished board), Tables and Home (Your table) | none (the set's tiles, from `history.sets`) |
 | `YourTableHero` | Tables, Home | `history.loadSet()` → `GET /sets/{id}` once a board of the running set is finished |
 | `TableCard` | Tables | none (one open table with its mini compass) |
 | `YourForm`, `RecentBoards` | Tables, Home | `users.loadStats(null)` → `GET /api/user/stats`; `history.loadHistory(null)` → `GET /api/user/playings` |
-| `AwayNotice` | Play, Table detail (one line while others are away, no countdown); Table detail, Tables, Home (your held seat, counting down); an orange-tint banner (#163) | none (reads `away_since` / `replace_at` from the table) |
-| `AwaySeatTag` | Play (`BridgeTable`), Table detail (compass): an away seat's clock | none (`replace_at` via `useAwayTags`) |
+| `AwayNotice` | Play (one line while others are away, no countdown); Play, Tables, Home (your held seat, counting down); an orange-tint banner (#163) | none (reads `away_since` / `replace_at` from the table) |
+| `AwaySeatTag` | Play (`BridgeTable`): an away seat's clock | none (`replace_at` via `useAwayTags`) |
 | route progress bar, boot bar, toasts | the app shell | none (#18) |

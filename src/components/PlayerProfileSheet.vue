@@ -1,6 +1,8 @@
 <template>
   <!-- A bottom sheet over the table: the player's public profile in one tap.
-       The parent owns which player is open and clears it on close. -->
+       The parent owns which player is open and clears it on close. At the
+       game table a manager takes the player out from here (`removable`,
+       the `remove` event: #181, no Remove on the table itself). -->
   <ion-modal
     :is-open="player !== null"
     :initial-breakpoint="0.5"
@@ -48,6 +50,20 @@
           </ion-button>
         </template>
 
+        <!-- The page confirms and sends it (canRemove said it may). -->
+        <ion-button
+          v-if="removable"
+          expand="block"
+          color="danger"
+          fill="outline"
+          class="profile-remove"
+          :disabled="busy"
+          @click="emit('remove', player!)"
+        >
+          <ion-spinner v-if="busy" name="crescent" />
+          <span v-else>Remove from the table</span>
+        </ion-button>
+
         <!-- A robot has no page of its own: nothing more to see there. -->
         <ion-button v-if="!gone && !shown.is_robot" expand="block" fill="outline" @click="openPage">
           Full profile
@@ -71,8 +87,17 @@ import type { PublicUser } from '@/services/users';
 import { banDate, canBan } from '@/utils/ban';
 import { errorMessage, statusOf } from '@/utils/errors';
 
-const props = defineProps<{ player: PublicUser | null }>();
-const emit = defineEmits<{ close: [] }>();
+const props = withDefaults(
+  defineProps<{
+    player: PublicUser | null;
+    // The viewer may take this player out of the table (canRemove).
+    removable?: boolean;
+    // That removal on its way.
+    busy?: boolean;
+  }>(),
+  { removable: false, busy: false },
+);
+const emit = defineEmits<{ close: []; remove: [player: PublicUser] }>();
 
 const store = useUsersStore();
 const auth = useAuthStore();
@@ -221,7 +246,8 @@ function openPage() {
 }
 
 .ban-form,
-.ban-open {
+.ban-open,
+.profile-remove {
   margin-bottom: 12px;
 }
 

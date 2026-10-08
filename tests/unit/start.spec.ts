@@ -1,9 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { IonButton } from '@ionic/vue'
 import StartBox from '@/components/StartBox.vue'
-import TableDetailPage from '@/views/TableDetailPage.vue'
 import * as echo from '@/services/echo'
 import * as gameService from '@/services/game'
 import * as tablesService from '@/services/tables'
@@ -11,13 +9,13 @@ import type { Playing } from '@/services/game'
 import type { BroadcastTable, Seat, Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
-import { useTablesStore } from '@/stores/tables'
-import { isReady, startNeeded, startWaiting } from '@/utils/start'
+import { START_TIMEOUT_NOTICE, startRevokedText, useTablesStore } from '@/stores/tables'
+import { showToast } from '@/utils/toast'
+import { isReady, startClock, startClockText, startNeeded, startWaiting } from '@/utils/start'
 
 vi.mock('@/services/tables', async (importOriginal) => ({
   ...(await importOriginal<typeof tablesService>()),
   getTable: vi.fn(),
-  // The detail page asks where the user sits when it isn't their table.
   listTables: vi.fn(),
   startTable: vi.fn(),
   cancelStart: vi.fn(),
@@ -36,19 +34,6 @@ vi.mock('@/services/echo', () => ({
   disconnectEcho: vi.fn(),
 }))
 vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
-vi.mock('vue-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('vue-router')>()),
-  useRoute: () => ({ params: { id: '5' }, path: '/tables/5' }),
-}))
-const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }))
-vi.mock('@ionic/vue', async (importOriginal) => {
-  const { onMounted } = await import('vue')
-  return {
-    ...(await importOriginal<typeof import('@ionic/vue')>()),
-    useIonRouter: () => ({ navigate }),
-    onIonViewWillEnter: (hook: () => void) => onMounted(hook),
-  }
-})
 
 // The user is ana (id 1). Seats are seat -> username; `robot-…` usernames
 // are robots, eve is an admin, and `ready` lists the humans who have pressed Start.
@@ -76,6 +61,9 @@ function makeTable(
       user_id: idOf(username),
       seat,
       ready: username.startsWith('robot-') || ready.includes(username),
+      away_since: null,
+      replace_at: null,
+      start_deadline: null,
       user: {
         id: idOf(username),
         name: username,
@@ -88,6 +76,14 @@ function makeTable(
     free_seats: (['N', 'E', 'S', 'W'] as Seat[]).filter((s) => !(s in seats)),
     can_manage: true,
     ...extra,
+  }
+}
+
+// The table with the Start timer running on `seat` until `deadline`.
+function timed(table: Table, seat: Seat, deadline: string): Table {
+  return {
+    ...table,
+    seats: table.seats.map((s) => (s.seat === seat ? { ...s, start_deadline: deadline } : s)),
   }
 }
 
@@ -197,6 +193,7 @@ describe('start helpers', () => {
 
 describe('StartBox.vue', () => {
   beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => vi.useRealTimers())
 
   test('before pressing: Start, and who the board waits for', async () => {
     const wrapper = mount(StartBox, { props: { table: makeTable(TWO_HUMANS, ['bob']), me: 1 } })
@@ -204,7 +201,7 @@ describe('StartBox.vue', () => {
     expect(wrapper.text()).toContain('Ready to play?')
     expect(wrapper.text()).toContain('Waiting for you to press Start.')
     expect(wrapper.find('.start-cancel').exists()).toBe(false)
-    expect(wrapper.find('.start-seats').exists()).toBe(false)
+    expect(wrapper.find('.start-clock').exists()).toBe(false)
 
     await wrapper.get('.start-button').trigger('click')
     expect(wrapper.emitted('start')).toHaveLength(1)
@@ -221,125 +218,70 @@ describe('StartBox.vue', () => {
     expect(wrapper.emitted('cancel')).toHaveLength(1)
   })
 
-  test('the seats, marked, when the page asks for them', () => {
-    const wrapper = mount(StartBox, {
-      props: { table: makeTable({ N: 'robot-1', E: 'bob', S: 'ana' }, ['bob']), me: 1, showSeats: true },
-    })
+  test('busy: both buttons spin and hold', () => {
+    const before = mount(StartBox, { props: { table: makeTable(TWO_HUMANS), me: 1, busy: true } })
+    const after = mount(StartBox, { props: { table: makeTable(TWO_HUMANS, ['ana']), me: 1, busy: true } })
 
-    const ready = wrapper.findAll('.start-seats li.is-ready').map((li) => li.attributes('data-seat'))
-    expect(ready).toEqual(['N', 'E'])
-    // Plates (#163): the viewer's ringed, a tick for each Start, an empty
-    // seat dashed.
-    expect(wrapper.get('[data-seat="S"] .seat-name').text()).toBe('South')
-    expect(wrapper.get('[data-seat="S"] .seat-you').text()).toBe('· you')
-    expect(wrapper.get('[data-seat="S"] .seat-plate').classes()).toContain('seat-plate-mine')
-    expect(wrapper.get('[data-seat="E"] .plate-ready').text()).toBe('· ready')
-    expect(wrapper.findAll('.seat-plate-tick')).toHaveLength(2)
-    expect(wrapper.get('[data-seat="N"]').text()).toContain('· robot')
-    expect(wrapper.get('[data-seat="W"] .start-empty').text()).toBe('Empty · West')
-    expect(wrapper.text()).toContain('Waiting for a fourth player, and for you to press Start.')
-  })
-
-  test('an admin is marked in the seats', () => {
-    const wrapper = mount(StartBox, {
-      props: { table: makeTable({ N: 'eve', S: 'ana' }), me: 1, showSeats: true },
-    })
-
-    expect(wrapper.get('[data-seat="N"]').find('.admin-badge').exists()).toBe(true)
-    expect(wrapper.findAll('.admin-badge')).toHaveLength(1)
-  })
-
-  test('a manager fills each empty seat from the box (#117)', async () => {
-    const wrapper = mount(StartBox, {
-      props: { table: makeTable({ N: 'robot-1', S: 'ana' }), me: 1, showSeats: true, manage: true },
-    })
-
-    const rows = wrapper.findAll('.start-fill')
-    expect(rows.map((row) => row.attributes('data-fill-seat'))).toEqual(['E', 'W'])
-    // Inside the empty seat's dashed plate.
-    expect(wrapper.get('[data-seat="E"] .start-empty').text()).toContain('Empty · East')
-    await rows[0].get('.start-seat-player').trigger('click')
-    await rows[1].get('.start-add-robot').trigger('click')
-
-    expect(wrapper.emitted('seatPlayer')).toEqual([['E']])
-    expect(wrapper.emitted('addRobot')).toEqual([['W']])
-  })
-
-  test('a seat being filled spins its Add robot and holds the others', async () => {
-    const wrapper = mount(StartBox, {
-      props: { table: makeTable({ S: 'ana' }), me: 1, showSeats: true, manage: true, fillingSeat: 'E' as Seat },
-    })
-
-    expect(wrapper.get('[data-fill-seat="E"] .start-add-robot').find('ion-spinner').exists()).toBe(true)
-    expect(wrapper.get('[data-fill-seat="N"] .start-add-robot').text()).toBe('Add robot')
-    const buttons = wrapper.findAllComponents(IonButton).filter((b) => b.element.closest('.start-fill'))
-    expect(buttons).toHaveLength(6)
-    expect(buttons.every((b) => b.props('disabled'))).toBe(true)
-  })
-
-  test('no fill buttons for a non-manager, a full table, or without the seats', () => {
-    const seats = { S: 'ana' }
-    const notManager = mount(StartBox, { props: { table: makeTable(seats), me: 1, showSeats: true } })
-    const noSeats = mount(StartBox, { props: { table: makeTable(seats), me: 1, manage: true } })
-    const full = mount(StartBox, {
-      props: { table: makeTable({ N: 'robot-1', E: 'robot-2', S: 'ana', W: 'robot-3' }), me: 1, showSeats: true, manage: true },
-    })
-
-    for (const wrapper of [notManager, noSeats, full]) {
-      expect(wrapper.find('.start-fill').exists()).toBe(false)
+    for (const [wrapper, button] of [[before, '.start-button'], [after, '.start-cancel']] as const) {
+      expect(wrapper.getComponent(button).props('disabled')).toBe(true)
+      expect(wrapper.get(button).find('ion-spinner').exists()).toBe(true)
     }
   })
 
-  // The play page's way off the seat, and a manager's Remove, between sets
-  // (#121): StartBox replaces the board's own Leave once a set is over.
-  test('Leave the table, only when the page asks for it', async () => {
-    const table = makeTable({ N: 'robot-1', E: 'robot-2', S: 'ana', W: 'robot-3' })
-    const plain = mount(StartBox, { props: { table, me: 1, showSeats: true } })
-    const leaving = mount(StartBox, { props: { table, me: 1, showSeats: true, canLeave: true } })
+  test('the Start timer on our seat counts down in orange, red under 5 s', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-08T12:00:00Z'))
+    const table = timed(makeTable(TWO_HUMANS, ['bob']), 'S', '2026-10-08T12:00:12Z')
+    const wrapper = mount(StartBox, { props: { table, me: 1 } })
 
-    expect(plain.find('.start-leave').exists()).toBe(false)
-    expect(leaving.get('.start-leave').text()).toBe('Leave the table')
-    await leaving.get('.start-leave').trigger('click')
-    expect(leaving.emitted('leave')).toHaveLength(1)
+    const clock = wrapper.get('.start-clock')
+    expect(clock.text()).toBe('Press Start · 0:12')
+    expect(clock.attributes('role')).toBe('timer')
+    expect(clock.classes()).toContain('start-clock-mine')
+    expect(clock.classes()).not.toContain('start-clock-urgent')
+
+    await vi.advanceTimersByTimeAsync(8000)
+    expect(wrapper.get('.start-clock').text()).toBe('Press Start · 0:04')
+    expect(wrapper.get('.start-clock').classes()).toContain('start-clock-urgent')
+    wrapper.unmount()
   })
 
-  test('a Remove on each seat the page names, never on an empty one', async () => {
-    const wrapper = mount(StartBox, {
-      props: {
-        table: makeTable({ N: 'robot-1', E: 'robot-2', S: 'ana' }),
-        me: 1,
-        showSeats: true,
-        removable: ['N', 'E', 'W'] as Seat[],
-      },
-    })
+  test("another player's Start timer: whom we wait for, never red", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-08T12:00:00Z'))
+    const table = timed(makeTable(TWO_HUMANS, ['ana']), 'E', '2026-10-08T12:00:03Z')
+    const wrapper = mount(StartBox, { props: { table, me: 1 } })
 
-    const seats = wrapper.findAll('.start-seats li').filter((li) => li.find('.start-remove').exists())
-    expect(seats.map((li) => li.attributes('data-seat'))).toEqual(['N', 'E'])
-    expect(wrapper.get('[data-seat="N"] .start-remove').attributes('aria-label')).toBe('Remove robot-1')
+    const clock = wrapper.get('.start-clock')
+    expect(clock.text()).toBe('Waiting for East · 0:03')
+    expect(clock.classes()).not.toContain('start-clock-mine')
+    expect(clock.classes()).not.toContain('start-clock-urgent')
 
-    await wrapper.get('[data-seat="E"] .start-remove').trigger('click')
-    expect(wrapper.emitted('remove')).toEqual([['E']])
+    // The deadline gone (Start pressed, or the condition broken): no clock.
+    await wrapper.setProps({ table: makeTable(TWO_HUMANS, ['ana']) })
+    expect(wrapper.find('.start-clock').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+describe('the Start timer helpers', () => {
+  test('the timed seat, ours or not, counted from its deadline', () => {
+    const now = Date.parse('2026-10-08T12:00:00Z')
+    expect(startClock(makeTable(TWO_HUMANS), 1, now)).toBeNull()
+
+    const mine = timed(makeTable(TWO_HUMANS, ['bob']), 'S', '2026-10-08T12:00:04.200Z')
+    expect(startClock(mine, 1, now)).toEqual({ seat: 'S', seconds: 5, mine: true, urgent: false })
+    expect(startClock(mine, 1, now + 1000)).toEqual({ seat: 'S', seconds: 4, mine: true, urgent: true })
+    // Past it: 0, until the seat is freed.
+    expect(startClock(mine, 1, now + 60_000)!.seconds).toBe(0)
+
+    const theirs = timed(makeTable(TWO_HUMANS, ['ana']), 'E', '2026-10-08T12:00:02Z')
+    expect(startClock(theirs, 1, now)).toEqual({ seat: 'E', seconds: 2, mine: false, urgent: false })
   })
 
-  test('a seat being emptied spins its Remove and holds Leave', () => {
-    const wrapper = mount(StartBox, {
-      props: {
-        table: makeTable({ N: 'robot-1', E: 'robot-2', S: 'ana' }),
-        me: 1,
-        showSeats: true,
-        removable: ['N', 'E'] as Seat[],
-        fillingSeat: 'N' as Seat,
-        canLeave: true,
-      },
-    })
-
-    expect(wrapper.get('[data-seat="N"] .start-remove').find('ion-spinner').exists()).toBe(true)
-    expect(wrapper.get('[data-seat="E"] .start-remove').text()).toBe('Remove')
-    const buttons = wrapper
-      .findAllComponents(IonButton)
-      .filter((b) => b.classes('start-remove') || b.classes('start-leave'))
-    expect(buttons).toHaveLength(3)
-    expect(buttons.every((b) => b.props('disabled'))).toBe(true)
+  test('the words', () => {
+    expect(startClockText({ seat: 'S', seconds: 12, mine: true, urgent: false })).toBe('Press Start · 0:12')
+    expect(startClockText({ seat: 'W', seconds: 61, mine: false, urgent: false })).toBe('Waiting for West · 1:01')
   })
 })
 
@@ -414,101 +356,100 @@ describe('tables store start', () => {
   })
 })
 
-describe('TableDetailPage.vue Start', () => {
-  const modalStub = { template: '<div><slot /></div>' }
-
-  async function mountPage(table: Table) {
-    vi.mocked(tablesService.getTable).mockResolvedValue(table)
-    const wrapper = mount(TableDetailPage, {
-      global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } },
-    })
-    await flushPromises()
-    return wrapper
-  }
-
+describe('tables store: the Start timer and the set time (bb#142)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.resetAllMocks()
     logIn()
     vi.mocked(tablesService.sendHeartbeat).mockResolvedValue(undefined)
-    vi.mocked(tablesService.listTables).mockResolvedValue([])
   })
 
   afterEach(() => useTablesStore().unwatchTable())
 
-  test('with three robots: Start deals and goes to the board', async () => {
-    const wrapper = await mountPage(makeTable(WITH_ROBOTS))
+  async function watching(table: Table) {
+    vi.mocked(tablesService.getTable).mockResolvedValue(table)
+    const store = useTablesStore()
+    await store.loadTable(5)
+    return store
+  }
 
-    expect(wrapper.get('.start-box').text()).toContain('Waiting for you to press Start.')
-    // Robots are marked ready on the compass; we aren't yet.
-    for (const seat of ['n', 'e', 'w']) {
-      expect(wrapper.get(`.seat-${seat}`).text()).toContain('· ready')
-      expect(wrapper.find(`.seat-${seat} .seat-plate-tick`).exists()).toBe(true)
-    }
-    expect(wrapper.get('.seat-s').text()).not.toContain('ready')
+  test('a new set time taking our Start back is told; the same time, or not ready, is not', async () => {
+    await watching(makeTable(TWO_HUMANS, ['ana']))
 
-    const dealt = makeTable(WITH_ROBOTS, [], { board_id: 8 })
-    vi.mocked(tablesService.startTable).mockResolvedValue({ ...dealt, playing: stateOf(dealt) })
-    await wrapper.get('.start-button').trigger('click')
-    await flushPromises()
+    // Bob takes his own Start back: nothing about the set time.
+    pushUpdate(makeTable(TWO_HUMANS, ['ana', 'bob']))
+    pushUpdate(makeTable(TWO_HUMANS, ['ana']))
+    expect(showToast).not.toHaveBeenCalled()
 
-    expect(navigate).toHaveBeenCalledWith('/tables/5/play', 'forward', 'push')
-    // The board is already in hand, so the game page needs no GET for it.
-    expect(useGameStore().playing?.playing_id).toBe(42)
-    expect(gameService.getPlaying).not.toHaveBeenCalled()
+    pushUpdate(makeTable(TWO_HUMANS, [], { set_minutes: 8 }))
+    expect(showToast).toHaveBeenCalledWith(startRevokedText(8), 'warning')
+    expect(startRevokedText(8)).toBe('The set time changed to 8 min: press Start again.')
+
+    // Changed again while we hadn't pressed: nothing to take back.
+    vi.mocked(showToast).mockClear()
+    pushUpdate(makeTable(TWO_HUMANS, [], { set_minutes: 12 }))
+    expect(showToast).not.toHaveBeenCalled()
   })
 
-  test('two humans: the first Start waits live, the second deals for both', async () => {
-    const wrapper = await mountPage(makeTable(TWO_HUMANS))
-    vi.mocked(tablesService.startTable).mockResolvedValue({ ...makeTable(TWO_HUMANS, ['ana']), playing: null })
+  test('our seat freed while its Start timer ran is told as such', async () => {
+    const store = await watching(timed(makeTable(TWO_HUMANS, ['bob']), 'S', '2026-10-08T12:00:15Z'))
 
-    await wrapper.get('.start-button').trigger('click')
-    await flushPromises()
+    pushUpdate(makeTable({ N: 'robot-1', E: 'bob', W: 'robot-3' }, ['bob']))
 
-    const box = wrapper.get('.start-box')
-    expect(box.text()).toContain('Waiting for the others…')
-    expect(box.text()).toContain('Waiting for East (bob) to press Start.')
-    expect(box.find('.start-cancel').exists()).toBe(true)
-    expect(wrapper.get('.seat-s').text()).toContain('· ready')
-    expect(navigate).not.toHaveBeenCalled()
-
-    // Bob's Start deals: we learn it from TableUpdated.
-    pushUpdate(makeTable(TWO_HUMANS, [], { board_id: 8 }))
-    await flushPromises()
-
-    expect(navigate).toHaveBeenCalledWith('/tables/5/play', 'forward', 'push')
+    expect(showToast).toHaveBeenCalledWith(START_TIMEOUT_NOTICE, 'warning')
+    expect(store.kickedFrom).toBe(5)
+    expect(echo.leaveTable).toHaveBeenCalledWith(5)
   })
 
-  test('Cancel takes the Start back', async () => {
-    const wrapper = await mountPage(makeTable(TWO_HUMANS, ['ana']))
-    vi.mocked(tablesService.cancelStart).mockResolvedValue(makeTable(TWO_HUMANS))
+  test('UnseatedFromTable first: the seat goes from our copies, the channel too, the page leaves', async () => {
+    const store = await watching(timed(makeTable(TWO_HUMANS, ['bob']), 'S', '2026-10-08T12:00:15Z'))
+    store.tables = [store.currentTable!]
 
-    await wrapper.get('.start-cancel').trigger('click')
+    // `kibitzing` waits for the kibitzers (#182): treated as false.
+    store.applyUnseated({ table_id: 5, reason: 'start_timeout', kibitzing: true })
+
+    expect(echo.leaveTable).toHaveBeenCalledWith(5)
+    expect(store.watchedTableId).toBeNull()
+    expect(store.kickedFrom).toBe(5)
+    expect(store.myTable).toBeNull()
+    expect(store.currentTable!.free_seats).toEqual(['S'])
+    expect(store.tables[0].seats.map((s) => s.seat)).toEqual(['N', 'E', 'W'])
+    expect(showToast).toHaveBeenCalledTimes(1)
+    expect(showToast).toHaveBeenCalledWith(START_TIMEOUT_NOTICE, 'warning')
+
+    // The table's TableUpdated after it changes nothing more.
+    pushUpdate(makeTable({ N: 'robot-1', E: 'bob', W: 'robot-3' }, ['bob']))
+    expect(showToast).toHaveBeenCalledTimes(1)
+  })
+
+  test('UnseatedFromTable after the TableUpdated told it: once only', async () => {
+    const store = await watching(timed(makeTable(TWO_HUMANS, ['bob']), 'S', '2026-10-08T12:00:15Z'))
+    pushUpdate(makeTable({ N: 'robot-1', E: 'bob', W: 'robot-3' }, ['bob']))
+
+    store.applyUnseated({ table_id: 5, reason: 'start_timeout', kibitzing: false })
+
+    expect(showToast).toHaveBeenCalledTimes(1)
+  })
+
+  test('another reason or another table: nothing', async () => {
+    const store = await watching(makeTable(TWO_HUMANS))
+
+    store.applyUnseated({ table_id: 5, reason: 'kibitzers_off', kibitzing: false })
+    store.applyUnseated({ table_id: 9, reason: 'start_timeout', kibitzing: false })
+
+    expect(store.watchedTableId).toBe(5)
+    expect(store.kickedFrom).toBeNull()
+    expect(showToast).not.toHaveBeenCalled()
+  })
+
+  test('the user channel hands UnseatedFromTable to the tables store', async () => {
+    const store = await watching(makeTable(TWO_HUMANS))
+    useGameStore().watchUser(1)
+    const onUnseated = vi.mocked(echo.listenToUser).mock.calls[0][8]
+
+    onUnseated({ table_id: 5, reason: 'start_timeout', kibitzing: false })
     await flushPromises()
 
-    expect(tablesService.cancelStart).toHaveBeenCalledWith(5)
-    expect(wrapper.find('.start-button').exists()).toBe(true)
-  })
-
-  test('a newcomer at a table short of one sees Start', async () => {
-    const wrapper = await mountPage(makeTable({ E: 'bob', S: 'ana', W: 'robot-3' }, ['bob']))
-
-    expect(wrapper.get('.start-box').text()).toContain(
-      'Waiting for a fourth player, and for you to press Start.',
-    )
-    expect(wrapper.get('.seat-e').text()).toContain('· ready')
-  })
-
-  test('no Start during a board, nor for somebody not seated here', async () => {
-    const inPlay = makeTable(WITH_ROBOTS, [], { board_id: 8 })
-    vi.mocked(gameService.getPlaying).mockResolvedValue(stateOf(inPlay))
-    const playing = await mountPage(inPlay)
-    expect(playing.find('.start-box').exists()).toBe(false)
-    playing.unmount()
-
-    setActivePinia(createPinia())
-    logIn()
-    const watching = await mountPage(makeTable({ N: 'robot-1', E: 'bob' }))
-    expect(watching.find('.start-box').exists()).toBe(false)
+    expect(store.kickedFrom).toBe(5)
   })
 })

@@ -2,12 +2,14 @@ import { VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonRefresher } from '@ionic/vue'
+import { IonActionSheet, IonRefresher } from '@ionic/vue'
+import type { ActionSheetButton } from '@ionic/vue'
 import { pullToRefresh } from './ionEvents'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import BiddingBox from '@/components/BiddingBox.vue'
 import BoardReviewModal from '@/components/BoardReviewModal.vue'
 import ClaimPanel from '@/components/ClaimPanel.vue'
+import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue'
 import BoardResultDialog from '@/components/BoardResultDialog.vue'
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue'
 import StartBox from '@/components/StartBox.vue'
@@ -21,7 +23,7 @@ import { useGameStore } from '@/stores/game'
 import { useTablesStore } from '@/stores/tables'
 import { OFFLINE_GRACE_MS } from '@/composables/useLiveStatus'
 import { resetLiveStatus, setConnection, setSubscribed } from '@/services/liveStatus'
-import { confirmLeave, confirmRemove } from '@/utils/seatMove'
+import { confirmLeave, confirmMove, confirmRemove } from '@/utils/seatMove'
 import { showToast } from '@/utils/toast'
 
 // The play page's ways out and its failure paths; the game itself (bidding,
@@ -48,7 +50,10 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   seatUser: vi.fn(),
   joinSeat: vi.fn(),
   removePlayer: vi.fn(),
+  listTables: vi.fn(),
 }))
+// A player's profile sheet reads the profile and the stats: never answered.
+vi.mock('@/services/users', () => ({ getUser: () => new Promise(() => {}), getUserStats: () => new Promise(() => {}) }))
 vi.mock('@/services/echo', () => ({
   listenToTable: vi.fn(),
   leaveTable: vi.fn(),
@@ -61,6 +66,7 @@ vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
 vi.mock('@/utils/seatMove', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/utils/seatMove')>()),
   confirmLeave: vi.fn(),
+  confirmMove: vi.fn(),
   confirmRemove: vi.fn(),
 }))
 const { navigate, route } = vi.hoisted(() => ({
@@ -190,6 +196,33 @@ async function emitFrom(wrapper: VueWrapper, component: object, event: string, .
   await flushPromises()
 }
 
+// An empty seat's action sheet (#181): open it by tapping the seat, press
+// one of its buttons as Ionic would (the handler).
+function sheet(wrapper: VueWrapper) {
+  return wrapper.findComponent(IonActionSheet)
+}
+
+function sheetButtons(wrapper: VueWrapper) {
+  return (sheet(wrapper).props('buttons') as ActionSheetButton[]).map((b) => b.text)
+}
+
+async function openSeat(wrapper: VueWrapper, seat: Seat) {
+  await wrapper.get(`.bridge-table [data-seat="${seat}"] .seat-empty-button`).trigger('click')
+  await flushPromises()
+}
+
+async function pressButton(wrapper: VueWrapper, text: string) {
+  const button = (sheet(wrapper).props('buttons') as ActionSheetButton[]).find((b) => b.text === text)
+  expect(button, text).toBeDefined()
+  await button!.handler!()
+  await flushPromises()
+}
+
+async function press(wrapper: VueWrapper, seat: Seat, text: string) {
+  await openSeat(wrapper, seat)
+  await pressButton(wrapper, text)
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
@@ -213,10 +246,31 @@ describe('TablePlayPage loading', () => {
     expect(wrapper.text()).toContain('This table no longer exists.')
   })
 
-  test('a 403 means the user does not sit here', async () => {
-    const wrapper = await mountPage(axiosError(403))
+  test('a 403 means the user does not sit here: the table, to take a free seat', async () => {
+    const table = makeTable({ board_id: null })
+    const others = { ...table, seats: table.seats.filter((s) => s.seat !== 'S'), free_seats: ['S'] as Seat[] }
+    vi.mocked(tablesService.listTables).mockResolvedValue([others])
+    const wrapper = await mountPage(axiosError(403), others)
 
-    expect(wrapper.text()).toContain("You don't sit at this table, so you can't see its board.")
+    expect(wrapper.get('.not-seated-note').text()).toBe("You don't sit at this table. Take a free seat to play.")
+    expect(wrapper.findAll('.not-seated .bridge-table .plate')).toHaveLength(3)
+    expect(wrapper.get('.not-seated .seat-empty-button').text()).toBe('Empty · South')
+    expect(wrapper.find('.leave-table').exists()).toBe(false)
+    // Where we sit, for the header and for a move, is looked up.
+    expect(tablesService.listTables).toHaveBeenCalled()
+  })
+
+  test('a 403 with nothing loaded says only that, with the way back', async () => {
+    vi.mocked(tablesService.getTable).mockRejectedValue(axiosError(403))
+    vi.mocked(gameService.getPlaying).mockRejectedValue(axiosError(403))
+    vi.mocked(tablesService.listTables).mockResolvedValue([])
+    const wrapper = mount(TablePlayPage, {
+      global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub, 'router-link': true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('.not-seated').text()).toContain("You don't sit at this table, so you can't see its board.")
+    expect(wrapper.find('.not-seated .bridge-table').exists()).toBe(false)
   })
 
   test('a 401 sends the user to log in', async () => {
@@ -610,7 +664,7 @@ describe('TablePlayPage claims and Start', () => {
 })
 
 // Left alone after the other three were freed (#117): a manager fills the
-// empty seats without leaving the game table.
+// empty seats from the table itself, an empty seat's action sheet (#181).
 describe('TablePlayPage filling empty seats', () => {
   const waiting = () => auction({ phase: 'waiting', board: null, turn: null, acting_user_id: null, hand: [] })
 
@@ -625,24 +679,37 @@ describe('TablePlayPage filling empty seats', () => {
       ...table,
       seats: [...table.seats, { id: 9, table_id: 5, user_id: user.id, seat, ready: user.is_robot, user }],
       free_seats: table.free_seats.filter((s) => s !== seat),
-    }
+    } as Table
   }
 
   const robot = { id: 90, name: 'Robot', username: 'robot-1', description: null, is_robot: true }
 
-  test('a manager gets Seat a player and Add robot per empty seat', async () => {
+  test('each empty seat on the table opens its action sheet; a manager may fill it', async () => {
     const wrapper = await mountPage(waiting(), alone(true))
 
-    const box = wrapper.findComponent(StartBox)
-    expect(box.props('manage')).toBe(true)
-    expect(wrapper.findAll('.start-fill').map((row) => row.attributes('data-fill-seat'))).toEqual(['N', 'E', 'W'])
+    const empty = wrapper.findAll('.bridge-table .seat-empty-button')
+    expect(empty.map((b) => b.text())).toEqual(['Empty · North', 'Empty · West', 'Empty · East'])
+    expect(sheet(wrapper).props('isOpen')).toBe(false)
+
+    await openSeat(wrapper, 'E')
+    expect(sheet(wrapper).props('isOpen')).toBe(true)
+    expect(sheet(wrapper).props('header')).toBe('East is free')
+    // We sit here already: moving is a seat change.
+    expect(sheetButtons(wrapper)).toEqual(['Move here · East', 'Seat a player', 'Add robot', 'Cancel'])
+
+    // Dismissed (an action sheet is presented through Ionic's controller,
+    // which the wrapper hears and re-emits as didDismiss): closed again.
+    sheet(wrapper).vm.$emit('didDismiss')
+    await flushPromises()
+    expect(sheet(wrapper).props('isOpen')).toBe(false)
   })
 
-  test('nobody else gets them', async () => {
+  test('nobody else gets Seat a player and Add robot', async () => {
     const wrapper = await mountPage(waiting(), alone(false))
 
-    expect(wrapper.findComponent(StartBox).props('manage')).toBe(false)
-    expect(wrapper.find('.start-fill').exists()).toBe(false)
+    await openSeat(wrapper, 'N')
+
+    expect(sheetButtons(wrapper)).toEqual(['Move here · North', 'Cancel'])
   })
 
   test('Add robot seats one and says so', async () => {
@@ -650,22 +717,25 @@ describe('TablePlayPage filling empty seats', () => {
     const wrapper = await mountPage(waiting(), table)
     vi.mocked(tablesService.seatRobot).mockResolvedValue(withSeat(table, 'N', robot))
 
-    await emitFrom(wrapper, StartBox, 'addRobot', 'N')
+    await press(wrapper, 'N', 'Add robot')
 
     expect(tablesService.seatRobot).toHaveBeenCalledWith(5, 'N')
     expect(showToast).toHaveBeenCalledWith('A robot now sits at N.', 'success')
-    expect(wrapper.find('[data-fill-seat="N"]').exists()).toBe(false)
+    expect(wrapper.find('.bridge-table [data-seat="N"] .seat-empty-button').exists()).toBe(false)
   })
 
   test('one seat at a time', async () => {
     const wrapper = await mountPage(waiting(), alone(true))
     vi.mocked(tablesService.seatRobot).mockReturnValue(new Promise(() => {}))
 
-    await emitFrom(wrapper, StartBox, 'addRobot', 'N')
-    expect(wrapper.findComponent(StartBox).props('fillingSeat')).toBe('N')
-    await emitFrom(wrapper, StartBox, 'addRobot', 'E')
+    await press(wrapper, 'N', 'Add robot')
+    expect(wrapper.get('.bridge-table [data-seat="E"] .seat-empty-button').attributes('disabled')).toBeDefined()
+    // The sheet still open: its buttons wait too.
+    await pressButton(wrapper, 'Add robot')
+    await pressButton(wrapper, 'Move here · North')
 
     expect(tablesService.seatRobot).toHaveBeenCalledTimes(1)
+    expect(tablesService.joinSeat).not.toHaveBeenCalled()
   })
 
   test('Seat a player opens the search, and the pick is seated', async () => {
@@ -674,7 +744,7 @@ describe('TablePlayPage filling empty seats', () => {
     const ann = { id: 1, name: 'Ann', username: 'ann', seated: false }
     vi.mocked(tablesService.seatUser).mockResolvedValue(withSeat(table, 'E', PLAYERS.N))
 
-    await emitFrom(wrapper, StartBox, 'seatPlayer', 'E')
+    await press(wrapper, 'E', 'Seat a player')
     expect(wrapper.findComponent(SeatPlayerSheet).props('seat')).toBe('E')
     await emitFrom(wrapper, SeatPlayerSheet, 'select', ann)
 
@@ -683,7 +753,7 @@ describe('TablePlayPage filling empty seats', () => {
     expect(wrapper.findComponent(SeatPlayerSheet).props('seat')).toBeNull()
   })
 
-  test('picking yourself moves you to that seat', async () => {
+  test('picking yourself in the search moves you to that seat', async () => {
     const table = alone(true)
     const wrapper = await mountPage(waiting(), table)
     vi.mocked(tablesService.joinSeat).mockResolvedValue({
@@ -691,17 +761,47 @@ describe('TablePlayPage filling empty seats', () => {
       seats: table.seats.map((s) => ({ ...s, seat: 'W' as Seat })),
     })
 
-    await emitFrom(wrapper, StartBox, 'seatPlayer', 'W')
+    await press(wrapper, 'W', 'Seat a player')
     await emitFrom(wrapper, SeatPlayerSheet, 'select', { id: 3, name: 'Cy', username: 'cy', seated: true })
 
     expect(tablesService.joinSeat).toHaveBeenCalledWith(5, 'W')
     expect(showToast).toHaveBeenCalledWith('You now sit at W.', 'success')
   })
 
+  test('Move here changes our seat and reads the table again', async () => {
+    const table = alone(false)
+    const wrapper = await mountPage(waiting(), table)
+    const moved = { ...table, seats: table.seats.map((s) => ({ ...s, seat: 'W' as Seat })), free_seats: ['N', 'E', 'S'] as Seat[] }
+    vi.mocked(tablesService.joinSeat).mockResolvedValue(moved)
+    vi.mocked(tablesService.getTable).mockResolvedValue(moved)
+
+    await press(wrapper, 'W', 'Move here · West')
+
+    expect(tablesService.joinSeat).toHaveBeenCalledWith(5, 'W')
+    // Asked nothing: a seat change at this table costs nothing.
+    expect(confirmMove).not.toHaveBeenCalled()
+    expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
+    // We are at the bottom of the table, now as West.
+    expect(wrapper.get('.bridge-table .side-bottom').attributes('data-seat')).toBe('W')
+  })
+
+  test('a seat taken meanwhile is told, logged, and the table read again', async () => {
+    const wrapper = await mountPage(waiting(), alone(false))
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(tablesService.getTable).mockClear()
+    vi.mocked(tablesService.joinSeat).mockRejectedValue(axiosError(409, 'That seat is taken.'))
+
+    await press(wrapper, 'N', 'Move here · North')
+
+    expect(showToast).toHaveBeenCalledWith('That seat is taken.', 'danger')
+    expect(tablesService.getTable).toHaveBeenCalledWith(5)
+    logged.mockRestore()
+  })
+
   test('a pick after the search closed seats nobody', async () => {
     const wrapper = await mountPage(waiting(), alone(true))
 
-    await emitFrom(wrapper, StartBox, 'seatPlayer', 'E')
+    await press(wrapper, 'E', 'Seat a player')
     await emitFrom(wrapper, SeatPlayerSheet, 'close')
     await emitFrom(wrapper, SeatPlayerSheet, 'select', { id: 1, name: 'Ann', username: 'ann', seated: false })
 
@@ -713,11 +813,11 @@ describe('TablePlayPage filling empty seats', () => {
     vi.mocked(tablesService.getTable).mockClear()
     vi.mocked(tablesService.seatRobot).mockRejectedValue(axiosError(409, 'That seat is taken.'))
 
-    await emitFrom(wrapper, StartBox, 'addRobot', 'N')
+    await press(wrapper, 'N', 'Add robot')
 
     expect(showToast).toHaveBeenCalledWith('That seat is taken.', 'danger')
     expect(tablesService.getTable).toHaveBeenCalledWith(5)
-    expect(wrapper.findComponent(StartBox).props('fillingSeat')).toBeNull()
+    expect(wrapper.get('.bridge-table [data-seat="E"] .seat-empty-button').attributes('disabled')).toBeUndefined()
   })
 
   test('a refusal whose reread fails too leaves the page as it was', async () => {
@@ -725,19 +825,35 @@ describe('TablePlayPage filling empty seats', () => {
     vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
     vi.mocked(tablesService.seatUser).mockRejectedValue(axiosError(403, 'You do not manage this table.'))
 
-    await emitFrom(wrapper, StartBox, 'seatPlayer', 'N')
+    await press(wrapper, 'N', 'Seat a player')
     await emitFrom(wrapper, SeatPlayerSheet, 'select', { id: 1, name: 'Ann', username: 'ann', seated: false })
 
     expect(showToast).toHaveBeenCalledWith('You do not manage this table.', 'danger')
     expect(wrapper.findComponent(StartBox).exists()).toBe(true)
   })
 
+  test('a move whose reread fails too leaves the page as it was', async () => {
+    const wrapper = await mountPage(waiting(), alone(false))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
+    vi.mocked(tablesService.joinSeat).mockRejectedValue(new Error('offline'))
+
+    await press(wrapper, 'N', 'Move here · North')
+
+    expect(showToast).toHaveBeenCalledWith('Could not take that seat. Please try again.', 'danger')
+    expect(wrapper.findComponent(StartBox).exists()).toBe(true)
+    vi.mocked(console.error).mockRestore()
+  })
+
   test('an expired session goes to log in', async () => {
     const wrapper = await mountPage(waiting(), alone(true))
     vi.mocked(tablesService.seatRobot).mockRejectedValue(axiosError(401))
+    vi.mocked(tablesService.joinSeat).mockRejectedValue(axiosError(401))
 
-    await emitFrom(wrapper, StartBox, 'addRobot', 'N')
+    await press(wrapper, 'N', 'Add robot')
+    await press(wrapper, 'E', 'Move here · East')
 
+    expect(navigate).toHaveBeenCalledTimes(2)
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
     expect(showToast).not.toHaveBeenCalledWith(expect.anything(), 'danger')
   })
@@ -809,7 +925,9 @@ describe('TablePlayPage leaving between boards', () => {
 
 // #121: a set of four boards with robots played to the end. Its last board
 // is still on show, the set is over (only the board's copy says so: a board
-// finishing sends no TableUpdated), and Start replaces the board's Leave.
+// finishing sends no TableUpdated), and Start replaces the board's vote. The
+// way off the seat is the header's Leave (#181), and a manager takes a robot
+// out from its profile sheet.
 describe('TablePlayPage after a set', () => {
   const robot = (id: number, n: number) => ({
     id,
@@ -841,21 +959,42 @@ describe('TablePlayPage after a set', () => {
     } as Playing
   }
 
+  // Tap a player's name on the table: their profile sheet.
+  async function openProfile(wrapper: VueWrapper, seat: Seat) {
+    await wrapper.get(`.bridge-table [data-seat="${seat}"] .seat-user`).trigger('click')
+    await flushPromises()
+    return wrapper.findComponent(PlayerProfileSheet)
+  }
+
+  async function remove(wrapper: VueWrapper, user: object) {
+    await emitFrom(wrapper, PlayerProfileSheet, 'remove', user)
+  }
+
   afterEach(() => vi.restoreAllMocks())
 
-  test('Start offers Leave, and Remove on each robot, in place of the next board', async () => {
+  test('Start in place of the next board, Leave in the header, Remove in a robot\'s profile', async () => {
     const wrapper = await mountPage(lastBoard(), robotTable())
 
     expect(wrapper.findComponent(BoardResultDialog).props('vote')).toBe(false)
-    const box = wrapper.findComponent(StartBox)
-    expect(box.props('canLeave')).toBe(true)
-    expect(box.props('removable')).toEqual(['N', 'E', 'W'])
+    expect(wrapper.find('.bridge-table .start-box').exists()).toBe(true)
+    expect(wrapper.get('.leave-table').text()).toBe('Leave')
+    // Nothing of the kind on the table itself.
+    expect(wrapper.find('.bridge-table .start-remove, .bridge-table .start-leave').exists()).toBe(false)
+
+    const sheet = await openProfile(wrapper, 'N')
+    expect(sheet.props('player')).toEqual(ROBOTS.N)
+    expect(sheet.props('removable')).toBe(true)
+    // Never on our own seat: that is Leave.
+    await openProfile(wrapper, 'S')
+    expect(wrapper.findComponent(PlayerProfileSheet).props('removable')).toBe(false)
+    await emitFrom(wrapper, PlayerProfileSheet, 'close')
+    expect(wrapper.findComponent(PlayerProfileSheet).props('player')).toBeNull()
   })
 
   test('nobody but a manager gets Remove', async () => {
     const wrapper = await mountPage(lastBoard(), { ...robotTable(), can_manage: false })
 
-    expect(wrapper.findComponent(StartBox).props('removable')).toEqual([])
+    expect((await openProfile(wrapper, 'E')).props('removable')).toBe(false)
   })
 
   test('Leave asks with nothing at stake, frees the seat and goes to the list', async () => {
@@ -863,7 +1002,8 @@ describe('TablePlayPage after a set', () => {
     const leave = vi.spyOn(useTablesStore(), 'leave').mockResolvedValue({ tableDeleted: false, held: false })
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
-    await emitFrom(wrapper, StartBox, 'leave')
+    await wrapper.get('.leave-table').trigger('click')
+    await flushPromises()
 
     expect(confirmLeave).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }), 3, 'finished', 7, null)
     expect(leave).toHaveBeenCalledWith(5)
@@ -871,22 +1011,28 @@ describe('TablePlayPage after a set', () => {
     expect(navigate).toHaveBeenCalledWith('/tables', 'back', 'replace')
   })
 
-  test('the chat and the review close before the confirmation', async () => {
+  test('the chat, the review and the profile close before the confirmation', async () => {
     const wrapper = await mountPage(lastBoard(), robotTable())
     const chat = useChatStore()
     await wrapper.get('.chat-toggle').trigger('click')
     expect(chat.open).toBe(true)
     await wrapper.get('.review-boards').trigger('click')
     expect(wrapper.findComponent(BoardReviewModal).props('open')).toBe(true)
+    await openProfile(wrapper, 'N')
     let openWhenAsked: unknown[] = []
     vi.mocked(confirmLeave).mockImplementation(async () => {
-      openWhenAsked = [chat.open, wrapper.findComponent(BoardReviewModal).props('open')]
+      openWhenAsked = [
+        chat.open,
+        wrapper.findComponent(BoardReviewModal).props('open'),
+        wrapper.findComponent(PlayerProfileSheet).props('player'),
+      ]
       return false
     })
 
-    await emitFrom(wrapper, StartBox, 'leave')
+    await wrapper.get('.leave-table').trigger('click')
+    await flushPromises()
 
-    expect(openWhenAsked).toEqual([false, false])
+    expect(openWhenAsked).toEqual([false, false, null])
   })
 
   test('a confirmation that fails is told and logged, never silent', async () => {
@@ -895,7 +1041,8 @@ describe('TablePlayPage after a set', () => {
     const leave = vi.spyOn(useTablesStore(), 'leave')
     vi.mocked(confirmLeave).mockRejectedValue(new TypeError('no overlay'))
 
-    await emitFrom(wrapper, StartBox, 'leave')
+    await wrapper.get('.leave-table').trigger('click')
+    await flushPromises()
 
     expect(leave).not.toHaveBeenCalled()
     expect(showToast).toHaveBeenCalledWith('Could not leave the table. Please try again.', 'danger')
@@ -905,41 +1052,57 @@ describe('TablePlayPage after a set', () => {
   test('Remove asks, takes the robot out and says so', async () => {
     const table = robotTable()
     const wrapper = await mountPage(lastBoard(), table)
-    vi.mocked(confirmRemove).mockResolvedValue(true)
+    vi.mocked(confirmRemove).mockImplementation(async () => {
+      // The sheet went before the confirmation.
+      expect(wrapper.findComponent(PlayerProfileSheet).props('player')).toBeNull()
+      return true
+    })
     vi.mocked(tablesService.removePlayer).mockResolvedValue({
       ...table,
       seats: table.seats.filter((s) => s.seat !== 'N'),
       free_seats: ['N'],
     })
+    await openProfile(wrapper, 'N')
 
-    await emitFrom(wrapper, StartBox, 'remove', 'N')
+    await remove(wrapper, ROBOTS.N)
 
     expect(confirmRemove).toHaveBeenCalledWith(ROBOTS.N, 'N', '')
     expect(tablesService.removePlayer).toHaveBeenCalledWith(5, 101)
     expect(showToast).toHaveBeenCalledWith('robot-1 was removed from the table.', 'success')
-    expect(wrapper.findComponent(StartBox).props('removable')).toEqual(['E', 'W'])
+    expect(wrapper.find('.bridge-table [data-seat="N"] .seat-empty-button').exists()).toBe(true)
   })
 
-  test('a Remove called off sends nothing, nor one for an empty seat', async () => {
+  test('removing the last robot of an unattended table deletes it and goes to the list', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+    vi.mocked(confirmRemove).mockResolvedValue(true)
+    vi.mocked(tablesService.removePlayer).mockResolvedValue({ table_deleted: true })
+
+    await remove(wrapper, ROBOTS.W)
+
+    expect(showToast).toHaveBeenCalledWith('robot-3 was removed and the table was deleted.', 'success')
+    expect(navigate).toHaveBeenCalledWith('/tables', 'back', 'replace')
+  })
+
+  test('a Remove called off sends nothing, nor one for somebody not seated here', async () => {
     const table = robotTable()
     const wrapper = await mountPage(lastBoard(), { ...table, seats: table.seats.filter((s) => s.seat !== 'W') })
     vi.mocked(confirmRemove).mockResolvedValue(false)
 
-    await emitFrom(wrapper, StartBox, 'remove', 'N')
-    await emitFrom(wrapper, StartBox, 'remove', 'W')
+    await remove(wrapper, ROBOTS.N)
+    await remove(wrapper, ROBOTS.W)
 
     expect(confirmRemove).toHaveBeenCalledTimes(1)
     expect(tablesService.removePlayer).not.toHaveBeenCalled()
   })
 
-  test('one seat at a time', async () => {
+  test('one at a time', async () => {
     const wrapper = await mountPage(lastBoard(), robotTable())
     vi.mocked(confirmRemove).mockResolvedValue(true)
     vi.mocked(tablesService.removePlayer).mockReturnValue(new Promise(() => {}))
 
-    await emitFrom(wrapper, StartBox, 'remove', 'N')
-    expect(wrapper.findComponent(StartBox).props('fillingSeat')).toBe('N')
-    await emitFrom(wrapper, StartBox, 'remove', 'E')
+    await remove(wrapper, ROBOTS.N)
+    expect(wrapper.findComponent(PlayerProfileSheet).props('busy')).toBe(true)
+    await remove(wrapper, ROBOTS.E)
 
     expect(tablesService.removePlayer).toHaveBeenCalledTimes(1)
   })
@@ -950,7 +1113,7 @@ describe('TablePlayPage after a set', () => {
     vi.mocked(tablesService.removePlayer).mockRejectedValue(axiosError(403, 'You do not manage this table.'))
     vi.mocked(tablesService.getTable).mockClear()
 
-    await emitFrom(wrapper, StartBox, 'remove', 'E')
+    await remove(wrapper, ROBOTS.E)
 
     expect(showToast).toHaveBeenCalledWith('You do not manage this table.', 'danger')
     expect(tablesService.getTable).toHaveBeenCalledWith(5)
@@ -962,10 +1125,10 @@ describe('TablePlayPage after a set', () => {
     vi.mocked(tablesService.removePlayer).mockRejectedValue(axiosError(404, 'Gone.'))
     vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
 
-    await emitFrom(wrapper, StartBox, 'remove', 'E')
+    await remove(wrapper, ROBOTS.E)
 
     expect(showToast).toHaveBeenCalledWith('Gone.', 'danger')
-    expect(wrapper.findComponent(StartBox).props('fillingSeat')).toBeNull()
+    expect(wrapper.findComponent(PlayerProfileSheet).props('busy')).toBe(false)
   })
 
   test('a failed Remove confirmation is told and logged', async () => {
@@ -973,7 +1136,7 @@ describe('TablePlayPage after a set', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(confirmRemove).mockRejectedValue(new TypeError('no overlay'))
 
-    await emitFrom(wrapper, StartBox, 'remove', 'E')
+    await remove(wrapper, ROBOTS.E)
 
     expect(tablesService.removePlayer).not.toHaveBeenCalled()
     expect(showToast).toHaveBeenCalledWith('Could not remove that player. Please try again.', 'danger')
@@ -985,7 +1148,7 @@ describe('TablePlayPage after a set', () => {
     vi.mocked(confirmRemove).mockResolvedValue(true)
     vi.mocked(tablesService.removePlayer).mockRejectedValue(axiosError(401))
 
-    await emitFrom(wrapper, StartBox, 'remove', 'E')
+    await remove(wrapper, ROBOTS.E)
 
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
     expect(showToast).not.toHaveBeenCalled()

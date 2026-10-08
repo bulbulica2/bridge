@@ -383,6 +383,7 @@ describe('game store', () => {
       expect.any(Function),
       expect.any(Function),
       expect.any(Function),
+      expect.any(Function),
     )
 
     game.unwatchUser()

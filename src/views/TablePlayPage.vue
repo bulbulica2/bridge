@@ -18,12 +18,10 @@
         <ion-button v-if="reviewable.length > 0" class="review-boards" @click="reviewOpen = true">
           Last board
         </ion-button>
-        <ion-button
-          v-if="tableId"
-          :router-link="`/tables/${tableId}`"
-          router-direction="back"
-        >
-          Table
+        <!-- The way off the seat (#181), whatever the board is doing: the
+             confirmation says what leaving costs now. Never on the table. -->
+        <ion-button v-if="seatedHere" class="leave-table" :disabled="asking" @click="leave">
+          Leave
         </ion-button>
       </template>
     </AppHeader>
@@ -52,12 +50,41 @@
           <ion-button router-link="/tables" router-direction="back">Back to tables</ion-button>
         </div>
 
-        <!-- 403: only the four players seated here may see the board. -->
-        <div v-else-if="notSeated" class="gone">
-          <p>You don't sit at this table, so you can't see its board.</p>
-          <ion-button :router-link="`/tables/${tableId}`" router-direction="back">
-            Go to the table
-          </ion-button>
+        <!-- 403: only the four players seated here may see the board. The
+             table itself is anyone's to look at: its plates, and its free
+             seats to take (a link to a table we don't sit at, say). -->
+        <div v-else-if="notSeated" class="not-seated">
+          <template v-if="table">
+            <p class="not-seated-note">{{ notSeatedText }}</p>
+            <!-- Only robots sit here since the last person left: they wait
+                 for somebody to take over, and the backend deletes the table
+                 after a few minutes if nobody does. -->
+            <p v-if="table.unattended_since" class="unattended">
+              Robots only — sit down to take over. You'll manage the table, and it is
+              deleted {{ UNATTENDED_MINUTES }} minutes after the last player left if nobody does.
+            </p>
+            <!-- The header's Your table leads back there. -->
+            <p v-if="seatedElsewhere" class="seated-elsewhere">
+              You sit at <strong>{{ seatedElsewhere.name || `table #${seatedElsewhere.id}` }}</strong>.
+              Taking a seat here moves you.
+            </p>
+            <BridgeTable
+              :players="tablePlayers"
+              :my-seat="null"
+              :board="null"
+              :turn="null"
+              :away="awayTags"
+              seatable
+              :busy="seatBusy"
+              @select="player = $event"
+              @empty="seatMenu = $event"
+            >
+              <p class="waiting-title">{{ table.free_seats.length > 0 ? 'Free seats' : 'Table full' }}</p>
+              <p class="waiting-count">{{ 4 - table.free_seats.length }} of 4 seated</p>
+            </BridgeTable>
+          </template>
+          <p v-else>You don't sit at this table, so you can't see its board.</p>
+          <ion-button fill="outline" router-link="/tables" router-direction="back">Back to tables</ion-button>
         </div>
 
         <div v-else-if="loading && !playing" class="loading" aria-busy="true">
@@ -97,32 +124,19 @@
             :my-seat="mySeat"
           />
 
-          <!-- No board yet (or a finished one with new players): the same
-               Start as on the table's page, so opening the game table early
-               is no dead end. The last Start deals the board here. A
-               manager fills the empty seats from it too, as on the table's
-               page (left alone after the others were freed, say). -->
-          <StartBox
-            v-if="showStart && table"
-            :table="table"
-            :me="me"
-            show-seats
-            :busy="asking"
-            :manage="table.can_manage"
-            :filling-seat="fillingSeat"
-            :removable="removable"
-            can-leave
-            @start="start"
-            @cancel="cancelStart"
-            @seat-player="seatingAt = $event"
-            @add-robot="addRobot"
-            @remove="removeSeat"
-            @leave="leave"
-          />
+          <!-- Our own seat left mid-set or marked away: opening the table
+               brings us back by itself (load), this says so until the
+               backend takes the mark back. -->
+          <AwayNotice :table="table" :me="me" held />
 
+          <!-- No board yet (or a finished one with new players, or a set
+               over): the table itself is the waiting room (#181). Its plates
+               are the table's seats with their ticks, its centre the Start,
+               an empty seat a tap away from being filled, a player's plate
+               from their profile (and a manager's Remove). -->
           <BridgeTable
-            :players="players"
-            :my-seat="mySeat"
+            :players="showStart ? tablePlayers : players"
+            :my-seat="showStart ? tableSeat : mySeat"
             :board="playing.board"
             :turn="playing.turn"
             :my-turn="myTurn"
@@ -143,10 +157,12 @@
             :calls="playing.phase === 'auction' ? (playing.auction ?? []) : null"
             :board-label="playing.set ? boardPosition(playing.set) : null"
             :wide="wideTable"
-            :busy="sendingCard !== null"
+            :seatable="showStart"
+            :busy="sendingCard !== null || seatBusy"
             :sending-id="sendingCard"
             @select="player = $event"
             @play="playCard"
+            @empty="seatMenu = $event"
           >
             <!-- The board's details in the table's corners (#171), where
                  they take no room of their own: who is vulnerable, in
@@ -181,6 +197,24 @@
                   <p v-if="forDeclarer" class="contract-you">you play it</p>
                 </template>
               </div>
+              <!-- Between sets the corner has the table's time for a set
+                   instead (#181): a manager's gear opens the settings, the
+                   others read it. -->
+              <template v-if="settingsCorner">
+                <button
+                  v-if="table!.can_manage"
+                  type="button"
+                  class="settings-gear"
+                  :aria-label="`Table settings: ${setClockText(tableMinutes)}`"
+                  @click="settingsOpen = true"
+                >
+                  <ion-icon :icon="settingsOutline" aria-hidden="true" />
+                  <span>{{ setMinutesShort(tableMinutes) }}</span>
+                </button>
+                <p v-else class="corner-minutes" :title="setClockText(tableMinutes)">
+                  <span class="sr-only">Time for a set: </span>{{ setMinutesShort(tableMinutes) }}
+                </p>
+              </template>
               <!-- The result dialog closed to look at the deal: this opens
                    it again, with the countdown to the next board. -->
               <ResultPill
@@ -222,11 +256,17 @@
             </p>
             <p class="waiting-count">{{ seatedCount }} of 4 seated</p>
 
+            <!-- Waiting for Start: who the board waits for, Start (or
+                 Cancel), and the Start timer's countdown (bb#142). The last
+                 Start deals the board here. -->
+            <template v-if="showStart && table" #centre>
+              <StartBox :table="table" :me="me" :busy="asking" @start="start" @cancel="cancelStart" />
+            </template>
             <!-- A wide table's auction: the calls so far and, on our turn,
                  the bidding box under them, in the middle of the table. It
                  keeps the height it reached until the next board, so the
                  table doesn't shrink when the box goes after our call. -->
-            <template v-if="auctionCentre" #centre>
+            <template v-else-if="auctionCentre" #centre>
               <div ref="auctionEl" class="centre-auction">
                 <AuctionHistory v-bind="liveAuctionProps" v-on="auctionEvents" />
                 <template v-if="canBid">
@@ -339,8 +379,31 @@
         </template>
       </div>
 
-      <PlayerProfileSheet :player="player" @close="player = null" />
+      <PlayerProfileSheet
+        :player="player"
+        :removable="profileRemovable"
+        :busy="seatBusy"
+        @remove="removePlayer"
+        @close="player = null"
+      />
       <SeatPlayerSheet :seat="seatingAt" @select="seatPlayer" @close="seatingAt = null" />
+      <!-- An empty seat tapped: take it (or move to it), and a manager's
+           Seat a player / Add robot. -->
+      <ion-action-sheet
+        :is-open="seatMenu !== null"
+        class="seat-menu"
+        :header="seatMenu ? `${SEAT_NAMES[seatMenu]} is free` : undefined"
+        :buttons="seatMenuButtons"
+        @did-dismiss="seatMenu = null"
+      />
+      <TableSettingsDialog
+        :open="settingsOpen"
+        :minutes="tableMinutes"
+        :busy="savingMinutes"
+        :picker-key="minutesKey"
+        @change="changeMinutes"
+        @close="settingsOpen = false"
+      />
       <ClaimSheet
         :open="claimOpen"
         :remaining="playing ? tricksLeft(playing) : 0"
@@ -423,12 +486,14 @@ import {
   IonBadge,
   IonIcon,
   IonModal,
+  IonActionSheet,
   onIonViewWillEnter,
   onIonViewWillLeave,
   useIonRouter,
 } from '@ionic/vue';
+import type { ActionSheetButton } from '@ionic/vue';
 import { vIonEvent } from '@/directives/ionEvent';
-import { chatbubblesOutline } from 'ionicons/icons';
+import { chatbubblesOutline, settingsOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
 import AuctionHistory from '@/components/AuctionHistory.vue';
 import AuctionPopover from '@/components/AuctionPopover.vue';
@@ -451,6 +516,7 @@ import ResultPill from '@/components/ResultPill.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
+import TableSettingsDialog from '@/components/TableSettingsDialog.vue';
 import TrickArea from '@/components/TrickArea.vue';
 import TurnClockLine from '@/components/TurnClockLine.vue';
 import VulnerabilityLabel from '@/components/VulnerabilityLabel.vue';
@@ -467,8 +533,8 @@ import { useChatStore } from '@/stores/chat';
 import { useGameStore } from '@/stores/game';
 import { useHistoryStore } from '@/stores/history';
 import { useTablesStore } from '@/stores/tables';
-import { canRemove, seatsOf } from '@/services/tables';
-import type { Seat } from '@/services/tables';
+import { DEFAULT_SET_MINUTES, UNATTENDED_MINUTES, canRemove, seatsOf } from '@/services/tables';
+import type { Seat, SetMinutes } from '@/services/tables';
 import type { ChatTo } from '@/services/chat';
 import type { AlertDraft, Bid, Card, Claim, PlayedCard, Playing, Trick, Vulnerability } from '@/services/game';
 import type { PublicUser, SearchedUser } from '@/services/users';
@@ -487,7 +553,8 @@ import {
 import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
 import { playingExtras } from '@/utils/export';
 import { doubledMark, resultSummary } from '@/utils/result';
-import { confirmLeave, confirmRemove, heldNotice, removeCost } from '@/utils/seatMove';
+import { confirmLeave, confirmMove, confirmRemove, heldNotice, removeCost } from '@/utils/seatMove';
+import { setClockText, setMinutesShort } from '@/utils/setClock';
 import { boardPosition, currentSet, setLabel } from '@/utils/sets';
 import { reviewChoices } from '@/utils/review';
 import type { SeenBoard } from '@/utils/review';
@@ -531,9 +598,19 @@ const finishedTrick = ref<Trick | null>(null);
 // boards: one at a time.
 const asking = ref(false);
 // A manager filling an empty seat: the seat whose player search is open, and
-// the seat a player or robot is on its way to.
+// the seat a player or robot (or we ourselves) is on its way to, or a
+// player being taken out of.
 const seatingAt = ref<Seat | null>(null);
 const fillingSeat = ref<Seat | null>(null);
+// The empty seat whose action sheet is open (Sit here, Seat a player, Add
+// robot).
+const seatMenu = ref<Seat | null>(null);
+// The table's settings dialog (a manager's gear), a change of the time for
+// a set on its way, and the picker's key, bumped to put it back on the
+// table's value after a refusal.
+const settingsOpen = ref(false);
+const savingMinutes = ref(false);
+const minutesKey = ref(0);
 // The claim sheet is open; a claim, an answer or a withdrawal is on its way.
 const claimOpen = ref(false);
 const claiming = ref(false);
@@ -577,16 +654,33 @@ const table = computed(() => {
   return tablesStore.tables.find((t) => t.id === tableId.value) ?? null;
 });
 
+// Who sits where at the table now (its seats, not a board's snapshot).
+const tablePlayers = computed<Partial<Record<Seat, PublicUser | null>>>(() =>
+  Object.fromEntries((table.value ? seatsOf(table.value) : []).map(({ seat, user }) => [seat, user])),
+);
+
 // Once a board is dealt the playing's own seat snapshot names the players;
 // while waiting there is none, so the table's seats do.
-const players = computed<Partial<Record<Seat, PublicUser | null>>>(() => {
-  if (playing.value?.players) {
-    return playing.value.players;
-  }
-  return Object.fromEntries(
-    (table.value ? seatsOf(table.value) : []).map(({ seat, user }) => [seat, user]),
-  );
-});
+const players = computed<Partial<Record<Seat, PublicUser | null>>>(
+  () => playing.value?.players ?? tablePlayers.value,
+);
+
+// Our seat at the table now, and whether we have one.
+const tableSeat = computed<Seat | null>(
+  () => table.value?.seats.find((s) => s.user_id === me.value)?.seat ?? null,
+);
+const seatedHere = computed(() => tableSeat.value !== null);
+
+// Another table the user sits at, which sitting down here gives up.
+const seatedElsewhere = computed(() =>
+  tablesStore.myTable && tablesStore.myTable.id !== tableId.value ? tablesStore.myTable : null,
+);
+
+const notSeatedText = computed(() =>
+  table.value && table.value.free_seats.length > 0
+    ? "You don't sit at this table. Take a free seat to play."
+    : "You don't sit at this table, and all four seats are taken.",
+);
 
 const mySeat = computed<Seat | null>(() => {
   if (playing.value?.my_seat) {
@@ -609,7 +703,6 @@ const awayTags = useAwayTags(
   () => me.value,
 );
 
-const seatedCount = computed(() => Object.values(players.value).filter(Boolean).length);
 
 // acting_user_id is who must act for `turn`: declarer on dummy's turn.
 const myTurn = computed(
@@ -890,10 +983,7 @@ function playLine(state: Playing): string {
 // their seats. The table's seats say who sits here: a newcomer isn't in the
 // finished board's players.
 const showStart = computed(
-  () =>
-    !!table.value &&
-    table.value.seats.some((s) => s.user_id === me.value) &&
-    startNeeded(table.value, playing.value),
+  () => !!table.value && seatedHere.value && startNeeded(table.value, playing.value),
 );
 
 // The seats that pressed Start, ticked on the table while a Start is
@@ -902,19 +992,70 @@ const readySeats = computed<Seat[]>(() =>
   showStart.value && table.value ? table.value.seats.filter((s) => s.ready).map((s) => s.seat) : [],
 );
 
-// The taken seats the viewer may empty from StartBox (a manager's robots,
-// say, once a set is over): the same rule as the table's page.
-const removable = computed(() => {
+// The player whose profile is open, if they sit here and the viewer may
+// take them out (a manager; anyone for a robot of an unattended table): the
+// profile sheet's Remove (#181).
+const profileRemovable = computed(() => {
   const current = table.value;
-  return current
-    ? current.seats.filter((s) => canRemove(current, s.user, auth.user)).map((s) => s.seat)
-    : [];
+  const held = current?.seats.find((s) => s.user_id === player.value?.id);
+  return !!current && !!held && canRemove(current, held.user, auth.user);
 });
+
+// A seat being taken, filled or emptied: one at a time.
+const seatBusy = computed(() => fillingSeat.value !== null);
+
+// An empty seat's action sheet: take it (a seat change when we sit here
+// already), and for a manager, Seat a player or Add robot.
+const seatMenuButtons = computed<ActionSheetButton[]>(() => {
+  const seat = seatMenu.value;
+  if (!seat) {
+    return [];
+  }
+  const buttons: ActionSheetButton[] = [
+    {
+      text: `${seatedHere.value ? 'Move here' : 'Sit here'} · ${SEAT_NAMES[seat]}`,
+      cssClass: 'seat-menu-sit',
+      handler: () => {
+        sit(seat);
+      },
+    },
+  ];
+  if (table.value?.can_manage) {
+    buttons.push(
+      {
+        text: 'Seat a player',
+        cssClass: 'seat-menu-player',
+        handler: () => {
+          seatingAt.value = seat;
+        },
+      },
+      {
+        text: 'Add robot',
+        cssClass: 'seat-menu-robot',
+        handler: () => {
+          addRobot(seat);
+        },
+      },
+    );
+  }
+  return [...buttons, { text: 'Cancel', role: 'cancel' }];
+});
+
+const seatedCount = computed(() => Object.values(players.value).filter(Boolean).length);
+
+// Each player's time for a set at this table, which a manager changes from
+// the table's corner while no set runs: a set copies it when it opens, so
+// the backend refuses a change mid-set (409).
+const tableMinutes = computed<SetMinutes>(() => table.value?.set_minutes ?? DEFAULT_SET_MINUTES);
 
 // The set the table is on (or ended last): the board's own `set`, updated
 // by the table's events (a set broken off between boards comes as a
 // TableUpdated only).
 const shownSet = computed(() => currentSet(table.value, playing.value));
+
+// While waiting for Start between sets (not for a seat refilled mid-set),
+// the top-right corner has the set time: a manager's gear, else the text.
+const settingsCorner = computed(() => showStart.value && !(shownSet.value && !shownSet.value.finished));
 
 // Its results as far as they go (GET /sets/{id}), once read: the running
 // score under each board's result.
@@ -1103,6 +1244,8 @@ onIonViewWillLeave(() => {
   reviewOpen.value = false;
   explainIndex.value = null;
   seatingAt.value = null;
+  seatMenu.value = null;
+  settingsOpen.value = false;
 });
 
 // The chat's store follows what is on show (its unread count stops while
@@ -1275,6 +1418,13 @@ function reloadQuietly() {
   });
 }
 
+// A set started (or our seat went): no settings to change any more.
+watch(settingsCorner, (shown) => {
+  if (!shown) {
+    settingsOpen.value = false;
+  }
+});
+
 // Somebody else's claim (or the board moving on) takes the sheet away.
 watch(mayClaim, (may) => {
   if (!may) {
@@ -1378,6 +1528,9 @@ async function load(refetchTable = true) {
       notFound.value = true;
     } else if (status === 403) {
       notSeated.value = true;
+      // Somebody else's table: where we sit, if anywhere, is still to find,
+      // for the header's "Your table" and for a move off it.
+      tablesStore.findSeat();
     } else {
       loadError.value = errorMessage(e, 'Could not load the board. Please try again.');
     }
@@ -1633,8 +1786,8 @@ async function cancelStart() {
   }
 }
 
-// A manager fills an empty seat, as on the table's page: the player picked
-// in the search (yourself is a plain seat change here), or a robot.
+// A manager fills an empty seat from its action sheet: the player picked in
+// the search (yourself is a plain seat change here), or a robot.
 async function seatPlayer(user: SearchedUser) {
   const seat = seatingAt.value;
   seatingAt.value = null;
@@ -1686,9 +1839,79 @@ async function fillSeat(seat: Seat, request: () => Promise<unknown>, done: strin
   }
 }
 
+// Take a free seat here: a seat change when we sit here already, a move
+// (confirmed first: it costs something there) when we sit at another table,
+// else our first seat here, which opens the board to us.
+async function sit(seat: Seat) {
+  if (fillingSeat.value !== null) {
+    return;
+  }
+  try {
+    const current = table.value;
+    if (!seatedHere.value && current && me.value) {
+      const from = await tablesStore.seatedTable();
+      if (
+        from &&
+        from.id !== tableId.value &&
+        !(await confirmMove(from, current, me.value, game.phaseOf(from.id), tablesStore.stakeOf(from)))
+      ) {
+        return;
+      }
+    }
+    fillingSeat.value = seat;
+    await tablesStore.join(tableId.value, seat);
+    notSeated.value = false;
+    await load(false);
+  } catch (e) {
+    if (statusOf(e) === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+      return;
+    }
+    // 409 when somebody got there first (or the seat name is unknown).
+    logUnexpected(e);
+    showToast(errorMessage(e, 'Could not take that seat. Please try again.'), 'danger');
+    await tablesStore.loadTable(tableId.value).catch(() => {
+      // The next update or refresh says how the seats stand.
+    });
+  } finally {
+    fillingSeat.value = null;
+  }
+}
+
+// A manager picks another time for a set in the settings dialog. A set
+// started meanwhile (409) or a role gone (403) leaves the page stale: the
+// refusal is toasted, the table read again and the picker put back. A
+// change takes back every Start (bb#142): the players are told
+// (the tables store), and press again.
+async function changeMinutes(minutes: SetMinutes) {
+  if (savingMinutes.value) {
+    return;
+  }
+  savingMinutes.value = true;
+  try {
+    await tablesStore.updateSettings(tableId.value, { set_minutes: minutes });
+    showToast(`Each player now has ${minutes} minutes for a set.`, 'success');
+  } catch (e) {
+    if (statusOf(e) === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+      return;
+    }
+    minutesKey.value++;
+    showToast(errorMessage(e, 'Could not change the time for a set. Please try again.'), 'danger');
+    await tablesStore.loadTable(tableId.value).catch(() => {
+      // The next update or refresh says how the table stands.
+    });
+  } finally {
+    savingMinutes.value = false;
+  }
+}
+
 // Our own sheets and modals go before a confirmation, so nothing of the
 // page's stands over the alert (#121): closed, and drawn closed.
 async function closeOverlays() {
+  player.value = null;
+  seatMenu.value = null;
+  settingsOpen.value = false;
   reviewOpen.value = false;
   resultDismissed.value = finishedId.value;
   claimOpen.value = false;
@@ -1698,23 +1921,29 @@ async function closeOverlays() {
   await nextTick();
 }
 
-// A manager takes a player out from StartBox (a robot, once a set is over),
-// as on the table's page. The confirmation is inside the try, so nothing
-// fails unseen (#121).
-async function removeSeat(seat: Seat) {
+// A manager takes a player out from their profile sheet (#181; anyone a
+// robot of an unattended table). The sheet closes before the confirmation,
+// which is inside the try, so nothing fails unseen (#121).
+async function removePlayer(target: PublicUser) {
   const current = table.value;
-  const user = current?.seats.find((s) => s.seat === seat)?.user;
-  if (!current || !user || fillingSeat.value !== null) {
+  const held = current?.seats.find((s) => s.user_id === target.id);
+  if (!current || !held || fillingSeat.value !== null) {
     return;
   }
+  const { seat, user } = held;
   try {
     await closeOverlays();
     if (!(await confirmRemove(user, seat, removeCost(current, playing.value, seat)))) {
       return;
     }
     fillingSeat.value = seat;
-    // We still sit here, so the table lives on.
-    await tablesStore.removePlayer(tableId.value, user.id);
+    const { tableDeleted } = await tablesStore.removePlayer(tableId.value, user.id);
+    if (tableDeleted) {
+      // The last robot of an unattended table: the id is dead.
+      showToast(`${user.username} was removed and the table was deleted.`, 'success');
+      ionRouter.navigate('/tables', 'back', 'replace');
+      return;
+    }
     showToast(`${user.username} was removed from the table.`, 'success');
   } catch (e) {
     if (statusOf(e) === 401) {
@@ -1732,10 +1961,11 @@ async function removeSeat(seat: Seat) {
   }
 }
 
-// Leaving between boards (the result dialog) or sets (StartBox): free, since the
-// board is over, unless the set goes on: then the seat is held, and not
-// coming back to play once the turn reaches us hands it to a robot. The
-// confirmation is inside the try, so nothing fails unseen (#121).
+// Leaving (the header's Leave, or the result dialog's): free between sets,
+// since nothing is at stake; mid-board it abandons the board, and mid-set
+// the seat is held, a robot taking it if we don't come back in time
+// (confirmLeave says which). The confirmation is inside the try, so nothing
+// fails unseen (#121).
 async function leave() {
   if (asking.value) {
     return;
@@ -1953,6 +2183,76 @@ async function refresh(event: CustomEvent) {
 
 .my-hand {
   margin: 8px 0 16px;
+}
+
+/* The table's time for a set in its top-right corner between sets: a
+   manager's gear (44 px to tap), or the text. */
+.settings-gear {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--bridge-on-table-chip);
+  color: var(--bridge-on-table);
+  font-family: var(--bridge-font-numbers);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-gear ion-icon {
+  font-size: 1.25rem;
+}
+
+.settings-gear:focus-visible {
+  outline: 2px solid var(--bridge-amber);
+  outline-offset: 2px;
+}
+
+.corner-minutes {
+  margin: 0;
+  color: var(--bridge-on-table-muted);
+  font-family: var(--bridge-font-numbers);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.not-seated {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0;
+  text-align: center;
+}
+
+.not-seated p {
+  margin: 0;
+}
+
+.not-seated > ion-button {
+  align-self: center;
+}
+
+.unattended {
+  font-size: 0.9rem;
+  color: var(--bridge-redouble-text);
+}
+
+.seated-elsewhere {
+  font-size: 0.9rem;
+  color: var(--ion-color-medium);
 }
 
 /* The caption over the Last trick pill, on two rows wherever it is: a

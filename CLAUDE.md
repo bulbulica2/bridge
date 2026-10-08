@@ -85,10 +85,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   `meta.guestOnly`, reached from the Login page or the emailed link),
   `/account` (`AccountPage.vue`, `meta.requiresAuth`), `/tables`
   (`TablesPage.vue`, `meta.requiresAuth`, the menu's logged-in entry),
-  `/tables/:id` (`TableDetailPage.vue`, `meta.requiresAuth`, one table's four
-  seats, reached from the list's "Open" button, not from the menu),
-  `/tables/:id/play` (`TablePlayPage.vue`, `meta.requiresAuth`, the game at
-  that table, entered from the detail page), `/history` (`HistoryPage.vue`,
+  `/tables/:id` (only a redirect to `/tables/:id/play`, so old links
+  still work, #181), `/tables/:id/play` (`TablePlayPage.vue`,
+  `meta.requiresAuth`, the game table: a table's one page, the waiting
+  room before a board, reached from Deal me in / Create table, every Sit
+  on Tables, a `TableCard`'s name and Your table), `/history` (`HistoryPage.vue`,
   `meta.requiresAuth`, the menu's "My boards"), `/boards/:id/results`
   (`BoardResultsPage.vue`, `meta.requiresAuth`, reached from a board's
   review or the play page's "Compare with other tables"),
@@ -106,7 +107,7 @@ The user's standing rule (#91): **no task may leave code coverage under
 - **Route guard**: a single `router.beforeEach` in `src/router/index.ts` enforces
   the route meta declared in the same file (`RouteMeta` is augmented there):
   `requiresAuth` sends guests to `/login`, `guestOnly` sends logged-in users to
-  `/account`, `notBanned` (on `/tables/:id` and `/tables/:id/play`) sends a
+  `/account`, `notBanned` (on `/tables/:id/play`) sends a
   banned user (`auth.isBanned`) to `/tables`. It awaits `authStore.loadSession()` first, which calls
   `GET /api/user` once per page load so a reload on an auth-only page doesn't
   bounce a user whose Sanctum session cookie is still valid.
@@ -127,13 +128,12 @@ The user's standing rule (#91): **no task may leave code coverage under
   Theme: Daylight). Creating
   a table and taking a seat on the Tables page are the exceptions to
   `navigateAndSettle`: **Deal me in** / **Create table** navigate to
-  `/tables/:id` (where Start, the seats and Seat a player / Add robot
-  are, #68), with or without robots (#132), as soon as `POST /tables`
-  answers (#55; `createTable` seats the creator South, `CREATOR_SEAT`,
-  robots N, E and W); a seat navigates as soon as
-  `join` answers, to `/tables/:id/play` if the returned table's `board_id`
-  is set, else `/tables/:id` (#67), with the seat buttons disabled until
-  `onIonViewDidLeave`.
+  `/tables/:id/play` (the waiting table: Start, the seats, an empty
+  seat's Seat a player / Add robot, #68, #181), with or without robots
+  (#132), as soon as `POST /tables` answers (#55; `createTable` seats the
+  creator South, `CREATOR_SEAT`, robots N, E and W); a seat navigates to
+  `/tables/:id/play` as soon as `join` answers (#67, #181), with the seat
+  buttons disabled until `onIonViewDidLeave`.
 - **App shell**: `App.vue` wraps `<AppMenu />` (the left `ion-menu`) and
   `<ion-router-outlet id="main-content" />` in an `ion-split-pane`
   (`content-id="main-content"`, the menu's `content-id` must match). From
@@ -164,18 +164,17 @@ The user's standing rule (#91): **no task may leave code coverage under
   `aria-current`. **Your table** (#99): `src/composables/useYourTable.ts`
   (header button + the menu's first entry) reads the tables store's
   `myTable` (nothing for a guest, a banned user or nobody seated): target
-  `/tables/:id/play` if `board_id` or the seat is held/away, else
-  `/tables/:id`; status `away` > `turn` (`turnNotice` on the game store's
+  always `/tables/:id/play` (#181); status `away` > `turn` (`turnNotice` on the game store's
   board for that table, `startNeeded` for a Start; `statusText` "Your
   turn · 0:42" while our turn clock runs, `useTurnClock`; `AppHeader`
   then makes its button the orange `.turn-pill` with `statusText` in
   `.table-shortcut-turn`, #162) > `board`; `current`
-  when the route is the target, `atTable` on either table page. `myTable`
+  when the route is the target, `atTable` the same. `myTable`
   on every page: the router's `afterEach` calls the store's `findSeat()`
   (one `GET /tables`, deduped, skipped once anything held says where we
   sit) except on routes with `meta.findsSeat` (`/home`, `/tables`,
-  `/tables/:id`, `/tables/:id/play`, which load it themselves; the detail
-  page calls `findSeat()` after opening a table). `load()` then follows
+  `/tables/:id/play`, which load it themselves; the play page calls
+  `findSeat()` when its board 403s). `load()` then follows
   the seat's channel and heartbeat. Logout calls the store's `clear()`.
   Because the header and menu read the auth store, mounting any page in a
   unit test needs an active Pinia; they read the route through
@@ -233,7 +232,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   Taking a seat while holding one is a **move**, not a 409: a plain seat change
   at the same table, or, at another table, it frees the old seat with every
   consequence of leaving it. The store's `join` then reloads `GET /tables`
-  (the response only describes the joined table), and both pages confirm a
+  (the response only describes the joined table), and Tables and the play
+  page (an empty seat's Sit here, not seated there) confirm a
   cross-table move first via `src/utils/seatMove.ts`; `myTable` /
   `seatedTable()` tell them where the user sits.
   The manager controls (Remove, "Seat a player", "Add robot") show from
@@ -245,18 +245,26 @@ The user's standing rule (#91): **no task may leave code coverage under
   moderator (#77, bb#78: only an admin removes an admin, no timer frees
   them, so the tables store's `freedAsIdle` never tells an admin
   `IDLE_NOTICE`). `AdminBadge.vue` marks admins on every plate
-  (`BridgeTable`, `SeatPlate`), the profile sheet and `UserProfilePage`. `TableUpdated` leaves
+  (`BridgeTable`), the profile sheet and `UserProfilePage`. `TableUpdated` leaves
   `can_manage` out, so the store's
   `withCanManage` keeps the last HTTP value and refetches the table when
   `moderated_by` changes (taking only `can_manage` from that answer);
   `canManageDue` keeps asking on every broadcast until an answer for the
   held moderator lands (`loadTable` clears it too), and a failed refetch
   retries `CAN_MANAGE_RETRIES` (3) times `CAN_MANAGE_RETRY_MS` (3 s) apart
-  while the table is watched (#117). The play page's `StartBox` (`manage`
-  = `can_manage`, with `showSeats`) offers Seat a player / Add robot per
-  empty seat (`seatPlayer`/`addRobot` events, `fillingSeat`), run by the
+  while the table is watched (#117). On the play page (#181) an empty
+  seat is `BridgeTable`'s `seatable` button (`.seat-empty-button`,
+  `empty` event → `seatMenu`), opening an `ion-action-sheet`
+  (`seatMenuButtons`: "Sit here · West" / "Move here · West" → `sit()`,
+  `confirmMove` off another table, then `load()`; for `can_manage` also
+  "Seat a player" → `seatingAt` / "Add robot"), the fills run by the
   page's `fillSeat` (picking yourself is a `join`; a refusal toasts and
-  `loadTable`s, 401 → login) with its own `SeatPlayerSheet` (#117). The
+  `loadTable`s, 401 → login) with its own `SeatPlayerSheet` (#117), one
+  at a time (`fillingSeat`, `seatBusy`). Remove is in
+  `PlayerProfileSheet` (`removable` = `profileRemovable`, `canRemove` for
+  a player seated there; `remove` → the page's `removePlayer`:
+  `closeOverlays`, `confirmRemove` + `removeCost` inside the `try`, a
+  deleted table → `/tables`). The
   channel payload is typed `BroadcastTable`, `Table` adds `can_manage`.
   "Seat a player" opens `src/components/SeatPlayerSheet.vue`, a search over
   `GET /users?search=` (`searchUsers` in `src/services/users.ts`) through
@@ -270,13 +278,14 @@ The user's standing rule (#91): **no task may leave code coverage under
   Tables page's **Deal me in**, with its card's `SetMinutesPicker`'s
   `set_minutes`; **Create table** for friends sends `robots: false` and
   no `set_minutes`) seats three
-  but deals nothing, so the page goes to `/tables/:id`, where the
+  but deals nothing, so the page goes to `/tables/:id/play`, where the
   creator's Start deals (robots are always ready); a manager adds one
-  with the store's `seatRobot(id, seat)` ("Add robot" on the detail page).
+  with the store's `seatRobot(id, seat)` ("Add robot" in an empty seat's
+  action sheet).
   The backend moves them (a queued job per `PlayingUpdated`, about 1 s
   apart; `queue:work` must run) through the same rules as a human, so the
   SPA only shows them: a robot's icon as the avatar on every plate
-  (`BridgeTable`, `SeatPlate` + "· robot"), `RobotBadge.vue` on the
+  (`BridgeTable`), `RobotBadge.vue` on the
   profile sheet (which has no "Full profile" link for a robot; the
   lobby's `TableCard` compass draws a robot's seat blue instead), and `BridgeTable`'s `thinking` prop + "robot-1 is
   thinking…" status when `acting_user_id` is a robot. Robots count as
@@ -357,14 +366,14 @@ The user's standing rule (#91): **no task may leave code coverage under
   "Board 2 of 4 · Set 3" + " · set over" from `currentSet`, whenever
   `playing.set`; the `title` is the table's name alone); the dealer is
   `BridgeTable`'s `.dealer` "D" on the plate (`role="img"`,
-  `aria-label="dealer"`); the board tile is gone. The detail page moves a
-  seated player to `/play` when `board_id` changes to a new board.
+  `aria-label="dealer"`); the board tile is gone. A `board_id` the page
+  doesn't show yet (the last Start, the next board) makes it `load(false)`.
   `Playing.declarer_hand` is a robot declarer's remaining cards, only for
   its human dummy (null otherwise, and once `finished`); the same channel's
   `DeclarerHandShown` (`listenToUser`'s fourth handler; the fifth and
   sixth are `CallAlerted` / `CallQuestioned`, see Alerts, the seventh
   `BoardMessageSent`, see Board chat, the eighth `AuctionAlertsShown`,
-  see Alerts) brings it when the
+  see Alerts, the ninth `UnseatedFromTable`, see Start) brings it when the
   auction ends, `applyDeclarerHand` sets it on the board held, and
   `PlayingUpdated` carries it over less any card played, like `hand`.
 - **Start** (#68, bb#73, backend `docs/API.md` Dealing): filling a table
@@ -375,23 +384,44 @@ The user's standing rule (#91): **no task may leave code coverage under
   and leaving or moving drops it. No Start for everyone, a manager
   included. The tables store's `start(id)` hands a dealing answer's
   `playing` to the game store (`adopt`) before syncing the table, so the
-  detail page's `board_id` watch moves the presser on with the board in
-  hand; `start`/`cancelStart` skip syncing an answer if a `TableUpdated`
+  play page draws the board at once; `start`/`cancelStart` skip syncing an answer if a `TableUpdated`
   arrived while it was in flight (two Starts race). `src/utils/start.ts`:
   `startNeeded(table, playing)` (no board, a finished one whose set is
   over (`currentSet`), or one whose four aren't all still in their seats:
   then Start, not Next; unknown phase says no), `isReady`, `startWaiting` (the "Waiting for …" line).
-  `StartBox.vue` (a white card, #163) shows it on the detail page (whose
-  compass ticks ready seats) and on the play page (`showSeats`: the four
-  seats as `SeatPlate`s two by two, `li[data-seat]` `.is-ready`, an empty
-  one `.start-empty` dashed orange "Empty · West" holding a manager's
-  `.start-fill[data-fill-seat]` buttons), in `waiting` and under the
-  table for a finished board with new players or a set over (the result
-  dialog then has no vote). There (#121) it also carries the play page's
-  way off the seat (`canLeave` → `leave`) and a manager's Remove per seat
-  (`removable` = the seats `canRemove` allows → `remove`, run by the
-  page's `removeSeat` with `fillingSeat` as its busy mark), since the
-  result dialog's Leave goes with its vote.
+  **The waiting table** (#181, no `TableDetailPage` any more): while
+  `showStart` (seated here and `startNeeded`) the play page's
+  `BridgeTable` gets the table's own seats (`tablePlayers`, rotated by
+  `tableSeat`, not a finished board's snapshot), `ready` ticks and
+  `seatable`, and its `#centre` is `StartBox.vue` (`table`, `me`,
+  `busy`; `start`/`cancel`): "Ready to play?" / "Waiting for the
+  others…", `startWaiting`, the orange `.start-button` or `.start-cancel`,
+  and `.start-clock` (`role="timer"`, `useNow` while a seat has
+  `start_deadline`). **The Start timer** (bb#142): `TableSeat.start_deadline`
+  (ISO or null) on the last human a full table waits for once another
+  human pressed; `startClock(table, me, now)` (`{seat, seconds, mine,
+  urgent}`, urgent = mine and < `START_URGENT_SECONDS` 5) and
+  `startClockText` ("Press Start · 0:12" `.start-clock-mine` orange,
+  `.start-clock-urgent` red / "Waiting for East · 0:12") in
+  `src/utils/start.ts`. Expired, the backend frees the seat:
+  `UnseatedFromTable` `{table_id, reason: 'start_timeout'|'kibitzers_off',
+  kibitzing}` (`UnseatedFromTableEvent` in `services/tables.ts`,
+  `listenToUser`'s ninth handler, the game store hands it to the tables
+  store's `applyUnseated`: only `start_timeout` and only while still
+  watching that table → `unwatchTable`, `withoutMe` on the held copies,
+  `kickedFrom`, `START_TIMEOUT_NOTICE`; `kibitzing` waits for #182 and
+  counts as false), or the `TableUpdated` freeing a seat whose held copy
+  had `start_deadline` (same notice), whichever comes first; the play
+  page's `kickedFrom` watch goes to `/tables`. A `TableUpdated` that
+  clears our own `ready` while `set_minutes` changed (`startRevoked`)
+  toasts `startRevokedText(minutes)` ("The set time changed to 8 min:
+  press Start again."). **Leave** is the header's `.leave-table` (while
+  `seatedHere`, any phase; the result dialog keeps its own). Not seated
+  (the board 403s): `.not-seated` shows the table (`tablePlayers`,
+  `my-seat` null, `seatable`), `.not-seated-note`, the unattended note,
+  `.seated-elsewhere`, and calls `findSeat()`; sitting down clears
+  `notSeated` and loads. Our own away seat: `AwayNotice held` above the
+  table (opening the page already calls `comeBack`).
 - **Bidding**: calls go out as a `bid_id`, and the ids aren't pinned to the
   rank, so they come from the public `GET /bids` (`getBids`, the 38 calls in
   `auction[].bid`'s shape), which the game store's `loadBids()` reads once;
@@ -726,8 +756,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   `turnNotice()` says nothing in `finished` (nothing waits for the
   user). Leaving between boards abandons nothing and keeps `board_id`;
   with three seated the next ask 409s, and once a fourth player sits
-  down everyone's Start deals the board (`StartBox` on the page, the
-  dialog without its vote). `leaveWarning()` / `moveConsequences()` in
+  down everyone's Start deals the board (`StartBox` in the table's
+  centre, the dialog without its vote). `leaveWarning()` / `moveConsequences()` in
   `src/utils/seatMove.ts` word leaving by phase (`game.phaseOf(id)`).
   No set strip and never a running score at the table.
 - **Sets of four boards** (#73, bb#75, backend `docs/API.md` Sets): Start
@@ -750,7 +780,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   longer `replaced`). The
   play page shows `setLabel` ("Board 2 of 4 · Set 3") under the table's
   name in the header and `boardPosition` ("Board 2 of 4") in the table's
-  centre line, the detail page `setLabel` while a set runs. `getSet(id)` (`GET /sets/{id}`, in
+  centre line. `getSet(id)` (`GET /sets/{id}`, in
   `src/services/history.ts`: finished `boards` with `matchpoints`/`top`,
   `totals`, `winner`; 403 unless a player of it or finished all its
   boards) is cached by the history store's `loadSet` (replaced on every
@@ -759,7 +789,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   feeds the result dialog's matchpoints and, once the set is over
   (`endedSet`), the dialog shows `SetResultsPanel.vue` instead of the
   board (in `waiting`, for a set ended mid-board, the page shows it; the
-  same navy hero card, #162), with `StartBox` on the page. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
+  same navy hero card, #162), with `StartBox` in the table's centre. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
   side), `replacementsOf` (`?? []`), `replacedText(entry, mine)` ("East
   didn't play in time: a robot took their seat." / "You didn't play in
   time: a robot took your seat."; `SetResultsPanel` lists one per
@@ -801,10 +831,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   each human's time bank for the set, the table's `set_minutes`
   (`SET_MINUTES` 8/12/16/20, `DEFAULT_SET_MINUTES` 16 in
   `src/services/tables.ts`; `BroadcastTable.set_minutes`, sent by
-  `createTable`, changed by a manager between sets on the detail page,
-  whose `SetMinutesPicker` shows only while `can_manage` and no set runs,
-  a refusal toasted, the table reloaded and the picker re-keyed; else
-  `setClockText`), copied as `set.minutes`; `set.time_left` (seat →
+  `createTable`, changed by a manager between sets at the game table
+  (#181): while `settingsCorner` (`showStart` and no running set) the
+  top-right corner has a manager's `.settings-gear` ("16 min",
+  `setMinutesShort`) opening `TableSettingsDialog.vue` (`open`,
+  `minutes`, `busy`, `pickerKey`; `SetMinutesPicker` inside, content
+  only while `shown`) → the page's `changeMinutes`, a refusal toasted,
+  the table reloaded and `minutesKey` bumped; else `.corner-minutes`
+  with `setClockText` as its `title`; a change revokes every Start,
+  bb#142, see Start), copied as `set.minutes`; `set.time_left` (seat →
   seconds or null for a robot/admin) is as of the state's
   `turn_started_at` (HTTP and compact alike; with `turn_deadline_by`
   `move|away|set`; `PlayingReview` omits all three). `turn_deadline` is the
@@ -854,22 +889,22 @@ The user's standing rule (#91): **no task may leave code coverage under
   an admin viewer or while `adminAway`). `src/composables/useAwayTags.ts`
   (one `useNow` while `awayClockRuns`, so seats away together show the
   same time) feeds `BridgeTable`'s `away` prop (seat → `AwayTag`) on the
-  play page and the detail compass, both drawn by `AwaySeatTag.vue` (red
+  play page, drawn by `AwaySeatTag.vue` (red
   `away-tag-urgent`; single root, the parent's class lands on it).
   `AwayNotice.vue` (Daylight's orange-tint banner, #163; one line, never a
   countdown: `awayNote`; `held` for the own seat, counting down with its
   own `useNow`) on the play page
-  above the turn clock, the detail page, Tables and Home. The
+  above the turn clock, Tables and Home. The
   tables store: `leave()` returns `held: true` on the 202 (still seated)
   and sets `heldTableId`, which `shouldBeat()` excludes;
   `watchTable(id, away)` also holds a seat found away when we weren't
   watching (`followSeat`); `comeBack(id)` (the play page after every
-  load, the detail page's Come back) beats + `catchUp`; a
+  load) beats + `catchUp`; a
   `TableUpdated`/`loadTable` clearing our own `away_since` toasts
   `WELCOME_BACK` and reloads the game; marked away while beating, it
   beats at once; unseated by an update whose `set.replaced` names us
   (`replacementOf`, not `moved`) sets `replacedFrom` (`{id, number, seat,
-  reason, tableId}`), toasts `replacedFromText`, and the table pages go
+  reason, tableId}`), toasts `replacedFromText`, and the play page goes
   to `/sets/:id`. `rememberSet` keeps the running set in `localStorage`
   (`bridge.setInProgress`), `checkReplaced` (from `load()`) reads
   `GET /sets/{id}` for it once we no longer sit there; Home shows
@@ -1069,7 +1104,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   `NO_FIGURE` "—", `setsLine`, `boardsLine`, `comparedNote`,
   `leavingLine`, `leavingReasons`, `statsSummary`, `STATS_EXPLAINED`);
   `percentText` takes a number or a formatted string.
-  Tapping a seated player's name on either table page opens
+  Tapping a seated player's name on the play page or Tables opens
   `src/components/PlayerProfileSheet.vue`, a bottom-sheet `ion-modal` that
   shows the embedded copy at once, refreshes it from the store, and links to
   `/users/:id`. The own record with its email stays the auth store's `User`.
@@ -1094,7 +1129,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   `TableUpdated` carries the whole table and **replaces** it
   via the store's sync path; one that no longer seats the user (outside their
   own seat request) is a kick: toast, unsubscribe, and `kickedFrom` makes the
-  detail page go back to `/tables`. After a reconnect the watched table is
+  play page go back to `/tables`; `UnseatedFromTable` on the user channel
+  ends a seat the same way (see Start). After a reconnect the watched table is
   refetched once. The Tables list has no channel and stays refresh-only.
   Every broadcast fits in 10 KB (backend `docs/API.md`, Message size):
   hence the compact `PlayingUpdated` (see Game) and the length caps the
@@ -1134,12 +1170,12 @@ The user's standing rule (#91): **no task may leave code coverage under
   password). Three envelopes reach the SPA: the game endpoints'
   `{status, message, data}`, Laravel's 422 `{message, errors}`, and a bare
   `{message}` from auth/policy failures. `logUnexpected(e)` logs a
-  non-HTTP error to the console. Leave and Remove (detail, play and
-  Tables pages, #121) keep their confirmation (`confirmLeave`,
+  non-HTTP error to the console. Leave and Remove (play and Tables
+  pages, #121, #181) keep their confirmation (`confirmLeave`,
   `confirmRemove` + `removeCost` in `seatMove.ts`) inside the request's
   `try`, so a failure before any request is toasted and logged, never
-  silent, and close the page's own sheets/modals (`closeSheets` /
-  `closeOverlays`, then `nextTick`) before asking. The Tables page's
+  silent, and close the page's own sheets/modals (`closeOverlays`, the
+  profile sheet included, then `nextTick`) before asking. The Tables page's
   `YourTableHero` has **Leave** (`.seated-leave`, its `actions` slot)
   for an unheld seat (`seatedAt`).
 - **Dev server port is 3000 on purpose** (`vite.config.ts`, `strictPort`): the
@@ -1230,11 +1266,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   `--bridge-on-table-good`/`-bad`/`-accent`, `--bridge-table-dim`,
   `--bridge-on-table-faint`, `--bridge-navy-tint`(`-text`),
   `--bridge-action-line`; `.lobby-card` in `daylight.css` is the lobby's
-  white card. #163 did the rest: `SeatPlate.vue` (+ `PlayerAvatar.vue`,
-  initials or a robot's icon) is a seated player off the table
-  (`StartBox`, the detail page's compass: N/S across, side plates upright
-  below 576 px; an empty seat is the ion-button `.seat-sit` dashed orange
-  "Sit here · North" / "Move here · North"), `PlayerProfileSheet`'s
+  white card. #163 did the rest: `PlayerAvatar.vue` (initials or a
+  robot's icon; #181 dropped `SeatPlate.vue` with the detail page),
+  `PlayerProfileSheet`'s
   `.profile-avatar` and `SeatPlayerSheet`'s result avatars, the chat's
   bubbles, and the small buttons it touched 44 px tall. **The wide
   table**: `wideTable` on the play page = `chatWide` (≥ 1100 px) and the

@@ -1,7 +1,8 @@
 <template>
   <!-- Each player's time for a set at the table (the set clock, bb#131):
        8, 12, 16 or 20 minutes for its 4 boards, like a chess clock. The
-       create-table form and a manager on the table's page pick it here. -->
+       create-table form and a manager's settings at the game table pick it
+       here. -->
   <div class="set-minutes">
     <p :id="labelId" class="set-minutes-label">{{ label }}</p>
     <ion-segment

@@ -123,7 +123,7 @@ beforeEach(() => {
 })
 
 describe('TablesPage.vue open tables', () => {
-  test('each card: the name opening its page, the meta line, the pill and the compass', () => {
+  test('each card: the name opening its game table, the meta line, the pill and the compass', () => {
     const wrapper = mountWith([
       makeTable(1, { N: 'bob', E: 'robot-1', S: 'carl!' }),
       makeTable(2, { N: 'bob', E: 'carl', S: 'dan', W: 'eve' }, {
@@ -134,7 +134,7 @@ describe('TablesPage.vue open tables', () => {
     ])
 
     const first = card(wrapper, 1)
-    expect(first.getComponent(RouterLinkStub).props('to')).toBe('/tables/1')
+    expect(first.getComponent(RouterLinkStub).props('to')).toBe('/tables/1/play')
     expect(first.get('.table-card-meta').text()).toBe('16 min · no set yet')
     expect(first.get('.table-card-pill').text()).toBe('1 seat free')
     expect(first.get('.table-card-pill').classes()).toContain('pill-wait')
@@ -223,7 +223,7 @@ describe('TablesPage.vue open tables', () => {
 })
 
 describe('TablesPage.vue starting a table', () => {
-  test('"Deal me in" makes a table with robots and goes to it, where Start is', async () => {
+  test('"Deal me in" makes a table with robots and goes straight to the game table, where Start is', async () => {
     // Full, but nothing is dealt until the creator presses Start.
     const full = makeTable(3, { N: 'robot-1', E: 'robot-2', S: 'ana', W: 'robot-3' })
     vi.mocked(tablesService.createTable).mockResolvedValue(full)
@@ -233,7 +233,7 @@ describe('TablesPage.vue starting a table', () => {
     await flushPromises()
 
     expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true, set_minutes: 16 })
-    expect(navigate).toHaveBeenCalledWith('/tables/3', 'forward', 'push')
+    expect(navigate).toHaveBeenCalledWith('/tables/3/play', 'forward', 'push')
     // The table page draws from this copy rather than fetching the table again.
     expect(useTablesStore().currentTable).toEqual(full)
     // Free again at once: nothing waits for the game page to be up.
@@ -268,7 +268,7 @@ describe('TablesPage.vue starting a table', () => {
     await flushPromises()
 
     expect(tablesService.createTable).toHaveBeenCalledWith({ name: 'Sunday pairs', robots: false })
-    expect(navigate).toHaveBeenCalledWith('/tables/3', 'forward', 'push')
+    expect(navigate).toHaveBeenCalledWith('/tables/3/play', 'forward', 'push')
     expect(useTablesStore().tables.map((t) => t.id)).toEqual([3])
   })
 
@@ -323,7 +323,7 @@ describe('TablesPage.vue taking a seat', () => {
     return (button.element as HTMLButtonElement).disabled
   }
 
-  test('a table still waiting for players opens its page', async () => {
+  test('a table still waiting for players opens its game table, where Start is', async () => {
     vi.mocked(tablesService.joinSeat).mockResolvedValue(makeTable(1, { N: 'bob', E: 'ana' }))
     const wrapper = mountWith([makeTable(1, { N: 'bob' })])
 
@@ -331,7 +331,7 @@ describe('TablesPage.vue taking a seat', () => {
     await flushPromises()
 
     expect(tablesService.joinSeat).toHaveBeenCalledWith(1, 'E')
-    expect(navigate).toHaveBeenCalledWith('/tables/1', 'forward', 'push')
+    expect(navigate).toHaveBeenCalledWith('/tables/1/play', 'forward', 'push')
     // The buttons stay disabled while the page changes, the seat taken spinning.
     expect(isDisabled(seatButton(wrapper, 1, 'S'))).toBe(true)
   })
@@ -370,7 +370,7 @@ describe('TablesPage.vue taking a seat', () => {
     await flushPromises()
 
     expect(confirmMove).toHaveBeenCalled()
-    expect(navigate).toHaveBeenCalledWith('/tables/2', 'forward', 'push')
+    expect(navigate).toHaveBeenCalledWith('/tables/2/play', 'forward', 'push')
   })
 
   test('a cancelled move stays on the list', async () => {
