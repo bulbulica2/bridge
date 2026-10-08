@@ -158,7 +158,7 @@
             :calls="playing.phase === 'auction' ? (playing.auction ?? []) : null"
             :board-label="playing.set ? boardPosition(playing.set) : null"
             :wide="wideTable"
-            :top-right-room="playing.phase === 'play'"
+            :top-left-room="playing.phase === 'play'"
             :seatable="waitingRoom"
             :menu-seat="seatMenu?.seat ?? null"
             :busy="sendingCard !== null || seatBusy"
@@ -173,12 +173,13 @@
             </template>
             <!-- The board's details in the table's corners (#171), where
                  they take no room of their own: who is vulnerable, in
-                 words, for the whole board (#151) top left; the contract
-                 and the tricks through the play top right; the Auction
-                 button from the first call on (the only place the auction
-                 shows once the bidding is over) bottom left; Claim (or,
-                 bidding with three robots, our HCP) bottom right.The board's place in its set is in the header, the
-                 dealer the D on their plate. -->
+                 words, for the whole board (#151) top left, the contract
+                 and the tricks under it through the play (#210); Last
+                 trick top right (#196); the Auction button from the first
+                 call on (the only place the auction shows once the bidding
+                 is over) bottom left; Claim (or, bidding with three robots,
+                 our HCP) bottom right. The board's place in its set is in
+                 the header, the dealer the D on their plate. -->
             <template #top-left>
               <VulnerabilityLabel
                 v-if="vulnerable !== null"
@@ -187,8 +188,9 @@
                 :vulnerable="vulnerable"
                 :my-seat="mySeat"
               />
-            </template>
-            <template #top-right>
+              <!-- The contract under the pill (#210): the corner, which
+                   partner's seat makes room for through the play, holds
+                   the same lines from the first card to the last. -->
               <div class="corner-contract" aria-live="polite">
                 <template v-if="playing.phase === 'play' && playing.contract">
                   <p class="contract-line">
@@ -204,12 +206,13 @@
                   <p v-if="forDeclarer" class="contract-you">you play it</p>
                 </template>
               </div>
-              <!-- The last trick in a pop-up under the contract (#196), from
-                   the second trick on, so the centre keeps the trick in
-                   progress and its caption to itself. Its room is kept all
-                   through the play (the first trick, a trick held), so the
-                   corner, which partner's seat makes room for, never grows
-                   from card to card. -->
+            </template>
+            <template #top-right>
+              <!-- The last trick in a pop-up, alone in its corner (#196,
+                   #210), from the second trick on, so the centre keeps the
+                   trick in progress and its caption to itself. Its room is
+                   kept all through the play (the first trick, a trick
+                   held), so nothing moves when it comes. -->
               <LastTrickPopover
                 v-if="peekTrick"
                 class="corner-last-trick"
@@ -2500,18 +2503,23 @@ async function refresh(event: CustomEvent) {
   white-space: nowrap;
 }
 
-/* The contract and the tricks in the table's top-right corner (#171):
-   white on the navy, right-aligned, wrapping to short lines in a narrow
-   corner. */
+/* The contract and the tricks in the table's top-left corner, under who
+   is vulnerable (#171, #210): white on the navy, left-aligned, the
+   contract wrapping to short lines in a narrow corner. 6 px from the pill
+   (the corner's 4 px gap and 2 more). */
 .corner-contract {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 2px;
   color: var(--bridge-on-table);
   font-size: 0.875rem;
   line-height: 1.2;
-  text-align: right;
+  text-align: left;
+}
+
+.corner-vul + .corner-contract {
+  margin-top: 2px;
 }
 
 .corner-contract p {
@@ -2527,10 +2535,11 @@ async function refresh(event: CustomEvent) {
   color: var(--bridge-on-table-bad);
 }
 
+/* One line whatever the count ("NS 10 · EW 3"), so the corner keeps its
+   height from the first trick to the last. */
 .corner-contract .tricks-won {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 0 6px;
   font-family: var(--bridge-font-numbers);
   font-size: 0.9375rem;

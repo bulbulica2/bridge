@@ -463,11 +463,17 @@ describe('TablePlayPage table corners (#165, #171)', () => {
 
   const corner = (wrapper: VueWrapper, which: string) => wrapper.get(`.bridge-table .corner-${which}`)
 
-  test('in the play: vulnerability, contract, Auction and Claim, one per corner', async () => {
+  test('in the play: vulnerability and the contract under it, Last trick, Auction and Claim', async () => {
     const wrapper = await mountPage(played())
 
     expect(corner(wrapper, 'top-left').get('.vul-label').text()).toBe('Nobody vulnerable')
-    expect(corner(wrapper, 'top-right').get('.contract-line').text().replace(/\s+/g, ' ')).toBe('4♠ by South')
+    // The contract under the pill, left-aligned like it (#210); top right
+    // only Last trick's room.
+    const left = corner(wrapper, 'top-left')
+    expect([...left.element.children].map((el) => el.classList.contains('corner-vul'))).toEqual([true, false])
+    expect(left.get('.corner-vul + .corner-contract .contract-line').text().replace(/\s+/g, ' ')).toBe('4♠ by South')
+    expect(corner(wrapper, 'top-right').find('.corner-contract').exists()).toBe(false)
+    expect(corner(wrapper, 'top-right').find('.corner-last-trick-room').exists()).toBe(true)
     expect(corner(wrapper, 'bottom-left').get('.auction-button').text()).toBe('Auction')
     expect(corner(wrapper, 'bottom-right').get('.claim-button').text()).toBe('Claim')
     // No bar above the table, no outcome section, no row under the hand.
@@ -483,8 +489,9 @@ describe('TablePlayPage table corners (#165, #171)', () => {
     )
 
     expect(corner(wrapper, 'top-left').find('.vul-label').exists()).toBe(true)
-    // The live region is there, empty, for the contract to come.
-    expect(corner(wrapper, 'top-right').get('.corner-contract').attributes('aria-live')).toBe('polite')
+    // The live region is there, empty, under the pill for the contract to come.
+    expect(corner(wrapper, 'top-left').get('.corner-vul + .corner-contract').attributes('aria-live')).toBe('polite')
+    expect(corner(wrapper, 'top-left').get('.corner-contract').text()).toBe('')
     expect(corner(wrapper, 'top-right').text()).toBe('')
     expect(corner(wrapper, 'bottom-left').find('.auction-button').exists()).toBe(true)
     expect(corner(wrapper, 'bottom-right').find('.claim-button').exists()).toBe(false)
@@ -498,6 +505,7 @@ describe('TablePlayPage table corners (#165, #171)', () => {
     })
 
     expect(corner(wrapper, 'top-left').find('.vul-label').exists()).toBe(true)
+    expect(corner(wrapper, 'top-left').get('.corner-contract').text()).toBe('')
     expect(corner(wrapper, 'top-right').text()).toBe('')
     expect(corner(wrapper, 'bottom-left').find('.auction-button').exists()).toBe(true)
     expect(corner(wrapper, 'bottom-right').find('.claim-button').exists()).toBe(false)
@@ -513,7 +521,7 @@ describe('TablePlayPage table corners (#165, #171)', () => {
   test('the tricks as they are won', async () => {
     const wrapper = await mountPage(played({ tricks_won: { ns: 3, ew: 2 } }))
 
-    expect(wrapper.findAll('.corner-top-right .tricks-won span').map((s) => s.text())).toEqual([
+    expect(wrapper.findAll('.corner-top-left .tricks-won span').map((s) => s.text())).toEqual([
       'NS 3',
       '·',
       'EW 2',
@@ -581,7 +589,7 @@ describe('TablePlayPage table corners (#165, #171)', () => {
       } as Partial<Playing>),
     )
 
-    const contractCorner = corner(wrapper, 'top-right')
+    const contractCorner = corner(wrapper, 'top-left')
     expect(contractCorner.get('.contract-line').text().replace(/\s+/g, ' ')).toBe('4♠ by North')
     expect(contractCorner.findAll('.tricks-won span').map((s) => s.text())).toEqual(['NS 0', '·', 'EW 0'])
     expect(contractCorner.get('.contract-you').text()).toBe('you play it')

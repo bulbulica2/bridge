@@ -396,20 +396,25 @@ The user's standing rule (#91): **no task may leave code coverage under
   bottom seats' `.plate-row` keep `--corner-w` + `--corner-gap` clear as
   padding. The play page passes all four at every width (contents
   `v-if`'d): top-left `VulnerabilityLabel` `compact` (28 px, 12.5 px
-  text that wraps, no dot) while `vulnerable` (auction/play/finished);
-  top-right `.corner-contract` (`aria-live`, always there, empty but in
-  the play): `.contract-line` `CallLabel` + `doubledMark` ("4♥X by
-  East", red strains `--bridge-on-table-bad`), `.tricks-won` "NS 0 · EW
-  0" in Barlow, `.contract-you` "you play it" for `forDeclarer`; after
-  it, outside the live region, `LastTrickPopover` `.corner-last-trick`
+  text that wraps, no dot) while `vulnerable` (auction/play/finished),
+  then under it (#210, `.corner-vul + .corner-contract` 2 px margin on
+  the corner's 4 px gap = 6 px, left-aligned) `.corner-contract`
+  (`aria-live`, always there, empty but in the play): `.contract-line`
+  `CallLabel` + `doubledMark` ("4♥X by East", red strains
+  `--bridge-on-table-bad`), `.tricks-won` "NS 0 · EW 0" in Barlow (no
+  wrap, so the count never adds a line), `.contract-you` "you play it"
+  for `forDeclarer`; in the play the page passes `BridgeTable`'s
+  `topLeftRoom` (`room-top-left`: that corner is rendered first inside
+  `.side-top`, a grid of `--corner-w` / `minmax(0, 1fr)` / `--corner-w`,
+  the corner rows 1-2 on the left, plate-row and turn-slot in the
+  middle, any hand row 3, `.single-row` stretched), so the left seat and
+  a hand across the top start below it (measured at 360/390/768/1366,
+  narrow and wide: no overlap, the same height on the first trick and
+  later); top-right, alone, `LastTrickPopover` `.corner-last-trick`
   while `peekTrick`, else in the play the 32 px
   `.corner-last-trick-room` (#196: its room kept on the first trick and
-  while a trick is held); in the play the page passes `BridgeTable`'s
-  `topRightRoom` (`room-top-right`: that corner is rendered inside
-  `.side-top`, a grid of `--corner-w` / `minmax(0, 1fr)` / `--corner-w`,
-  plate-row and turn-slot in the middle, the corner rows 1-2 on the
-  right, any hand row 3, `.single-row` stretched), so the right seat and
-  a hand across the top start below it (measured at 360/390/768/1366);
+  while a trick is held), over the panel (no room needed; #210 dropped
+  `topRightRoom`);
   bottom-left `AuctionPopover.vue` (the **Auction** button,
   `auctionButton`: from the first call to the end of the board, the
   `AuctionHistory` grid in a `usePopover` pop-up opening upward, `live`
@@ -673,8 +678,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   it". `current_trick` empties as soon
   as a trick's fourth card lands, so the page holds that trick (the last of
   `tricks`) with its winner for 2 s before clearing it, but only when seen
-  live. The contract's top-right corner carries `tricks_won`. Under it
-  (#196, not in the centre any more), `LastTrickPopover.vue` (from the
+  live. The contract's top-left corner carries `tricks_won` (#210). Alone
+  in the top-right corner (#196, not in the centre any more),
+  `LastTrickPopover.vue` (from the
   second trick on, not while a trick is held; `peekTrick`) is a 32 px
   light pill (44 px tap area, icon + `.last-trick-label`, the label
   hidden under a 420 px table, `aria-label` "Last trick") that pops up
@@ -843,7 +849,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   `ddLoading` = !`useDoubleDummy`'s `settled` (ready, failed, or pending
   after its one reread). `ResultPill.vue` (`.result-pill`, "Result ·
   0:12" with the countdown while `resultVote`, else "Result") sits in
-  `BridgeTable`'s top-right corner beside `.corner-contract` while the
+  `BridgeTable`'s top-right corner while the
   board is finished and the dialog closed, and opens it again.
   **The next board comes by itself** (#98, bb#97): `next_board_at` (ISO
   8601, `BRIDGE_NEXT_BOARD_SECONDS` = 15 since bb#140 after the board
