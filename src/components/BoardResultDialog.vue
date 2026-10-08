@@ -9,7 +9,9 @@
        results instead, with no countdown and no vote: everyone's Start on
        the page deals the next set. The rows still being read hold their
        place as a skeleton line, so nothing jumps. The X, the backdrop and
-       Escape close it; the parent owns whether it is open. -->
+       Escape close it; the parent owns whether it is open. No Leave or
+       Review here (#188): leaving mid-set only marks a player away, and 15 s
+       is no time to step through a board; the header has both. -->
   <ion-modal :is-open="open" class="result-dialog" aria-labelledby="result-dialog-title" @did-dismiss="dismissed">
     <div v-if="shown" class="result-sheet">
       <header class="result-head">
@@ -86,8 +88,8 @@
         </template>
       </div>
 
-      <footer class="result-foot">
-        <div v-if="vote && !set" class="vote">
+      <footer v-if="vote && !set" class="result-foot">
+        <div class="vote">
           <div
             v-if="left !== null"
             class="vote-ring"
@@ -100,22 +102,6 @@
           <ion-button color="action" class="vote-button" :disabled="busy || voted || left === 0" @click="emit('next')">
             <ion-spinner v-if="busy" name="crescent" />
             <span v-else>{{ voteLabel }}</span>
-          </ion-button>
-        </div>
-        <div v-if="reviewable || (vote && !set)" class="foot-links">
-          <ion-button v-if="reviewable" fill="clear" size="small" class="result-review" @click="emit('review')">
-            Review
-          </ion-button>
-          <ion-button
-            v-if="vote && !set"
-            fill="clear"
-            size="small"
-            color="medium"
-            class="result-leave"
-            :disabled="busy"
-            @click="emit('leave')"
-          >
-            Leave the table
           </ion-button>
         </div>
       </footer>
@@ -179,8 +165,6 @@ const props = withDefaults(
     nextBoardAt?: string | null;
     // The vote is on its way.
     busy?: boolean;
-    // The review modal has boards to show.
-    reviewable?: boolean;
   }>(),
   {
     set: null,
@@ -196,11 +180,10 @@ const props = withDefaults(
     ready: () => [],
     nextBoardAt: null,
     busy: false,
-    reviewable: false,
   },
 );
 
-const emit = defineEmits<{ close: []; next: []; review: []; leave: [] }>();
+const emit = defineEmits<{ close: []; next: [] }>();
 
 // The content stays until the dialog has finished closing, so it never
 // empties while it animates out.
@@ -478,16 +461,6 @@ ion-modal.result-dialog {
   color: var(--bridge-muted);
 }
 
-.result-foot {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.result-foot:empty {
-  display: none;
-}
-
 .vote {
   display: flex;
   align-items: center;
@@ -520,18 +493,6 @@ ion-modal.result-dialog {
 .vote-button {
   flex: 1;
   min-width: 0;
-  margin: 0;
-}
-
-.foot-links {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-/* Small, but a 44 px touch target still (#163). */
-.foot-links ion-button {
-  height: 44px;
   margin: 0;
 }
 </style>

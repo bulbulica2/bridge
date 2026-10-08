@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/106-review-modal-size`._
+_Status as of branch `bulbulica2/107-no-leave-or-review-in-result-dialog`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -951,7 +951,7 @@ lobby's cards show with a **Watch** button.
 | `ClaimAnswerDialog` | a pending claim as a centred dialog over the table (#186, replacing #161's banner above it, so the table never moves): an `ion-modal`, class `claim-answer-dialog`, sized like `ClaimSheet`'s; the title "Claim" ("Claim for North" when you claimed for a robot declarer's seat, `actsFor`), the claim in one line (`claimText`: "South claims 9 of 9") with `claimOutcome()` from the claimer's side ("4♠ +1", red going down), a countdown ring like the result dialog's vote ring (`claimSecondsLeft` out of `CLAIM_SECONDS` 10, `role="timer"`, red under `CLAIM_URGENT_SECONDS` 4, ticked by `useNow`, none without `expires_at`), the claimer's cards in a single-row `HandView` in bridge order, the answerers (✓ / …, "you"), **Accept** (orange) / **Reject** or **Withdraw**, disabled while `busy` and once the time is up (a late tap can't earn a 409), "Waiting for West…" (`claimWaitingText`) for anyone without an answer to give. The claimer and an answerer still to answer can't dismiss it (`backdrop-dismiss` false, no X); anyone else has an **X** (`close`, as the backdrop and Escape). It holds the last claim's content until `did-dismiss`, so it never empties while closing. The play page opens it while a claim is pending, the view is shown and the review is closed, unless closed for that claim (`claimDismissed`, keyed by playing, cards played and claimer); `closeOverlays` closes it |
 | `TurnClockLine` | the play page's turn clock line (#161): the words, the clock and the move's minute as a bar, orange for `mine`, red for `urgent`, blue for a `robot`; two lines of room and the bar's track always there, so its height never changes |
 | `BoardResultPanel` | a finished board's result in the review (#162), as a navy hero card: who declared (`declaredText`: "You declared", "radu declared", "E-W declared"), the contract and its result ("2♣ +2", the suffix green, red when down), the tricks ("10 tricks · by claim"), your score big on the right (N-S's, tagged, for someone who didn't play it) and, once another table has played it, "Against the other tables 67 %" with an amber bar |
-| `BoardResultDialog`, `ResultPill` | the play page's finished board (#174): a centred `ion-modal` (`result-dialog`, at most 420 px wide, as tall as its content, no breakpoints) with the result ("4♠ by South +1", "11 tricks · by claim", your side's score big), the matchpoints with a bar (`extras`), up to `OTHER_TABLES_MAX` (4) other tables (`otherTableRows`, yours tinted, **Compare with other tables** when there are more), one `doubleDummyLine` once `ready`, and the footer: a ring counting down `nextBoardAt`, **Deal next board** (`vote`; then "Waiting for bob…", the humans not in `ready`) and small **Review** / **Leave the table**. `othersLoading` / `ddLoading` hold a skeleton line. With `set` (after a set's last board) it shows `SetResultsPanel` instead, with no countdown and no vote. The X emits `close`, as the backdrop and Escape do (`did-dismiss` while still open); the content stays until it has finished closing. `ResultPill` is the "Result · 0:12" pill in the table's top-right corner that opens it again |
+| `BoardResultDialog`, `ResultPill` | the play page's finished board (#174): a centred `ion-modal` (`result-dialog`, at most 420 px wide, as tall as its content, no breakpoints) with the result ("4♠ by South +1", "11 tricks · by claim", your side's score big), the matchpoints with a bar (`extras`), up to `OTHER_TABLES_MAX` (4) other tables (`otherTableRows`, yours tinted, **Compare with other tables** when there are more), one `doubleDummyLine` once `ready`, and the footer: a ring counting down `nextBoardAt`, **Deal next board** (`vote`; then "Waiting for bob…", the humans not in `ready`), and nothing else: no Leave or Review (#188, the header has both). `othersLoading` / `ddLoading` hold a skeleton line. With `set` (after a set's last board) it shows `SetResultsPanel` instead, with no countdown and no vote. The X emits `close`, as the backdrop and Escape do (`did-dismiss` while still open); the content stays until it has finished closing. `ResultPill` is the "Result · 0:12" pill in the table's top-right corner that opens it again |
 | `SetStrip` | a set's boards as tiles, B1–B4: your side's matchpoints on each board finished (`setStripTiles` in `utils/sets.ts`; "—" while no other table has played it), the board on now tinted ("now" until it is finished), light under a board's result or `onTable` on a navy card (Your table) |
 | `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the results page, or a note while it is being solved; `compact` (#180) is the grid alone, small, on a white card, no title, note or legend, and nothing at all until it is `ready`: the review's bottom-right table corner; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
@@ -1296,14 +1296,16 @@ deal (all four hands). Its rules, all in `TablePlayPage`:
   board** only while the same four go on to the set's next board. After
   the set's last board it shows `endedSet` with no countdown and no vote,
   and `StartBox` is in the table's centre.
-- Between boards, its **Leave the table** is a second way off the seat
-  (`leave()`, as the header's **Leave**, #181).
+- It offers no way off the seat and no review (#188): leaving mid-set
+  only marks a player away until a robot takes the seat, and the next
+  board comes 15 s later, no time to step through one. The header's
+  **Leave** and **Last board** are always there for both.
 
 ### Reviewing at the table
 
 The play page reviews the table's finished boards without leaving it
-(#97): **Last board** in its header (and **Review** in a finished board's
-result dialog, which steps aside while the review is open) opens
+(#97): **Last board** in its header (a finished board's result dialog
+steps aside while the review is open) opens
 `BoardReviewModal`, a centred
 `ion-modal` with the same `BoardReview` and Export. It is a dialog, not a
 sheet (#187): `--height` 90 % of the screen (`90dvh` where the browser has

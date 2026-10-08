@@ -480,11 +480,8 @@
         :ready="playing?.ready ?? []"
         :next-board-at="playing?.next_board_at ?? null"
         :busy="asking"
-        :reviewable="reviewable.length > 0"
         @close="resultDismissed = finishedId"
         @next="askNext"
-        @review="reviewOpen = true"
-        @leave="leave"
       />
       <BoardReviewModal
         :open="reviewOpen"

@@ -751,8 +751,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   `.vote-button` orange "Deal next board" → `next`, after our vote
   disabled "Waiting for bob, di…" (humans not in `ready`, a seat with
   nobody named by `SEAT_NAMES`), "Dealing…" when nobody is left or at 0;
-  then small `.result-review` (`reviewable` → `review`) and
-  `.result-leave` "Leave the table" (`vote` only → `leave`). With `set`
+  nothing else in the footer (#188: no Leave, which mid-set only marks
+  the player away, and no Review, 15 s being no time for one; the
+  header's Leave and Last board do both). With `set`
   (`endedSet`) it shows "Set results" + `SetResultsPanel`, no vote. The
   page: `finishedId` (the finished `playing_id` with a result);
   `resultOpen` = `finishedId` && `viewActive` && !`reviewOpen` &&
@@ -1007,9 +1008,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   South. An empty `auction` (`isRecorded`) means a playing finished before
   bb#60: only the deal and the result, with a notice. `HistoryEntryItem`
   and each `BoardResultsPage` row link to it.
-  **At the table** (#97): the play page's header "Last board" (and the
-  result dialog's Review once `finished`; the dialog steps aside while
-  the review is open) opens `BoardReviewModal.vue`
+  **At the table** (#97): the play page's header "Last board" (the
+  result dialog steps aside while the review is open) opens
+  `BoardReviewModal.vue`
   (a centred `ion-modal.board-review-modal`, #187: `--height` `90vh`,
   `90dvh` under `@supports (height: 1dvh)` (a custom property takes any
   value, so a second declaration is no fallback), 5 % free above and

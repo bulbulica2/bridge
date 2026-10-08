@@ -16,10 +16,12 @@ import StartBox from '@/components/StartBox.vue'
 import * as gameService from '@/services/game'
 import * as tablesService from '@/services/tables'
 import type { Bid, Card, Playing, Seat, Suit } from '@/services/game'
+import type { PlayingHistoryEntry } from '@/services/history'
 import type { Table } from '@/services/tables'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useGameStore } from '@/stores/game'
+import { useHistoryStore } from '@/stores/history'
 import { useTablesStore } from '@/stores/tables'
 import { OFFLINE_GRACE_MS } from '@/composables/useLiveStatus'
 import { resetLiveStatus, setConnection, setSubscribed } from '@/services/liveStatus'
@@ -687,8 +689,17 @@ describe('TablePlayPage claims and Start', () => {
   test('the review takes its place while open', async () => {
     const wrapper = await mountPage(inPlay(southClaims))
     expect(answerOpen(wrapper)).toBe(true)
+    // A board finished here before: the header's Last board opens it.
+    useHistoryStore().lists.me = {
+      entries: [{ playing_id: 40, table_id: 5, board: { id: 6, number: 6 } } as unknown as PlayingHistoryEntry],
+      page: 1,
+      lastPage: 1,
+      total: 1,
+    }
+    await flushPromises()
 
-    await emitFrom(wrapper, BoardResultDialog, 'review')
+    await wrapper.get('.review-boards').trigger('click')
+    await flushPromises()
     expect(wrapper.findComponent(BoardReviewModal).props('open')).toBe(true)
     expect(answerOpen(wrapper)).toBe(false)
 
@@ -955,7 +966,7 @@ describe('TablePlayPage leaving between boards', () => {
       return false
     })
 
-    await wrapper.get('.result-leave').trigger('click')
+    await wrapper.get('.leave-table').trigger('click')
     await flushPromises()
 
     expect(confirmLeave).toHaveBeenCalled()
@@ -976,7 +987,8 @@ describe('TablePlayPage leaving between boards', () => {
     const clear = vi.spyOn(useGameStore(), 'clear')
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
-    await emitFrom(wrapper, BoardResultDialog, 'leave')
+    await wrapper.get('.leave-table').trigger('click')
+    await flushPromises()
 
     expect(clear).toHaveBeenCalled()
     expect(showToast).toHaveBeenCalledWith(message, color)
@@ -989,7 +1001,8 @@ describe('TablePlayPage leaving between boards', () => {
     vi.spyOn(useTablesStore(), 'leave').mockRejectedValue(new Error('offline'))
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
-    await emitFrom(wrapper, BoardResultDialog, 'leave')
+    await wrapper.get('.leave-table').trigger('click')
+    await flushPromises()
 
     expect(showToast).toHaveBeenCalledWith('Could not leave the table. Please try again.', 'danger')
     expect(logged).toHaveBeenCalledWith(new Error('offline'))
@@ -1002,7 +1015,8 @@ describe('TablePlayPage leaving between boards', () => {
     vi.spyOn(useTablesStore(), 'leave').mockRejectedValue(axiosError(401))
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
-    await emitFrom(wrapper, BoardResultDialog, 'leave')
+    await wrapper.get('.leave-table').trigger('click')
+    await flushPromises()
 
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
     expect(showToast).not.toHaveBeenCalled()

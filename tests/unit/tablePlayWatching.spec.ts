@@ -327,7 +327,6 @@ describe('watching mode', () => {
 
     const dialog = wrapper.findComponent(BoardResultDialog)
     expect(dialog.props('vote')).toBe(false)
-    expect(dialog.props('reviewable')).toBe(false)
     expect(wrapper.find('.vote-button').exists()).toBe(false)
     expect(wrapper.find('.review-boards').exists()).toBe(false)
   })
