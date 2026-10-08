@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/100-claim-dialog`._
+_Status as of branch `bulbulica2/101-board-result-dialog`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -186,7 +186,7 @@ whatever the table is waiting for.
   (imported in `main.ts`, so they work offline and in the Capacitor build).
 - **Buttons** (`src/theme/daylight.css`): 48 px tall (small and toolbar
   buttons keep Ionic's sizes), sentence case, 12 px radius. One solid
-  orange `color="action"` per screen (Start, Deal now), the solid navy
+  orange `color="action"` per screen (Start, Deal next board), the solid navy
   default as the secondary, `fill="outline"` as the neutral outline,
   `fill="outline" color="danger"` as the red danger outline, and a grey
   disabled state rather than a faded one. A small button (a seat's
@@ -223,12 +223,11 @@ Nothing in the app draws a card back yet.
 The finished board and the lobby (#162) follow the same boards. A board's
 result is a navy **hero card** (`BoardResultPanel`: who declared, the
 contract with its result green or red, your score big in Barlow, and the
-matchpoints against the other tables with an amber bar), then **Same
-board elsewhere** (the board's results at every table, yours tinted
-orange and named "You"), the double dummy line with a green tick when
-declarer found every trick, the set's boards as tiles (`SetStrip`), and
-the **next board bar** (`NextBoardBox`: a ring emptying over the wait,
-**Deal now** orange); `SetResultsPanel` uses the same navy card. The
+matchpoints against the other tables with an amber bar), the review's last
+step; at the table it is the **result dialog** (`BoardResultDialog`, #174:
+the same navy card, shorter, then the other tables with yours tinted
+orange, one double dummy line, a ring emptying over the wait and **Deal
+next board** orange); `SetResultsPanel` uses the same navy card. The
 Tables page is the **lobby**: `YourTableHero` (navy, the set's tiles,
 **Back to the table** orange), **Play now with robots** (the
 `SetMinutesPicker` as a four-way segmented control, **Deal me in**) and
@@ -491,7 +490,8 @@ A few backend rules the stores rely on:
   page's Start box (#117) both show Seat a player and Add robot on each
   empty seat. Nothing at the
   table moves the others on: within a set the next board comes by itself,
-  and **Deal now** only asks for the player who presses it (#72, #98).
+  and **Deal next board** only votes for the player who presses it (#72,
+  #98, #174).
 - **Nothing is dealt before Start** (bb#73). Filling a table deals no
   board: it is dealt once the table is full and every person seated there
   has pressed Start (`POST /tables/{id}/start`; `DELETE` takes it back).
@@ -508,20 +508,22 @@ A few backend rules the stores rely on:
   while it was on its way, since two players pressing at once race.
 - **Boards come in sets of four** (#73, bb#75). Start deals a set's first
   board; the other three are dealt by themselves (#98, bb#97): a finished
-  board carries `next_board_at`, 10 s after it ended
-  (`BRIDGE_NEXT_BOARD_SECONDS` on the backend), and the backend's queue
-  deals the next board then, with the usual `TableUpdated`,
-  `PlayingUpdated` and `HandDealt`. The result and the deal stay on show
-  until they arrive. `NextBoardBox` counts down from `next_board_at`
-  (`useNow`, `secondsLeft`/`formatClock` from `utils/away.ts`), its ring
-  a full circle at `NEXT_BOARD_SECONDS` (10, `utils/sets.ts`); its
-  optional **Deal now** (`game.next()`, `POST /tables/{id}/playing/next`)
-  deals at once when every human at the table has pressed it (robots count
-  as asked), so a player alone with robots skips the wait. If nothing has
+  board carries `next_board_at`, 15 s after it ended
+  (`BRIDGE_NEXT_BOARD_SECONDS` on the backend, 15 since bb#140), and the
+  backend's queue deals the next board then, with the usual
+  `TableUpdated`, `PlayingUpdated` and `HandDealt`. The result and the
+  deal stay on show until they arrive. The result dialog
+  (`BoardResultDialog`, #174, see [The result dialog](#the-result-dialog))
+  counts down from `next_board_at` (`useNow`, `secondsLeft`/`formatClock`
+  from `utils/away.ts`), its ring a full circle at `NEXT_BOARD_SECONDS`
+  (15, `utils/sets.ts`); its optional **Deal next board** (`game.next()`,
+  `POST /tables/{id}/playing/next`), a vote, deals at once when every
+  human at the table has pressed it (robots count as voted), so a player
+  alone with robots skips the wait. If nothing has
   come 2 s after `next_board_at`, the play page rereads the game
   (`useStaleDeadline` → `game.load()`, once per deadline), as for a
   claim's deadline. `next_board_at` is null when no deal is coming: the
-  set is over (then **Deal now** is refused: everyone presses Start again
+  set is over (then the vote is refused: everyone presses Start again
   for the next set), a seat is empty or the players changed (both Start). The game state
   and the table payload both carry `set` (`{id, number, board, of,
   finished, ended, replaced}`, typed `SetPosition` in
@@ -890,7 +892,8 @@ arrives, and the app falls back to what each request returns.
 | `ClaimSheet` | the claim dialog (#173: a centred `ion-modal`, class `claim-dialog`, at most 400 px wide and as tall as its content, no breakpoints; #161's tiles): the title "Claim" ("Claim for North" with `forSeat`) and an **X** (`aria-label="Close"`, 44 px) that emits `close`, as the backdrop and Escape do; then a 4-column grid of tiles from all the tricks left down to 0, each with the contract's result ("4♠ +1", "4♠ −2" in red) and the claimer's side's score ("+450"), from `claimOutcome()` (`state` + `seat`, the seat claimed for); all of them picked on opening (#137: a tap picks fewer; a trick finishing moves the default to the new maximum and keeps a hand-picked number while still possible); the one orange button reads **Claim 7 · 4♠ +1 · +450** / **Claim 5 · 4♠ −1 · −50**, and **Concede** for the 0 tile (sends 0); no other text: the answer rule and the countdown are `ClaimPanel`'s once the claim is out |
 | `ClaimPanel` | a pending claim as Daylight's dark banner (#161): what is claimed with the countdown on the right, who has accepted, **Accept** / **Reject** as two equal buttons or **Withdraw**, and the countdown in words under them ("Answer within 0:07", "Waiting for East and West · 0:07", ticked by `useNow`); the buttons disable at 0, so a late tap can't earn a 409; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
 | `TurnClockLine` | the play page's turn clock line (#161): the words, the clock and the move's minute as a bar, orange for `mine`, red for `urgent`, blue for a `robot`; two lines of room and the bar's track always there, so its height never changes |
-| `BoardResultPanel`, `NextBoardBox` | the result once a board is finished (#162), as a navy hero card: who declared (`declaredText`: "You declared", "radu declared", "E-W declared"), the contract and its result ("2♣ +2", the suffix green, red when down), the tricks ("10 tricks · by claim"), your score big on the right (N-S's, tagged, for someone who didn't play it) and, once another table has played it, "Against the other tables 67 %" with an amber bar; then **Same board elsewhere** (`others` = the history store's board results, `otherTableRows` in `utils/result.ts`: the first five, always with yours, each named by its N-S pair, yours "You" and tinted), the double dummy line ("Double dummy: 4♠ by South makes 10. You found every trick.", `doubleDummyVerdict`, ticked green when declarer took at least as many tricks) with **Review**, and the set's boards (`SetStrip`). `NextBoardBox` is the bar under it: a ring emptying over the wait with the seconds in it, "Next board in 0:08" (then "Dealing the next board…"), "Board 3 of 4 · or skip the wait" (`set`), the optional orange **Deal now** and, once pressed, the humans who haven't yet |
+| `BoardResultPanel` | a finished board's result in the review (#162), as a navy hero card: who declared (`declaredText`: "You declared", "radu declared", "E-W declared"), the contract and its result ("2♣ +2", the suffix green, red when down), the tricks ("10 tricks · by claim"), your score big on the right (N-S's, tagged, for someone who didn't play it) and, once another table has played it, "Against the other tables 67 %" with an amber bar |
+| `BoardResultDialog`, `ResultPill` | the play page's finished board (#174): a centred `ion-modal` (`result-dialog`, at most 420 px wide, as tall as its content, no breakpoints) with the result ("4♠ by South +1", "11 tricks · by claim", your side's score big), the matchpoints with a bar (`extras`), up to `OTHER_TABLES_MAX` (4) other tables (`otherTableRows`, yours tinted, **Compare with other tables** when there are more), one `doubleDummyLine` once `ready`, and the footer: a ring counting down `nextBoardAt`, **Deal next board** (`vote`; then "Waiting for bob…", the humans not in `ready`) and small **Review** / **Leave the table**. `othersLoading` / `ddLoading` hold a skeleton line. With `set` (after a set's last board) it shows `SetResultsPanel` instead, with no countdown and no vote. The X emits `close`, as the backdrop and Escape do (`did-dismiss` while still open); the content stays until it has finished closing. `ResultPill` is the "Result · 0:12" pill in the table's top-right corner that opens it again |
 | `SetStrip` | a set's boards as tiles, B1–B4: your side's matchpoints on each board finished (`setStripTiles` in `utils/sets.ts`; "—" while no other table has played it), the board on now tinted ("now" until it is finished), light under a board's result or `onTable` on a navy card (Your table) |
 | `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the review and the results page, or a note while it is being solved; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
@@ -1189,22 +1192,47 @@ board's results they are refused (403) until you have finished the board.
 - **Unavailable** means the server has no solver set up (the backend's
   `DDS_LIBRARY`, bb#125), for every board alike, so it reads "Double dummy
   analysis isn't set up on this server." (`DOUBLE_DUMMY_UNAVAILABLE`, #138)
-  in the table and in `BoardResultPanel`'s line, and is never read again.
+  in the table, and is never read again.
 
 Where it shows: `BoardReview` (the review page and the play page's review
 modal) has `DoubleDummyTable`, the contract played marked, and
 `LeadAnalysis`; `BoardResultsPage` has the table above the results, your
 contract marked; the play page, once a board is `finished`, reads the table
-and `BoardResultPanel` gives one line, "Double dummy: 4♠ by South makes 10",
-with **Review** opening the review modal. The text export adds the table and
+and the result dialog gives one line, "Double dummy: 4♠ by South makes 10",
+once it is ready (a skeleton line until `useDoubleDummy`'s `settled`: ready,
+failed, or still pending after the reread; nothing then). The text export adds the table and
 the lead in words; the PBN export adds the optional `OptimumResultTable`
 tag. Par isn't built by the backend, so none is shown.
+
+### The result dialog
+
+When a board ends, the play page shows its result in `BoardResultDialog`
+(#174) instead of a stack of panels under the table, which keeps only the
+deal (all four hands). Its rules, all in `TablePlayPage`:
+
+- It is open (`resultOpen`) while the board is `finished` with a result,
+  the view is active, the review modal is closed and the player hasn't
+  closed it for this board (`resultDismissed`, set by the X, the backdrop
+  or `closeOverlays` before a confirmation; cleared by the pill and on
+  entering the view). A new board, `onIonViewWillLeave` or the review
+  closes it.
+- It opens without jumping: once the board's other tables are read
+  (`history.loadResults` settled, or already held) and, after a set's last
+  board, the set's results are in; or after `RESULT_WAIT_MS` (1 s) at
+  most. Rows still being read hold a skeleton line.
+- `resultVote` (`!showStart && !endedSet`): the countdown and **Deal next
+  board** only while the same four go on to the set's next board. After
+  the set's last board it shows `endedSet` with no countdown and no vote,
+  and `StartBox` stays on the page.
+- Between boards, its **Leave the table** is the play page's way off the
+  seat (`leave()`, as `StartBox`'s Leave once a set is over).
 
 ### Reviewing at the table
 
 The play page reviews the table's finished boards without leaving it
-(#97): **Last board** in its header (and **Review and export** under a
-finished board's result) opens `BoardReviewModal`, a full-height
+(#97): **Last board** in its header (and **Review** in a finished board's
+result dialog, which steps aside while the review is open) opens
+`BoardReviewModal`, a full-height
 `ion-modal` with the same `BoardReview` and Export. The game goes on
 underneath: `PlayingUpdated` keeps arriving and the page keeps drawing it.
 Which boards it offers is `reviewChoices()` in `src/utils/review.ts`:

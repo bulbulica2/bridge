@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/100-claim-dialog`._
+_Status as of branch `bulbulica2/101-board-result-dialog`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -369,7 +369,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -379,9 +379,9 @@ Robots play by themselves: each of their calls, cards, claim answers and
 "ready"s arrives as an ordinary `PlayingUpdated` about a second apart, so
 nothing on this page drives them. On a robot's turn its seat reads
 **Thinking…** instead of **To act** and the turn clock line says
-"robot-1 is thinking…". Robots are badged at their seat and in the
-next-board box, and count as having asked for the next board, so your
-**Deal now** deals it at once instead of waiting out the countdown. When your robot partner wins the contract, it stays
+"robot-1 is thinking…". Robots are badged at their seat, and count
+as having voted for the next board, so your **Deal next board** deals it
+at once instead of waiting out the countdown. When your robot partner wins the contract, it stays
 declarer and you stay dummy, but **you play the hand**: the contract in
 the table's top-right corner says **you play it** under the tricks,
 declarer's cards (yours
@@ -403,7 +403,7 @@ stand raised and ringed, the others dimmed; in the trick the card winning
 so far is ringed amber and a dashed place waits for yours. The auction
 grid is a card of chips (green Pass, red X, blue XX), the vulnerable
 side's seats red, the call awaited a "?" ringed orange. **Start** and
-**Deal now** are the orange buttons.
+**Deal next board** are the orange buttons.
 
 **The wide table** (#163, the design canvas's boards A and B in
 Daylight's colours). On a screen 1100 px wide or more, once the page's
@@ -634,53 +634,59 @@ What it shows by phase:
   with the next card. If the backend's
   update hasn't come 2 s after the deadline, the page rereads the game.
   The last accept finishes the board.
-- **finished**: the result at a glance (#100, Daylight's look by #162).
-  A navy card: who declared ("You declared", "radu declared", or the
-  side, "E-W declared"), the contract and how it went in big type
-  (**2♣ +2**, **4♠X −1** in red, **3NT =**, or **Passed out**), "10
-  tricks · by claim" under it, and your score big on the right (**−130**;
-  N-S's, tagged "N-S", if you didn't play it). Once another table has
-  played the board, "Against the other tables 67 %" with an amber bar.
-  Under it **Same board elsewhere**: every table's result on this board
-  (best N-S first, the first five, always with yours), each named by its
-  N-S pair since a result has no table name, with its contract ("3NT N
-  +2") and N-S score; yours is tinted orange and named "You". Then one
-  double dummy line (#119): "Double dummy: 4♠ by South makes 11. You
-  found every trick." with a green tick when declarer took at least as
-  many tricks as double dummy says ("Declarer took 2 fewer." otherwise),
-  and **Review** (the board review at the table, where the whole table
-  is); "Double dummy analysis is being worked out…" while the backend
-  solves it, or "Double dummy analysis isn't set up on this server." on a
-  server without the solver (#138). Then the set's four boards as tiles
-  (**Board 1 62 %** … with this one tinted, "·" for those to come). Scores
-  are never added up over a set: each board is compared with the other
-  tables. **Compare with other tables**, **Review and export** (the board
-  review at the table, below), and the next-board bar: a ring emptying
-  over the wait with the seconds in it, **Next board in 0:08**, "Board 3
-  of 4 · or skip the wait", and an orange **Deal now**. The next board is
-  dealt by itself (#98; then "Dealing the next board…"). All four hands
-  lie face up on the table below, and the result and the deal stay on
-  show until the next board arrives, then the page moves to its auction;
-  **Last board** still reviews the one just played. **Deal now** is
-  optional: it deals at once once every person at the table has pressed
-  it (robots count as pressed), and after pressing it the bar says who
-  hasn't ("You asked to deal now. Waiting for bob."). Nobody, a manager
-  included, asks for the others (#72). If nothing has arrived 2 s after
-  the countdown ends, the page rereads the game. If one of the four has
-  left or been replaced since, the Start box takes the next-board bar's
-  place: the next board waits for every person's Start.
+- **finished**: the page is just the table, all four hands face up as
+  dealt, and the result opens in a **small dialog** in the middle of the
+  screen (#174; the table stays visible around it). It opens by itself
+  when the board ends (the last card or an accepted claim, or on coming
+  to the page while it is finished), once the other tables' results are
+  read or after a second at most, so nothing in it jumps: a row still
+  being read holds its place as a grey skeleton line. In it, short:
+  - the result: **4♠ by South +1** (**Passed out**), "11 tricks · by
+    claim" under it, and your side's score big on the right (**+450**;
+    N-S's, tagged "N-S", if you didn't play it);
+  - the matchpoints once another table has played the board: **67 %**
+    with an amber bar;
+  - **Other tables**: up to four tables' contract and result ("4♠ N +1")
+    with their N-S score, best first, yours tinted orange, then
+    **Compare with other tables** (the board results page) when more
+    have played it; hidden while no other table has;
+  - one double dummy line once the analysis is ready ("Double dummy: 4♠
+    by South makes 10"; nothing while it is pending or on a server
+    without the solver);
+  - a ring counting down to the next board ("0:12"; it is dealt by
+    itself 15 s after the board ended, the backend's `next_board_at`,
+    bb#140) beside the orange **Deal next board**, your vote to deal it
+    now. Once you voted it reads "Waiting for bob…" (the people still to
+    press it); robots always count as having voted, so with three robots
+    your press deals at once. Nobody, a manager included, votes for the
+    others (#72). Under it, small: **Review** (the board review at the
+    table, below) and **Leave the table** (free between boards).
+
+  The X in its corner, the backdrop or Escape close it to look at the
+  deal; a **Result · 0:12** pill in the table's top-right corner opens it
+  again and keeps the countdown in sight. A new board, leaving the page
+  or a confirmation over it closes it; coming back to the page while the
+  board is still finished shows it again. If nothing has arrived 2 s
+  after the countdown ends, the page rereads the game. If one of the four
+  has left or been replaced since, the dialog shows the result with no
+  countdown and no vote, and the Start box under the table deals the
+  next board once everyone has pressed Start. The header's **Last board**
+  reviews the board just played at any time.
 - **set over** (after the fourth board, or earlier when it is broken off
-  between boards): the set's results take the board result's place, in
-  the same navy card (#162): who won, from your side ("You won the set.", "You lost the set."), whom a
-  robot replaced and why ("East didn't play in time: a robot took their
-  seat."), the four boards (number, contract and declarer, result, your
-  side's score and matchpoint %, each opening its review) and the totals.
-  Below it the Start box: everyone's Start opens the next set, **Board 1
-  of 4**. A set that ended mid-board (a player taken out of it)
-  shows its results the same way once the table is back to waiting. They
-  update live for all four: the set ending arrives with the last card's
-  `PlayingUpdated` (or the `TableUpdated` that broke it off), and the
-  page then reads the set again.
+  between boards): the same dialog shows the set's results instead of the
+  board (#174), in the navy card (#162): who won, from your side ("You
+  won the set.", "You lost the set."), whom a robot replaced and why
+  ("East didn't play in time: a robot took their seat."), the four boards
+  (number, contract and declarer, result, your side's score and
+  matchpoint %, each opening its review), the totals and the time each
+  player used, with no countdown and no vote (after the set's last board
+  it waits for the set's results rather than show the board first). The
+  Start box stays on the page under the table: everyone's Start opens
+  the next set, **Board 1 of 4**. A set that ended mid-board (a player
+  taken out of it) shows its results on the page once the table is back
+  to waiting. They update live for all four: the set ending arrives with
+  the last card's `PlayingUpdated` (or the `TableUpdated` that broke it
+  off), and the page then reads the set again.
 
 **Board chat** (#102): from the first deal on, the board's chat is on
 show beside the table on a screen 1100 px wide or more (Daylight's look,
@@ -738,14 +744,14 @@ play itself while it is open, and leaving the page closes it. It fits a
 | `chat.follow()` (entering the table, and when a board finishes) | `GET /tables/{id}/messages`, after the board is drawn; failures are quiet |
 | `chat.send()` | `POST /tables/{id}/messages` |
 | `game.claim()`, `game.respondToClaim()`, `game.withdrawClaim()` | `POST /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `DELETE /tables/{id}/claim` |
-| `game.next()` (**Deal now**, optional) | `POST /tables/{id}/playing/next` |
+| `game.next()` (**Deal next board**, the result dialog's vote, optional) | `POST /tables/{id}/playing/next` |
 | `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
 | `tables.seatRobot()`, `tables.seatUser()` (managers, Start box, #117) | `POST /tables/{id}/seats/robots`, `GET /users?search=` + `POST /tables/{id}/seats/users` (picking yourself is `tables.join()`, `POST /tables/{id}/seats`); a refusal toasts and rereads the table |
 | `game.load()` 2 s after a claim's or the next board's deadline with no update | `GET /tables/{id}/playing` |
 | `history.loadSet()` (after each finished board, when the set ends, and on entry mid-set) | `GET /sets/{id}` |
 | `history.loadReview()` (the board review) | `GET /playings/{id}`, once per board per session (again while its double dummy analysis is pending) |
 | `history.loadDoubleDummy()` (once a board is finished; once more 5 s later if pending) | `GET /boards/{id}/double-dummy` |
-| `history.loadResults()` (once a board is finished: Same board elsewhere) | `GET /boards/{id}/results`; failures are quiet |
+| `history.loadResults()` (once a board is finished: the result dialog's other tables) | `GET /boards/{id}/results`; failures are quiet |
 | `history.loadHistory()` (on entry, only when no board to review is known but one may have been finished here) | `GET /api/user/playings` |
 | `tables.openTable()` on entry, `tables.loadTable()` on pull to refresh, Refresh (offline only) or a 409 | `GET /tables/{id}`, skipped on entry when the store already follows the table (after Create, a join, or the detail page) |
 | `tables.leave()` | `DELETE /tables/{id}/seats` (202 mid-set: the seat is held) |
@@ -753,7 +759,7 @@ play itself while it is open, and leaving the page closes it. It fits a
 | channels | `private-table.{id}`: `TableUpdated` (seats, away marks, a robot taking a seat over), `PlayingUpdated` (with `turn_deadline`); `private-App.Models.User.{me}`: `HandDealt`, `DeclarerHandShown` (a robot declarer's cards, when you play them), `CallAlerted` (an opponent's alert or answer; in the play, anyone's answer), `CallQuestioned` (a question about your call), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read) |
 
 A 409 on a call, card, claim or next board toasts the backend's message and
-reloads (after a set's last board, Deal now 409s: "The set is over: press Start
+reloads (after a set's last board, the vote 409s: "The set is over: press Start
 for a new one.", though the page shows Start instead by then). A `TableUpdated` whose `board_id` goes back to null mid-board means
 a player left and the board was abandoned: toast, back to waiting (and to
 Start once the table is full again).
@@ -814,7 +820,7 @@ Backend: bb#75, bb#131 (`time_used`).
 ## Board results — `/boards/:id/results`
 
 **Logged in, and only after you finished that board** (403 otherwise).
-Built by #30; Daylight's colours (your tables navy-tinted) by #163. Reached from a board's review or **Compare with other tables**.
+Built by #30; Daylight's colours (your tables navy-tinted) by #163. Reached from a board's review or the result dialog's **Compare with other tables**.
 
 The same board at every table, best N-S score first, each with its
 contract, declarer, score and matchpoints. The tables you sat at are

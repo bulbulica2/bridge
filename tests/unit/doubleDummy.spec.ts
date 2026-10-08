@@ -31,7 +31,6 @@ import {
   leadsInHandOrder,
   pbnOptimumResultTable,
 } from '@/utils/doubleDummy'
-import BoardResultPanel from '@/components/BoardResultPanel.vue'
 import BoardReview from '@/components/BoardReview.vue'
 import DoubleDummyTable from '@/components/DoubleDummyTable.vue'
 import LeadAnalysis from '@/components/LeadAnalysis.vue'
@@ -364,6 +363,38 @@ describe('useDoubleDummy', () => {
     expect(other.analysis.value).toBeNull()
   })
 
+  test('settled: once the board is read, or still pending after its reread', async () => {
+    vi.useFakeTimers()
+    const id = ref<number | null>(7)
+    const { dd } = run(() => id.value)
+    expect(dd.settled.value).toBe(false)
+    answer(PENDING)
+    answer(PENDING)
+
+    await dd.load()
+    expect(dd.settled.value).toBe(false)
+    vi.advanceTimersByTime(DOUBLE_DUMMY_REREAD_MS)
+    await flushPromises()
+    expect(dd.settled.value).toBe(true)
+    // A load again for the same board: no second reread, settled at once.
+    answer(PENDING)
+    await dd.load()
+    expect(dd.settled.value).toBe(true)
+
+    // Another board: not until it is read; a failure settles it too.
+    id.value = 8
+    expect(dd.settled.value).toBe(false)
+    answer(READY)
+    await dd.load()
+    expect(dd.settled.value).toBe(true)
+    id.value = 9
+    vi.mocked(http.get).mockRejectedValueOnce(axiosError(403))
+    await dd.load()
+    expect(dd.settled.value).toBe(true)
+    id.value = null
+    expect(dd.settled.value).toBe(false)
+  })
+
   test('a failed reread is quiet too', async () => {
     vi.useFakeTimers()
     const { dd } = run(() => 7)
@@ -560,66 +591,6 @@ describe('BoardReview double dummy', () => {
     await flushPromises()
     expect(http.get).toHaveBeenCalledTimes(1)
     expect(http.get).toHaveBeenCalledWith('/playings/43')
-  })
-})
-
-describe('BoardResultPanel double dummy line', () => {
-  test('one line, with the review a tap away', async () => {
-    const wrapper = mount(BoardResultPanel, {
-      props: { result: result(), mySeat: 'S', doubleDummy: READY, reviewable: true },
-    })
-
-    expect(wrapper.get('.result-dd').text()).toBe(
-      'Double dummy: 4♠ by North makes 10. Declarer found every trick. Review',
-    )
-    // Every trick found: the green tick.
-    expect(wrapper.find('.dd-tick').exists()).toBe(true)
-    await wrapper.get('.result-dd-review').trigger('click')
-    expect(wrapper.emitted('review')).toHaveLength(1)
-  })
-
-  test('the tick stays for a gift from the defence, and goes when declarer fell short', () => {
-    const over = mount(BoardResultPanel, {
-      props: { result: result({ made_by: 1, tricks_won: 11 }), mySeat: 'N', doubleDummy: READY },
-    })
-    expect(over.get('.dd-text').text()).toBe('Double dummy: 4♠ by North makes 10. You took 1 more.')
-    expect(over.find('.dd-tick').exists()).toBe(true)
-
-    const short = mount(BoardResultPanel, {
-      props: { result: result({ made_by: -2, tricks_won: 8 }), mySeat: 'E', doubleDummy: READY },
-    })
-    expect(short.get('.dd-text').text()).toBe('Double dummy: 4♠ by North makes 10. Declarer took 2 fewer.')
-    expect(short.find('.dd-tick').exists()).toBe(false)
-  })
-
-  test('the note while pending; no button when there is nothing to review', () => {
-    const wrapper = mount(BoardResultPanel, {
-      props: { result: result(), mySeat: 'S', doubleDummy: PENDING },
-    })
-
-    expect(wrapper.get('.result-dd').text()).toBe(DOUBLE_DUMMY_PENDING)
-    expect(wrapper.find('.result-dd-review').exists()).toBe(false)
-    expect(wrapper.find('.dd-tick').exists()).toBe(false)
-  })
-
-  test('the note on a server without a solver', () => {
-    const wrapper = mount(BoardResultPanel, {
-      props: { result: result(), mySeat: 'S', doubleDummy: { status: 'unavailable', table: null } },
-    })
-
-    expect(wrapper.get('.result-dd').text()).toBe(DOUBLE_DUMMY_UNAVAILABLE)
-    expect(wrapper.find('.result-dd-review').exists()).toBe(false)
-  })
-
-  test('nothing without it, or on a passed-out board', () => {
-    expect(mount(BoardResultPanel, { props: { result: result(), mySeat: 'S' } }).find('.result-dd').exists()).toBe(
-      false,
-    )
-    expect(
-      mount(BoardResultPanel, { props: { result: PASSED, mySeat: 'S', doubleDummy: READY } })
-        .find('.result-dd')
-        .exists(),
-    ).toBe(false)
   })
 })
 
