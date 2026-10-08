@@ -8,7 +8,7 @@ import TablePlayPage from '@/views/TablePlayPage.vue'
 import BiddingBox from '@/components/BiddingBox.vue'
 import BoardReviewModal from '@/components/BoardReviewModal.vue'
 import ClaimPanel from '@/components/ClaimPanel.vue'
-import NextBoardBox from '@/components/NextBoardBox.vue'
+import BoardResultDialog from '@/components/BoardResultDialog.vue'
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue'
 import StartBox from '@/components/StartBox.vue'
 import * as gameService from '@/services/game'
@@ -747,12 +747,19 @@ describe('TablePlayPage leaving between boards', () => {
   test('nothing happens when the user cancels', async () => {
     const wrapper = await mountPage(finished())
     const leave = vi.spyOn(useTablesStore(), 'leave')
-    vi.mocked(confirmLeave).mockResolvedValue(false)
+    let openWhenAsked: unknown = null
+    vi.mocked(confirmLeave).mockImplementation(async () => {
+      openWhenAsked = wrapper.findComponent(BoardResultDialog).props('open')
+      return false
+    })
 
-    await wrapper.get('.next-leave ion-button').trigger('click')
+    await wrapper.get('.result-leave').trigger('click')
     await flushPromises()
 
     expect(confirmLeave).toHaveBeenCalled()
+    // The dialog went before the confirmation, and stays closed after it.
+    expect(openWhenAsked).toBe(false)
+    expect(wrapper.find('.result-pill').exists()).toBe(true)
 
     expect(leave).not.toHaveBeenCalled()
   })
@@ -767,7 +774,7 @@ describe('TablePlayPage leaving between boards', () => {
     const clear = vi.spyOn(useGameStore(), 'clear')
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
-    await emitFrom(wrapper, NextBoardBox, 'leave')
+    await emitFrom(wrapper, BoardResultDialog, 'leave')
 
     expect(clear).toHaveBeenCalled()
     expect(showToast).toHaveBeenCalledWith(message, color)
@@ -780,7 +787,7 @@ describe('TablePlayPage leaving between boards', () => {
     vi.spyOn(useTablesStore(), 'leave').mockRejectedValue(new Error('offline'))
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
-    await emitFrom(wrapper, NextBoardBox, 'leave')
+    await emitFrom(wrapper, BoardResultDialog, 'leave')
 
     expect(showToast).toHaveBeenCalledWith('Could not leave the table. Please try again.', 'danger')
     expect(logged).toHaveBeenCalledWith(new Error('offline'))
@@ -793,7 +800,7 @@ describe('TablePlayPage leaving between boards', () => {
     vi.spyOn(useTablesStore(), 'leave').mockRejectedValue(axiosError(401))
     vi.mocked(confirmLeave).mockResolvedValue(true)
 
-    await emitFrom(wrapper, NextBoardBox, 'leave')
+    await emitFrom(wrapper, BoardResultDialog, 'leave')
 
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
     expect(showToast).not.toHaveBeenCalled()
@@ -839,7 +846,7 @@ describe('TablePlayPage after a set', () => {
   test('Start offers Leave, and Remove on each robot, in place of the next board', async () => {
     const wrapper = await mountPage(lastBoard(), robotTable())
 
-    expect(wrapper.findComponent(NextBoardBox).exists()).toBe(false)
+    expect(wrapper.findComponent(BoardResultDialog).props('vote')).toBe(false)
     const box = wrapper.findComponent(StartBox)
     expect(box.props('canLeave')).toBe(true)
     expect(box.props('removable')).toEqual(['N', 'E', 'W'])
@@ -869,7 +876,7 @@ describe('TablePlayPage after a set', () => {
     const chat = useChatStore()
     await wrapper.get('.chat-toggle').trigger('click')
     expect(chat.open).toBe(true)
-    await wrapper.get('.review-and-export').trigger('click')
+    await wrapper.get('.review-boards').trigger('click')
     expect(wrapper.findComponent(BoardReviewModal).props('open')).toBe(true)
     let openWhenAsked: unknown[] = []
     vi.mocked(confirmLeave).mockImplementation(async () => {

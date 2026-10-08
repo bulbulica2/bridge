@@ -99,6 +99,10 @@ export function declaredText(
 
 // One row of "Same board elsewhere": the table's result told by its players
 // (a result row has no table name), N-S's score, and whether it is ours.
+// The other tables a finished board's result dialog lists at most; the
+// rest are on the board's results page (#174).
+export const OTHER_TABLES_MAX = 4;
+
 export interface OtherTableRow {
   playingId: number;
   // "You" for our own table, else its N-S pair: "anna & luis".

@@ -9,7 +9,8 @@ import { isReady } from '@/utils/start';
 // page's review modal shows it, so looking back at a board never holds the
 // table up unnoticed. A finished board waits for nobody: the set's next one
 // is dealt by itself (bb#97). `startShown` is the page's
-// StartBox in place of NextBoardBox (src/utils/start.ts startNeeded).
+// StartBox in place of the result dialog's vote (src/utils/start.ts
+// startNeeded).
 export function turnNotice(
   state: Playing | null,
   me: number | null,

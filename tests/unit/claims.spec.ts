@@ -1012,7 +1012,7 @@ describe('TablePlayPage claims', () => {
     useGameStore().applyPlayingUpdate(5, { ...state({ phase: 'finished', turn: null, acting_user_id: null, result: RESULT, ready: [] }) })
     await flushPromises()
 
-    expect(wrapper.get('.result-detail').text()).toContain('by claim')
+    expect(wrapper.get('.dialog-detail').text()).toBe('12 tricks · by claim')
     expect(showToast).toHaveBeenCalledWith('Board over: 4♠ S +2 · +480.', 'success')
   })
 

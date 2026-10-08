@@ -1,4 +1,4 @@
-import { computed, onScopeDispose } from 'vue';
+import { computed, onScopeDispose, ref } from 'vue';
 import { useHistoryStore } from '@/stores/history';
 import type { DoubleDummy } from '@/services/history';
 
@@ -11,7 +11,9 @@ export const DOUBLE_DUMMY_REREAD_MS = 5000;
 // and an answer still `pending` is read once more DOUBLE_DUMMY_REREAD_MS
 // later, never again (no polling loop: a later load or a refresh asks
 // afresh). Failures are quiet: the analysis is an extra, and a 403/404
-// shows on the page's own reads.
+// shows on the page's own reads. `settled`: the board's reads are done
+// (ready, failed, or still pending after the reread), so the result dialog
+// stops holding a row for the line.
 export function useDoubleDummy(boardId: () => number | null) {
   const history = useHistoryStore();
 
@@ -22,6 +24,11 @@ export function useDoubleDummy(boardId: () => number | null) {
 
   let rereadFor: number | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  const settledFor = ref<number | null>(null);
+  const settled = computed(() => {
+    const id = boardId();
+    return !!id && settledFor.value === id;
+  });
 
   async function load() {
     const id = boardId();
@@ -32,6 +39,7 @@ export function useDoubleDummy(boardId: () => number | null) {
     try {
       answer = await history.loadDoubleDummy(id);
     } catch {
+      settledFor.value = id;
       return;
     }
     if (answer.status === 'pending' && rereadFor !== id && boardId() === id) {
@@ -40,10 +48,15 @@ export function useDoubleDummy(boardId: () => number | null) {
       timer = setTimeout(() => {
         timer = null;
         if (boardId() === id) {
-          history.loadDoubleDummy(id).catch(() => {});
+          history
+            .loadDoubleDummy(id)
+            .catch(() => {})
+            .finally(() => (settledFor.value = id));
         }
       }, DOUBLE_DUMMY_REREAD_MS);
+      return;
     }
+    settledFor.value = id;
   }
 
   function stop() {
@@ -55,5 +68,5 @@ export function useDoubleDummy(boardId: () => number | null) {
 
   onScopeDispose(stop);
 
-  return { analysis, load };
+  return { analysis, load, settled };
 }

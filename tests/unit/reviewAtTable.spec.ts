@@ -2,6 +2,7 @@ import { VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import TablePlayPage from '@/views/TablePlayPage.vue'
+import BoardResultDialog from '@/components/BoardResultDialog.vue'
 import BoardReviewModal from '@/components/BoardReviewModal.vue'
 import * as gameService from '@/services/game'
 import * as historyService from '@/services/history'
@@ -239,7 +240,7 @@ describe('the review modal at the table', () => {
     expect(modal(wrapper).props('open')).toBe(false)
     expect(wrapper.find('.board-review').exists()).toBe(false)
 
-    await wrapper.get('.review-and-export').trigger('click')
+    await wrapper.get('.result-review').trigger('click')
     await flushPromises()
 
     expect(navigate).not.toHaveBeenCalled()
@@ -347,6 +348,28 @@ describe('the review modal at the table', () => {
     leaveHooks.forEach((hook) => hook())
     await flushPromises()
     expect(modal(wrapper).props('open')).toBe(false)
+  })
+
+  test('leaving the view closes the result dialog, and coming back shows it again', async () => {
+    vi.useFakeTimers()
+    const wrapper = await mountPage(finished())
+    const dialog = () => wrapper.findComponent(BoardResultDialog)
+    vi.advanceTimersByTime(1000)
+    await flushPromises()
+    expect(dialog().props('open')).toBe(true)
+    // Closed with its X: it stays closed while we look at the deal…
+    dialog().vm.$emit('close')
+    await flushPromises()
+    expect(dialog().props('open')).toBe(false)
+
+    leaveHooks.forEach((hook) => hook())
+    await flushPromises()
+    expect(dialog().props('open')).toBe(false)
+
+    // …but another page and back shows the result again.
+    enterHooks.forEach((hook) => hook())
+    await flushPromises()
+    expect(dialog().props('open')).toBe(true)
   })
 
   test('the forced card waits while the review is open', async () => {

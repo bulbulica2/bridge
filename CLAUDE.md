@@ -280,8 +280,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   profile sheet (which has no "Full profile" link for a robot; the
   lobby's `TableCard` compass draws a robot's seat blue instead), and `BridgeTable`'s `thinking` prop + "robot-1 is
   thinking…" status when `acting_user_id` is a robot. Robots count as
-  having asked for the next board, so a lone human's **Deal now** deals
-  it at once. A robot declarer hands the play to its human dummy (#95, bb#94):
+  having voted for the next board, so a lone human's **Deal next board**
+  deals it at once. A robot declarer hands the play to its human dummy (#95, bb#94):
   `acting_user_id` is that dummy on declarer's turn and on dummy's, the
   play page reads it as `handToPlay() === 'declarer'`, and
   `playsForDeclarer()` (`src/utils/play.ts`) words it, auto-plays forced
@@ -385,13 +385,13 @@ The user's standing rule (#91): **no task may leave code coverage under
   compass ticks ready seats) and on the play page (`showSeats`: the four
   seats as `SeatPlate`s two by two, `li[data-seat]` `.is-ready`, an empty
   one `.start-empty` dashed orange "Empty · West" holding a manager's
-  `.start-fill[data-fill-seat]` buttons), in `waiting` and in place of
-  `NextBoardBox` for a finished board with new players or a set over.
-  There (#121) it also carries the play page's only way off the seat
-  (`canLeave` → `leave`) and a manager's Remove per seat (`removable` =
-  the seats `canRemove` allows → `remove`, run by the page's `removeSeat`
-  with `fillingSeat` as its busy mark), since `NextBoardBox`'s Leave is
-  gone once a set is over.
+  `.start-fill[data-fill-seat]` buttons), in `waiting` and under the
+  table for a finished board with new players or a set over (the result
+  dialog then has no vote). There (#121) it also carries the play page's
+  way off the seat (`canLeave` → `leave`) and a manager's Remove per seat
+  (`removable` = the seats `canRemove` allows → `remove`, run by the
+  page's `removeSeat` with `fillingSeat` as its busy mark), since the
+  result dialog's Leave goes with its vote.
 - **Bidding**: calls go out as a `bid_id`, and the ids aren't pinned to the
   rank, so they come from the public `GET /bids` (`getBids`, the 38 calls in
   `auction[].bid`'s shape), which the game store's `loadBids()` reads once;
@@ -660,58 +660,80 @@ The user's standing rule (#91): **no task may leave code coverage under
   "2♣X W +2", `declaredText` "You declared" / "radu declared" / "E-W
   declared");
   `BoardResultPanel.vue` (#162, Daylight's result board) is a navy hero
-  card: `declaredText` (`players` prop), the contract + made suffix
-  ("2♣ +2", `.made-ok` green / `.made-down` red), "10 tricks · by
-  claim", the viewer's score big right (N-S's tagged "N-S" for someone
-  not seated), and "Against the other tables 67 %" + an amber bar when
-  this board's matchpoints for the viewer's side are known (`extras`,
-  from `playingExtras()` in `export.ts`: the board's results or a cached
-  set's row by `playing_id`; `useBoardExport` uses it too); then **Same
-  board elsewhere** (`others` = `history.results[boardId]`, which the play
-  page reads with `loadResults` once `finished`, failures quiet;
-  `otherTableRows(board, playingId)`: rows only with 2+ results, the
-  first 5 with ours always in, labelled by the N-S pair's usernames since
-  a result row has no table name, ours "You" + `.elsewhere-mine`), the
-  double dummy line (below) with `doubleDummyVerdict` and a green
-  `.dd-tick` when `doubleDummyDiff` ≥ 0, and `SetStrip` (`setPosition`
-  = the board's `set`, `setSoFar` for the figures: `setStripTiles` in
-  `sets.ts`, "Board 2 62 %", the current tile tinted, "now" until played,
-  "·" to come, "—" with top 0; `onTable` is the navy B1–B4 version);
-  `BridgeTable`'s `deal` prop lays each hand at its seat. **The next board comes by itself**
-  (#98, bb#97): `next_board_at` (ISO 8601, `BRIDGE_NEXT_BOARD_SECONDS` =
-  10 after the board ended; null when no deal is coming: set over, a seat
-  empty, players changed) is when the backend's queued `DealNextBoard`
-  deals it, with the usual `TableUpdated` + `PlayingUpdated` +
-  `HandDealt`; the result stays on show until then. `NextBoardBox.vue`
-  (prop `nextBoardAt`, `set` = the board's) is the next board bar: a
-  `.next-ring` (conic gradient, `--ring-fill` = seconds left of
-  `NEXT_BOARD_SECONDS` 10 in `sets.ts`, the seconds in `.next-ring-face`)
-  counting down ("Next board in 0:08", then "Dealing the next board…";
-  `useNow`, `secondsLeft`/`formatClock` from `away.ts`), `.next-sub`
-  "Board 3 of 4 · or skip the wait" (no next board after the set's last,
-  no "skip" once asked), Deal now orange, Leave a small clear button
-  under it. Its optional **Deal now** is the
-  game store's `next()`: `POST /tables/{id}/playing/next` through the
-  same `isBehind` guard; once every human has asked (robots count as
-  asked) the last one gets the new board in the answer, the others
-  through `PlayingUpdated` + `HandDealt`. Each player asks only for
-  themselves (#72: no "for everyone", a manager included; the backend
-  ignores `everyone`, bb#74); after asking the box says "You asked to
-  deal now. Waiting for …" (humans only). The play page's
-  `useStaleDeadline` rereads the game if the finished board is still
-  shown 2 s after `next_board_at`. `turnNotice()` says nothing in
-  `finished` (nothing waits for the user). Leaving
-  between boards abandons nothing and keeps `board_id`; with three seated
-  the next ask 409s, and once a fourth player sits down everyone's Start
-  deals the board (the play page swaps `NextBoardBox` for `StartBox`).
-  `leaveWarning()` / `moveConsequences()` in `src/utils/seatMove.ts` word
-  leaving by phase (`game.phaseOf(id)`). Under a board's result goes its
-  set's boards (`BoardResultPanel`'s `SetStrip`, below), never a
-  running score.
+  card, only the review's now (`BoardReview`'s last step): `declaredText`
+  (`players` prop), the contract + made suffix ("2♣ +2", `.made-ok`
+  green / `.made-down` red), "10 tricks · by claim", the viewer's score
+  big right (N-S's tagged "N-S" for someone not seated), and "Against the
+  other tables 67 %" + an amber bar when this board's matchpoints for the
+  viewer's side are known (`extras`, from `playingExtras()` in
+  `export.ts`: the board's results or a cached set's row by `playing_id`;
+  `useBoardExport` uses it too). **At the table: the result dialog**
+  (#174): in `finished` the play page renders nothing under the table
+  (no result panel, Compare, Review and export or next-board bar; the
+  table's `deal` prop lays each hand at its seat) and shows
+  `BoardResultDialog.vue`, a centred `ion-modal.result-dialog` (no
+  breakpoints, `--width: min(420px, calc(100vw - 32px))`, `--height:
+  auto`, 16 px corners; content `v-if="shown"`, kept until `did-dismiss`
+  so it never empties while closing): title "Board result" + X
+  `.result-close` (`aria-label="Close"`, emits `close`; `did-dismiss`
+  while `open` is still true = backdrop/Escape, also `close`); the navy
+  `.dialog-hero` ("4♠ by South +1" `.dialog-contract` with `CallLabel` +
+  `doubledMark` + `SEAT_NAMES`, `.dialog-made`; "Passed out"; `.dialog-detail`
+  "11 tricks · by claim"; `.dialog-score` = `scoreFor` our side, `.dialog-side`
+  "N-S" without a seat; `.dialog-mp` "67 %" + bar from `extras`); `.others`
+  (`otherTableRows(others, playingId, OTHER_TABLES_MAX)`, 4 in
+  `result.ts`: contract "4♠ N +1" + N-S score, ours `.others-mine` +
+  `aria-current`, `.others-compare` "Compare with other tables" →
+  `/boards/:id/results` when more than 4; none with fewer than 2
+  results); `.dialog-dd` = `doubleDummyLine` only once `ready`;
+  `.others-skeleton` / `.dd-skeleton` (`ion-skeleton-text`) while
+  `othersLoading` / `ddLoading`; the footer with `vote`: `.vote-ring`
+  (conic `--ring-fill` of `NEXT_BOARD_SECONDS` 15 in `sets.ts`, "0:12"
+  inside, `role="timer"`, `useNow`, `secondsLeft`/`formatClock`) and
+  `.vote-button` orange "Deal next board" → `next`, after our vote
+  disabled "Waiting for bob, di…" (humans not in `ready`, a seat with
+  nobody named by `SEAT_NAMES`), "Dealing…" when nobody is left or at 0;
+  then small `.result-review` (`reviewable` → `review`) and
+  `.result-leave` "Leave the table" (`vote` only → `leave`). With `set`
+  (`endedSet`) it shows "Set results" + `SetResultsPanel`, no vote. The
+  page: `finishedId` (the finished `playing_id` with a result);
+  `resultOpen` = `finishedId` && `viewActive` && !`reviewOpen` &&
+  `resultDismissed` ≠ it && (`resultSettled` (`othersSettled`: the
+  page's `loadResults` settled for the board, `othersSettledFor`, or
+  `history.results` holds it; and after a set's last board `endedSet`
+  read) or `RESULT_WAIT_MS` 1 s gone, `resultWaited`); `resultDismissed`
+  is set by `close` and `closeOverlays`, cleared by the pill and
+  `onIonViewWillEnter`; `resultVote` = !`showStart` && !`endedSet`;
+  `ddLoading` = !`useDoubleDummy`'s `settled` (ready, failed, or pending
+  after its one reread). `ResultPill.vue` (`.result-pill`, "Result ·
+  0:12" with the countdown while `resultVote`, else "Result") sits in
+  `BridgeTable`'s top-right corner beside `.corner-contract` while the
+  board is finished and the dialog closed, and opens it again.
+  **The next board comes by itself** (#98, bb#97): `next_board_at` (ISO
+  8601, `BRIDGE_NEXT_BOARD_SECONDS` = 15 since bb#140 after the board
+  ended; null when no deal is coming: set over, a seat empty, players
+  changed) is when the backend's queued `DealNextBoard` deals it, with
+  the usual `TableUpdated` + `PlayingUpdated` + `HandDealt`; the result
+  stays on show until then, and the dialog closes when the new board
+  arrives. The dialog's **Deal next board** (the vote) is the game
+  store's `next()`: `POST /tables/{id}/playing/next` through the same
+  `isBehind` guard; once every human has asked (robots count as asked)
+  the last one gets the new board in the answer, the others through
+  `PlayingUpdated` + `HandDealt`. Each player votes only for themselves
+  (#72: no "for everyone", a manager included; the backend ignores
+  `everyone`, bb#74). The play page's `useStaleDeadline` rereads the
+  game if the finished board is still shown 2 s after `next_board_at`.
+  `turnNotice()` says nothing in `finished` (nothing waits for the
+  user). Leaving between boards abandons nothing and keeps `board_id`;
+  with three seated the next ask 409s, and once a fourth player sits
+  down everyone's Start deals the board (`StartBox` on the page, the
+  dialog without its vote). `leaveWarning()` / `moveConsequences()` in
+  `src/utils/seatMove.ts` word leaving by phase (`game.phaseOf(id)`).
+  No set strip and never a running score at the table.
 - **Sets of four boards** (#73, bb#75, backend `docs/API.md` Sets): Start
   deals a set's first board, the other three come by themselves
   (`next_board_at`, above); after the fourth `next_board_at` is null,
-  Deal now 409s ("The set is over…") and everyone's Start opens the next
+  the vote 409s ("The set is over…") and everyone's Start opens the next
   set. `set`
   (`SetPosition` in `src/services/game.ts`: `id`, `number` at the table,
   `board` (this board's place / boards dealt), `of`, `finished`, `ended`
@@ -734,10 +756,10 @@ The user's standing rule (#91): **no task may leave code coverage under
   boards) is cached by the history store's `loadSet` (replaced on every
   read, 403/404 drop it). The play page reads it once per finished board
   and when the set ends (keyed, failures ignored: a newcomer gets 403),
-  feeds `BoardResultPanel`'s set strip and matchpoints and, once the set is
-  over (`endedSet`), shows `SetResultsPanel.vue` instead of the board
-  result (also in `waiting` for a set ended mid-board; the same navy hero
-  card, #162), with `StartBox` below. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
+  feeds the result dialog's matchpoints and, once the set is over
+  (`endedSet`), the dialog shows `SetResultsPanel.vue` instead of the
+  board (in `waiting`, for a set ended mid-board, the page shows it; the
+  same navy hero card, #162), with `StartBox` on the page. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
   side), `replacementsOf` (`?? []`), `replacedText(entry, mine)` ("East
   didn't play in time: a robot took their seat." / "You didn't play in
   time: a robot took your seat."; `SetResultsPanel` lists one per
@@ -905,8 +927,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   South. An empty `auction` (`isRecorded`) means a playing finished before
   bb#60: only the deal and the result, with a notice. `HistoryEntryItem`
   and each `BoardResultsPage` row link to it.
-  **At the table** (#97): the play page's header "Last board" (and
-  "Review and export" once `finished`) opens `BoardReviewModal.vue`
+  **At the table** (#97): the play page's header "Last board" (and the
+  result dialog's Review once `finished`; the dialog steps aside while
+  the review is open) opens `BoardReviewModal.vue`
   (full-height `ion-modal`, content only `v-if="open"` since page tests
   stub `IonModal` with its slot) without navigating; `PlayingUpdated`
   keeps applying underneath. Its boards are `reviewChoices(setResults,
@@ -948,9 +971,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   `best` ringed) sit in `BoardReview` under the result; `BoardResultsPage`
   shows the table above the list (read after `loadResults` succeeds, the
   viewer's contract marked); the play page reads it once `finished`
-  (`finishedBoardId`) and `BoardResultPanel`'s `doubleDummy` +
-  `reviewable` give one line with **Review** (`review` event → the
-  review modal). Play page specs that mock `@/services/history` keep
+  (`finishedBoardId`) and the result dialog gives one line once it is
+  `ready` (a skeleton while `useDoubleDummy`'s `settled` is false). Play page specs that mock `@/services/history` keep
   `getDoubleDummy` never settling.
 - **Export** (#71): the review page's header "Export" (and the review
   modal's) opens an `ion-action-sheet`, all of it in
@@ -1123,7 +1145,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   colours (`primary` = the table navy, `success`/`danger`/`warning` =
   pass/double/amber, `medium` = muted, `tertiary` = the robot blue) plus a
   custom **`action`** colour (`color="action"`, the one orange primary per
-  screen: StartBox's Start, NextBoardBox's Deal now). Components read
+  screen: StartBox's Start, the result dialog's Deal next board). Components read
   tokens, never hex (none left under `src/` since #163 but the
   printout's black on white); what stays white in both modes (card
   faces, the bidding box's cards, the plates' avatars) has tokens that

@@ -33,7 +33,12 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/100-claim-dialog` (after #173, the claim as a small
+> branch `bulbulica2/101-board-result-dialog` (after #174, a finished
+> board's result in a small dialog over the deal: the score, the
+> matchpoints, up to four other tables, one double dummy line, a ring
+> counting down the 15 s to the next board and a **Deal next board**
+> vote; a **Result** pill reopens it, and the set's results show in it
+> after a set's last board; after #173, the claim as a small
 > dialog in the middle of the screen with an X: the tiles and one button,
 > **Concede** on the 0 tile, and none of the explanatory lines; after
 > #172, dummy's cards

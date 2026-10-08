@@ -16,10 +16,11 @@ export function sideOfCode(code: SideCode): Side {
   return code === 'NS' ? 'ns' : 'ew';
 }
 
-// BRIDGE_NEXT_BOARD_SECONDS' default (bb#97): how long after a board ends
-// the next one of the set is dealt by itself (`next_board_at`). Only the
-// countdown ring's full circle: the deadline itself is the backend's.
-export const NEXT_BOARD_SECONDS = 10;
+// BRIDGE_NEXT_BOARD_SECONDS' default (bb#97, 15 since bb#140): how long
+// after a board ends the next one of the set is dealt by itself
+// (`next_board_at`). Only the countdown ring's full circle: the deadline
+// itself is the backend's.
+export const NEXT_BOARD_SECONDS = 15;
 
 // "Board 2 of 4": the board's place in its set (the play page names no set
 // and never the board's number in the database, #165).

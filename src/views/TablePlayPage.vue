@@ -75,7 +75,9 @@
             <span>Refreshing…</span>
           </div>
 
-          <!-- A claim waiting for its answers: play stops until it is settled. -->
+          <!-- A claim waiting for its answers: play stops until it is settled.
+               A finished board's result is in its dialog (below), over the
+               deal on the table. -->
           <ClaimPanel
             v-if="pendingClaim"
             :state="pendingClaim"
@@ -87,63 +89,6 @@
             @reject="answerClaim(false)"
             @withdraw="withdrawClaim"
           />
-          <!-- The board is over (13 tricks, or passed out): its score, then
-               moving on. The deal lies face up on the table below. -->
-          <template v-else-if="playing.phase === 'finished' && playing.result">
-            <!-- After the set's last board: the whole set in place of the
-                 board, then everyone's Start. -->
-            <SetResultsPanel v-if="endedSet" :set="endedSet" :my-seat="mySeat" />
-            <BoardResultPanel
-              v-else
-              :result="playing.result"
-              :my-seat="mySeat"
-              :players="players"
-              :set-position="playing.set"
-              :set-so-far="setResults"
-              :extras="boardExtras"
-              :others="playing.board ? (history.results[playing.board.id] ?? null) : null"
-              :playing-id="playing.playing_id"
-              :double-dummy="doubleDummy.analysis.value"
-              :reviewable="reviewable.length > 0"
-              @review="reviewOpen = true"
-            />
-            <!-- The same board at every other table, with matchpoints. -->
-            <ion-button
-              v-if="playing.board"
-              expand="block"
-              fill="outline"
-              class="compare"
-              :router-link="`/boards/${playing.board.id}/results`"
-            >
-              Compare with other tables
-            </ion-button>
-            <!-- Replay it card by card, and export it (text, PBN, print),
-                 in the review modal: we stay at the table. -->
-            <ion-button
-              v-if="reviewable.length > 0"
-              expand="block"
-              fill="outline"
-              class="compare review-and-export"
-              @click="reviewOpen = true"
-            >
-              Review and export
-            </ion-button>
-            <!-- The same four get the set's next board by itself, counted
-                 down here (Deal now skips the wait); once one of them has
-                 been replaced, it is Start again (below). -->
-            <NextBoardBox
-              v-if="!showStart"
-              :ready="playing.ready ?? []"
-              :players="players"
-              :my-seat="mySeat"
-              :next-board-at="playing.next_board_at ?? null"
-              :set="playing.set"
-              :busy="asking"
-              @next="askNext"
-              @leave="leave"
-            />
-          </template>
-
           <!-- A set that ended mid-board (a player taken out of it): no
                board is left on the table, but its results are. -->
           <SetResultsPanel
@@ -236,6 +181,13 @@
                   <p v-if="forDeclarer" class="contract-you">you play it</p>
                 </template>
               </div>
+              <!-- The result dialog closed to look at the deal: this opens
+                   it again, with the countdown to the next board. -->
+              <ResultPill
+                v-if="finishedId !== null && !resultOpen"
+                :next-board-at="resultVote ? (playing.next_board_at ?? null) : null"
+                @open="resultDismissed = null"
+              />
             </template>
             <template #bottom-left>
               <AuctionPopover
@@ -422,6 +374,31 @@
           <BoardChat v-if="chatSheet" v-bind="chatProps" v-model:draft="chatDraft" v-on="chatEvents" />
         </ion-content>
       </ion-modal>
+      <!-- The finished board's result (or, after a set's last board, the
+           set's), its countdown and the vote to deal the next board now. -->
+      <BoardResultDialog
+        :open="resultOpen"
+        :result="playing?.result ?? null"
+        :set="endedSet"
+        :my-seat="mySeat"
+        :players="players"
+        :extras="boardExtras"
+        :others="othersOfBoard"
+        :others-loading="!othersSettled"
+        :playing-id="playing?.playing_id ?? null"
+        :board-id="finishedBoardId"
+        :double-dummy="doubleDummy.analysis.value"
+        :dd-loading="!doubleDummy.settled.value"
+        :vote="resultVote"
+        :ready="playing?.ready ?? []"
+        :next-board-at="playing?.next_board_at ?? null"
+        :busy="asking"
+        :reviewable="reviewable.length > 0"
+        @close="resultDismissed = finishedId"
+        @next="askNext"
+        @review="reviewOpen = true"
+        @leave="leave"
+      />
       <BoardReviewModal
         :open="reviewOpen"
         :choices="reviewable"
@@ -458,7 +435,7 @@ import AuctionPopover from '@/components/AuctionPopover.vue';
 import AwayNotice from '@/components/AwayNotice.vue';
 import BiddingBox from '@/components/BiddingBox.vue';
 import BoardChat from '@/components/BoardChat.vue';
-import BoardResultPanel from '@/components/BoardResultPanel.vue';
+import BoardResultDialog from '@/components/BoardResultDialog.vue';
 import BoardReviewModal from '@/components/BoardReviewModal.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
@@ -468,9 +445,9 @@ import ClaimSheet from '@/components/ClaimSheet.vue';
 import ExplainCallSheet from '@/components/ExplainCallSheet.vue';
 import HandView from '@/components/HandView.vue';
 import LastTrickPopover from '@/components/LastTrickPopover.vue';
-import NextBoardBox from '@/components/NextBoardBox.vue';
 import OfflineRefresh from '@/components/OfflineRefresh.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
+import ResultPill from '@/components/ResultPill.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
@@ -958,23 +935,36 @@ const boardExtras = computed(() =>
 );
 
 // The finished board's double dummy table (bb#114), read once it is over
-// here (the backend refuses earlier): one line under its result. Its
-// results at every table too: "Same board elsewhere" (failures quiet, the
-// list just stays away).
+// here (the backend refuses earlier): one line in its result dialog. Its
+// results at every table too: the other tables (failures quiet, the list
+// just stays away). `othersSettledFor`: the board whose read has answered.
 const finishedBoardId = computed(() =>
   playing.value?.phase === 'finished' ? (playing.value.board?.id ?? null) : null,
 );
 const doubleDummy = useDoubleDummy(() => finishedBoardId.value);
+const othersSettledFor = ref<number | null>(null);
 watch(
   finishedBoardId,
   (boardId) => {
     if (boardId) {
       doubleDummy.load();
-      history.loadResults(boardId).catch(() => null);
+      history
+        .loadResults(boardId)
+        .catch(() => null)
+        .finally(() => (othersSettledFor.value = boardId));
     }
   },
   { immediate: true },
 );
+const othersOfBoard = computed(() => {
+  const id = finishedBoardId.value;
+  return id ? (history.results[id] ?? null) : null;
+});
+// Read already (or kept from before): the dialog has its rows.
+const othersSettled = computed(() => {
+  const id = finishedBoardId.value;
+  return !!id && (othersSettledFor.value === id || !!history.results[id]);
+});
 
 // The set is over and its results are in: they replace the board's result.
 // Nothing to show for a set broken off before any board was finished.
@@ -985,6 +975,48 @@ const endedSet = computed(() => {
   }
   return results.boards.length > 0 ? results : null;
 });
+
+// The finished board whose result the dialog shows (#174).
+const finishedId = computed(() =>
+  playing.value?.phase === 'finished' && playing.value.result ? playing.value.playing_id : null,
+);
+// The board whose dialog was closed (the X, the backdrop, a confirmation
+// over it): it stays closed until the pill or coming back to the page.
+const resultDismissed = ref<number | null>(null);
+// The board whose dialog has waited long enough for its other tables.
+const resultWaited = ref<number | null>(null);
+// Its rows read, so it opens without jumping: the other tables, and after
+// a set's last board the set's results. Or RESULT_WAIT_MS gone by: the
+// rows still missing hold a skeleton line.
+const resultSettled = computed(
+  () => othersSettled.value && (!shownSet.value?.finished || endedSet.value !== null),
+);
+const resultOpen = computed(
+  () =>
+    finishedId.value !== null &&
+    viewActive.value &&
+    !reviewOpen.value &&
+    resultDismissed.value !== finishedId.value &&
+    (resultSettled.value || resultWaited.value === finishedId.value),
+);
+// The same four go on to the set's next board: the dialog counts down to it
+// and takes our vote. Not once the set is over or the players changed:
+// everyone's Start on the page deals then.
+const resultVote = computed(() => !showStart.value && !endedSet.value);
+
+// How long a finished board's dialog waits for its other tables at most.
+const RESULT_WAIT_MS = 1000;
+let resultTimer: ReturnType<typeof setTimeout> | undefined;
+watch(
+  finishedId,
+  (id) => {
+    clearTimeout(resultTimer);
+    if (id !== null) {
+      resultTimer = setTimeout(() => (resultWaited.value = id), RESULT_WAIT_MS);
+    }
+  },
+  { immediate: true },
+);
 
 // The finished boards the review modal offers: the running set's, else the
 // last one seen here, else (after a reload) the latest in our history.
@@ -1058,11 +1090,14 @@ onIonViewWillEnter(() => {
   notFound.value = false;
   notSeated.value = false;
   viewActive.value = true;
+  // A finished board's result shows again on coming back.
+  resultDismissed.value = null;
   load(false);
 });
 
 // Off screen (another page pushed on top): no card plays itself meanwhile,
-// and the review closes (with its export sheet and any printout).
+// and the review closes (with its export sheet and any printout); so does
+// the result dialog (`viewActive`).
 onIonViewWillLeave(() => {
   viewActive.value = false;
   reviewOpen.value = false;
@@ -1307,7 +1342,10 @@ watch(
   },
 );
 
-onBeforeUnmount(() => clearTimeout(pauseTimer));
+onBeforeUnmount(() => {
+  clearTimeout(pauseTimer);
+  clearTimeout(resultTimer);
+});
 
 // Both the table (seats, live channel) and its board; either alone would
 // leave the page half drawn. The playing snapshot also rebuilds everything
@@ -1547,7 +1585,8 @@ async function withdrawClaim() {
   }
 }
 
-// Deal now: ask for the next board before its time, for ourselves only
+// Deal next board (the result dialog's vote): ask for the next board
+// before its time, for ourselves only
 // (nobody asks for anyone else). The last human to ask deals it, and the new
 // board replaces this one.
 async function askNext() {
@@ -1651,6 +1690,7 @@ async function fillSeat(seat: Seat, request: () => Promise<unknown>, done: strin
 // page's stands over the alert (#121): closed, and drawn closed.
 async function closeOverlays() {
   reviewOpen.value = false;
+  resultDismissed.value = finishedId.value;
   claimOpen.value = false;
   explainIndex.value = null;
   seatingAt.value = null;
@@ -1692,7 +1732,7 @@ async function removeSeat(seat: Seat) {
   }
 }
 
-// Leaving between boards (NextBoardBox) or sets (StartBox): free, since the
+// Leaving between boards (the result dialog) or sets (StartBox): free, since the
 // board is over, unless the set goes on: then the seat is held, and not
 // coming back to play once the turn reaches us hands it to a robot. The
 // confirmation is inside the try, so nothing fails unseen (#121).
@@ -1833,10 +1873,6 @@ async function refresh(event: CustomEvent) {
   .chat-toggle-label {
     display: none;
   }
-}
-
-.compare {
-  margin: 0 0 12px;
 }
 
 .loading {
