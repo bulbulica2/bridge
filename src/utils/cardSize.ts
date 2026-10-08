@@ -48,6 +48,10 @@ export function setCardSize(size: CardSize) {
 
 const current = computed(() => CARD_SIZES.find((size) => size.value === cardSize.value)!);
 
+// The setting's card width in px, for the layouts worked out in script
+// (dummy's single row, handRow.ts).
+export const cardWidthPx = computed(() => current.value.width);
+
 // The width every card is drawn at, as CSS: the setting's, unless the room
 // around it is shorter (`--card-max`: a phone's hand, the table's centre).
 // PlayingCard, the hand and the trick all set `--card-w` from it, so the

@@ -180,7 +180,7 @@ async function load() {
 <style scoped>
 /* As wide as the play page: the same table. */
 .review {
-  max-width: 720px;
+  max-width: 832px;
   margin: 0 auto;
 }
 

@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/98-board-info-in-the-table-corners`._
+_Status as of branch `bulbulica2/99-dummy-on-one-row`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -369,7 +369,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim sheet with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim sheet with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -436,6 +436,14 @@ card in your hand shows at least 44 px of itself to tap, so on a phone the
 hand wraps whole suits, about two to a row, at 1.5 × the old size, and
 keeps the height it had as dealt while you play. On a phone the side seats
 narrow to their name and tags so the trick in the middle can be large.
+
+**Dummy on one row** (#172): dummy's cards across the top (and a robot
+declarer's, for its dummy) always lie on one row, so the table never moves
+as they go. The page is up to 832 px wide, room for 13 Extra large cards;
+narrower (a phone, a small laptop, the chat beside the table) they overlap
+more, down to each card's rank and suit, and on a small phone the cards
+get smaller rather than wrap. On dummy's turn the cards you may play keep
+a full 44 px to tap where the row has room.
 
 Like the detail page, it shows **Refresh** (under a note, **Live updates
 are off. Refresh to see the latest.**) only once live updates have been
@@ -846,7 +854,8 @@ cards as they go but keep the room they took as dealt, so the buttons stay
 in the same place at every step (#59). The line saying where you are
 (trick and card) sits under the buttons. The result panel shows once the
 replay reaches the end, and **Results** (header) / **Results at every
-table** go back to the board's results.
+table** go back to the board's results. The page is as wide as the play
+page (832 px at most), so the table reads the same.
 
 Under the result, what was possible double dummy (#119): the board's double
 dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks

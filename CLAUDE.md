@@ -547,6 +547,15 @@ The user's standing rule (#91): **no task may leave code coverage under
   trick's cards by seat for `TrickArea.vue`, which fills `BridgeTable`'s
   `centre` slot. `dummy_hand` is public only after the opening lead.
   `BridgeTable` lays it across the top for declarer, where it can be tapped,
+  on **one row** (#172: `HandView`'s `singleRow`, also for a robot
+  declarer's hand; `useElementWidth` on the hand, `src/utils/handRow.ts`:
+  `rowCardWidth` sizes the card for 13 cards in 4 suits at the floor step
+  `floorStep` = max(22, 0.42 w), so it never changes as cards go;
+  `rowSteps` gives each card's shown strip, `naturalStep` where it fits,
+  else tappable cards keep it and the rest share down to the floor; per-card
+  `margin-left` inline, `.suit-group` `display: contents`, `contain:
+  inline-size`, 18 px rise room always, so the row never changes height;
+  unmeasured, the usual steps on one row),
   or as `DummyColumns.vue` on a defender's side seat, and not at all for
   dummy, whose own hand is the same cards. For a robot declarer's dummy,
   `BridgeTable`'s `declarer` prop (+ `declarerPlayable`,
@@ -1245,9 +1254,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   `DummyColumns` takes `cardTextSize` as `--hand-text` (at most 1.1rem
   below 576 px, so a finished deal's three hands fit 360 px).
   `BridgeTable` below 576 px is `auto minmax(0, 1fr) auto`. The play page,
-  `PlayingReviewPage` and `BoardReviewModal` are 720 px wide at most (the
-  chat aside's `clamp()` uses 720 + 2 × 328 = 1376 px); the play page's
-  wide table 1040 px (1696 px).
+  `PlayingReviewPage` and `BoardReviewModal` are 832 px wide at most (#172:
+  13 Extra large cards at the usual step, 120 + 12 × 55.2 + 3 × 4, plus
+  the table's 2 × 12 padding; the chat aside's `clamp()` uses 832 + 2 ×
+  328 = 1488 px, the modal's `--width` 880 px); the play page's wide
+  table 1040 px (1696 px).
 - **Ionic events** (#158): Ionic Vue 8 dispatches every event in
   kebab-case (`ion-change`), but its wrappers declare the camelCase name
   as a component event and only re-emit it from an `ionChange` listener

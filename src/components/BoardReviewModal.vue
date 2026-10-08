@@ -213,11 +213,11 @@ async function load() {
    need the room. */
 ion-modal.board-review-modal {
   --height: 100%;
-  --width: min(100%, 800px);
+  --width: min(100%, 880px);
 }
 
 .review {
-  max-width: 720px;
+  max-width: 832px;
   margin: 0 auto;
 }
 

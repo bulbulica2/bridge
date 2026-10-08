@@ -20,7 +20,8 @@
        own are below the table already). Once the board is over, the whole
        deal lies face up, each hand at its seat (in a replay, what is left
        of it, in the room the hand took as dealt). Dummy's and a robot
-       declarer's cards read trumps first (`trump`, see suitOrder); the
+       declarer's cards read trumps first (`trump`, see suitOrder) and lie
+       on one row whatever the width (HandView's `singleRow`, #172); the
        claimer's and the deal keep bridge order. With `wide` (the play page
        on a wide screen, #163) the table takes boards A/B's layout:
        partner top centre, the opponents' plates upright where room is
@@ -157,6 +158,7 @@
           :forced-id="dummyForcedId"
           :forced-seconds="forcedSeconds"
           :order="trumpOrder"
+          single-row
           @play="emit('play', $event)"
         />
         <DummyColumns v-else :cards="dummy!.cards" :order="trumpOrder" />
@@ -172,6 +174,7 @@
         :forced-id="declarerForcedId"
         :forced-seconds="forcedSeconds"
         :order="trumpOrder"
+        single-row
         @play="emit('play', $event)"
       />
       <DummyColumns
