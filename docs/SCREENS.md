@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/99-dummy-on-one-row`._
+_Status as of branch `bulbulica2/100-claim-dialog`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -369,7 +369,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim sheet with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -598,23 +598,25 @@ What it shows by phase:
   **plays in 3** on the card and the turn clock line counting down too
   ("Your turn from dummy · ♥7 plays in 3"); tapping it plays
   it at once. Never on a lead, and never for a defender: their other cards
-  are dimmed, but they tap the one left themselves. Opening the claim sheet or the board review, a claim or any new card on the
+  are dimmed, but they tap the one left themselves. Opening the claim dialog or the board review, a claim or any new card on the
   table stops the countdown.
   Anyone but dummy can **Claim** some of the tricks left (or **Concede**
   them) with the small **Claim** button in the table's bottom-right
-  corner (#171). The claim sheet (#161) says "7 tricks left · you have 4 · 4♠ needs
-  10" and has a tile per number, four a row, from all the tricks left
-  down to 0, each with what it makes of the contract ("4♠ +1", "4♠ −2" in
-  red) and your side's score ("+450", "−100"), worked out on the page as a
-  hint (the backend's score is final). It opens with every remaining trick
-  picked, so the orange send button reads **Claim all 7 · 4♠ +1 · +450**
-  at once and one tap claims them all (#137); tapping another tile picks
-  it instead (**Claim 5 · 4♠ −1 · −50**; the 0 tile makes it
-  **Concede**). A trick finishing while it is open moves that default to
-  the new maximum, and keeps a number picked by hand while it is still
-  possible (capped to the new maximum otherwise). **Concede** is its own
-  outlined button, beside "Both opponents get 10 seconds. No answer counts
-  as no." While a claim is pending, a dark banner says what is claimed with
+  corner (#171). It opens a small dialog in the middle of the screen
+  (#173, the table still visible around it): the title **Claim** ("Claim
+  for North" for a robot declarer's dummy) with an **X** in the corner,
+  then a tile per number, four a row, from all the tricks left down to 0,
+  each with what it makes of the contract ("4♠ +1", "4♠ −2" in red) and
+  your side's score ("+450", "−100"), worked out on the page as a hint
+  (the backend's score is final), then one orange button. It opens with
+  every remaining trick picked, so the button reads **Claim 7 · 4♠ +1 ·
+  +450** at once and one tap claims them all (#137); tapping another tile
+  picks it instead (**Claim 5 · 4♠ −1 · −50**); the 0 tile makes it
+  **Concede**, which sends 0. A trick finishing while it is open moves
+  that default to the new maximum, and keeps a number picked by hand while
+  it is still possible (capped to the new maximum otherwise). The X, a tap
+  on the backdrop or Escape closes it. How long the others have to answer
+  shows once the claim is out, in the banner below. While a claim is pending, a dark banner says what is claimed with
   its countdown on the right, the claimer's cards lie face up at their
   seat, no card can be played, the players who still have to answer get
   **Accept** / **Reject**, two equal buttons, at once (both of them,

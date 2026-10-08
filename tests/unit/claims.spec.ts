@@ -15,13 +15,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
 import {
   CLAIM_LOCKED_TEXT,
-  CLAIM_SECONDS,
   canClaim,
   claimAction,
-  claimAnswerersText,
   claimLocked,
   claimOutcome,
-  claimSummary,
   claimClockText,
   claimExpired,
   claimOffText,
@@ -213,25 +210,10 @@ describe('claim outcomes (the claim sheet)', () => {
       tricks_won: null,
     })
     expect(claimOutcome(xx, 'S', 5)).toEqual({ result: '4♠XX −5', down: true, score: '−2800' })
-    expect(claimSummary(xx, 'S')).toBe('5 tricks left · you have 0 · 4♠XX needs 10')
   })
 
   test('without a contract there is nothing to work out', () => {
     expect(claimOutcome(state({ contract: null }), 'S', 3)).toBeNull()
-    expect(claimSummary(state({ contract: null }), 'S')).toBe('5 tricks left')
-    expect(claimAnswerersText(state({ contract: null }), 'S')).toBe('The others')
-  })
-
-  test('the summary counts our side, and one trick left reads "1 trick left"', () => {
-    const last = state({ tricks: tricks(12), tricks_won: { ns: 9, ew: 3 } })
-    expect(claimSummary(last, 'S')).toBe('1 trick left · you have 9 · 4♠ needs 10')
-    expect(claimSummary(last, 'E')).toBe('1 trick left · you have 3 · 4♠ needs 10')
-  })
-
-  test('who answers: both opponents for declarer, declarer and partner for a defender', () => {
-    expect(claimAnswerersText(state(), 'S')).toBe('Both opponents')
-    expect(claimAnswerersText(state(), 'N')).toBe('Both opponents')
-    expect(claimAnswerersText(state(), 'W')).toBe('Declarer and your partner')
   })
 })
 
@@ -440,7 +422,9 @@ describe('game store claims', () => {
 })
 
 describe('ClaimSheet', () => {
-  const modalStub = { template: '<div><slot /></div>' }
+  // The modal's own props land on the stub's root as attributes, so a
+  // breakpoint would show there.
+  const modalStub = { name: 'IonModal', emits: ['didDismiss'], template: '<div class="modal-stub"><slot /></div>' }
 
   type SheetProps = {
     open?: boolean
@@ -469,8 +453,7 @@ describe('ClaimSheet', () => {
     expect(picked(wrapper)).toEqual(['6'])
     expect(wrapper.get('[data-tricks="6"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.get('[data-tricks="5"]').attributes('aria-pressed')).toBe('false')
-    expect(wrapper.get('.send-claim').text()).toBe('Claim all 6')
-    expect(wrapper.get('.claim-summary').text()).toBe('6 tricks left')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 6')
 
     // One tap claims them all.
     await wrapper.get('.send-claim').trigger('click')
@@ -480,7 +463,6 @@ describe('ClaimSheet', () => {
   test('with 1 trick left the send button reads "Claim 1"', () => {
     const wrapper = mountSheet({ remaining: 1 })
     expect(wrapper.get('.send-claim').text()).toBe('Claim 1')
-    expect(wrapper.get('.claim-summary').text()).toBe('1 trick left')
   })
 
   test('with no trick left there is nothing to claim', () => {
@@ -522,28 +504,62 @@ describe('ClaimSheet', () => {
     expect(wrapper.emitted('claim')).toEqual([[0]])
   })
 
-  test('Concede claims 0 whatever is picked', async () => {
+  test('one button only: no separate Concede, the 0 tile is the concede', () => {
     const wrapper = mountSheet({ remaining: 6 })
 
-    expect(wrapper.get('.concede').text()).toBe('Concede')
-    await wrapper.get('.concede').trigger('click')
-    expect(wrapper.emitted('claim')).toEqual([[0]])
+    expect(wrapper.find('.concede').exists()).toBe(false)
+    expect(wrapper.findAll('ion-button').map((b) => b.classes())).toEqual([
+      expect.arrayContaining(['claim-close']),
+      expect.arrayContaining(['send-claim']),
+    ])
   })
 
-  test("claiming for a robot declarer names its seat, whose hand goes face up", () => {
-    const wrapper = mountSheet({ remaining: 5, forSeat: 'N' })
+  test('a centred dialog: no sheet breakpoints, so no drag handle', () => {
+    const modal = mountSheet({ remaining: 5 }).get('.modal-stub')
 
-    expect(wrapper.get('.claim-title').text()).toBe('Claim tricks for North')
-    expect(wrapper.get('.claim-help').text()).toContain("North's hand is shown to everyone")
-    expect(mountSheet({ remaining: 5 }).get('.claim-help').text()).toContain('Your hand is shown to everyone')
+    expect(modal.classes()).toContain('claim-dialog')
+    expect(modal.attributes('breakpoints')).toBeUndefined()
+    expect(modal.attributes('initial-breakpoint')).toBeUndefined()
+    expect(modal.attributes('aria-labelledby')).toBe('claim-dialog-title')
   })
 
-  test('busy disables every button', () => {
+  test('the X in the corner closes it, as does a dismiss (the backdrop, Escape)', async () => {
+    const wrapper = mountSheet({ remaining: 5 })
+    const close = wrapper.get('.claim-head .claim-close')
+
+    expect(close.attributes('aria-label')).toBe('Close')
+    await close.trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.emitted('claim')).toBeUndefined()
+
+    wrapper.findComponent({ name: 'IonModal' }).vm.$emit('didDismiss')
+    expect(wrapper.emitted('close')).toHaveLength(2)
+  })
+
+  test("the title says Claim, and names a robot declarer's seat claimed for", () => {
+    expect(mountSheet({ remaining: 5 }).get('.claim-title').text()).toBe('Claim')
+    expect(mountSheet({ remaining: 5, forSeat: 'N' }).get('.claim-title').text()).toBe('Claim for North')
+  })
+
+  test('no explanatory text: no summary, no hand shown line, no answer rule', () => {
+    const wrapper = mountSheet({ remaining: 5, state: state(), seat: 'S' })
+    const text = wrapper.text()
+
+    expect(wrapper.find('.claim-summary').exists()).toBe(false)
+    expect(wrapper.find('.claim-help').exists()).toBe(false)
+    expect(wrapper.find('.claim-deadline').exists()).toBe(false)
+    expect(text).not.toContain('tricks left')
+    expect(text).not.toContain('is shown to everyone')
+    expect(text).not.toContain('seconds')
+  })
+
+  test('busy disables the tiles and the send button, never the X', () => {
     const wrapper = mountSheet({ remaining: 3, busy: true })
 
-    for (const b of [...wrapper.findAll('ion-button'), ...wrapper.findAll('.trick-pick')]) {
+    for (const b of [wrapper.get('.send-claim'), ...wrapper.findAll('.trick-pick')]) {
       expect(isDisabled(b)).toBe(true)
     }
+    expect(isDisabled(wrapper.get('.claim-close'))).toBe(false)
     expect(wrapper.find('.send-claim ion-spinner').exists()).toBe(true)
   })
 
@@ -555,7 +571,7 @@ describe('ClaimSheet', () => {
     await wrapper.setProps({ open: true })
 
     expect(picked(wrapper)).toEqual(['6'])
-    expect(wrapper.get('.send-claim').text()).toBe('Claim all 6')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 6')
   })
 
   test('reopening after tricks were played picks the new maximum', async () => {
@@ -564,7 +580,7 @@ describe('ClaimSheet', () => {
     await wrapper.setProps({ remaining: 4 })
     await wrapper.setProps({ open: true })
 
-    expect(wrapper.get('.send-claim').text()).toBe('Claim all 4')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 4')
   })
 
   test('a trick finishing with the default picked moves it to the new maximum', async () => {
@@ -586,7 +602,7 @@ describe('ClaimSheet', () => {
     expect(wrapper.get('.send-claim').text()).toBe('Claim 3')
 
     await wrapper.setProps({ remaining: 3 })
-    expect(wrapper.get('.send-claim').text()).toBe('Claim all 3')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 3')
 
     // No longer possible: capped to the new maximum.
     await wrapper.setProps({ remaining: 2 })
@@ -601,7 +617,7 @@ describe('ClaimSheet', () => {
 
     await wrapper.setProps({ remaining: 4 })
 
-    expect(wrapper.get('.send-claim').text()).toBe('Claim all 4')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 4')
   })
 
   describe('with the board: each number\'s result and score', () => {
@@ -625,9 +641,7 @@ describe('ClaimSheet', () => {
         ['1', '4♠ −1', '−50', true],
         ['0', '4♠ −2', '−100', true],
       ])
-      expect(wrapper.get('.claim-summary').text()).toBe('5 tricks left · you have 8 · 4♠ needs 10')
-      expect(wrapper.get('.send-claim').text()).toBe('Claim all 5 · 4♠ +3 · +510')
-      expect(wrapper.get('.claim-deadline').text()).toBe('Both opponents get 10 seconds. No answer counts as no.')
+      expect(wrapper.get('.send-claim').text()).toBe('Claim 5 · 4♠ +3 · +510')
     })
 
     test('the send button follows the pick', async () => {
@@ -636,7 +650,10 @@ describe('ClaimSheet', () => {
       await wrapper.get('[data-tricks="1"]').trigger('click')
       expect(wrapper.get('.send-claim').text()).toBe('Claim 1 · 4♠ −1 · −50')
       await wrapper.get('[data-tricks="0"]').trigger('click')
-      expect(wrapper.get('.send-claim').text()).toBe('Concede · 4♠ −2 · −100')
+      // The 0 tile carries the result and score; the button just concedes.
+      expect(wrapper.get('.send-claim').text()).toBe('Concede')
+      await wrapper.get('.send-claim').trigger('click')
+      expect(wrapper.emitted('claim')).toEqual([[0]])
     })
 
     test("a defender's tiles: what declarer then makes, and E-W's score", () => {
@@ -645,10 +662,7 @@ describe('ClaimSheet', () => {
 
       expect(tiles(wrapper)[0]).toEqual(['5', '4♠X −2', '+500', true])
       expect(tiles(wrapper).at(-1)).toEqual(['0', '4♠X +3', '−1390', false])
-      expect(wrapper.get('.claim-summary').text()).toBe('5 tricks left · you have 0 · 4♠X needs 10')
-      expect(wrapper.get('.claim-deadline').text()).toBe(
-        'Declarer and your partner get 10 seconds. No answer counts as no.',
-      )
+      expect(wrapper.get('.send-claim').text()).toBe('Claim 5 · 4♠X −2 · +500')
     })
   })
 })
@@ -772,17 +786,6 @@ describe('claim deadline', () => {
     expect(reload).toHaveBeenCalledTimes(2)
   })
 
-  test('the claim sheet says how long the others have, and what silence means', () => {
-    const modalStub = { template: '<div><slot /></div>' }
-    const wrapper = mount(ClaimSheet, {
-      props: { open: true, remaining: 5 },
-      global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } },
-    })
-
-    expect(CLAIM_SECONDS).toBe(10)
-    expect(wrapper.get('.claim-deadline').text()).toBe('The others get 10 seconds. No answer counts as no.')
-  })
-
   describe('ClaimPanel', () => {
     const isDisabled = (el: { element: Element }) => (el.element as HTMLButtonElement).disabled
     const panel = (s: Playing, mySeat: Seat) =>
@@ -904,7 +907,7 @@ describe('TablePlayPage claims', () => {
     expect(wrapper.find('.claim-row').exists()).toBe(false)
     await wrapper.get('.claim-button').trigger('click')
     expect(wrapper.findAll('.trick-pick .pick-count').map((b) => b.text())).toEqual(['5', '4', '3', '2', '1', '0'])
-    expect(wrapper.get('.claim-summary').text()).toBe('5 tricks left · you have 8 · 4♠ needs 10')
+    expect(wrapper.get('.send-claim').text()).toBe('Claim 5 · 4♠ +3 · +510')
     await wrapper.get('[data-tricks="4"]').trigger('click')
     expect(wrapper.get('.send-claim').text()).toBe('Claim 4 · 4♠ +2 · +480')
     await wrapper.get('.send-claim').trigger('click')
@@ -927,12 +930,15 @@ describe('TablePlayPage claims', () => {
     expect(wrapper.find('.claim-text').exists()).toBe(false)
   })
 
-  test('a defender concedes in one tap', async () => {
+  test('a defender concedes with the 0 tile', async () => {
     logIn(2)
     const wrapper = await mountPage(asSeat('E', { turn: 'S', acting_user_id: 3 }))
     vi.mocked(gameService.makeClaim).mockResolvedValue(asSeat('E', { claim: pending({ seat: 'E', tricks: 0 }) }))
 
-    await wrapper.get('.concede').trigger('click')
+    await wrapper.get('.claim-button').trigger('click')
+    await wrapper.get('[data-tricks="0"]').trigger('click')
+    expect(wrapper.get('.send-claim').text()).toBe('Concede')
+    await wrapper.get('.send-claim').trigger('click')
     await flushPromises()
 
     expect(gameService.makeClaim).toHaveBeenCalledWith(5, 0)
@@ -1015,7 +1021,7 @@ describe('TablePlayPage claims', () => {
     vi.mocked(gameService.makeClaim).mockResolvedValue(forRobot({ claim: pending({ seat: 'N', hand: NORTH }) }))
 
     await wrapper.get('.claim-button').trigger('click')
-    expect(wrapper.get('.claim-title').text()).toBe('Claim tricks for North')
+    expect(wrapper.get('.claim-title').text()).toBe('Claim for North')
     await wrapper.get('[data-tricks="4"]').trigger('click')
     await wrapper.get('.send-claim').trigger('click')
     await flushPromises()
@@ -1108,7 +1114,8 @@ describe('TablePlayPage claims', () => {
     vi.mocked(gameService.getPlaying).mockResolvedValue(state({ claim_locked: true }))
 
     await wrapper.get('.claim-button').trigger('click')
-    await wrapper.get('.concede').trigger('click')
+    await wrapper.get('[data-tricks="0"]').trigger('click')
+    await wrapper.get('.send-claim').trigger('click')
     await flushPromises()
 
     expect(showToast).toHaveBeenCalledWith('A claim was just refused: play a card first.', 'danger')

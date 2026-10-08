@@ -33,7 +33,10 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/99-dummy-on-one-row` (after #172, dummy's cards
+> branch `bulbulica2/100-claim-dialog` (after #173, the claim as a small
+> dialog in the middle of the screen with an X: the tiles and one button,
+> **Concede** on the 0 tile, and none of the explanatory lines; after
+> #172, dummy's cards
 > across the top always on one row: the play page and the review 832 px
 > wide, and narrower the cards overlap more, then get smaller, so the
 > table never moves as dummy's cards go; after

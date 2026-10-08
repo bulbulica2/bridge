@@ -1,79 +1,71 @@
 <template>
-  <!-- A bottom sheet for making a claim (Daylight, #161): one tile per
-       number of the tricks still to play, from all of them down to 0, each
-       with what it makes of the contract and the claimer's side's score;
-       every trick left is picked to start with. Then the send button for
-       the number picked, or Concede for none. The parent owns whether it is
-       open and sends the claim. A robot declarer's dummy claims for
-       declarer (`forSeat`); `seat` is the seat claimed for either way. -->
+  <!-- A small dialog in the middle of the screen for making a claim (#173):
+       the title with an X, one tile per number of the tricks still to play,
+       from all of them down to 0, each with what it makes of the contract
+       and the claimer's side's score (every trick left picked to start
+       with), then the one send button for the number picked, which reads
+       Concede for 0. The X, the backdrop and Escape close it. The parent
+       owns whether it is open and sends the claim. A robot declarer's dummy
+       claims for declarer (`forSeat`); `seat` is the seat claimed for
+       either way. -->
   <ion-modal
     :is-open="open"
-    :initial-breakpoint="0.75"
-    :breakpoints="[0, 0.75, 1]"
+    class="claim-dialog"
+    aria-labelledby="claim-dialog-title"
     @did-dismiss="emit('close')"
   >
-    <ion-content class="ion-padding claim-content">
-      <div class="claim-sheet">
-        <h2 class="claim-title">
-          Claim tricks<template v-if="forSeat"> for {{ SEAT_NAMES[forSeat] }}</template>
+    <div class="claim-sheet">
+      <header class="claim-head">
+        <h2 id="claim-dialog-title" class="claim-title">
+          Claim<template v-if="forSeat"> for {{ SEAT_NAMES[forSeat] }}</template>
         </h2>
-        <p class="claim-summary">{{ summary }}</p>
-
-        <div class="trick-picks" role="group" aria-label="Tricks to claim">
-          <button
-            v-for="option in options"
-            :key="option.tricks"
-            type="button"
-            class="trick-pick"
-            :class="{ picked: tricks === option.tricks, down: option.outcome?.down }"
-            :aria-pressed="tricks === option.tricks"
-            :data-tricks="option.tricks"
-            :disabled="busy"
-            @click="pick(option.tricks)"
-          >
-            <span class="pick-count">{{ option.tricks }}</span>
-            <template v-if="option.outcome">
-              <span class="pick-result">{{ option.outcome.result }}</span>
-              <span class="pick-score">{{ option.outcome.score }}</span>
-            </template>
-          </button>
-        </div>
-
-        <p class="claim-help">
-          {{ forSeat ? `${SEAT_NAMES[forSeat]}'s hand` : 'Your hand' }} is shown to everyone while
-          the others answer.
-        </p>
-
-        <ion-button
-          expand="block"
-          color="action"
-          class="send-claim"
-          :disabled="busy || remaining < 1"
-          @click="emit('claim', tricks)"
-        >
-          <ion-spinner v-if="busy" name="crescent" />
-          <span v-else>{{ sendLabel }}</span>
+        <ion-button fill="clear" size="small" class="claim-close" aria-label="Close" @click="emit('close')">
+          <ion-icon slot="icon-only" :icon="closeOutline" />
         </ion-button>
-        <div class="claim-foot">
-          <p class="claim-deadline">
-            {{ answerers }} get {{ CLAIM_SECONDS }} seconds. No answer counts as no.
-          </p>
-          <ion-button fill="outline" class="concede" :disabled="busy" @click="emit('claim', 0)">
-            Concede
-          </ion-button>
-        </div>
+      </header>
+
+      <div class="trick-picks" role="group" aria-label="Tricks to claim">
+        <button
+          v-for="option in options"
+          :key="option.tricks"
+          type="button"
+          class="trick-pick"
+          :class="{ picked: tricks === option.tricks, down: option.outcome?.down }"
+          :aria-pressed="tricks === option.tricks"
+          :data-tricks="option.tricks"
+          :disabled="busy"
+          @click="pick(option.tricks)"
+        >
+          <span class="pick-count">{{ option.tricks }}</span>
+          <template v-if="option.outcome">
+            <span class="pick-result">{{ option.outcome.result }}</span>
+            <span class="pick-score">{{ option.outcome.score }}</span>
+          </template>
+        </button>
       </div>
-    </ion-content>
+
+      <ion-button
+        expand="block"
+        color="action"
+        class="send-claim"
+        :disabled="busy || remaining < 1"
+        @click="emit('claim', tricks)"
+      >
+        <ion-spinner v-if="busy" name="crescent" />
+        <span v-else>{{ sendLabel }}</span>
+      </ion-button>
+    </div>
   </ion-modal>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { IonModal, IonContent, IonButton, IonSpinner } from '@ionic/vue';
+import { IonModal, IonButton, IonIcon, IonSpinner } from '@ionic/vue';
+import { closeOutline } from 'ionicons/icons';
 import type { PublicPlaying } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES } from '@/utils/auction';
-import { CLAIM_SECONDS, claimAnswerersText, claimOutcome, claimSummary } from '@/utils/claim';
+import { claimOutcome } from '@/utils/claim';
 
 const props = withDefaults(
   defineProps<{
@@ -97,7 +89,7 @@ const emit = defineEmits<{ claim: [tricks: number]; close: [] }>();
 
 // The number picked; nothing is sent until the send button is pressed.
 const tricks = ref(props.remaining);
-// The player picked it by hand since the sheet opened.
+// The player picked it by hand since the dialog opened.
 const picked = ref(false);
 
 function pick(n: number) {
@@ -119,23 +111,15 @@ const options = computed(() =>
       })),
 );
 
-const summary = computed(() => {
-  if (props.state && props.seat) {
-    return claimSummary(props.state, props.seat);
-  }
-  return `${props.remaining} trick${props.remaining === 1 ? '' : 's'} left`;
-});
-
-const answerers = computed(() =>
-  props.state && props.seat ? claimAnswerersText(props.state, props.seat) : 'The others',
-);
-
-// "Claim all 7 · 4♠ +1 · +450", "Claim 5 · 4♠ −1 · −50", "Concede · …".
+// "Claim 5 · 4♠ +3 · +510", "Claim 1 · 4♠ −1 · −50"; the 0 tile is the
+// concede, whose result and score its tile shows.
 const sendLabel = computed(() => {
   const n = tricks.value;
-  const what = n === 0 ? 'Concede' : n === props.remaining && n > 1 ? `Claim all ${n}` : `Claim ${n}`;
+  if (n === 0) {
+    return 'Concede';
+  }
   const made = outcome(n);
-  return made ? `${what} · ${made.result} · ${made.score}` : what;
+  return made ? `Claim ${n} · ${made.result} · ${made.score}` : `Claim ${n}`;
 });
 
 // Each opening starts with every remaining trick picked: a claim is almost
@@ -159,28 +143,47 @@ watch(
 </script>
 
 <style scoped>
-.claim-content {
-  --background: var(--bridge-surface);
+/* Centred, as tall as its content: no breakpoints, so no drag handle.
+   Ionic's own `ion-modal > .ion-page` rule lets the content set the height. */
+ion-modal.claim-dialog {
+  --width: min(400px, calc(100vw - 32px));
+  --height: auto;
+  --border-radius: 16px;
+  --box-shadow: 0 12px 40px var(--bridge-shadow-strong);
+  /* Ionic shows no backdrop behind a phone's (full-screen) modal. */
+  --backdrop-opacity: var(--ion-backdrop-opacity, 0.4);
 }
 
 .claim-sheet {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: 440px;
-  margin: 0 auto;
+  padding: 8px 16px 16px;
+  background: var(--bridge-surface);
+  color: var(--bridge-ink);
+}
+
+.claim-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-right: -10px;
 }
 
 .claim-title {
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 1.375rem;
   font-weight: 700;
 }
 
-.claim-summary {
-  margin: -10px 0 0;
-  font-size: 0.875rem;
-  color: var(--bridge-muted);
+/* A 44 px tap area in the corner. */
+.claim-close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  --color: var(--bridge-muted);
 }
 
 /* Four tiles a row, all the tricks left first. */
@@ -257,36 +260,10 @@ watch(
   outline-offset: 2px;
 }
 
-.claim-help {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: var(--bridge-muted);
-}
-
 .send-claim {
   margin: 0;
   --border-radius: 14px;
   min-height: 54px;
   font-size: 1.05rem;
-}
-
-.claim-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.claim-deadline {
-  max-width: 240px;
-  margin: 0;
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  color: var(--bridge-muted);
-}
-
-.concede {
-  flex: none;
-  margin: 0;
 }
 </style>
