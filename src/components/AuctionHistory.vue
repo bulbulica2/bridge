@@ -31,6 +31,7 @@
               :live="live"
               :busy="busy"
               :bidding="bidding"
+              :robot="!!players[cell.call.seat]?.is_robot"
               @ask="emit('ask', $event)"
               @explain="emit('explain', $event)"
               @chat="emit('chat', $event)"
@@ -67,7 +68,8 @@ const props = withDefaults(
     live?: boolean;
     // A question or an answer is on its way.
     busy?: boolean;
-    // The auction is still on: partner's alerts stay hidden.
+    // The auction is still on: a human partner's alerts stay hidden (a
+    // robot's show, from `players`).
     bidding?: boolean;
   }>(),
   { turn: null, players: () => ({}), live: false, busy: false, bidding: false },

@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/114-trick-in-play-order`._
+_Status as of branch `bulbulica2/115-robot-partner-alerts`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -37,7 +37,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
 | `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board and each seat's time for the set, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button, the play page's Auction and locked Claim buttons and the auction's calls, kept off the screen's edges and a `data-right-edge` panel, and brought down below the screen's top when it opens upward), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved), `useElementWidth` (an element's width as it is resized: the play page's column, for the wide table, and dummy's single row), `useSteadyHeight` (an element held at its tallest: a hand, the wide table's auction) |
 | `src/directives/` | `ionEvent.ts`: `v-ion-event:ion-refresh="refresh"` listens for an Ionic event on the element itself (pull-to-refresh, the history's infinite scroll); see [Ionic events](#ionic-events) |
-| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), the set clock (`setClock.ts`), a player's stats in words (`stats.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`), the wide table's minimum column (`layout.ts`), dummy's single row (`handRow.ts`) |
+| `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), the set clock (`setClock.ts`), a player's stats in words (`stats.ts`), how robots bid for a robot's profile sheet (`robots.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`), the wide table's minimum column (`layout.ts`), dummy's single row (`handRow.ts`) |
 | `src/theme/` | the Daylight design tokens (`variables.css`), the shared button and font rules (`daylight.css`), the global toast styles, the shared form fields (`forms.css`) and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
@@ -702,7 +702,7 @@ doesn't send the XSRF header Sanctum wants.
 | Channel | Who owns it | Events |
 |---|---|---|
 | `private-table.{id}` | `tables` store, following your seat (or the table you watch) | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state in its compact shape, expanded by the `game` store) |
-| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call; in the play, anyone's answer), `CallQuestioned` (an opponent asks what your call means), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read: handed to the `chat` store), `UnseatedFromTable` (your seat, or your place as a kibitzer, taken away without you asking: handed to `tables.applyUnseated`), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
+| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call, or a robot partner did, #203; in the play, anyone's answer), `CallQuestioned` (an opponent asks what your call means), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read: handed to the `chat` store), `UnseatedFromTable` (your seat, or your place as a kibitzer, taken away without you asking: handed to `tables.applyUnseated`), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
 
 - The table channel only admits players seated there and its kibitzers,
   and the server never ends a subscription. So the `tables` store
@@ -745,7 +745,8 @@ doesn't send the XSRF header Sanctum wants.
   `DeclarerHandShown` are not compact.
 - Alerts never come over the table channel: the bidder's partner mustn't
   see them during the auction, so `PlayingUpdated` carries none and each
-  opponent gets `CallAlerted` on their own channel; partner gets them as
+  opponent gets `CallAlerted` on their own channel (a robot's human
+  partner too, #203); a human's partner gets them as
   `AuctionAlertsShown` once the auction is over (see [Alerts](#alerts)). Nor does the
   board chat: each message goes as `BoardMessageSent` to the user channel
   of every human who may read it (see [Board chat](#board-chat)).
@@ -969,7 +970,7 @@ lobby's cards show with a **Watch** button.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | Daylight's navy panel (#160) with the four seats, rotated so **you are always at the bottom**, partner and you across its width, the opponents left and right. Each seat is a **plate**: avatar (two initials; a robot's icon, `avatar-robot`), name (opens the profile sheet), seat, the `AdminBadge`, and each human's time for the set as a pill (`banks`: grey idle, white while it runs, red under a minute, none for a robot or an admin). The seat on turn is ringed orange, an away seat's plate is red, a seat that pressed Start gets a green tick (`ready`, the play page's seats while Start is awaited), an empty seat is dashed ("Empty · North"; with `seatable` a button emitting `empty` with its seat, its plate and its side, `aria-haspopup="menu"` and `aria-expanded` for the seat in `menuSeat`, #181, #192; the `menu` slot lays the page's `SeatMenu` over the whole table); the plate's top edge is red/green for vulnerability. During the auction each seat's **last call** sits beside its plate as a chip (`calls`), an opponent's alerted one ringed amber with "!" (partner's never during the auction); whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`); the dealer's plate has a **D** (`aria-label` "dealer"); the centre's first line while it shows the board is `boardLabel` (the play page's "Board 2 of 4", none outside a set, #165; left out, no such line: never the board's number, #189); with `wide` (#163) the wide screen's layout; four corner slots, `top-left`, `top-right`, `bottom-left`, `bottom-right` (#171), laid over the panel's corners at every width without taking a row's height, partner's and your plates keeping them clear; with `topRightRoom` (the play page during the play, #196) the top-right corner lies in partner's seat beside the plate and the turn line, so whatever is taller sets that row and the right seat and a hand across the top start below it; with `bottomRightRoom` (the review's double dummy grid, #180) your whole seat, hand included, keeps the larger bottom-right corner's width clear on both sides, and a table under 340 px gives that corner a row of its own under your seat |
+| `BridgeTable` | Daylight's navy panel (#160) with the four seats, rotated so **you are always at the bottom**, partner and you across its width, the opponents left and right. Each seat is a **plate**: avatar (two initials; a robot's icon, `avatar-robot`), name (opens the profile sheet), seat, the `AdminBadge`, and each human's time for the set as a pill (`banks`: grey idle, white while it runs, red under a minute, none for a robot or an admin). The seat on turn is ringed orange, an away seat's plate is red, a seat that pressed Start gets a green tick (`ready`, the play page's seats while Start is awaited), an empty seat is dashed ("Empty · North"; with `seatable` a button emitting `empty` with its seat, its plate and its side, `aria-haspopup="menu"` and `aria-expanded` for the seat in `menuSeat`, #181, #192; the `menu` slot lays the page's `SeatMenu` over the whole table); the plate's top edge is red/green for vulnerability. During the auction each seat's **last call** sits beside its plate as a chip (`calls`), an opponent's or a robot partner's alerted one ringed amber with "!" (a human partner's never during the auction, #203); whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`); the dealer's plate has a **D** (`aria-label` "dealer"); the centre's first line while it shows the board is `boardLabel` (the play page's "Board 2 of 4", none outside a set, #165; left out, no such line: never the board's number, #189); with `wide` (#163) the wide screen's layout; four corner slots, `top-left`, `top-right`, `bottom-left`, `bottom-right` (#171), laid over the panel's corners at every width without taking a row's height, partner's and your plates keeping them clear; with `topRightRoom` (the play page during the play, #196) the top-right corner lies in partner's seat beside the plate and the turn line, so whatever is taller sets that row and the right seat and a hand across the top start below it; with `bottomRightRoom` (the review's double dummy grid, #180) your whole seat, hand included, keeps the larger bottom-right corner's width clear on both sides, and a table under 340 px gives that corner a row of its own under your seat |
 | `VulnerabilityLabel` | who is vulnerable in words (`vulnerabilityText`), Daylight's pill: green **Nobody vulnerable**, else red with a dot, **Vul: E-W** for the other side, **Vulnerable: N-S (you)** for yours, **Both (you too)**; on the board results page (#151, #160), and `compact` (28 px, smaller words that may wrap, no dot) in the play page's and `BoardReview`'s top-left table corner (#171, #180) |
 | `AuctionPopover` | the play page's **Auction** button in the table's bottom-left corner (#165, #171), from the first call to the end of the board: the `AuctionHistory` grid in a pop-up opening upward (`usePopover`: a mouse hovering opens it, a tap toggles it, a tap outside or Escape closes it), passing on `ask` / `explain` / `chat`, so Ask and Ask in the chat work there while the board is on |
 | `ClaimButton` | the play page's **Claim** in the table's bottom-right corner (#171): a light 36 px button with a 44 px tap area, `claim` on a tap, `disabled` while a card or a claim is in flight; `locked` after a refused claim, it reads **Claim · locked** in grey (`aria-disabled`) and a tap or a hover opens a small pop-up above it with `CLAIM_LOCKED_TEXT` (`usePopover`), always in the DOM as the button's `aria-describedby` |
@@ -998,7 +999,7 @@ lobby's cards show with a **Watch** button.
 | `TableSettingsDialog` | the game table's settings (#181): a small centred `ion-modal` (`settings-dialog`) with **Table settings**, an X, `SetMinutesPicker` (`minutes`, `busy`, `pickerKey` to put it back after a refusal) and a note that a change takes every Start back; `change` / `close` events, the page sends `tables.updateSettings()`. Opened by a manager's gear in the table's top-right corner while no set runs; the others read the time there ("16 min") |
 | `StartBox` | the game table's centre before a board (#181), on the navy: **Ready to play?** / **Waiting for the others…**, what the board still waits for (`startWaiting`), the orange **Start** or **Cancel**, and while a seat has `start_deadline` the Start timer counting down (`startClock`: "Press Start · 0:12" orange, red under 5 s; "Waiting for East · 0:12"); `start` / `cancel` events. The seats and their ticks are the table's own plates |
 | `PlayerAvatar` | two initials or a robot's icon in a circle: heads the profile sheet and each seat-a-player result |
-| `RobotBadge` | the "robot" mark next to a robot's name (the profile sheet; at the table and on the plates the robot icon says it, in the lobby's compass the blue seat) |
+| `RobotBadge` | the "robot" mark next to a robot's name (the profile sheet, which adds **How robots bid** for a robot, #203; at the table and on the plates the robot icon says it, in the lobby's compass the blue seat) |
 | `AdminBadge` | the amber **ADMIN** tag next to an admin's name, on every plate at the table, the profile sheet and the User profile page |
 
 The lobby (Tables and Home, #162) has its own pieces:
@@ -1127,11 +1128,15 @@ characters in `utils/limits.ts`) above the bidding box's rows, goes out
 with the next call (`game.call(bidId, alert)`), is cleared once the call is
 taken, and stays if it is refused. The opponents see it; **partner
 doesn't while the auction lasts** (that would be unauthorised information),
-only once it is over (#135, bb#124), so:
+only once it is over (#135, bb#124). A **robot's** alerts are the exception
+(#203, bb#152): a human partnered with a robot has to learn its system at
+the table, so a robot partner's alerts reach them at once. So:
 
 - Your own state (`GET /tables/{id}/playing` and the action answers) has
   `alert` (`{explanation}` or null) and `question` (`{asked_by}`, an open
-  question) on the opponents' calls and your own, null on partner's. From
+  question) on the opponents' calls and your own, null on partner's (but
+  a robot partner's `alert` is there all along, its `question` still
+  null). From
   the end of the auction (phase `play`) every call's `alert` is there,
   partner's too; `question` stays null on partner's calls.
 - `PlayingUpdated` carries neither. The `game` store keeps an **alert
@@ -1155,7 +1160,10 @@ only once it is over (#135, bb#124), so:
   opponents as `CallAlerted` (all four humans during the play; the asker's
   side is told the answer in a toast, the bidder never their own).
 - Robots alert their conventional calls themselves (Stayman, transfers,
-  the strong 2♣ …), with their explanation.
+  the strong 2♣, weak twos, preempts, Blackwood …), with their
+  explanation. A robot partner's comes as `CallAlerted` too, noted in the
+  book like an opponent's (`noteAlert`); nothing pops up for it, the "!"
+  on the call is enough (the toast stays for the answer to a question).
 - Once the board is finished every alert is public: the review
   (`GET /playings/{id}`) has every call's `alert`, so the review and the
   exports show them all.
@@ -1167,8 +1175,13 @@ titled "East alerted 2♦" ("You alerted …", "Partner alerted …") with the
 explanation as plain text, or "Alerted, no explanation given.". **Ask**
 and **Ask in the chat** are only on the opponents' calls, never partner's.
 During the auction the play page passes `bidding` to `AuctionHistory`, so
-partner's calls show no alert even if one is held (`isPartner` in
-`utils/alerts.ts`).
+a human partner's calls show no alert even if one is held
+(`hidesPartnerAlert` in `utils/alerts.ts`); a robot partner's (read from
+`players[seat].is_robot`, the cell's `robot` prop) shows like an
+opponent's, "Partner alerted 2♣", still with no Ask. `BridgeTable`'s
+last-call chips follow the same rule. A robot's profile sheet
+(`PlayerProfileSheet`) says how robots bid (`utils/robots.ts`, from
+bridge_backend `docs/ROBOTS.md`, Bidding).
 
 ## Board chat
 

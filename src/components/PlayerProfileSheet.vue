@@ -28,6 +28,14 @@
           <p v-else-if="shown.description === null" class="profile-empty">No description yet.</p>
           <!-- One line of their stats; a robot has none worth showing. -->
           <PlayerStats v-if="!shown.is_robot" ref="stats" :user-id="shown.id" compact />
+          <!-- A robot's system at a glance (#203), to answer it as partner. -->
+          <section v-else class="robot-system" :aria-labelledby="systemId">
+            <h3 :id="systemId" class="robot-system-title">{{ ROBOT_SYSTEM_TITLE }}</h3>
+            <ul class="robot-system-list">
+              <li v-for="line in ROBOT_SYSTEM" :key="line">{{ line }}</li>
+            </ul>
+            <p class="robot-system-note">{{ ROBOT_ALERTS_NOTE }}</p>
+          </section>
         </template>
 
         <div v-if="refreshing" class="refreshing">
@@ -115,6 +123,7 @@ import { useUsersStore } from '@/stores/users';
 import type { PublicUser } from '@/services/users';
 import { banDate, canBan } from '@/utils/ban';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { ROBOT_ALERTS_NOTE, ROBOT_SYSTEM, ROBOT_SYSTEM_TITLE } from '@/utils/robots';
 import { REMOVE_BLOCKED_TEXT } from '@/utils/seatMove';
 
 const props = withDefaults(
@@ -147,6 +156,7 @@ const stats = ref<InstanceType<typeof PlayerStats> | null>(null);
 
 const { root, button, popup, open, nudge, drop, hover, toggle, close } = usePopover();
 const noteId = `remove-blocked-${useId()}`;
+const systemId = `robot-system-${useId()}`;
 
 // The ion-button's element, for the pop-up's Escape to give focus back to.
 function setButton(el: unknown) {
@@ -270,6 +280,33 @@ function openPage() {
   white-space: pre-line;
   overflow-wrap: anywhere;
   text-align: left;
+}
+
+.robot-system {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: var(--bridge-radius-card);
+  background: var(--bridge-surface);
+  box-shadow: 0 1px 0 var(--bridge-line);
+  text-align: left;
+}
+
+.robot-system-title {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.robot-system-list {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.5;
+}
+
+.robot-system-note {
+  margin: 8px 0 0;
+  color: var(--bridge-muted);
+  font-size: 0.9rem;
 }
 
 .profile-empty,

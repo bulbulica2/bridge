@@ -10,8 +10,8 @@
        button with `seatable`, the `empty` event, its menu at the plate). Once a
        board is dealt each seat is striped red when its side is vulnerable
        and green when it is not. During the auction each seat's last call
-       sits by its plate (`calls`), an opponent's alerted one with the amber
-       "!". Once dummy is face up its cards lie at its seat: across the top
+       sits by its plate (`calls`), an opponent's or a robot partner's
+       alerted one with the amber "!". Once dummy is face up its cards lie at its seat: across the top
        when the viewer is declarer (who plays them from there), in suit
        columns on a side seat for a defender, and not at all when the viewer
        is dummy, whose own hand below is the same cards. A kibitzer
@@ -261,7 +261,7 @@ import type { PublicUser } from '@/services/users';
 import { SEAT_NAMES } from '@/utils/auction';
 import { formatClock } from '@/utils/away';
 import type { AwayTag } from '@/utils/away';
-import { isPartner } from '@/utils/alerts';
+import { hidesPartnerAlert } from '@/utils/alerts';
 import { isVulnerable, longestSuit, seatAt, suitOrder, vulnerabilityText } from '@/utils/cards';
 import { bankLabel } from '@/utils/setClock';
 import type { SeatBank } from '@/utils/setClock';
@@ -418,10 +418,13 @@ const lastCalls = computed(() => {
   return last;
 });
 
-// An alerted last call shows its "!", but never partner's: alerts are for
-// the opponents during the auction.
+// An alerted last call shows its "!", but never a human partner's: alerts
+// are for the opponents during the auction, and a robot partner's (#203).
 function lastCallAlerted(seat: Seat): boolean {
-  return !!lastCalls.value[seat]?.alert && !isPartner(seat, props.mySeat);
+  return (
+    !!lastCalls.value[seat]?.alert &&
+    !hidesPartnerAlert(seat, props.mySeat, !!props.players[seat]?.is_robot)
+  );
 }
 
 // Two letters for the avatar: "bulbulica" reads BU.

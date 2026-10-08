@@ -6,8 +6,9 @@
        hovering with a mouse, or a tap until a tap outside or Escape. While
        the board lasts, any opponent's call also pops up an Ask button (and
        Ask in the chat, to ask in one's own words), and a call of ours an
-       opponent asked about an Answer button. Partner's alerts show only
-       once the auction is over (`bidding` hides them). A kibitzer (no
+       opponent asked about an Answer button. A human partner's alerts show
+       only once the auction is over (`bidding` hides them); a robot
+       partner's show at once (#203), with no Ask. A kibitzer (no
        seat, #182) gets no buttons, and no explanation while it lasts. Any
        other call is just its label. -->
   <span
@@ -88,7 +89,7 @@ import { usePopover } from '@/composables/usePopover';
 import type { AuctionCall } from '@/services/game';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES, callLabel, callName } from '@/utils/auction';
-import { KIBITZER_ALERT, alertText, isOpponent, isPartner } from '@/utils/alerts';
+import { KIBITZER_ALERT, alertText, hidesPartnerAlert, isOpponent, isPartner } from '@/utils/alerts';
 
 const props = withDefaults(
   defineProps<{
@@ -100,10 +101,13 @@ const props = withDefaults(
     live?: boolean;
     // A question or an answer is on its way.
     busy?: boolean;
-    // The auction is still on: partner's alert stays hidden, even if held.
+    // The auction is still on: a human partner's alert stays hidden, even
+    // if held.
     bidding?: boolean;
+    // The caller is a robot: as partner, its alert shows while bidding too.
+    robot?: boolean;
   }>(),
-  { live: false, busy: false, bidding: false },
+  { live: false, busy: false, bidding: false, robot: false },
 );
 
 const emit = defineEmits<{
@@ -118,8 +122,13 @@ const popupId = `call-${useId()}`;
 const mine = computed(() => props.mySeat !== null && props.call.seat === props.mySeat);
 const opponents = computed(() => isOpponent(props.call.seat, props.mySeat));
 const partner = computed(() => isPartner(props.call.seat, props.mySeat));
-// The alert the viewer may see: partner's only once the auction is over.
-const alert = computed(() => (props.bidding && partner.value ? null : props.call.alert ?? null));
+// The alert the viewer may see: a human partner's only once the auction is
+// over.
+const alert = computed(() =>
+  props.bidding && hidesPartnerAlert(props.call.seat, props.mySeat, props.robot)
+    ? null
+    : (props.call.alert ?? null),
+);
 const canAsk = computed(() => props.live && opponents.value && !props.call.question);
 const canAnswer = computed(() => props.live && mine.value && !!props.call.question);
 const canChat = computed(() => props.live && opponents.value);
