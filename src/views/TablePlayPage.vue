@@ -85,10 +85,14 @@
               :turn="null"
               :away="awayTags"
               seatable
+              :menu-seat="seatMenu?.seat ?? null"
               :busy="seatBusy"
               @select="player = $event"
-              @empty="seatMenu = $event"
+              @empty="openSeatMenu"
             >
+              <template #menu>
+                <SeatMenu v-bind="seatMenuProps" @sit="sit" @player="seatingAt = $event" @robot="addRobot" @close="seatMenu = null" />
+              </template>
               <p class="waiting-title">{{ table.free_seats.length > 0 ? 'Free seats' : 'Table full' }}</p>
               <p class="waiting-count">{{ 4 - table.free_seats.length }} of 4 seated</p>
             </BridgeTable>
@@ -155,12 +159,17 @@
             :board-label="playing.set ? boardPosition(playing.set) : null"
             :wide="wideTable"
             :seatable="waitingRoom"
+            :menu-seat="seatMenu?.seat ?? null"
             :busy="sendingCard !== null || seatBusy"
             :sending-id="sendingCard"
             @select="player = $event"
             @play="playCard"
-            @empty="seatMenu = $event"
+            @empty="openSeatMenu"
           >
+            <!-- An empty seat tapped: its menu at the plate (#192). -->
+            <template #menu>
+              <SeatMenu v-bind="seatMenuProps" @sit="sit" @player="seatingAt = $event" @robot="addRobot" @close="seatMenu = null" />
+            </template>
             <!-- The board's details in the table's corners (#171), where
                  they take no room of their own: who is vulnerable, in
                  words, for the whole board (#151) top left; the contract
@@ -395,15 +404,6 @@
         @close="player = null"
       />
       <SeatPlayerSheet :seat="seatingAt" @select="seatPlayer" @close="seatingAt = null" />
-      <!-- An empty seat tapped: take it (or move to it), and a manager's
-           Seat a player / Add robot. -->
-      <ion-action-sheet
-        :is-open="seatMenu !== null"
-        class="seat-menu"
-        :header="seatMenu ? `${SEAT_NAMES[seatMenu]} is free` : undefined"
-        :buttons="seatMenuButtons"
-        @did-dismiss="seatMenu = null"
-      />
       <TableSettingsDialog
         :open="settingsOpen"
         :minutes="tableMinutes"
@@ -509,12 +509,10 @@ import {
   IonBadge,
   IonIcon,
   IonModal,
-  IonActionSheet,
   onIonViewWillEnter,
   onIonViewWillLeave,
   useIonRouter,
 } from '@ionic/vue';
-import type { ActionSheetButton } from '@ionic/vue';
 import { vIonEvent } from '@/directives/ionEvent';
 import { chatbubblesOutline, eyeOutline, settingsOutline } from 'ionicons/icons';
 import AppHeader from '@/components/AppHeader.vue';
@@ -536,6 +534,7 @@ import LastTrickPopover from '@/components/LastTrickPopover.vue';
 import OfflineRefresh from '@/components/OfflineRefresh.vue';
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue';
 import ResultPill from '@/components/ResultPill.vue';
+import SeatMenu from '@/components/SeatMenu.vue';
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue';
 import SetResultsPanel from '@/components/SetResultsPanel.vue';
 import StartBox from '@/components/StartBox.vue';
@@ -564,6 +563,7 @@ import type { PublicUser, SearchedUser } from '@/services/users';
 import { openQuestion } from '@/utils/alerts';
 import { SEAT_NAMES, contractLabel } from '@/utils/auction';
 import { SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
+import type { ScreenSide } from '@/utils/cards';
 import { canClaim, claimLocked, claimOffText, claimSeatOf, tricksLeft } from '@/utils/claim';
 import {
   autoPlaysForced,
@@ -625,9 +625,9 @@ const asking = ref(false);
 // player being taken out of.
 const seatingAt = ref<Seat | null>(null);
 const fillingSeat = ref<Seat | null>(null);
-// The empty seat whose action sheet is open (Sit here, Seat a player, Add
-// robot).
-const seatMenu = ref<Seat | null>(null);
+// The empty seat whose menu is open (Sit here, Seat a player, Add robot),
+// with the plate tapped and the table's side it is on (#192).
+const seatMenu = ref<{ seat: Seat; plate: HTMLElement; side: ScreenSide } | null>(null);
 // The table's settings dialog (a manager's gear), a change of the time for
 // a set on its way, and the picker's key, bumped to put it back on the
 // table's value after a refusal.
@@ -1070,42 +1070,36 @@ const profileRemoveBlocked = computed(() => {
 // A seat being taken, filled or emptied: one at a time.
 const seatBusy = computed(() => fillingSeat.value !== null);
 
-// An empty seat's action sheet: take it (a seat change when we sit here
-// already), and for a manager, Seat a player or Add robot.
-const seatMenuButtons = computed<ActionSheetButton[]>(() => {
-  const seat = seatMenu.value;
-  if (!seat) {
-    return [];
-  }
-  const buttons: ActionSheetButton[] = [
-    {
-      text: `${seatedHere.value ? 'Move here' : 'Sit here'} · ${SEAT_NAMES[seat]}`,
-      cssClass: 'seat-menu-sit',
-      handler: () => {
-        sit(seat);
-      },
-    },
-  ];
-  if (table.value?.can_manage) {
-    buttons.push(
-      {
-        text: 'Seat a player',
-        cssClass: 'seat-menu-player',
-        handler: () => {
-          seatingAt.value = seat;
-        },
-      },
-      {
-        text: 'Add robot',
-        cssClass: 'seat-menu-robot',
-        handler: () => {
-          addRobot(seat);
-        },
-      },
-    );
-  }
-  return [...buttons, { text: 'Cancel', role: 'cancel' }];
-});
+// An empty seat's menu, at its plate: take it (a seat change when we sit
+// here already), and for a manager, Seat a player or Add robot.
+const seatMenuProps = computed(() => ({
+  seat: seatMenu.value?.seat ?? null,
+  anchor: seatMenu.value?.plate ?? null,
+  side: seatMenu.value?.side ?? 'top',
+  moveHere: seatedHere.value,
+  canManage: !!table.value?.can_manage,
+}));
+
+// A tap on an empty seat opens its menu there (from another seat's, it
+// moves); on the seat whose menu is open, closes it.
+function openSeatMenu(seat: Seat, plate: HTMLElement, side: ScreenSide) {
+  seatMenu.value = seatMenu.value?.seat === seat ? null : { seat, plate, side };
+}
+
+// The seat taken meanwhile (a TableUpdated), or no seat to take any more
+// (a board dealt): its menu goes.
+watch(
+  () => {
+    const seat = seatMenu.value?.seat;
+    const taken = !!seat && !!table.value?.seats.some((s) => s.seat === seat);
+    return taken || (!!seat && !notSeated.value && !waitingRoom.value);
+  },
+  (gone) => {
+    if (gone) {
+      seatMenu.value = null;
+    }
+  },
+);
 
 const seatedCount = computed(() => Object.values(players.value).filter(Boolean).length);
 
@@ -1867,7 +1861,7 @@ async function cancelStart() {
   }
 }
 
-// A manager fills an empty seat from its action sheet: the player picked in
+// A manager fills an empty seat from its menu: the player picked in
 // the search (yourself is a plain seat change here), or a robot.
 async function seatPlayer(user: SearchedUser) {
   const seat = seatingAt.value;
