@@ -140,14 +140,15 @@ export async function confirmMove(
  * docs/API.md, Away mid-set). Where
  * the seat isn't held (an admin, or an admin here away), it breaks the set
  * off instead. Empty when there is no board or its phase is unknown, outside
- * a set.
+ * a set. `boardInSet` is the board's place in its set ("Board 2"), never its
+ * number in the database (#189).
  */
 export function leaveWarning(
   phase: Phase | null,
-  boardNumber: number | null = null,
+  boardInSet: number | null = null,
   stake: SetAtStake | null = null,
 ): string {
-  const board = boardNumber ? `Board ${boardNumber}` : 'The board';
+  const board = boardInSet ? `Board ${boardInSet}` : 'The board';
   const inProgress = phase === 'auction' || phase === 'play';
   if (stake?.held) {
     const held = inProgress
@@ -177,10 +178,10 @@ export function leaveMessage(
   table: Table | null,
   userId: number | null,
   phase: Phase | null,
-  boardNumber: number | null = null,
+  boardInSet: number | null = null,
   stake: SetAtStake | null = null,
 ): string {
-  return [leaveWarning(phase, boardNumber, stake), stake?.held ? '' : leaveNote(table, userId)]
+  return [leaveWarning(phase, boardInSet, stake), stake?.held ? '' : leaveNote(table, userId)]
     .filter(Boolean)
     .join(' ');
 }
@@ -190,12 +191,12 @@ export async function confirmLeave(
   table: Table | null,
   userId: number | null,
   phase: Phase | null,
-  boardNumber: number | null = null,
+  boardInSet: number | null = null,
   stake: SetAtStake | null = null,
 ) {
   const role = await ask(
     stake ? `Leave in the middle of set ${stake.number}?` : 'Leave this table?',
-    leaveMessage(table, userId, phase, boardNumber, stake),
+    leaveMessage(table, userId, phase, boardInSet, stake),
     [
       { text: 'Cancel', role: 'cancel' },
       { text: stake ? 'Leave anyway' : 'Leave', role: 'destructive' },
@@ -269,12 +270,12 @@ export async function confirmWatch(
   to: Pick<Table, 'id' | 'name'>,
   userId: number,
   phase: Phase | null = null,
-  boardNumber: number | null = null,
+  boardInSet: number | null = null,
   stake: SetAtStake | null = null,
 ) {
   const role = await ask(
     `Leave ${tableLabel(from)} to watch ${tableLabel(to)}?`,
-    leaveMessage(from, userId, phase, boardNumber, stake),
+    leaveMessage(from, userId, phase, boardInSet, stake),
     [
       { text: 'Cancel', role: 'cancel' },
       { text: 'Leave and watch', role: 'destructive' },

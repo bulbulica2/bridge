@@ -5,7 +5,7 @@
        the app (teleported to <body>); src/theme/print.css hides the rest. -->
   <article class="board-printout">
     <header>
-      <h1>Board {{ review.board?.number ?? '?' }}</h1>
+      <h1>{{ boardInSetText(review.set) }}</h1>
       <p class="meta">
         Dealer {{ review.board ? SEAT_NAMES[review.board.dealer] : '?' }} ·
         {{ review.board ? vulnerabilityText(review.board.vulnerable, mySeat).text : 'Vul: ?' }} ·
@@ -139,6 +139,7 @@ import {
 import type { ExportExtras, TrickRow } from '@/utils/export';
 import { resultSummary } from '@/utils/result';
 import { isRecorded } from '@/utils/review';
+import { boardInSetText } from '@/utils/sets';
 
 // `mySeat`: the viewer's seat if they played the board, for "(you)" after
 // who is vulnerable.

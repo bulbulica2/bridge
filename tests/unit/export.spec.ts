@@ -107,6 +107,8 @@ function played(overrides: Partial<PlayingReview> = {}): PlayingReview {
   return {
     phase: 'finished',
     playing_id: 42,
+    // The set's second board; 7 is its number in the database (PBN only).
+    set: { id: 5, number: 1, board: 2, of: 4 },
     board: { id: 7, number: 7, dealer: 'N', vulnerable: 'E-W' },
     players: { N: ann, E: bo, S: cy, W: robot },
     turn: null,
@@ -229,11 +231,16 @@ describe('playingExtras', () => {
 })
 
 describe('boardText', () => {
+  test('names the board by its place in the set, plain Board outside one, never its number', () => {
+    expect(boardText(played({ set: null })).split('\n')[0]).toBe('Board (playing #42)')
+    expect(boardText(played({ set: undefined })).split('\n')[0]).toBe('Board (playing #42)')
+  })
+
   test('a played board: hands, every call, every trick, the result', () => {
     const text = boardText(played(), { matchpoints: { ns: 3, ew: 1 }, top: 4 })
     const lines = text.split('\n')
 
-    expect(lines[0]).toBe('Board 7 (playing #42)')
+    expect(lines[0]).toBe('Board 2 of 4 (playing #42)')
     expect(lines[1]).toBe('Dealer: North · Vulnerable: E-W')
     expect(text).toContain('West   ROBOT-1 @robot-1 (robot)')
     expect(text).toContain('North  ♠ A K 7 3  ♥ Q J 2  ♦ 10 9 4  ♣ K 8 2')
@@ -478,7 +485,7 @@ describe('export on the review page', () => {
     expect(writeText).toHaveBeenCalledWith(
       boardText(played(), { matchpoints: { ns: 3, ew: 1 }, top: 4 }),
     )
-    expect(toast).toHaveBeenCalledWith('Board 7 copied as text.', 'success')
+    expect(toast).toHaveBeenCalledWith('Board 2 of 4 copied as text.', 'success')
     wrapper.unmount()
   })
 
@@ -518,7 +525,7 @@ describe('export on the review page', () => {
     expect(print).toHaveBeenCalledTimes(1)
     expect(document.body.classList.contains('printing-board')).toBe(true)
     const printout = document.querySelector('body > .board-printout')!
-    expect(printout.textContent).toContain('Board 7')
+    expect(printout.querySelector('h1')!.textContent).toBe('Board 2 of 4')
     expect(printout.textContent).toContain('ROBOT-1 @robot-1 (robot)')
     // Who is vulnerable, in words: bo sat East, on the vulnerable side.
     expect(printout.querySelector('.meta')!.textContent).toContain('Vulnerable: E-W (you)')

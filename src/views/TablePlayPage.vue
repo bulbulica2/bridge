@@ -1529,7 +1529,7 @@ watch(
       seenBoard.value = {
         tableId: tableId.value,
         playingId,
-        number: playing.value!.board?.number ?? null,
+        position: playing.value!.set?.board ?? null,
         setId: playing.value!.set?.id ?? null,
       };
     }
@@ -2113,7 +2113,7 @@ async function leave() {
       table.value,
       me.value,
       playing.value?.phase ?? null,
-      playing.value?.board?.number ?? null,
+      playing.value?.set?.board ?? null,
       stake,
     );
     if (!confirmed) {

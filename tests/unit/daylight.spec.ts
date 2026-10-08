@@ -90,10 +90,12 @@ describe('BridgeTable plates', () => {
     })
   }
 
-  test("the centre's board line: the board's number left out, the play page's label, or none", () => {
+  test("the centre's board line: the label given, else none, never the board's number", () => {
     const board = { id: 1, number: 12, dealer: 'W', vulnerable: 'E-W' }
 
-    expect(mountTable({ board }).get('.board-number').text()).toBe('Board 12')
+    const left = mountTable({ board })
+    expect(left.find('.board-number').exists()).toBe(false)
+    expect(left.get('.centre').text()).not.toContain('12')
     expect(mountTable({ board, boardLabel: 'Board 2 of 4' }).get('.board-number').text()).toBe('Board 2 of 4')
     const none = mountTable({ board, boardLabel: null })
     expect(none.find('.board-number').exists()).toBe(false)

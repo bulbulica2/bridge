@@ -17,6 +17,7 @@ import {
 } from '@/utils/result';
 import type { Side } from '@/utils/result';
 import { isRecorded, playedCards } from '@/utils/review';
+import { boardInSetText } from '@/utils/sets';
 
 // A finished board taken out of the app (GET /playings/{playing}, the
 // review page's payload): as plain text to paste into a chat, as Portable
@@ -175,7 +176,7 @@ export function boardText(review: PlayingReview, extras: ExportExtras = {}): str
   const dealer = board?.dealer ?? null;
 
   lines.push(
-    `Board ${board?.number ?? '?'} (playing #${review.playing_id ?? '?'})`,
+    `${boardInSetText(review.set)} (playing #${review.playing_id ?? '?'})`,
     `Dealer: ${dealer ? SEAT_NAMES[dealer] : '?'} · Vulnerable: ${board ? vulnerabilityLabel(board.vulnerable) : '?'}`,
     '',
     'Players',

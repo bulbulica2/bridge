@@ -91,10 +91,11 @@ export function stepCaption(at: ReviewStep): string {
 }
 
 // A finished board of a table that the play page offers to review, and its
-// number at the table (null if unknown).
+// place in its set (1–4; null outside a set or if unknown), never the board's
+// number in the database (#189).
 export interface ReviewChoice {
   playingId: number;
-  number: number | null;
+  position: number | null;
 }
 
 // The last board the play page saw finish at a table, and its set.
@@ -116,14 +117,14 @@ export function reviewChoices(
 ): ReviewChoice[] {
   const choices: ReviewChoice[] = (set?.boards ?? []).map((row) => ({
     playingId: row.playing_id,
-    number: row.board.number,
+    position: row.position,
   }));
   const inSet = choices.length === 0 || seen?.setId === set?.id;
   if (seen && inSet && !choices.some((c) => c.playingId === seen.playingId)) {
-    choices.push({ playingId: seen.playingId, number: seen.number });
+    choices.push({ playingId: seen.playingId, position: seen.position });
   }
   if (choices.length === 0 && latest) {
-    choices.push({ playingId: latest.playing_id, number: latest.board.number });
+    choices.push({ playingId: latest.playing_id, position: latest.set?.board ?? null });
   }
   return choices;
 }

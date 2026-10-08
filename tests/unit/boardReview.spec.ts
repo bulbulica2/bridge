@@ -65,10 +65,12 @@ const pass = bid(1, 'P')
 const fourSpades = bid(22, '4S', 4)
 
 // 4♠ by North: one trick played, then North's claim of the rest.
-function review(playingId = 42, number = 7): PlayingReview {
+// `position` is its place in set 2 (null: outside any set).
+function review(playingId = 42, number = 7, position: number | null = 2): PlayingReview {
   return {
     phase: 'finished',
     playing_id: playingId,
+    set: position === null ? null : { id: 5, number: 2, board: position, of: 4 },
     board: { id: number, number, dealer: 'N', vulnerable: '' },
     players: PLAYERS,
     turn: null,
@@ -105,11 +107,12 @@ function review(playingId = 42, number = 7): PlayingReview {
   }
 }
 
-function boardRow(playingId: number, number: number): SetBoardRow {
+// The board's number in the database is far from its place in the set.
+function boardRow(playingId: number, position: number): SetBoardRow {
   return {
-    position: number,
+    position,
     playing_id: playingId,
-    board: { id: number, number, dealer: 'N', vulnerable: '' },
+    board: { id: 130 + position, number: 130 + position, dealer: 'N', vulnerable: '' },
     contract: fourSpades,
     doubled: 0,
     declarer: 'N',
@@ -141,11 +144,16 @@ function setResults(boards: SetBoardRow[], id = 5): SetResults {
   }
 }
 
-function historyEntry(playingId: number, tableId: number | null, number: number): PlayingHistoryEntry {
+function historyEntry(
+  playingId: number,
+  tableId: number | null,
+  number: number,
+  position: number | null = null,
+): PlayingHistoryEntry {
   return {
     playing_id: playingId,
     table_id: tableId,
-    set: null,
+    set: position === null ? null : { id: 5, number: 1, board: position, of: 4 },
     board: { id: number, number, dealer: 'N', vulnerable: '' },
     seat: 'E',
     partner: di,
@@ -184,37 +192,41 @@ afterEach(() => {
 })
 
 describe('reviewChoices', () => {
-  const seen = (playingId: number, number: number, setId: number | null) => ({ playingId, number, setId })
+  const seen = (playingId: number, position: number | null, setId: number | null) => ({ playingId, position, setId })
 
-  test("the running set's finished boards, oldest first", () => {
-    const set = setResults([boardRow(41, 5), boardRow(42, 6)])
+  test("the running set's finished boards, oldest first, by their place in the set", () => {
+    const set = setResults([boardRow(41, 1), boardRow(42, 2)])
     expect(reviewChoices(set, null, null)).toEqual([
-      { playingId: 41, number: 5 },
-      { playingId: 42, number: 6 },
+      { playingId: 41, position: 1 },
+      { playingId: 42, position: 2 },
     ])
   })
 
   test('the board just seen to finish joins its set before the set is read again', () => {
-    const set = setResults([boardRow(41, 5)])
-    expect(reviewChoices(set, seen(42, 6, 5), null).map((c) => c.playingId)).toEqual([41, 42])
+    const set = setResults([boardRow(41, 1)])
+    expect(reviewChoices(set, seen(42, 2, 5), null)).toEqual([
+      { playingId: 41, position: 1 },
+      { playingId: 42, position: 2 },
+    ])
     // Already there: not twice.
-    expect(reviewChoices(set, seen(41, 5, 5), null).map((c) => c.playingId)).toEqual([41])
+    expect(reviewChoices(set, seen(41, 1, 5), null).map((c) => c.playingId)).toEqual([41])
   })
 
   test("a board seen in another set stays out of the running set's", () => {
-    const set = setResults([boardRow(41, 5)])
+    const set = setResults([boardRow(41, 1)])
     expect(reviewChoices(set, seen(38, 4, 4), null).map((c) => c.playingId)).toEqual([41])
   })
 
   test("on the next set's first board, the previous set's last board", () => {
-    expect(reviewChoices(setResults([], 6), seen(44, 8, 5), null)).toEqual([{ playingId: 44, number: 8 }])
-    expect(reviewChoices(null, seen(44, 8, 5), null)).toEqual([{ playingId: 44, number: 8 }])
+    expect(reviewChoices(setResults([], 6), seen(44, 4, 5), null)).toEqual([{ playingId: 44, position: 4 }])
+    expect(reviewChoices(null, seen(44, null, null), null)).toEqual([{ playingId: 44, position: null }])
   })
 
-  test('after a reload, the latest history entry at the table', () => {
-    expect(reviewChoices(setResults([], 6), null, historyEntry(44, 9, 8))).toEqual([
-      { playingId: 44, number: 8 },
+  test('after a reload, the latest history entry at the table: its place in its set, if any', () => {
+    expect(reviewChoices(setResults([], 6), null, historyEntry(44, 9, 138, 3))).toEqual([
+      { playingId: 44, position: 3 },
     ])
+    expect(reviewChoices(null, null, historyEntry(44, 9, 138))).toEqual([{ playingId: 44, position: null }])
     expect(reviewChoices(null, null, null)).toEqual([])
   })
 })
@@ -521,8 +533,8 @@ describe('useBoardExport', () => {
 
 describe('BoardReviewModal', () => {
   const choices = [
-    { playingId: 41, number: 6 },
-    { playingId: 42, number: 7 },
+    { playingId: 41, position: 1 },
+    { playingId: 42, position: 2 },
   ]
 
   function mountModal(props: Partial<InstanceType<typeof BoardReviewModal>['$props']> = {}) {
@@ -539,20 +551,20 @@ describe('BoardReviewModal', () => {
     await flushPromises()
 
     expect(http.get).toHaveBeenCalledWith('/playings/42')
-    expect(wrapper.find('ion-title').text()).toBe('Board 7 review')
-    expect(wrapper.findAll('ion-segment-button').map((b) => b.text())).toEqual(['Board 6', 'Board 7'])
+    expect(wrapper.find('ion-title').text()).toBe('Board 2 review')
+    expect(wrapper.findAll('ion-segment-button').map((b) => b.text())).toEqual(['Board 1', 'Board 2'])
 
     answer(review(41, 6))
     await pickSegment(wrapper, '41')
     expect(http.get).toHaveBeenLastCalledWith('/playings/41')
-    expect(wrapper.find('ion-title').text()).toBe('Board 6 review')
+    expect(wrapper.find('ion-title').text()).toBe('Board 1 review')
 
     // Back to one already read: from the store, not asked again.
     await pickSegment(wrapper, '42')
     wrapper.findComponent(IonSegment).vm.$emit('update:modelValue', undefined)
     await flushPromises()
     expect(http.get).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('ion-title').text()).toBe('Board 7 review')
+    expect(wrapper.find('ion-title').text()).toBe('Board 2 review')
     wrapper.unmount()
   })
 
@@ -567,7 +579,7 @@ describe('BoardReviewModal', () => {
     expect(wrapper.find('.board-review').exists()).toBe(false)
     await wrapper.setProps({ open: true })
     await flushPromises()
-    expect(wrapper.find('ion-title').text()).toBe('Board 7 review')
+    expect(wrapper.find('ion-title').text()).toBe('Board 2 review')
     wrapper.unmount()
   })
 
@@ -584,13 +596,33 @@ describe('BoardReviewModal', () => {
     wrapper.unmount()
   })
 
+  test("a choice without its place in the set: the review's own set, else plain Board", async () => {
+    answer(review(42, 137, 3))
+    const wrapper = mountModal({
+      choices: [
+        { playingId: 41, position: null },
+        { playingId: 42, position: null },
+      ],
+    })
+    await flushPromises()
+    expect(wrapper.findAll('ion-segment-button').map((b) => b.text())).toEqual(['Board', 'Board'])
+    expect(wrapper.find('ion-title').text()).toBe('Board 3 review')
+
+    answer(review(41, 136, null))
+    await pickSegment(wrapper, '41')
+    expect(wrapper.find('ion-title').text()).toBe('Board review')
+    expect(wrapper.text()).not.toContain('136')
+    wrapper.unmount()
+  })
+
   test('a failed read says so and tries again', async () => {
     vi.mocked(http.get).mockRejectedValueOnce(axiosError(500, 'Server down.'))
     const wrapper = mountModal()
     await flushPromises()
 
     expect(wrapper.find('.load-error').text()).toContain('Server down.')
-    expect(wrapper.find('ion-title').text()).toBe('Board review')
+    // The choice knows its place in the set before the review is read.
+    expect(wrapper.find('ion-title').text()).toBe('Board 2 review')
 
     answer(review(42, 7))
     await wrapper.get('.load-error ion-button').trigger('click')
@@ -671,7 +703,7 @@ describe('BoardReviewModal', () => {
 
     await press(sheet.props('buttons') as Button[], 'Print / Save as PDF')
     expect(window.print).toHaveBeenCalledTimes(1)
-    expect(document.querySelector('body > .board-printout')?.textContent).toContain('Board 7')
+    expect(document.querySelector('body > .board-printout h1')?.textContent).toBe('Board 2 of 4')
     expect(document.querySelector('body > .board-printout .meta')?.textContent).toContain('Nobody vulnerable')
 
     await wrapper.setProps({ open: false })

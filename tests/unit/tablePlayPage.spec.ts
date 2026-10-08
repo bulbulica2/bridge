@@ -1105,7 +1105,8 @@ describe('TablePlayPage after a set', () => {
     await wrapper.get('.leave-table').trigger('click')
     await flushPromises()
 
-    expect(confirmLeave).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }), 3, 'finished', 7, null)
+    // The board's place in its set (the fourth), never its number in the database.
+    expect(confirmLeave).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }), 3, 'finished', 4, null)
     expect(leave).toHaveBeenCalledWith(5)
     expect(showToast).toHaveBeenCalledWith('You left the table.', 'success')
     expect(navigate).toHaveBeenCalledWith('/tables', 'back', 'replace')

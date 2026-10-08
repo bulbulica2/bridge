@@ -245,7 +245,7 @@ describe('the review modal at the table', () => {
 
     expect(navigate).not.toHaveBeenCalled()
     expect(modal(wrapper).props('open')).toBe(true)
-    expect(modal(wrapper).props('choices')).toEqual([{ playingId: 42, number: 7 }])
+    expect(modal(wrapper).props('choices')).toEqual([{ playingId: 42, position: null }])
     expect(historyService.getPlayingReview).toHaveBeenCalledWith(42)
     expect(wrapper.find('.board-review').exists()).toBe(true)
     // The next board comes by itself: nothing waits for us meanwhile.
@@ -260,7 +260,7 @@ describe('the review modal at the table', () => {
     await flushPromises()
     await openReview(wrapper)
 
-    expect(modal(wrapper).props('choices')).toEqual([{ playingId: 42, number: 7 }])
+    expect(modal(wrapper).props('choices')).toEqual([{ playingId: 42, position: null }])
     expect(wrapper.find('.turn-notice').exists()).toBe(false)
 
     // West passes: our call. The modal says so and stays open.
@@ -281,7 +281,8 @@ describe('the review modal at the table', () => {
     expect(historyService.getSet).toHaveBeenCalledWith(5)
     await openReview(wrapper)
 
-    expect(wrapper.findAll('ion-segment-button').map((b) => b.text())).toEqual(['Board 6', 'Board 7'])
+    expect(wrapper.findAll('ion-segment-button').map((b) => b.text())).toEqual(['Board 1', 'Board 2'])
+    expect(modal(wrapper).find('ion-title').text()).toBe('Board 2 review')
     expect(historyService.getPlayingReview).toHaveBeenCalledWith(42)
   })
 
@@ -293,7 +294,7 @@ describe('the review modal at the table', () => {
     await flushPromises()
 
     expect(reviewButton(wrapper).exists()).toBe(true)
-    expect(modal(wrapper).props('choices')).toEqual([{ playingId: 42, number: 7 }])
+    expect(modal(wrapper).props('choices')).toEqual([{ playingId: 42, position: 4 }])
   })
 
   test('after a reload mid-set, the set is read for its boards', async () => {
@@ -317,7 +318,7 @@ describe('the review modal at the table', () => {
 
     expect(historyService.getSet).not.toHaveBeenCalled()
     expect(historyService.getMyPlayings).toHaveBeenCalledWith(1)
-    expect(modal(wrapper).props('choices')).toEqual([{ playingId: 44, number: 8 }])
+    expect(modal(wrapper).props('choices')).toEqual([{ playingId: 44, position: null }])
   })
 
   test('nothing to review while nothing may have been finished here, or nothing is found', async () => {
