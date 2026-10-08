@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/96-auction-button-and-board-bar`._
+_Status as of branch `bulbulica2/97-nicer-form-inputs`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -93,6 +93,15 @@ Email, password and a **Remember me** checkbox (off by default, #65);
 links to Create account and Reset password. On success it goes to
 `/account` and shows a welcome toast.
 
+The form (#170) is a white card, at most 420 px wide and centred (full
+width less a 16 px gutter on a phone), with Daylight's fields
+(`forms.css`): the password has a show/hide button, a browser's autofill
+looks like typed text (no yellow or blue patch), and a 422 shows under
+its field with the field's border red ("These credentials do not match
+our records." under Email). **Log in** is the orange primary button,
+**Remember me** a checkbox with a 44 px tap area, and Create account /
+Reset password quiet text links under the button.
+
 Ticked, `POST /login` carries `remember: true` and the backend also sets
 Laravel's long-lived remember cookie, so a reload after the session cookie
 has expired (`SESSION_LIFETIME`, 120 minutes by default) still lands
@@ -111,7 +120,9 @@ first backend commit), described in [backend `AUTH.md`](https://github.com/bulbu
 **Guests only.** Built by #5; Daylight's colours by #163. Linked from Login and guest Home.
 
 Name (at most 50 characters), username (at most 30), email, password and
-confirmation; each 422 error shows under its field. On success the user is logged in, lands on `/account`
+confirmation, in the same white card and fields as Login (#170), both
+password fields with a show/hide button and **Create account** in orange;
+each 422 error shows under its field, its border red. On success the user is logged in, lands on `/account`
 and gets a welcome toast. There is no Remember me here: a new account is
 logged in for the session only, and Remember me is on the Login page.
 
@@ -131,6 +142,10 @@ Backend: `routes/auth.php`. Email verification is not wired yet
 2. `/password-reset/:token?email=…` (the link in the email): choose a new
    password. A reset doesn't log you in, so it then goes to `/login`.
 
+Both stages use Login's white card and fields (#170); the new password and
+its confirmation have a show/hide button. A 422 shows under its field;
+one about something not on the form (an invalid token) under the form.
+
 | Calls | Endpoint |
 |---|---|
 | `auth.requestPasswordReset()` | `GET /sanctum/csrf-cookie`, `POST /forgot-password` |
@@ -147,7 +162,9 @@ Locally `MAIL_MAILER=log`, so the link lands in the backend's
 profile); Daylight's colours by #163. Reached from the header's **Account** button.
 
 Shows your name, username, email and description. **Edit profile** turns
-the page into a form for name (at most 50 characters) and description (username and email are
+the page into a form for name (at most 50 characters) and description,
+in a white card with Daylight's fields (#170: a 422 under its field, the
+field's border red) (username and email are
 read-only, with the plain arrow cursor rather than the text cursor, #66;
 their text can still be selected and copied). **Card size** (#136) picks
 how big the cards are drawn at the table, **Normal**, **Large** (the

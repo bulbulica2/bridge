@@ -33,7 +33,11 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/96-auction-button-and-board-bar` (after
+> branch `bulbulica2/97-nicer-form-inputs` (after
+> #170, Daylight's form fields: a 48 px boxed field with its label above,
+> a focus ring, a red error state and a muted disabled one, autofill in
+> the field's own colours instead of the browser's yellow, a show/hide
+> button on password fields, and Login in a white card; after
 > #165, the play page's top-left corner: the auction behind an **Auction**
 > button beside the vulnerability pill (hover or tap), no auction grid on
 > the page once the bidding is over, **Board 1 of 4** under the button

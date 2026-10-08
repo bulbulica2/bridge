@@ -2,88 +2,106 @@
   <ion-page>
     <AppHeader :title="hasToken ? 'Choose a new password' : 'Reset password'" />
     <ion-content :fullscreen="true" class="ion-padding">
-      <div class="form-page">
-        <!-- Stage 2: a token came from the emailed link, so set the new password. -->
-        <form v-if="hasToken" @submit.prevent="submitNewPassword">
-          <ion-list>
-            <ion-item>
-              <ion-input
-                v-model="email"
-                type="email"
-                label="Email"
-                label-placement="stacked"
-                autocomplete="email"
-                required
-              />
-            </ion-item>
-            <ion-item>
-              <ion-input
-                v-model="password"
-                type="password"
-                label="New password"
-                label-placement="stacked"
-                autocomplete="new-password"
-                required
-              />
-            </ion-item>
-            <ion-item>
-              <ion-input
-                v-model="passwordConfirmation"
-                type="password"
-                label="Confirm new password"
-                label-placement="stacked"
-                autocomplete="new-password"
-                required
-              />
-            </ion-item>
-          </ion-list>
-
-          <ion-text v-if="error" color="danger">
-            <p class="message">{{ error }}</p>
-          </ion-text>
-
-          <ion-button type="submit" expand="block" :disabled="submitting">
-            <ion-spinner v-if="submitting" name="crescent" />
-            <span v-else>Save new password</span>
-          </ion-button>
-        </form>
-
-        <!-- Stage 1: ask for the reset link. -->
-        <form v-else @submit.prevent="submitLinkRequest">
-          <ion-text>
-            <p class="message">
-              Enter your email and we'll send you a link to choose a new password.
+      <div class="bridge-form-page">
+        <div class="bridge-form-card">
+          <!-- Stage 2: a token came from the emailed link, so set the new password. -->
+          <form v-if="hasToken" class="bridge-form" @submit.prevent="submitNewPassword">
+            <ion-input
+              v-model="email"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.email }"
+              type="email"
+              label="Email"
+              label-placement="stacked"
+              autocomplete="email"
+              aria-describedby="reset-email-error"
+              required
+            />
+            <p v-if="errors.email" id="reset-email-error" class="bridge-field-message">
+              {{ errors.email }}
             </p>
-          </ion-text>
+            <ion-input
+              v-model="password"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.password }"
+              type="password"
+              label="New password"
+              label-placement="stacked"
+              autocomplete="new-password"
+              aria-describedby="reset-password-error"
+              required
+            >
+              <ion-input-password-toggle slot="end" />
+            </ion-input>
+            <p v-if="errors.password" id="reset-password-error" class="bridge-field-message">
+              {{ errors.password }}
+            </p>
+            <ion-input
+              v-model="passwordConfirmation"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.password_confirmation }"
+              type="password"
+              label="Confirm new password"
+              label-placement="stacked"
+              autocomplete="new-password"
+              aria-describedby="reset-password-confirmation-error"
+              required
+            >
+              <ion-input-password-toggle slot="end" />
+            </ion-input>
+            <p v-if="errors.password_confirmation" id="reset-password-confirmation-error" class="bridge-field-message">
+              {{ errors.password_confirmation }}
+            </p>
 
-          <ion-list>
-            <ion-item>
-              <ion-input
-                v-model="email"
-                type="email"
-                label="Email"
-                label-placement="stacked"
-                autocomplete="email"
-                required
-              />
-            </ion-item>
-          </ion-list>
+            <ion-text v-if="error" color="danger">
+              <p class="message">{{ error }}</p>
+            </ion-text>
 
-          <ion-text v-if="error" color="danger">
-            <p class="message">{{ error }}</p>
-          </ion-text>
-          <ion-text v-if="status" color="success">
-            <p class="message">{{ status }}</p>
-          </ion-text>
+            <ion-button type="submit" expand="block" color="action" :disabled="submitting">
+              <ion-spinner v-if="submitting" name="crescent" />
+              <span v-else>Save new password</span>
+            </ion-button>
+          </form>
 
-          <ion-button type="submit" expand="block" :disabled="submitting">
-            <ion-spinner v-if="submitting" name="crescent" />
-            <span v-else>Send reset link</span>
-          </ion-button>
-        </form>
+          <!-- Stage 1: ask for the reset link. -->
+          <form v-else class="bridge-form" @submit.prevent="submitLinkRequest">
+            <ion-text>
+              <p class="message">
+                Enter your email and we'll send you a link to choose a new password.
+              </p>
+            </ion-text>
 
-        <div class="secondary">
-          <ion-button fill="clear" router-link="/login">Back to log in</ion-button>
+            <ion-input
+              v-model="email"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.email }"
+              type="email"
+              label="Email"
+              label-placement="stacked"
+              autocomplete="email"
+              aria-describedby="link-email-error"
+              required
+            />
+            <p v-if="errors.email" id="link-email-error" class="bridge-field-message">
+              {{ errors.email }}
+            </p>
+
+            <ion-text v-if="error" color="danger">
+              <p class="message">{{ error }}</p>
+            </ion-text>
+            <ion-text v-if="status" color="success">
+              <p class="message">{{ status }}</p>
+            </ion-text>
+
+            <ion-button type="submit" expand="block" color="action" :disabled="submitting">
+              <ion-spinner v-if="submitting" name="crescent" />
+              <span v-else>Send reset link</span>
+            </ion-button>
+          </form>
+
+          <div class="bridge-form-links">
+            <ion-button fill="clear" router-link="/login">Back to log in</ion-button>
+          </div>
         </div>
       </div>
     </ion-content>
@@ -96,9 +114,8 @@ import { useRoute } from 'vue-router';
 import {
   IonPage,
   IonContent,
-  IonList,
-  IonItem,
   IonInput,
+  IonInputPasswordToggle,
   IonButton,
   IonText,
   IonSpinner,
@@ -106,7 +123,7 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
-import { errorMessage } from '@/utils/errors';
+import { formErrors } from '@/utils/errors';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -123,6 +140,8 @@ const email = ref('');
 const password = ref('');
 const passwordConfirmation = ref('');
 const error = ref('');
+// A 422's messages under their fields; the rest in `error`.
+const errors = ref<Record<string, string>>({});
 const status = ref('');
 const submitting = ref(false);
 
@@ -137,12 +156,15 @@ onIonViewWillEnter(() => {
 
 async function submitLinkRequest() {
   error.value = '';
+  errors.value = {};
   status.value = '';
   submitting.value = true;
   try {
     status.value = await auth.requestPasswordReset({ email: email.value });
   } catch (e) {
-    error.value = errorMessage(e, 'Could not send the reset link. Please try again.');
+    const failure = formErrors(e, ['email'], 'Could not send the reset link. Please try again.');
+    errors.value = failure.fields;
+    error.value = failure.message;
   } finally {
     submitting.value = false;
   }
@@ -150,6 +172,7 @@ async function submitLinkRequest() {
 
 async function submitNewPassword() {
   error.value = '';
+  errors.value = {};
   status.value = '';
   if (password.value !== passwordConfirmation.value) {
     error.value = 'Passwords do not match.';
@@ -168,7 +191,13 @@ async function submitNewPassword() {
     // The reset does not start a session, so the user logs in with the new password.
     ionRouter.navigate('/login', 'root', 'replace');
   } catch (e) {
-    error.value = errorMessage(e, 'Could not reset the password. Please try again.');
+    const failure = formErrors(
+      e,
+      ['email', 'password', 'password_confirmation'],
+      'Could not reset the password. Please try again.',
+    );
+    errors.value = failure.fields;
+    error.value = failure.message;
   } finally {
     submitting.value = false;
   }
@@ -177,23 +206,11 @@ async function submitNewPassword() {
 </script>
 
 <style scoped>
-.form-page {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  max-width: 420px;
-  min-height: 100%;
-  margin: 0 auto;
-}
-
 .message {
-  margin: 8px 16px;
+  margin: 0;
 }
 
-.secondary {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 16px;
+.bridge-form-links {
+  margin-top: 12px;
 }
 </style>

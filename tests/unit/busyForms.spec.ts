@@ -311,7 +311,7 @@ describe('Profile edit', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.find('.field-error').text()).toBe('The name field is required.')
+    expect(wrapper.find('.bridge-field-message').text()).toBe('The name field is required.')
     expect(wrapper.find('.error').exists()).toBe(false)
     expect(isDisabled(wrapper.find('ion-input'))).toBe(false)
     expect(showToast).not.toHaveBeenCalled()
@@ -327,7 +327,7 @@ describe('Profile edit', () => {
     await flushPromises()
 
     expect(wrapper.find('.error').text()).toBe('Could not save your profile. Please try again.')
-    expect(wrapper.find('.field-error').exists()).toBe(false)
+    expect(wrapper.find('.bridge-field-message').exists()).toBe(false)
     expect(wrapper.find('form').exists()).toBe(true)
   })
 

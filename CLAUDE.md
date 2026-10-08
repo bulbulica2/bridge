@@ -122,7 +122,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   logout presents its toast once `/login` is up, and login/sign-up greet the
   user with `showWelcomeToast` once `/account` is up. The toasts' styles live in
   `src/theme/toasts.css`: toasts render outside the pages, so the CSS is
-  global and styles the toast's shadow parts through `::part()`. Creating
+  global and styles the toast's shadow parts through `::part()`. Next to
+  it (`main.ts`) `src/theme/forms.css` holds the form fields (#170, see
+  Theme: Daylight). Creating
   a table and taking a seat on the Tables page are the exceptions to
   `navigateAndSettle`: **Deal me in** / **Create table** navigate to
   `/tables/:id` (where Start, the seats and Seat a player / Add robot
@@ -1043,7 +1045,11 @@ The user's standing rule (#91): **no task may leave code coverage under
 - **Error handling**: `src/utils/errors.ts` is the one axios-error reader —
   `errorMessage(e, fallback)` for the text to show, `statusOf(e)` for the
   status to branch on and `fieldErrors(e)` for a 422's first message per field
-  (shown under each input). Three envelopes reach the SPA: the game endpoints'
+  (shown under each input); `formErrors(e, fields, fallback)` splits a
+  failure into `{fields, message}`: the 422 messages of the fields a form
+  shows, and the rest (another field, e.g. a reset's `token`, another
+  status) as the one line under the form (Login, Create account, Reset
+  password). Three envelopes reach the SPA: the game endpoints'
   `{status, message, data}`, Laravel's 422 `{message, errors}`, and a bare
   `{message}` from auth/policy failures. `logUnexpected(e)` logs a
   non-HTTP error to the console. Leave and Remove (detail, play and
@@ -1084,6 +1090,31 @@ The user's standing rule (#91): **no task may leave code coverage under
   dark mode never redefines. Dark mode: the same
   tokens get the Midnight values under `prefers-color-scheme: dark` on
   `:root, :root.ios, :root.md` (so they beat `dark.system.css`).
+  **Form fields** (#170, `src/theme/forms.css`): `ion-input` /
+  `ion-textarea` with `class="bridge-field"` + `label-placement="stacked"`,
+  never inside an `ion-item` (Login, Create account, both Reset password
+  stages, Account's profile edit, `BanUserForm`): label 14 px bold above,
+  a 48 px box (`.native-wrapper` / `.textarea-wrapper-inner`, reached
+  directly since both are scoped, not shadow DOM; selectors carry Ionic's
+  host classes to outrank its own, e.g. `.label-floating
+  .input-label-placement-stacked`), 1.5 px `--bridge-field-border`, 12 px
+  radius, focus ring `--bridge-focus` (the label stays ink:
+  `--highlight-color-focused`), `bridge-field-invalid` → border
+  `--bridge-error` with a `<p class="bridge-field-message">` right after
+  the field whose id is the field's static `aria-describedby`, disabled
+  → `--bridge-field-bg` ground / `--bridge-field-ink` muted. Autofill:
+  global rules on every `ion-input .native-input` for `:-webkit-autofill`
+  and `:autofill` **separately** (a browser drops a rule with a selector
+  it doesn't know), inset shadow in `--bridge-field-bg` (`!important`:
+  Ionic clears an `:invalid` input's shadow) + `-webkit-text-fill-color`
+  / `caret-color` in `--bridge-field-ink`. Password fields carry
+  `<ion-input-password-toggle slot="end" />` (its inner button has
+  Ionic's `aria-label` and `role="switch"`; Ionic hides it while the
+  input is disabled). Guest pages: `.bridge-form-page` (420 px, centred)
+  > `.bridge-form-card` > `form.bridge-form` (a 16 px gap column),
+  `.bridge-form-links` (quiet text links), `ion-checkbox.bridge-check`
+  (44 px); their submit is `color="action"`.
+  `tests/unit/formFields.spec.ts` covers it.
   `src/theme/daylight.css`: body font, `ion-button` 48 px (not small,
   toolbar or clear), sentence case, 12 px radius, outline neutral /
   `color="danger"` outline via `::part(native)`, grey disabled (sets

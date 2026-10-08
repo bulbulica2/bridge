@@ -1,0 +1,201 @@
+/* Forms (#170): one look for every text field, from Daylight's component
+   kit (#160). A field is an `ion-input` or `ion-textarea` with
+   `class="bridge-field"` and `label-placement="stacked"`, outside any
+   ion-item: the label above, a 48 px white box under it. Its error message
+   is a `.bridge-field-message` right after it, and `bridge-field-invalid`
+   on the field turns its border red. The guest pages' white card is
+   `.bridge-form-card`, the column it sits in `.bridge-form-page`.
+
+   ion-input and ion-textarea are scoped, not shadow DOM: their inner parts
+   (`.label-text-wrapper`, `.native-wrapper`, the native input) are reached
+   with ordinary selectors, a class more specific than Ionic's own. */
+
+ion-input.bridge-field,
+ion-textarea.bridge-field {
+  /* What the box and the text are painted with; disabled changes both, and
+     the autofill rule below reads them too. */
+  --bridge-field-bg: var(--bridge-surface);
+  --bridge-field-ink: var(--ion-text-color);
+  --background: transparent;
+  --color: var(--bridge-field-ink);
+  --placeholder-color: var(--bridge-muted);
+  --placeholder-opacity: 1;
+  --padding-top: 0px;
+  --padding-bottom: 0px;
+  --padding-start: 0px;
+  --padding-end: 0px;
+  /* No underline and no md highlight bar: the box draws its own border.
+     The focused label (and caret) keep the ink instead of Ionic's primary. */
+  --border-width: 0px;
+  --highlight-height: 0px;
+  --highlight-color-focused: var(--bridge-ink);
+  font-size: 1rem;
+}
+
+/* The label: above the box, 14 px bold, never scaled down as Ionic's
+   stacked label is. */
+ion-input.bridge-field.label-floating.input-label-placement-stacked .label-text-wrapper,
+ion-textarea.bridge-field.label-floating.textarea-label-placement-stacked .label-text-wrapper {
+  max-width: 100%;
+  margin: 0 0 6px;
+  padding: 0;
+  transform: none;
+  color: var(--bridge-ink);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+/* The box. */
+ion-input.bridge-field .native-wrapper,
+ion-textarea.bridge-field .textarea-wrapper-inner {
+  box-sizing: border-box;
+  min-height: 48px;
+  border: 1.5px solid var(--bridge-field-border);
+  border-radius: var(--bridge-radius-button);
+  background: var(--bridge-field-bg);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+/* A fixed height: a password toggle's round button (46 px with its
+   margins) would stretch the box otherwise. */
+ion-input.bridge-field .native-wrapper {
+  height: 48px;
+  padding: 0 12px;
+}
+
+ion-textarea.bridge-field .textarea-wrapper-inner {
+  padding: 12px;
+}
+
+ion-input.bridge-field .native-input {
+  min-height: 44px;
+}
+
+/* Focus: a 2 px ring (the border plus half a pixel inside it), navy in
+   light mode and the accent in dark mode, and no browser outline on top. */
+ion-input.bridge-field.has-focus .native-wrapper,
+ion-textarea.bridge-field.has-focus .textarea-wrapper-inner {
+  border-color: var(--bridge-focus);
+  box-shadow: inset 0 0 0 0.5px var(--bridge-focus);
+}
+
+ion-input.bridge-field .native-input:focus,
+ion-input.bridge-field .native-input:focus-visible,
+ion-textarea.bridge-field .native-textarea:focus,
+ion-textarea.bridge-field .native-textarea:focus-visible {
+  outline: none;
+}
+
+/* Error: a red border (and ring while focused) and the message under it. */
+ion-input.bridge-field.bridge-field-invalid .native-wrapper,
+ion-textarea.bridge-field.bridge-field-invalid .textarea-wrapper-inner {
+  border-color: var(--bridge-error);
+}
+
+ion-input.bridge-field.bridge-field-invalid.has-focus .native-wrapper,
+ion-textarea.bridge-field.bridge-field-invalid.has-focus .textarea-wrapper-inner {
+  box-shadow: inset 0 0 0 0.5px var(--bridge-error);
+}
+
+.bridge-field-message {
+  margin: -12px 0 0;
+  color: var(--bridge-error);
+  font-size: 0.875rem;
+}
+
+/* Disabled: the ground colour with muted text, not Ionic's fade. */
+ion-input.bridge-field.input-disabled,
+ion-textarea.bridge-field.textarea-disabled {
+  --bridge-field-bg: var(--bridge-ground);
+  --bridge-field-ink: var(--bridge-muted);
+  opacity: 1;
+}
+
+/* A password field's show/hide button sits inside the box, at its end. */
+ion-input.bridge-field ion-input-password-toggle {
+  margin-inline-end: -8px;
+  color: var(--bridge-muted);
+}
+
+/* Autofill takes the field's own colours, on every ion-input, in a form or
+   not. Browsers paint a filled-in input yellow or blue with an !important
+   background of their own, so a surface-coloured inset shadow covers it and
+   the text fill keeps the ink. Ionic clears the shadow of an :invalid input,
+   hence the !important here too. The standard :autofill gets a rule of its
+   own: a browser that doesn't know one of the two selectors would drop a
+   rule naming both. */
+ion-input .native-input:-webkit-autofill,
+ion-input .native-input:-webkit-autofill:hover,
+ion-input .native-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--bridge-field-bg, var(--bridge-surface)) inset !important;
+  box-shadow: 0 0 0 1000px var(--bridge-field-bg, var(--bridge-surface)) inset !important;
+  -webkit-text-fill-color: var(--bridge-field-ink, var(--ion-text-color));
+  caret-color: var(--bridge-field-ink, var(--ion-text-color));
+  filter: none;
+}
+
+ion-input .native-input:autofill,
+ion-input .native-input:autofill:hover,
+ion-input .native-input:autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--bridge-field-bg, var(--bridge-surface)) inset !important;
+  box-shadow: 0 0 0 1000px var(--bridge-field-bg, var(--bridge-surface)) inset !important;
+  -webkit-text-fill-color: var(--bridge-field-ink, var(--ion-text-color));
+  caret-color: var(--bridge-field-ink, var(--ion-text-color));
+  filter: none;
+}
+
+/* A form's fields in a column, 16 px apart (a message sits 4 px under its
+   field). */
+.bridge-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* A checkbox row ("Remember me") with a 44 px tap area. */
+ion-checkbox.bridge-check {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 44px;
+}
+
+/* The guest pages (Login, Create account, Reset password): a white card on
+   the ground, centred, at most 420 px wide; on a phone it takes the width
+   less ion-content's 16 px padding. */
+.bridge-form-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  max-width: 420px;
+  min-height: 100%;
+  margin: 0 auto;
+}
+
+.bridge-form-card {
+  box-sizing: border-box;
+  padding: 24px 20px;
+  border-radius: var(--bridge-radius-card);
+  background: var(--bridge-surface);
+  box-shadow: 0 1px 0 var(--bridge-line);
+}
+
+/* The quiet text links under a form's button (Create account, Reset
+   password, Back to log in). */
+.bridge-form-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
+}
+
+.bridge-form-links ion-button {
+  --color: var(--ion-color-primary);
+  --padding-start: 4px;
+  --padding-end: 4px;
+  min-height: 44px;
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 400;
+}

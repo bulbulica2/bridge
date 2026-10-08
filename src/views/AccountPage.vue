@@ -4,40 +4,40 @@
     <ion-content :fullscreen="true" class="ion-padding">
       <div class="account">
         <form v-if="editing" class="edit" @submit.prevent="save">
-          <ion-list inset>
-            <ion-item>
-              <ion-input
-                v-model="name"
-                type="text"
-                label="Name"
-                label-placement="stacked"
-                autocomplete="name"
-                :maxlength="NAME_MAX"
-                required
-                :disabled="saving"
-              />
-            </ion-item>
-            <ion-text v-if="errors.name" color="danger">
-              <p class="field-error">{{ errors.name }}</p>
-            </ion-text>
-            <ion-item>
-              <ion-textarea
-                v-model="description"
-                label="Description"
-                label-placement="stacked"
-                :auto-grow="true"
-                :rows="3"
-                :maxlength="DESCRIPTION_MAX"
-                :disabled="saving"
-              />
-            </ion-item>
+          <div class="edit-fields bridge-form-card bridge-form">
+            <ion-input
+              v-model="name"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.name }"
+              type="text"
+              label="Name"
+              label-placement="stacked"
+              autocomplete="name"
+              aria-describedby="account-name-error"
+              :maxlength="NAME_MAX"
+              required
+              :disabled="saving"
+            />
+            <p v-if="errors.name" id="account-name-error" class="bridge-field-message">{{ errors.name }}</p>
+            <ion-textarea
+              v-model="description"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.description }"
+              label="Description"
+              label-placement="stacked"
+              aria-describedby="account-description-error"
+              :auto-grow="true"
+              :rows="3"
+              :maxlength="DESCRIPTION_MAX"
+              :disabled="saving"
+            />
             <ion-note class="counter" :color="description.length >= DESCRIPTION_MAX ? 'warning' : 'medium'">
               {{ description.length }} / {{ DESCRIPTION_MAX }}
             </ion-note>
-            <ion-text v-if="errors.description" color="danger">
-              <p class="field-error">{{ errors.description }}</p>
-            </ion-text>
-          </ion-list>
+            <p v-if="errors.description" id="account-description-error" class="bridge-field-message">
+              {{ errors.description }}
+            </p>
+          </div>
 
           <ion-list inset>
             <ion-item class="read-only">
@@ -327,16 +327,16 @@ async function logOut() {
   text-align: center;
 }
 
-.counter {
-  display: block;
-  padding: 4px 16px 0;
-  text-align: right;
-  font-size: 0.8rem;
+.edit-fields {
+  margin: 0 16px 16px;
 }
 
-.field-error {
-  margin: 4px 16px 8px;
-  font-size: 0.85rem;
+/* Under the description, 4 px below it like a field's message. */
+.counter {
+  display: block;
+  margin-top: -12px;
+  text-align: right;
+  font-size: 0.8rem;
 }
 
 /* Username and email can't be edited, so no text cursor over them; still
