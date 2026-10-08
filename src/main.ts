@@ -44,6 +44,7 @@ import '@fontsource/barlow-semi-condensed/700.css';
 import './theme/variables.css';
 import './theme/daylight.css';
 import './theme/toasts.css';
+import './theme/forms.css';
 import './theme/print.css';
 
 const app = createApp(App)

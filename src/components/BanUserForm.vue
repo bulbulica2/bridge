@@ -17,40 +17,42 @@
       </ion-button>
     </div>
 
-    <ion-list>
-      <ion-item>
-        <ion-input
-          v-model="daysText"
-          type="number"
-          inputmode="numeric"
-          :min="1"
-          :max="MAX_BAN_DAYS"
-          label="Days (1–365)"
-          label-placement="stacked"
-          :disabled="sending"
-        />
-      </ion-item>
-      <ion-text v-if="shownErrors.days" color="danger">
-        <p class="field-error">{{ shownErrors.days }}</p>
-      </ion-text>
-      <ion-item>
-        <ion-textarea
-          v-model="reason"
-          label="Reason (shown to the player)"
-          label-placement="stacked"
-          :auto-grow="true"
-          :maxlength="MAX_BAN_REASON"
-          placeholder="Playing two accounts at once."
-          :disabled="sending"
-        />
-      </ion-item>
-      <ion-text v-if="shownErrors.reason" color="danger">
-        <p class="field-error">{{ shownErrors.reason }}</p>
-      </ion-text>
-    </ion-list>
+    <div class="ban-form-fields bridge-form">
+      <ion-input
+        v-model="daysText"
+        class="bridge-field"
+        :class="{ 'bridge-field-invalid': shownErrors.days }"
+        type="number"
+        inputmode="numeric"
+        :min="1"
+        :max="MAX_BAN_DAYS"
+        label="Days (1–365)"
+        label-placement="stacked"
+        :aria-describedby="`ban-days-error-${user.id}`"
+        :disabled="sending"
+      />
+      <p v-if="shownErrors.days" :id="`ban-days-error-${user.id}`" class="bridge-field-message">
+        {{ shownErrors.days }}
+      </p>
+      <ion-textarea
+        v-model="reason"
+        class="bridge-field"
+        :class="{ 'bridge-field-invalid': shownErrors.reason }"
+        label="Reason (shown to the player)"
+        label-placement="stacked"
+        :aria-describedby="`ban-reason-error-${user.id}`"
+        :auto-grow="true"
+        :maxlength="MAX_BAN_REASON"
+        placeholder="Playing two accounts at once."
+        :disabled="sending"
+      />
+      <p v-if="shownErrors.reason" :id="`ban-reason-error-${user.id}`" class="bridge-field-message">
+        {{ shownErrors.reason }}
+      </p>
+    </div>
 
     <ion-text v-if="sendError" color="danger">
-      <p class="field-error">{{ sendError }}</p>
+      <p class="send-error">{{ sendError }}</p>
     </ion-text>
 
     <p class="ban-form-hint">
@@ -69,7 +71,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { IonButton, IonInput, IonItem, IonList, IonSpinner, IonText, IonTextarea } from '@ionic/vue';
+import { IonButton, IonInput, IonSpinner, IonText, IonTextarea } from '@ionic/vue';
 import { useUsersStore } from '@/stores/users';
 import type { PublicUser, UserBan } from '@/services/users';
 import { BAN_QUICK_DAYS, MAX_BAN_DAYS, MAX_BAN_REASON, banDate, banFormErrors } from '@/utils/ban';
@@ -145,9 +147,13 @@ async function submit() {
   gap: 4px;
 }
 
-.field-error {
-  margin: 4px 16px 8px;
-  font-size: 0.85rem;
+.ban-form-fields {
+  margin: 12px 0 0;
+}
+
+.send-error {
+  margin: 8px 0 0;
+  font-size: 0.875rem;
 }
 
 .ban-form-hint {

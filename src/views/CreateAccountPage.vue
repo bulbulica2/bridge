@@ -2,80 +2,100 @@
   <ion-page>
     <AppHeader title="Create account" />
     <ion-content :fullscreen="true" class="ion-padding">
-      <div class="form-page">
-        <form @submit.prevent="submit">
-          <ion-list>
-            <ion-item>
-              <ion-input
-                v-model="name"
-                type="text"
-                label="Name"
-                label-placement="stacked"
-                autocomplete="name"
-                :maxlength="NAME_MAX"
-                required
-                :disabled="submitting"
-              />
-            </ion-item>
-            <ion-item>
-              <ion-input
-                v-model="username"
-                type="text"
-                label="Username"
-                label-placement="stacked"
-                autocomplete="username"
-                :maxlength="USERNAME_MAX"
-                required
-                :disabled="submitting"
-              />
-            </ion-item>
-            <ion-item>
-              <ion-input
-                v-model="email"
-                type="email"
-                label="Email"
-                label-placement="stacked"
-                autocomplete="email"
-                required
-                :disabled="submitting"
-              />
-            </ion-item>
-            <ion-item>
-              <ion-input
-                v-model="password"
-                type="password"
-                label="Password"
-                label-placement="stacked"
-                autocomplete="new-password"
-                required
-                :disabled="submitting"
-              />
-            </ion-item>
-            <ion-item>
-              <ion-input
-                v-model="passwordConfirmation"
-                type="password"
-                label="Confirm password"
-                label-placement="stacked"
-                autocomplete="new-password"
-                required
-                :disabled="submitting"
-              />
-            </ion-item>
-          </ion-list>
+      <div class="bridge-form-page">
+        <div class="bridge-form-card">
+          <form class="bridge-form" @submit.prevent="submit">
+            <ion-input
+              v-model="name"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.name }"
+              type="text"
+              label="Name"
+              label-placement="stacked"
+              autocomplete="name"
+              aria-describedby="create-name-error"
+              :maxlength="NAME_MAX"
+              required
+              :disabled="submitting"
+            />
+            <p v-if="errors.name" id="create-name-error" class="bridge-field-message">{{ errors.name }}</p>
+            <ion-input
+              v-model="username"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.username }"
+              type="text"
+              label="Username"
+              label-placement="stacked"
+              autocomplete="username"
+              aria-describedby="create-username-error"
+              :maxlength="USERNAME_MAX"
+              required
+              :disabled="submitting"
+            />
+            <p v-if="errors.username" id="create-username-error" class="bridge-field-message">{{ errors.username }}</p>
+            <ion-input
+              v-model="email"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.email }"
+              type="email"
+              label="Email"
+              label-placement="stacked"
+              autocomplete="email"
+              aria-describedby="create-email-error"
+              required
+              :disabled="submitting"
+            />
+            <p v-if="errors.email" id="create-email-error" class="bridge-field-message">{{ errors.email }}</p>
+            <ion-input
+              v-model="password"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.password }"
+              type="password"
+              label="Password"
+              label-placement="stacked"
+              autocomplete="new-password"
+              aria-describedby="create-password-error"
+              required
+              :disabled="submitting"
+            >
+              <ion-input-password-toggle slot="end" />
+            </ion-input>
+            <p v-if="errors.password" id="create-password-error" class="bridge-field-message">{{ errors.password }}</p>
+            <ion-input
+              v-model="passwordConfirmation"
+              class="bridge-field"
+              :class="{ 'bridge-field-invalid': errors.password_confirmation }"
+              type="password"
+              label="Confirm password"
+              label-placement="stacked"
+              autocomplete="new-password"
+              aria-describedby="create-password-confirmation-error"
+              required
+              :disabled="submitting"
+            >
+              <ion-input-password-toggle slot="end" />
+            </ion-input>
+            <p
+              v-if="errors.password_confirmation"
+              id="create-password-confirmation-error"
+              class="bridge-field-message"
+            >
+              {{ errors.password_confirmation }}
+            </p>
 
-          <ion-text v-if="error" color="danger">
-            <p class="error">{{ error }}</p>
-          </ion-text>
+            <ion-text v-if="error" color="danger">
+              <p class="error">{{ error }}</p>
+            </ion-text>
 
-          <ion-button type="submit" expand="block" :disabled="submitting">
-            <ion-spinner v-if="submitting" name="crescent" />
-            <span v-else>Create account</span>
-          </ion-button>
-        </form>
+            <ion-button type="submit" expand="block" color="action" :disabled="submitting">
+              <ion-spinner v-if="submitting" name="crescent" />
+              <span v-else>Create account</span>
+            </ion-button>
+          </form>
 
-        <div class="secondary">
-          <ion-button fill="clear" router-link="/login" :disabled="submitting">Already have an account? Log in</ion-button>
+          <div class="bridge-form-links">
+            <ion-button fill="clear" router-link="/login" :disabled="submitting">Already have an account? Log in</ion-button>
+          </div>
         </div>
       </div>
     </ion-content>
@@ -87,9 +107,8 @@ import { ref } from 'vue';
 import {
   IonPage,
   IonContent,
-  IonList,
-  IonItem,
   IonInput,
+  IonInputPasswordToggle,
   IonButton,
   IonText,
   IonSpinner,
@@ -97,10 +116,13 @@ import {
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
 import { navigateAndSettle } from '@/router/loading';
-import { errorMessage } from '@/utils/errors';
+import { formErrors } from '@/utils/errors';
 import { NAME_MAX, USERNAME_MAX } from '@/utils/limits';
 import { showWelcomeToast } from '@/utils/toast';
 import { useAuthStore } from '@/stores/auth';
+
+// The fields a 422 can name under their input (POST /register).
+const FIELDS = ['name', 'username', 'email', 'password', 'password_confirmation'];
 
 const auth = useAuthStore();
 const ionRouter = useIonRouter();
@@ -111,6 +133,8 @@ const email = ref('');
 const password = ref('');
 const passwordConfirmation = ref('');
 const error = ref('');
+// A 422's messages under their fields; the rest in `error`.
+const errors = ref<Record<string, string>>({});
 const submitting = ref(false);
 
 async function submit() {
@@ -118,6 +142,7 @@ async function submit() {
     return;
   }
   error.value = '';
+  errors.value = {};
   if (password.value !== passwordConfirmation.value) {
     error.value = 'Passwords do not match.';
     return;
@@ -138,7 +163,9 @@ async function submit() {
     await navigateAndSettle(ionRouter, '/account');
     showWelcomeToast(`Welcome, ${auth.user?.name}! Your account is ready.`);
   } catch (e) {
-    error.value = errorMessage(e, 'Could not create the account. Please try again.');
+    const failure = formErrors(e, FIELDS, 'Could not create the account. Please try again.');
+    errors.value = failure.fields;
+    error.value = failure.message;
   } finally {
     submitting.value = false;
   }
@@ -147,23 +174,11 @@ async function submit() {
 </script>
 
 <style scoped>
-.form-page {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  max-width: 420px;
-  min-height: 100%;
-  margin: 0 auto;
-}
-
 .error {
-  margin: 8px 16px;
+  margin: 0;
 }
 
-.secondary {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 16px;
+.bridge-form-links {
+  margin-top: 12px;
 }
 </style>

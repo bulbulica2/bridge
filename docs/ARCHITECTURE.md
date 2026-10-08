@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/96-auction-button-and-board-bar`._
+_Status as of branch `bulbulica2/97-nicer-form-inputs`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -38,7 +38,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board and each seat's time for the set, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button, the play page's Auction button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved), `useElementWidth` (an element's width as it is resized: the play page's column, for the wide table), `useSteadyHeight` (an element held at its tallest: a hand, the wide table's auction) |
 | `src/directives/` | `ionEvent.ts`: `v-ion-event:ion-refresh="refresh"` listens for an Ionic event on the element itself (pull-to-refresh, the history's infinite scroll); see [Ionic events](#ionic-events) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), the set clock (`setClock.ts`), a player's stats in words (`stats.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`), the wide table's minimum column (`layout.ts`) |
-| `src/theme/` | the Daylight design tokens (`variables.css`), the shared button and font rules (`daylight.css`), the global toast styles and the print stylesheet |
+| `src/theme/` | the Daylight design tokens (`variables.css`), the shared button and font rules (`daylight.css`), the global toast styles, the shared form fields (`forms.css`) and the print stylesheet |
 | `tests/unit/`, `tests/e2e/` | Vitest and Cypress; tests are **not** next to the source |
 
 `@/` is an alias for `src/` (set in both `tsconfig.json` and
@@ -190,6 +190,27 @@ whatever the table is waiting for.
   `fill="outline" color="danger"` as the red danger outline, and a grey
   disabled state rather than a faded one. A small button (a seat's
   Remove, Seat a player, a sheet's close) is still 44 px tall to tap.
+- **Form fields** (#170, `src/theme/forms.css`, imported in `main.ts`
+  next to `toasts.css`): every text field is an `ion-input` /
+  `ion-textarea` with `class="bridge-field"` and a stacked label, outside
+  any `ion-item`. The label sits above in 14 px bold; the field is a
+  48 px white box with a 1.5 px border (`--bridge-field-border`), 12 px
+  corners and 12 px padding; focus is a 2 px ring in `--bridge-focus`
+  (navy, the accent in dark mode); `bridge-field-invalid` turns the border
+  `--bridge-error` red, with the message in a `.bridge-field-message`
+  right under the field (its id is the field's `aria-describedby`);
+  disabled is the ground colour with muted text. A global rule gives the
+  browser's **autofill** the field's own colours on every `ion-input`
+  (an inset shadow in `--bridge-field-bg` and the text fill in
+  `--bridge-field-ink`), so a field filled from saved credentials looks
+  like a typed one in Chrome, Edge and Firefox, light or dark. Password
+  fields carry Ionic's `ion-input-password-toggle` (Login, Create
+  account, the new-password stage of Reset password). The guest pages'
+  white card is `.bridge-form-card` in a 420 px `.bridge-form-page`, its
+  quiet links `.bridge-form-links`; `.bridge-check` gives a checkbox a
+  44 px tap area. Used by Login, Create account, Reset password,
+  Account's profile edit and `BanUserForm`; the claim, chat and alert
+  inputs keep their own layout.
 
 The play page during a board (#161) has the **turn clock line**
 (`TurnClockLine`), the header **<table> · Board 2 of 4** with the chat's
@@ -559,6 +580,10 @@ A few backend rules the stores rely on:
   404 → gone, 409 → stale view, reload), or `null` if the server was never
   reached.
 - `fieldErrors(e)`: a 422's first message per field, shown under each input.
+- `formErrors(e, fields, fallback)`: splits a failure for a form: the 422
+  messages of the fields it shows go under them, anything else (a field
+  it doesn't show, such as a reset link's `token`, another status, no
+  answer) becomes the one message under the form.
 - `logUnexpected(e)`: logs an error that didn't come from the backend (a
   bug, an alert that failed to open) to the console, since the toast's
   fallback text would otherwise hide it.
@@ -597,7 +622,11 @@ and policy failures. `errorMessage` handles all three.
 - **Toasts** go through `src/utils/toast.ts` (`showToast`, and
   `showWelcomeToast` after login/sign-up). They live outside the page and
   outlive a navigation, so the app navigates first and then toasts. Their
-  styles are global, in `src/theme/toasts.css`.
+  styles are global, in `src/theme/toasts.css`, next to the form fields'
+  (`src/theme/forms.css`, see [Look: Daylight](#look-daylight)).
+- **Forms with fields** (Login, Create account, Reset password, Account,
+  the ban form) show a 422's message under its own field, the field's
+  border red, and anything else under the form (`formErrors` below).
 
 ## Realtime
 

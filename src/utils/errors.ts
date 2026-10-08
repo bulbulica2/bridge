@@ -51,6 +51,31 @@ export function fieldErrors(e: unknown): Record<string, string> {
 }
 
 /**
+ * A failure split between a form's fields and the line under the form: a
+ * 422's message for each field the form shows goes under that field (red,
+ * forms.css), and anything else (a field the form doesn't show, another
+ * status, no answer at all) becomes `message`, '' when nothing is left.
+ */
+export function formErrors(
+  e: unknown,
+  fields: readonly string[],
+  fallback: string,
+): { fields: Record<string, string>; message: string } {
+  const all = fieldErrors(e);
+  const shown: Record<string, string> = {};
+  for (const field of fields) {
+    if (all[field]) {
+      shown[field] = all[field];
+    }
+  }
+  if (Object.keys(shown).length === 0) {
+    return { fields: shown, message: errorMessage(e, fallback) };
+  }
+  const other = Object.entries(all).find(([field]) => !fields.includes(field));
+  return { fields: shown, message: other ? other[1] : '' };
+}
+
+/**
  * Logs an error that didn't come from the backend (a bug, an overlay that
  * failed to open), which a toast's fallback text would otherwise hide.
  * HTTP errors are expected and already told to the user.

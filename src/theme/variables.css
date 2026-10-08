@@ -6,7 +6,9 @@
    - ground / surface: the page behind everything, and what sits on it
      (cards, sheets, the header).
    - ink / muted: text; muted is as light as secondary text may go (4.5:1).
-   - line / control: dividers, and the border of outlined buttons and inputs.
+   - line / control: dividers, and the border of outlined buttons.
+   - field-border / focus / error: a text field's border, its focus ring and
+     its error state (forms.css).
    - table: the table's navy panel (inner: a plate on it), the contract chip
      and the secondary solid button.
    - action: the one primary action per screen, your turn, the move clock
@@ -28,6 +30,11 @@
   --bridge-control: #c9d0da;
   --bridge-chip: #eef1f5;
   --bridge-disabled-text: #8a94a6;
+  /* Form fields (#170): a text field's border, the ring round the one
+     being typed in, and a field in error with its message. */
+  --bridge-field-border: #c9d0da;
+  --bridge-focus: #1d3a5f;
+  --bridge-error: #b3261e;
 
   --bridge-table: #1d3a5f;
   --bridge-table-inner: #2a4c76;
@@ -239,6 +246,9 @@
     --bridge-control: #3a4457;
     --bridge-chip: #222a3a;
     --bridge-disabled-text: #6f7a8e;
+    --bridge-field-border: #2c3445;
+    --bridge-focus: #8ea8ff;
+    --bridge-error: #ff8a96;
 
     --bridge-table: #161b25;
     --bridge-table-inner: #222a3a;
