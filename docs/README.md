@@ -34,7 +34,9 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/113-bridge4u-name` (after #198, the app's name:
+> branch `bulbulica2/112-last-trick-in-the-corner` (after #196, **Last trick** in the table's
+> top-right corner under the contract, the centre left to the trick in
+> progress; after #198, the app's name:
 > Bridge4U in the browser tab, on the guest Home, the menu and the guest
 > forms, the B4U icon, and a web app manifest so the site installs as
 > Bridge4U; after #182, kibitzers: a table
@@ -114,7 +116,7 @@ instead of repeating them. How the robot players bid and play is in
 > tap claims them all; after
 > #133, the play page no longer jumps from card to card: every seat keeps
 > room for the turn label, the status line keeps two lines, and the
-> trick's foot keeps its height with or without **Last trick**; after
+> trick's caption keeps its line; after
 > #132, **Create table** always opens the new table's page, with or
 > without robots, and seats you South; after
 > #134, the side menu is 320 px wide and its **Your table** entry stays on

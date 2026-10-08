@@ -4,7 +4,8 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 // auction's alerted calls open theirs: a mouse hovering opens it and moving
 // away closes it; a tap or a key (touch has no hover) opens it until a tap
 // outside, the button again, or Escape. It stays clear of the screen's
-// edges (`nudge`, in px sideways from under the button's centre); a panel
+// edges (`nudge`, in px sideways from where it opens: centred under the
+// button, or one aligned to its right edge like the last trick's); a panel
 // pinned on the right marked `data-right-edge` (the chat beside the table)
 // counts as the right edge. One opening upward (a button low on the table)
 // that would cross the screen's top comes down by `drop` px instead.
