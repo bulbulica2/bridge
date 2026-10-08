@@ -240,7 +240,7 @@ describe('the review modal at the table', () => {
     expect(modal(wrapper).props('open')).toBe(false)
     expect(wrapper.find('.board-review').exists()).toBe(false)
 
-    await wrapper.get('.result-review').trigger('click')
+    await wrapper.get('.review-boards').trigger('click')
     await flushPromises()
 
     expect(navigate).not.toHaveBeenCalled()

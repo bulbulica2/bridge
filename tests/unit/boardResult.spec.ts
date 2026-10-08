@@ -672,7 +672,7 @@ describe('TablePlayPage between boards', () => {
     vi.useRealTimers()
   })
 
-  test('one double dummy line in it, and Review opens the review over it', async () => {
+  test("one double dummy line in it, and the header's Last board opens the review over it", async () => {
     vi.mocked(historyService.getDoubleDummy).mockResolvedValue({
       status: 'ready',
       table: {
@@ -690,7 +690,7 @@ describe('TablePlayPage between boards', () => {
     // Not the whole grid: that is in the review.
     expect(wrapper.find('.dd-table').exists()).toBe(false)
 
-    await wrapper.get('.result-review').trigger('click')
+    await wrapper.get('.review-boards').trigger('click')
     const review = wrapper.findComponent({ name: 'BoardReviewModal' })
     expect(review.props('open')).toBe(true)
     expect(isOpen(wrapper)).toBe(false)

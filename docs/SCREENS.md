@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/106-review-modal-size`._
+_Status as of branch `bulbulica2/107-no-leave-or-review-in-result-dialog`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -601,8 +601,9 @@ What it shows by phase:
     now. Once you voted it reads "Waiting for bob…" (the people still to
     press it); robots always count as having voted, so with three robots
     your press deals at once. Nobody, a manager included, votes for the
-    others (#72). Under it, small: **Review** (the board review at the
-    table, below) and **Leave the table** (free between boards).
+    others (#72). Nothing else (#188): no Leave (mid-set it only marks
+    you away until a robot takes your seat) and no Review (15 s is no
+    time for one); the header's **Leave** and **Last board** do both.
 
   The X in its corner, the backdrop or Escape close it to look at the
   deal; a **Result · 0:12** pill in the table's top-right corner opens it

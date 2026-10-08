@@ -132,6 +132,14 @@ function disabled(wrapper: ReturnType<typeof mountDialog>, cls: string): boolean
   return wrapper.findAllComponents({ name: 'IonButton' }).find((b) => b.classes(cls))!.props('disabled')
 }
 
+// The header holds Leave and Last board; the dialog offers neither (#188).
+function noLeaveOrReview(wrapper: ReturnType<typeof mountDialog>) {
+  expect(wrapper.find('.result-leave').exists()).toBe(false)
+  expect(wrapper.find('.result-review').exists()).toBe(false)
+  expect(wrapper.find('.foot-links').exists()).toBe(false)
+  expect(wrapper.text()).not.toMatch(/Leave|Review/)
+}
+
 afterEach(() => {
   vi.useRealTimers()
 })
@@ -153,8 +161,8 @@ describe('BoardResultDialog: the result', () => {
     expect(wrapper.find('.dialog-skeleton').exists()).toBe(false)
     expect(wrapper.find('.dialog-dd').exists()).toBe(false)
     expect(wrapper.find('.vote').exists()).toBe(false)
-    expect(wrapper.find('.result-review').exists()).toBe(false)
-    expect(wrapper.find('.result-leave').exists()).toBe(false)
+    expect(wrapper.find('.result-foot').exists()).toBe(false)
+    noLeaveOrReview(wrapper)
   })
 
   test("the defenders' side sees it as a minus, someone without a seat as N-S's", () => {
@@ -307,12 +315,11 @@ describe('BoardResultDialog: the countdown and the vote', () => {
     expect(wrapper.get('.vote-button').text()).toBe('Dealing…')
   })
 
-  test('the vote on its way: the button spins, Leave waits', () => {
+  test('the vote on its way: the button spins', () => {
     const wrapper = mountDialog({ vote: true, busy: true })
 
     expect(disabled(wrapper, 'vote-button')).toBe(true)
     expect(wrapper.find('.vote-button ion-spinner').exists()).toBe(true)
-    expect(disabled(wrapper, 'result-leave')).toBe(true)
   })
 
   test('no seat of our own: the vote still shows', () => {
@@ -321,13 +328,14 @@ describe('BoardResultDialog: the countdown and the vote', () => {
     expect(wrapper.get('.vote-button').text()).toBe('Deal next board')
   })
 
-  test('Review and Leave are small buttons under it', async () => {
-    const wrapper = mountDialog({ vote: true, reviewable: true })
+  test('the footer holds the vote and nothing else: no Leave or Review (#188)', () => {
+    const wrapper = mountDialog({ vote: true, nextBoardAt: inSeconds(10) })
 
-    await wrapper.get('.result-review').trigger('click')
-    await wrapper.get('.result-leave').trigger('click')
-    expect(wrapper.emitted('review')).toHaveLength(1)
-    expect(wrapper.emitted('leave')).toHaveLength(1)
+    const foot = wrapper.get('.result-foot')
+    expect(foot.find('.vote-ring').exists()).toBe(true)
+    expect(foot.find('.vote-button').exists()).toBe(true)
+    expect(foot.findAllComponents({ name: 'IonButton' })).toHaveLength(1)
+    noLeaveOrReview(wrapper)
   })
 })
 
@@ -335,15 +343,15 @@ describe("BoardResultDialog after a set's last board", () => {
   test("the set's results, with no countdown and no vote", () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
-    const wrapper = mountDialog({ set: setOver(), vote: true, nextBoardAt: inSeconds(10), reviewable: true })
+    const wrapper = mountDialog({ set: setOver(), vote: true, nextBoardAt: inSeconds(10) })
 
     expect(wrapper.get('.result-title').text()).toBe('Set results')
     expect(wrapper.get('.set-results .set-title').text()).toBe('Set 3 over')
     expect(wrapper.findAll('.set-board')).toHaveLength(4)
     expect(wrapper.find('.dialog-hero').exists()).toBe(false)
     expect(wrapper.find('.vote').exists()).toBe(false)
-    expect(wrapper.find('.result-leave').exists()).toBe(false)
-    expect(wrapper.find('.result-review').exists()).toBe(true)
+    expect(wrapper.find('.result-foot').exists()).toBe(false)
+    noLeaveOrReview(wrapper)
   })
 })
 
