@@ -176,8 +176,8 @@
                  words, for the whole board (#151) top left; the contract
                  and the tricks through the play top right; the Auction
                  button from the first call on (the only place the auction
-                 shows once the bidding is over) bottom left; Claim bottom
-                 right. The board's place in its set is in the header, the
+                 shows once the bidding is over) bottom left; Claim (or,
+                 bidding with three robots, our HCP) bottom right.The board's place in its set is in the header, the
                  dealer the D on their plate. -->
             <template #top-left>
               <VulnerabilityLabel
@@ -270,6 +270,15 @@
                  next card: the button stays, grey ("Claim · locked"), and
                  says why when tapped. -->
             <template #bottom-right>
+              <!-- Our high card points while bidding with three robots
+                   (#204); Claim only comes in the play, so they never meet. -->
+              <p
+                v-if="handHcp !== null"
+                class="corner-hcp"
+                :aria-label="`${handHcp} high card points`"
+              >
+                {{ handHcp }} HCP
+              </p>
               <ClaimButton
                 v-if="mayClaim || claimBlocked"
                 :locked="claimBlocked"
@@ -568,14 +577,14 @@ import { useChatStore } from '@/stores/chat';
 import { useGameStore } from '@/stores/game';
 import { useHistoryStore } from '@/stores/history';
 import { useTablesStore } from '@/stores/tables';
-import { DEFAULT_SET_MINUTES, UNATTENDED_MINUTES, canRemove, seatsOf } from '@/services/tables';
+import { DEFAULT_SET_MINUTES, SEATS, UNATTENDED_MINUTES, canRemove, seatsOf } from '@/services/tables';
 import type { Seat, SetMinutes } from '@/services/tables';
 import type { ChatTo } from '@/services/chat';
 import type { AlertDraft, Bid, Card, Claim, PlayedCard, Playing, Trick, Vulnerability } from '@/services/game';
 import type { PublicUser, SearchedUser } from '@/services/users';
 import { openQuestion } from '@/utils/alerts';
 import { SEAT_NAMES, contractLabel } from '@/utils/auction';
-import { SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
+import { SUIT_SYMBOLS, hcp, rankLabel } from '@/utils/cards';
 import type { ScreenSide } from '@/utils/cards';
 import { canClaim, claimLocked, claimOffText, claimSeatOf, tricksLeft } from '@/utils/claim';
 import {
@@ -733,6 +742,18 @@ const mySeat = computed<Seat | null>(() => {
   }
   const entry = Object.entries(players.value).find(([, user]) => user?.id === me.value);
   return (entry?.[0] as Seat | undefined) ?? null;
+});
+
+// Our hand's high card points (#204), practising with robots: only while
+// the auction runs, and only when the other three seats are all robots.
+const handHcp = computed<number | null>(() => {
+  const state = playing.value;
+  const seat = mySeat.value;
+  if (state?.phase !== 'auction' || !state.hand || seat === null) {
+    return null;
+  }
+  const robotsOnly = SEATS.every((s) => s === seat || !!players.value[s]?.is_robot);
+  return robotsOnly ? hcp(state.hand) : null;
 });
 
 // Who is vulnerable on the board in hand (auction, play and finished), for
@@ -2472,6 +2493,18 @@ async function refresh(event: CustomEvent) {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--ion-color-medium);
+}
+
+/* Our high card points in the bottom-right corner (#204). */
+.corner-hcp {
+  margin: 0;
+  color: var(--bridge-on-table);
+  font-family: var(--bridge-font-numbers);
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
 }
 
 /* The contract and the tricks in the table's top-right corner (#171):
