@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/104-kibitzers`._
+_Status as of branch `bulbulica2/105-claim-answer-dialog`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -214,7 +214,8 @@ The play page during a board (#161) has the **turn clock line**
 (`TurnClockLine`), the chat's orange unread badge in the header, the **claim
 dialog**'s tiles with each number's result and score (`contractScore` in
 `src/utils/result.ts`, `claimOutcome` in `claim.ts`), the pending claim
-as a dark banner, and a forced card's **plays in 3** on the card itself.
+(since #186 a centred dialog, `ClaimAnswerDialog`), and a forced card's
+**plays in 3** on the card itself.
 Nothing in the app draws a card back yet.
 
 The finished board and the lobby (#162) follow the same boards. A board's
@@ -810,7 +811,7 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   since their seat's tag counts down (`awayOnTurn()`). It replaces the
   old status box: one line through the auction and the play, with room
   for two lines of text and the bar's track always there, so nothing
-  moves; empty while a claim's banner says it all. 2 s after the
+  moves; empty while a claim's dialog says it all. 2 s after the
   deadline with the same turn still shown, `useStaleDeadline` rereads
   the game once.
 - **The ping**: while the tab is hidden and the board the game store
@@ -946,8 +947,8 @@ lobby's cards show with a **Watch** button.
 | `TrickArea` | the current trick in the table's centre (a finished trick stays 2 s), its cards as large as the setting and the centre's width allow; the winner is ringed amber but never drawn over a neighbour's rank and suit; given `trump`, the card winning so far is ringed while the trick is in progress (`winningSoFar` in `play.ts`), and `mySlot` draws a dashed place for your card. `spread` (the pop-up) parts the four cards and tags each with its seat or **You** |
 | `LastTrickPopover` | the **Last trick** button (22 px tall; the play page keeps that row, `trick-peek`, under the trick's caption while the button is hidden, #133) under the trick in progress and its pop-up with the last trick's cards (a spread `TrickArea`, shifted sideways if centring it on the button would cross the screen's edge); a mouse opens it by hovering, a tap or key by clicking; a tap outside or Escape closes it (all of that is `usePopover`, shared with the auction's calls) |
 | `DummyColumns` | dummy (or a claimer's or a finished hand) on a side seat, in `order` (bridge order ♠ ♥ ♦ ♣ by default; dummy trumps first); given `rows`, every suit column keeps room for that many cards; its text follows the card size (1.15rem ranks when Large, at most 1.1rem on a phone) |
-| `ClaimSheet` | the claim dialog (#173: a centred `ion-modal`, class `claim-dialog`, at most 400 px wide and as tall as its content, no breakpoints; #161's tiles): the title "Claim" ("Claim for North" with `forSeat`) and an **X** (`aria-label="Close"`, 44 px) that emits `close`, as the backdrop and Escape do; then a 4-column grid of tiles from all the tricks left down to 0, each with the contract's result ("4♠ +1", "4♠ −2" in red) and the claimer's side's score ("+450"), from `claimOutcome()` (`state` + `seat`, the seat claimed for); all of them picked on opening (#137: a tap picks fewer; a trick finishing moves the default to the new maximum and keeps a hand-picked number while still possible); the one orange button reads **Claim 7 · 4♠ +1 · +450** / **Claim 5 · 4♠ −1 · −50**, and **Concede** for the 0 tile (sends 0); no other text: the answer rule and the countdown are `ClaimPanel`'s once the claim is out |
-| `ClaimPanel` | a pending claim as Daylight's dark banner (#161): what is claimed with the countdown on the right, who has accepted, **Accept** / **Reject** as two equal buttons or **Withdraw**, and the countdown in words under them ("Answer within 0:07", "Waiting for East and West · 0:07", ticked by `useNow`); the buttons disable at 0, so a late tap can't earn a 409; `actsFor` is the seat you answer for when it isn't your own (a robot declarer's) |
+| `ClaimSheet` | the claim dialog (#173: a centred `ion-modal`, class `claim-dialog`, at most 400 px wide and as tall as its content, no breakpoints; #161's tiles): the title "Claim" ("Claim for North" with `forSeat`) and an **X** (`aria-label="Close"`, 44 px) that emits `close`, as the backdrop and Escape do; then a 4-column grid of tiles from all the tricks left down to 0, each with the contract's result ("4♠ +1", "4♠ −2" in red) and the claimer's side's score ("+450"), from `claimOutcome()` (`state` + `seat`, the seat claimed for); all of them picked on opening (#137: a tap picks fewer; a trick finishing moves the default to the new maximum and keeps a hand-picked number while still possible); the one orange button reads **Claim 7 · 4♠ +1 · +450** / **Claim 5 · 4♠ −1 · −50**, and **Concede** for the 0 tile (sends 0); no other text: the countdown and the answers are `ClaimAnswerDialog`'s once the claim is out |
+| `ClaimAnswerDialog` | a pending claim as a centred dialog over the table (#186, replacing #161's banner above it, so the table never moves): an `ion-modal`, class `claim-answer-dialog`, sized like `ClaimSheet`'s; the title "Claim" ("Claim for North" when you claimed for a robot declarer's seat, `actsFor`), the claim in one line (`claimText`: "South claims 9 of 9") with `claimOutcome()` from the claimer's side ("4♠ +1", red going down), a countdown ring like the result dialog's vote ring (`claimSecondsLeft` out of `CLAIM_SECONDS` 10, `role="timer"`, red under `CLAIM_URGENT_SECONDS` 4, ticked by `useNow`, none without `expires_at`), the claimer's cards in a single-row `HandView` in bridge order, the answerers (✓ / …, "you"), **Accept** (orange) / **Reject** or **Withdraw**, disabled while `busy` and once the time is up (a late tap can't earn a 409), "Waiting for West…" (`claimWaitingText`) for anyone without an answer to give. The claimer and an answerer still to answer can't dismiss it (`backdrop-dismiss` false, no X); anyone else has an **X** (`close`, as the backdrop and Escape). It holds the last claim's content until `did-dismiss`, so it never empties while closing. The play page opens it while a claim is pending, the view is shown and the review is closed, unless closed for that claim (`claimDismissed`, keyed by playing, cards played and claimer); `closeOverlays` closes it |
 | `TurnClockLine` | the play page's turn clock line (#161): the words, the clock and the move's minute as a bar, orange for `mine`, red for `urgent`, blue for a `robot`; two lines of room and the bar's track always there, so its height never changes |
 | `BoardResultPanel` | a finished board's result in the review (#162), as a navy hero card: who declared (`declaredText`: "You declared", "radu declared", "E-W declared"), the contract and its result ("2♣ +2", the suffix green, red when down), the tricks ("10 tricks · by claim"), your score big on the right (N-S's, tagged, for someone who didn't play it) and, once another table has played it, "Against the other tables 67 %" with an amber bar |
 | `BoardResultDialog`, `ResultPill` | the play page's finished board (#174): a centred `ion-modal` (`result-dialog`, at most 420 px wide, as tall as its content, no breakpoints) with the result ("4♠ by South +1", "11 tricks · by claim", your side's score big), the matchpoints with a bar (`extras`), up to `OTHER_TABLES_MAX` (4) other tables (`otherTableRows`, yours tinted, **Compare with other tables** when there are more), one `doubleDummyLine` once `ready`, and the footer: a ring counting down `nextBoardAt`, **Deal next board** (`vote`; then "Waiting for bob…", the humans not in `ready`) and small **Review** / **Leave the table**. `othersLoading` / `ddLoading` hold a skeleton line. With `set` (after a set's last board) it shows `SetResultsPanel` instead, with no countdown and no vote. The X emits `close`, as the backdrop and Escape do (`did-dismiss` while still open); the content stays until it has finished closing. `ResultPill` is the "Result · 0:12" pill in the table's top-right corner that opens it again |
@@ -1013,8 +1014,8 @@ requiring it), `auction.ts` (call legality hints and labels),
 sender, time and call, the question toast, the export's chat lines),
 `play.ts` (follow-suit hint, the forced card and who it plays itself for, whose hand you play, trick layout), `claim.ts`
 (who may claim, `claimLocked` after a refused claim, who still has to answer,
-the claim's wording, its countdown and how it ended: `claimClockText`,
-`claimExpired`, `claimOffText`), `result.ts`
+the claim's wording, its countdown and how it ended: `claimText`,
+`CLAIM_SECONDS`, `claimWaitingText`, `claimExpired`, `claimOffText`), `result.ts`
 (the score from your side, and the table notation: `madeSuffix()` for "+2"
 / "=" / "−1", `doubledMark()` for X / XX, `resultSummary()` for "2♣ W +2 ·
 −130" in toasts and the text export, `percentText()`), `seatMove.ts` (wording for leaving or moving by

@@ -5,7 +5,7 @@ import { effectScope, nextTick, ref } from 'vue'
 import { AxiosError, AxiosHeaders } from 'axios'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import BoardResultPanel from '@/components/BoardResultPanel.vue'
-import ClaimPanel from '@/components/ClaimPanel.vue'
+import ClaimAnswerDialog from '@/components/ClaimAnswerDialog.vue'
 import ClaimSheet from '@/components/ClaimSheet.vue'
 import * as gameService from '@/services/game'
 import * as tablesService from '@/services/tables'
@@ -19,13 +19,13 @@ import {
   claimAction,
   claimLocked,
   claimOutcome,
-  claimClockText,
   claimExpired,
   claimOffText,
   claimSecondsLeft,
   claimSeatOf,
   claimText,
   claimWaitingFor,
+  claimWaitingText,
   tricksLeft,
 } from '@/utils/claim'
 import { STALE_GRACE_MS, useStaleDeadline } from '@/composables/useStaleDeadline'
@@ -283,12 +283,14 @@ describe('claim hints', () => {
     expect(claimAction(s, 'N')).toBeNull()
   })
 
-  test('the banner words a claim, all of them, a concession and the last trick', () => {
-    expect(claimText(pending(), 5)).toBe('South claims 4 of the remaining 5 tricks')
-    expect(claimText(pending({ tricks: 5 }), 5)).toBe('South claims all 5 remaining tricks')
-    expect(claimText(pending({ seat: 'E', tricks: 0 }), 5)).toBe('East concedes the remaining 5 tricks')
-    expect(claimText(pending({ tricks: 1 }), 1)).toBe('South claims the last trick')
-    expect(claimText(pending(), 5, 'S')).toBe('You claim 4 of the remaining 5 tricks')
+  test('the dialog words a claim in one line: some, all, a concession and the last trick', () => {
+    expect(claimText(pending(), 5)).toBe('South claims 4 of 5')
+    expect(claimText(pending({ tricks: 5 }), 5)).toBe('South claims 5 of 5')
+    expect(claimText(pending({ seat: 'E', tricks: 0 }), 5)).toBe('East concedes all 5')
+    expect(claimText(pending({ tricks: 1 }), 1)).toBe('South claims 1 of 1')
+    expect(claimText(pending({ tricks: 0 }), 1)).toBe('South concedes the last trick')
+    expect(claimText(pending(), 5, 'S')).toBe('You claim 4 of 5')
+    expect(claimText(pending({ tricks: 0 }), 5, 'S')).toBe('You concede all 5')
   })
 
   test("a robot declarer's dummy claims and answers for declarer's seat", () => {
@@ -306,23 +308,11 @@ describe('claim hints', () => {
     expect(claimAction(ours, claimSeatOf(ours))).toBe('withdraw')
   })
 
-  test("the banner words a claim made for declarer's seat", () => {
-    expect(claimText(pending({ seat: 'N', tricks: 3 }), 5, 'S', 'N')).toBe(
-      'You claim 3 of the remaining 5 tricks for North',
-    )
-    expect(claimText(pending({ seat: 'N', tricks: 5 }), 5, 'S', 'N')).toBe(
-      'You claim all 5 remaining tricks for North',
-    )
-    expect(claimText(pending({ seat: 'N', tricks: 0 }), 5, 'S', 'N')).toBe(
-      'You concede the remaining 5 tricks for North',
-    )
-    expect(claimText(pending({ seat: 'N', tricks: 1 }), 1, 'S', 'N')).toBe(
-      'You claim the last trick for North',
-    )
+  test("a claim made for declarer's seat is the viewer's own", () => {
+    expect(claimText(pending({ seat: 'N', tricks: 3 }), 5, 'S', 'N')).toBe('You claim 3 of 5')
+    expect(claimText(pending({ seat: 'N', tricks: 0 }), 1, 'S', 'N')).toBe('You concede the last trick')
     // A defender's claim reads as before.
-    expect(claimText(pending({ seat: 'E', tricks: 0 }), 5, 'S', 'N')).toBe(
-      'East concedes the remaining 5 tricks',
-    )
+    expect(claimText(pending({ seat: 'E', tricks: 0 }), 5, 'S', 'N')).toBe('East concedes all 5')
   })
 
   test('no hand is on play while a claim is pending', () => {
@@ -667,27 +657,6 @@ describe('ClaimSheet', () => {
   })
 })
 
-describe('ClaimPanel for a robot declarer', () => {
-  test("the claim made for declarer's seat is ours to withdraw", () => {
-    const wrapper = mount(ClaimPanel, {
-      props: { state: forRobot({ claim: pending({ seat: 'N', hand: NORTH }) }) as Playing & { claim: Claim }, mySeat: 'S', actsFor: 'N', players: ROBOT_NORTH },
-    })
-
-    expect(wrapper.get('.claim-text').text()).toBe('You claim 4 of the remaining 5 tricks for North')
-    expect(wrapper.find('.withdraw').exists()).toBe(true)
-  })
-
-  test("a defender's claim is ours to answer, on declarer's behalf", () => {
-    const wrapper = mount(ClaimPanel, {
-      props: { state: forRobot({ claim: pending({ seat: 'E', tricks: 0 }) }) as Playing & { claim: Claim }, mySeat: 'S', actsFor: 'N', players: ROBOT_NORTH },
-    })
-
-    expect(wrapper.find('.accept').exists()).toBe(true)
-    expect(wrapper.get('[data-seat="N"]').text()).toContain('you')
-    expect(wrapper.get('.claim-detail').text()).toBe('Play stops until you and W answer.')
-  })
-})
-
 describe('claim deadline', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -707,40 +676,11 @@ describe('claim deadline', () => {
     expect(claimExpired(pending(), NOW)).toBe(false)
   })
 
-  test("those to answer see their time, everyone else whom they're waiting for", () => {
-    const s = state({ claim: pending({ expires_at: inSeconds(7) }) })
-
-    expect(claimClockText(s, 'E', NOW)).toBe('Answer within 0:07')
-    expect(claimClockText(s, 'W', NOW + 2000)).toBe('Answer within 0:05')
-    expect(claimClockText(s, 'S', NOW)).toBe('Waiting for East and West · 0:07')
-    expect(claimClockText(s, 'N', NOW)).toBe('Waiting for East and West · 0:07')
-    expect(claimClockText(s, null, NOW)).toBe('Waiting for East and West · 0:07')
-
-    // West has accepted: West waits for East like the rest.
-    const half = state({ claim: pending({ accepted: ['W'], expires_at: inSeconds(7) }) })
-    expect(claimClockText(half, 'W', NOW)).toBe('Waiting for East · 0:07')
-    expect(claimClockText(half, 'E', NOW)).toBe('Answer within 0:07')
-  })
-
-  test('at 0 the time is up for everyone', () => {
-    const s = state({ claim: pending({ expires_at: inSeconds(7) }) })
-
-    expect(claimClockText(s, 'E', NOW + 7000)).toBe('Time is up: no answer counts as no.')
-    expect(claimClockText(s, 'S', NOW + 8000)).toBe('Time is up: no answer counts as no.')
-  })
-
-  test('no clock without a claim, a deadline, or anybody left to answer', () => {
-    expect(claimClockText(state(), 'S', NOW)).toBeNull()
-    expect(claimClockText(state({ claim: pending() }), 'E', NOW)).toBeNull()
-    expect(
-      claimClockText(state({ claim: pending({ accepted: ['E', 'W'], expires_at: inSeconds(7) }) }), 'S', NOW),
-    ).toBeNull()
-  })
-
-  test("a robot declarer's dummy answers on declarer's clock", () => {
-    const s = forRobot({ claim: pending({ seat: 'E', tricks: 0, expires_at: inSeconds(9) }) })
-
-    expect(claimClockText(s, claimSeatOf(s), NOW)).toBe('Answer within 0:09')
+  test("whom the claim still waits for, for those with nothing to answer", () => {
+    expect(claimWaitingText(state({ claim: pending() }))).toBe('Waiting for East and West…')
+    expect(claimWaitingText(state({ claim: pending({ accepted: ['W'] }) }))).toBe('Waiting for East…')
+    expect(claimWaitingText(state({ claim: pending({ accepted: ['E', 'W'] }) }))).toBeNull()
+    expect(claimWaitingText(state())).toBeNull()
   })
 
   test('a claim gone after its deadline was silence; before it, a reject or a withdrawal', () => {
@@ -785,81 +725,6 @@ describe('claim deadline', () => {
     vi.advanceTimersByTime(1_000_000)
     expect(reload).toHaveBeenCalledTimes(2)
   })
-
-  describe('ClaimPanel', () => {
-    const isDisabled = (el: { element: Element }) => (el.element as HTMLButtonElement).disabled
-    const panel = (s: Playing, mySeat: Seat) =>
-      mount(ClaimPanel, { props: { state: s as Playing & { claim: Claim }, mySeat, players: PLAYERS } })
-
-    test('the countdown ticks for those to answer, and their buttons go at 0', async () => {
-      vi.useFakeTimers()
-      vi.setSystemTime(NOW)
-      const wrapper = panel(asSeat('E', { claim: pending({ expires_at: inSeconds(7) }) }), 'E')
-
-      expect(wrapper.get('.claim-clock').text()).toBe('Answer within 0:07')
-      // The countdown on the right of the banner.
-      expect(wrapper.get('.claim-head .claim-seconds').text()).toBe('0:07')
-      expect(isDisabled(wrapper.get('.accept'))).toBe(false)
-      expect(isDisabled(wrapper.get('.reject'))).toBe(false)
-
-      vi.advanceTimersByTime(2000)
-      await nextTick()
-      expect(wrapper.get('.claim-clock').text()).toBe('Answer within 0:05')
-      expect(wrapper.get('.claim-seconds').text()).toBe('0:05')
-
-      vi.advanceTimersByTime(5000)
-      await nextTick()
-      expect(wrapper.get('.claim-clock').text()).toBe('Time is up: no answer counts as no.')
-      expect(isDisabled(wrapper.get('.accept'))).toBe(true)
-      expect(isDisabled(wrapper.get('.reject'))).toBe(true)
-    })
-
-    test('the claimer sees whom they wait for, and Withdraw goes at 0', async () => {
-      vi.useFakeTimers()
-      vi.setSystemTime(NOW)
-      const wrapper = panel(state({ claim: pending({ expires_at: inSeconds(7) }) }), 'S')
-
-      expect(wrapper.get('.claim-clock').text()).toBe('Waiting for East and West · 0:07')
-      expect(isDisabled(wrapper.get('.withdraw'))).toBe(false)
-
-      vi.advanceTimersByTime(7000)
-      await nextTick()
-      expect(isDisabled(wrapper.get('.withdraw'))).toBe(true)
-    })
-
-    test('both answerers get Accept and Reject at once, the claimer waits for both', () => {
-      vi.useFakeTimers()
-      vi.setSystemTime(NOW)
-      const claim = pending({ expires_at: inSeconds(7) })
-      const east = panel(asSeat('E', { claim }), 'E')
-      const west = panel(asSeat('W', { claim }), 'W')
-      const south = panel(state({ claim }), 'S')
-
-      for (const wrapper of [east, west]) {
-        expect(wrapper.findAll('.claim-buttons ion-button').map((b) => b.text())).toEqual(['Accept', 'Reject'])
-        expect(isDisabled(wrapper.get('.accept'))).toBe(false)
-        expect(wrapper.get('.claim-clock').text()).toBe('Answer within 0:07')
-      }
-      expect(south.get('.claim-clock').text()).toBe('Waiting for East and West · 0:07')
-    })
-
-    test('one answer in, the other still answers', async () => {
-      const wrapper = panel(asSeat('W', { claim: pending({ accepted: ['E'] }) }), 'W')
-
-      expect(wrapper.get('[data-seat="E"]').classes()).toContain('is-accepted')
-      await wrapper.get('.reject').trigger('click')
-      expect(wrapper.emitted('reject')).toHaveLength(1)
-    })
-
-    test('without a deadline it reads as before, and the buttons stay', () => {
-      const wrapper = panel(asSeat('E', { claim: pending() }), 'E')
-
-      expect(wrapper.find('.claim-clock').exists()).toBe(false)
-      expect(wrapper.find('.claim-seconds').exists()).toBe(false)
-      expect(wrapper.get('.claim-detail').text()).toBe('Play stops until you and W answer.')
-      expect(isDisabled(wrapper.get('.accept'))).toBe(false)
-    })
-  })
 })
 
 describe('TablePlayPage claims', () => {
@@ -897,6 +762,8 @@ describe('TablePlayPage claims', () => {
 
   const buttonTexts = (wrapper: ReturnType<typeof mount>, selector: string) =>
     wrapper.findAll(`${selector} ion-button`).map((b) => b.text())
+  // The pending claim's dialog, open or not (the stub keeps its content).
+  const answerOpen = (wrapper: ReturnType<typeof mount>) => wrapper.findComponent(ClaimAnswerDialog).props('open')
 
   test('declarer claims from the sheet: a number picked, then sent', async () => {
     const wrapper = await mountPage(state())
@@ -914,7 +781,8 @@ describe('TablePlayPage claims', () => {
     await flushPromises()
 
     expect(gameService.makeClaim).toHaveBeenCalledWith(5, 4)
-    expect(wrapper.get('.claim-text').text()).toBe('You claim 4 of the remaining 5 tricks')
+    expect(answerOpen(wrapper)).toBe(true)
+    expect(wrapper.get('.claim-answer-text').text()).toBe('You claim 4 of 5')
     expect(buttonTexts(wrapper, '.claim-buttons')).toEqual(['Withdraw'])
     expect(wrapper.find('.claim-button').exists()).toBe(false)
   })
@@ -927,7 +795,7 @@ describe('TablePlayPage claims', () => {
     await flushPromises()
 
     expect(gameService.withdrawClaim).toHaveBeenCalledWith(5)
-    expect(wrapper.find('.claim-text').exists()).toBe(false)
+    expect(answerOpen(wrapper)).toBe(false)
   })
 
   test('a defender concedes with the 0 tile', async () => {
@@ -942,7 +810,7 @@ describe('TablePlayPage claims', () => {
     await flushPromises()
 
     expect(gameService.makeClaim).toHaveBeenCalledWith(5, 0)
-    expect(wrapper.get('.claim-text').text()).toBe('You concede the remaining 5 tricks')
+    expect(wrapper.get('.claim-answer-text').text()).toBe('You concede all 5')
   })
 
   test('the turn line stays, empty, while a claim is pending', async () => {
@@ -953,7 +821,7 @@ describe('TablePlayPage claims', () => {
     useGameStore().applyPlayingUpdate(5, { ...state({ claim: pending() }) })
     await flushPromises()
 
-    expect(wrapper.get('.claim-text').text()).toBe('You claim 4 of the remaining 5 tricks')
+    expect(wrapper.get('.claim-answer-text').text()).toBe('You claim 4 of 5')
     expect(wrapper.get('.turn-line-text').text()).toBe('')
     expect(wrapper.get('.turn-line').classes()).not.toContain('turn-line-mine')
     expect(wrapper.find('.turn-line-time').exists()).toBe(false)
@@ -967,8 +835,10 @@ describe('TablePlayPage claims', () => {
     useGameStore().applyPlayingUpdate(5, { ...state({ claim: pending() }) })
     await flushPromises()
 
+    expect(answerOpen(wrapper)).toBe(true)
     expect(wrapper.find('.claim-buttons').exists()).toBe(false)
-    expect(wrapper.get('.claim-detail').text()).toBe('Play stops until E and W answer.')
+    expect(wrapper.get('.claim-answer-waiting').text()).toBe('Waiting for East and West…')
+    expect(wrapper.find('.claim-answer-close').exists()).toBe(true)
     // Declarer sits opposite dummy: their cards lie face up at the top.
     expect(wrapper.find('.side-top .claim-hand').exists()).toBe(true)
   })
@@ -978,7 +848,8 @@ describe('TablePlayPage claims', () => {
     const wrapper = await mountPage(asSeat('W', { turn: 'W', acting_user_id: 4, claim: pending() }))
     vi.mocked(gameService.respondToClaim).mockResolvedValue(asSeat('W', { claim: pending({ accepted: ['W'] }) }))
 
-    expect(wrapper.get('.claim-text').text()).toBe('South claims 4 of the remaining 5 tricks')
+    expect(wrapper.get('.claim-answer-text').text()).toBe('South claims 4 of 5')
+    expect(wrapper.findAll('.claim-answer-hand .playing-card')).toHaveLength(5)
     // West sees South on the right.
     expect(wrapper.find('.side-right .claim-hand').exists()).toBe(true)
     expect(wrapper.findAll('button[data-card]')).toHaveLength(0)
@@ -989,7 +860,7 @@ describe('TablePlayPage claims', () => {
 
     expect(gameService.respondToClaim).toHaveBeenCalledWith(5, true)
     expect(wrapper.find('.claim-buttons').exists()).toBe(false)
-    expect(wrapper.get('.claim-detail').text()).toBe('Play stops until E answers.')
+    expect(wrapper.get('.claim-answer-waiting').text()).toBe('Waiting for East…')
   })
 
   test('a reject resumes play where it stopped, with a toast', async () => {
@@ -1002,7 +873,7 @@ describe('TablePlayPage claims', () => {
 
     expect(gameService.respondToClaim).toHaveBeenCalledWith(5, false)
     expect(showToast).toHaveBeenCalledWith("South's claim is off. Play on: no claim until the next card.", 'warning')
-    expect(wrapper.find('.claim').exists()).toBe(false)
+    expect(answerOpen(wrapper)).toBe(false)
     expect(wrapper.findAll('.my-hand button[data-card]').length).toBeGreaterThan(0)
   })
 
@@ -1027,7 +898,8 @@ describe('TablePlayPage claims', () => {
     await flushPromises()
 
     expect(gameService.makeClaim).toHaveBeenCalledWith(5, 4)
-    expect(wrapper.get('.claim-text').text()).toBe('You claim 4 of the remaining 5 tricks for North')
+    expect(wrapper.get('.claim-answer-title').text()).toBe('Claim for North')
+    expect(wrapper.get('.claim-answer-text').text()).toBe('You claim 4 of 5')
     expect(buttonTexts(wrapper, '.claim-buttons')).toEqual(['Withdraw'])
     // North's cards stay across the top, where we play them from.
     expect(wrapper.find('.side-top .declarer-hand').exists()).toBe(true)
@@ -1134,17 +1006,17 @@ describe('TablePlayPage claims', () => {
       logIn(2)
       const wrapper = await mountPage(asSeat('E', { claim: pending({ expires_at: inSeconds(10) }) }))
 
-      expect(wrapper.get('.claim-clock').text()).toBe('Answer within 0:10')
+      expect(wrapper.get('.claim-ring').text()).toBe('0:10')
       vi.advanceTimersByTime(10_000)
       await flushPromises()
-      expect(wrapper.get('.claim-clock').text()).toBe('Time is up: no answer counts as no.')
+      expect(wrapper.get('.claim-ring').text()).toBe('0:00')
       expect((wrapper.get('.accept').element as HTMLButtonElement).disabled).toBe(true)
 
       // The backend's update arrives in time: no reread.
       useGameStore().applyPlayingUpdate(5, { ...asSeat('E') })
       await flushPromises()
       expect(showToast).toHaveBeenCalledWith('Nobody answered: the claim is off. Play on: no claim until the next card.', 'warning')
-      expect(wrapper.find('.claim').exists()).toBe(false)
+      expect(answerOpen(wrapper)).toBe(false)
       vi.advanceTimersByTime(STALE_GRACE_MS)
       await flushPromises()
       expect(gameService.getPlaying).toHaveBeenCalledTimes(1)
@@ -1165,7 +1037,7 @@ describe('TablePlayPage claims', () => {
       await flushPromises()
       expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
       expect(gameService.getPlaying).toHaveBeenLastCalledWith(5)
-      expect(wrapper.find('.claim').exists()).toBe(false)
+      expect(answerOpen(wrapper)).toBe(false)
       expect(showToast).toHaveBeenCalledWith('Nobody answered: the claim is off. Play on: no claim until the next card.', 'warning')
     })
 
@@ -1179,7 +1051,8 @@ describe('TablePlayPage claims', () => {
       await flushPromises()
 
       expect(gameService.getPlaying).toHaveBeenCalledTimes(2)
-      expect(wrapper.get('.claim-clock').text()).toBe('Time is up: no answer counts as no.')
+      expect(answerOpen(wrapper)).toBe(true)
+      expect(wrapper.get('.claim-ring').text()).toBe('0:00')
     })
 
     test('a claim rejected in time keeps the reject wording and drops the reread', async () => {

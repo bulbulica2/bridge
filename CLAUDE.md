@@ -620,8 +620,9 @@ The user's standing rule (#91): **no task may leave code coverage under
 - **Claims**: during `play` any player but dummy (except a robot
   declarer's human dummy, who claims, answers and withdraws for
   declarer's seat: `claimSeatOf(state)` in `src/utils/claim.ts`, passed to
-  `canClaim`/`claimAction`, `ClaimPanel`'s `actsFor`, `ClaimSheet`'s
-  `forSeat`, and `claimText`'s fourth argument: "You claim … for North")
+  `canClaim`/`claimAction`, `ClaimAnswerDialog`'s `actsFor` (its title
+  "Claim for North"), `ClaimSheet`'s `forSeat`, and `claimText`'s fourth
+  argument: "You claim 4 of 5")
   may claim `tricks` of the
   tricks left (`13 - tricks.length`; 0 concedes) with `POST
   /tables/{id}/claim`; the other non-dummy players answer through
@@ -635,7 +636,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   a claim appearing or going away always counts as newer, since a reject
   or withdrawal leaves the cards unchanged. `src/utils/claim.ts` holds the
   hints (`canClaim`, `claimAction`: withdraw/answer/null,
-  `claimWaitingFor`, `claimText`); both answerers get Accept / Reject at
+  `claimWaitingFor`, `claimWaitingText`, `claimText` "South claims 9 of
+  9" / "East concedes all 5"); both answerers get Accept / Reject at
   once, neither waits for the other. **Claim lock** (#120, bb#115): a
   claim that ends unaccepted (rejected, withdrawn, expired) sets the
   state's `claim_locked` (HTTP and compact `PlayingUpdated` alike,
@@ -667,19 +669,37 @@ The user's standing rule (#91): **no task may leave code coverage under
   "Concede" for the 0 tile, which sends 0 (no separate Concede button);
   a trick finishing re-picks the new maximum unless a lower number was
   picked by hand, kept while still possible; no summary, hand-shown or
-  answer-rule line: those are `ClaimPanel`'s once the claim is out),
-  `ClaimPanel.vue` the pending claim as a dark banner (`--bridge-popup`,
-  the countdown `.claim-seconds` on the right, Accept / Reject two equal
-  buttons, Withdraw). A claim
+  answer-rule line), and **the pending claim is a dialog too** (#186,
+  `ClaimAnswerDialog.vue`, nothing above the table any more, so it never
+  moves): `ion-modal.claim-answer-dialog` sized like `.claim-dialog`,
+  content `v-if="shown && held"` (`held` = the last non-null `state`,
+  kept until `did-dismiss`, as `BoardResultDialog`); title "Claim" /
+  "Claim for North" (the viewer claimed for `actsFor`);
+  `.claim-answer-text` (`claimText`) + `.claim-answer-outcome`
+  (`claimOutcome` for `claim.seat`/`claim.tricks`, `.down` red);
+  `.claim-ring` (`role="timer"`, conic `--ring-fill` of
+  `claimSecondsLeft` / `CLAIM_SECONDS` 10, `claim-ring-urgent` red under
+  `CLAIM_URGENT_SECONDS` 4, `useNow` while open, none without
+  `expires_at`); `.claim-answer-hand` (`HandView` `singleRow`, `SUITS`);
+  `.claim-answers` li `data-seat`, `is-accepted` ✓ / …, "you";
+  `.claim-buttons` `.accept` (`color="action"`) / `.reject` (outline) or
+  `.withdraw`, disabled while `busy` or `claimExpired`;
+  `.claim-answer-waiting` (`claimWaitingText`, "Waiting for West…") for
+  anyone but an answerer. `mustAct` (`claimAction` non-null: the claimer
+  or an answerer still to answer) means `backdrop-dismiss` false (Escape
+  too) and no X; else `.claim-answer-close` (`aria-label="Close"`, 44 px)
+  and `did-dismiss` while `open` emit `close`. The play page:
+  `claimAnswerOpen` = `claimKey` (playing, tricks and current trick
+  lengths, claimer) && `viewActive` && !`reviewOpen` && `claimDismissed`
+  ≠ it; `close` and `closeOverlays` set `claimDismissed`. A claim
   going away mid-play toasts (`claimOffText`); the last accept lands in
   `finished` with `result.claimed`, which `resultSummary`/`BoardResultPanel`
   word as "by claim". **Silence means no** (#96, bb#96): the backend
   rejects a claim not fully accepted by `claim.expires_at` (10 s,
   `BRIDGE_CLAIM_SECONDS`) and clears it with `PlayingUpdated`.
-  `ClaimPanel` counts down from `expires_at` (`useNow`;
-  `claimClockText`: "Answer within 0:07" / "Waiting for East and West ·
-  0:07" / "Time is up…", reusing `secondsLeft`/`formatClock` from
-  `away.ts`) and disables its buttons at 0 (`claimExpired`); a claim gone
+  `ClaimAnswerDialog`'s ring counts down from `expires_at` (reusing
+  `secondsLeft`/`formatClock` from `away.ts`) and its buttons disable at
+  0 (`claimExpired`); a claim gone
   at or after its deadline toasts "Nobody answered: the claim is off.",
   before it "South's claim is off.", each followed by "Play on: no claim
   until the next card." (`claimOffText`). `src/composables/useStaleDeadline.ts` rereads the game
@@ -1314,7 +1334,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   board: `TurnClockLine`, the header (since #171 the table's name over
   `headerSubtitle`, never `board.number`), the chat badge in `action`,
   Claim, `ClaimSheet`'s tiles,
-  `ClaimPanel`'s banner (tokens `--bridge-on-popup-clock`/`-ok`) and
+  the pending claim's banner (a dialog since #186) and
   `HandView`'s `.forced-tag`; nothing draws a card back yet. #165 did the
   top-left corner (which #171 moved into the table's corners, above,
   Vulnerability in words) in place of #161's contract chip and phone

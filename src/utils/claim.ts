@@ -1,7 +1,7 @@
 import type { Seat } from '@/services/tables';
 import type { Claim, Playing, PublicPlaying } from '@/services/game';
 import { SEAT_NAMES, callLabel } from '@/utils/auction';
-import { formatClock, secondsLeft } from '@/utils/away';
+import { secondsLeft } from '@/utils/away';
 import { isVulnerable } from '@/utils/cards';
 import { playsForDeclarer } from '@/utils/play';
 import { contractScore, doubledMark, formatScore, madeSuffix, sideOf } from '@/utils/result';
@@ -83,10 +83,10 @@ export function claimAction(state: PublicPlaying, seat: Seat | null): 'withdraw'
   return claimWaitingFor(state).includes(seat) ? 'answer' : null;
 }
 
-// "South claims 4 of the remaining 5 tricks", "… claims all 5 remaining
-// tricks", "… concedes the remaining 5 tricks"; `you` for the viewer's own,
-// and "You claim … for North" when the viewer claimed for `actsFor`, a
-// robot declarer's seat.
+// The claim in one line, as the answer dialog heads it: "South claims 4 of
+// 5", "You claim 5 of 5", "East concedes all 5", "… concedes the last
+// trick"; `You` for the viewer's own, also when the viewer claimed for
+// `actsFor`, a robot declarer's seat (the dialog's title names that seat).
 export function claimText(
   claim: Claim,
   remaining: number,
@@ -96,18 +96,18 @@ export function claimText(
   const mine = claim.seat === mySeat || claim.seat === actsFor;
   const who = mine ? 'You' : SEAT_NAMES[claim.seat];
   const verb = (word: string) => (mine ? word : `${word}s`);
-  const forSeat = mine && claim.seat !== mySeat ? ` for ${SEAT_NAMES[claim.seat]}` : '';
-  if (remaining === 1) {
-    return `${who} ${verb(claim.tricks === 0 ? 'concede' : 'claim')} the last trick${forSeat}`;
+  if (claim.tricks > 0) {
+    return `${who} ${verb('claim')} ${claim.tricks} of ${remaining}`;
   }
-  if (claim.tricks === 0) {
-    return `${who} ${verb('concede')} the remaining ${remaining} tricks${forSeat}`;
-  }
-  if (claim.tricks === remaining) {
-    return `${who} ${verb('claim')} all ${remaining} remaining tricks${forSeat}`;
-  }
-  return `${who} ${verb('claim')} ${claim.tricks} of the remaining ${remaining} tricks${forSeat}`;
+  return `${who} ${verb('concede')} ${remaining === 1 ? 'the last trick' : `all ${remaining}`}`;
 }
+
+// How long the opponents have to answer a claim (the backend's
+// BRIDGE_CLAIM_SECONDS): the answer dialog's ring is full at this.
+export const CLAIM_SECONDS = 10;
+
+// Under this many seconds the ring turns red.
+export const CLAIM_URGENT_SECONDS = 4;
 
 // Whole seconds before silence rejects the pending claim, never below 0;
 // null for a claim without a deadline.
@@ -121,23 +121,12 @@ export function claimExpired(claim: Claim, now: number): boolean {
   return claimSecondsLeft(claim, now) === 0;
 }
 
-// The pending claim's clock as `seat` (claimSeatOf) sees it: "Answer within
-// 0:07" for a player who still has to answer, "Waiting for East and West ·
-// 0:07" for everyone else, "Time is up: no answer counts as no." once it has
-// run out. Null without a deadline, or with nobody left to answer.
-export function claimClockText(state: PublicPlaying, seat: Seat | null, now: number): string | null {
-  const left = state.claim ? claimSecondsLeft(state.claim, now) : null;
+// Whom the pending claim still waits for, for anyone with nothing to
+// answer: "Waiting for East and West…", "Waiting for West…". Null with
+// nobody left to answer.
+export function claimWaitingText(state: PublicPlaying): string | null {
   const waiting = claimWaitingFor(state);
-  if (left === null || waiting.length === 0) {
-    return null;
-  }
-  if (left === 0) {
-    return 'Time is up: no answer counts as no.';
-  }
-  if (claimAction(state, seat) === 'answer') {
-    return `Answer within ${formatClock(left)}`;
-  }
-  return `Waiting for ${waiting.map((s) => SEAT_NAMES[s]).join(' and ')} · ${formatClock(left)}`;
+  return waiting.length === 0 ? null : `Waiting for ${waiting.map((s) => SEAT_NAMES[s]).join(' and ')}…`;
 }
 
 // The toast for a claim going away mid-play. Gone at or after its deadline,

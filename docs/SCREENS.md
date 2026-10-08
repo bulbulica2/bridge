@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/104-kibitzers`._
+_Status as of branch `bulbulica2/105-claim-answer-dialog`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -282,7 +282,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140), #186 (a pending claim in a dialog, so the table never moves);
 **Compare** by #30; the table's one page (the waiting table, Remove in the
 profile, Leave in the header, the set time's gear, the Start timer) by
 #181, needs bb#142; watching mode (kibitzers) by #182, needs bb#143.
@@ -304,7 +304,7 @@ declarer's cards (yours
 alone to see) lie across the top from the end of the auction, and on its
 turn you tap one of them ("Play: your turn from North's hand."), on yours
 one of your own. Forced cards play themselves on both hands, and you claim
-for declarer ("You claim 4 of the remaining 5 tricks for North"). The
+for declarer (the claim's dialog is titled "Claim for North"). The
 defenders still play by themselves. How they bid and play is in
 [backend `ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
@@ -339,7 +339,7 @@ auction under it while the bidding lasts.
 every seat keeps a line for the turn label (**Your turn**, **To act**,
 **Thinking…**), filled only on the seat on turn; the turn clock line
 under the table is there for the whole auction and play with room for two
-lines over its bar (empty while a claim's banner says what is going on);
+lines over its bar (empty while a claim's dialog says what is going on);
 and the trick's caption sits over the **Last trick** button's row, which
 keeps its height while the button is hidden. So the table and your hand
 stay put on a phone as on a desktop.
@@ -548,15 +548,25 @@ What it shows by phase:
   that default to the new maximum, and keeps a number picked by hand while
   it is still possible (capped to the new maximum otherwise). The X, a tap
   on the backdrop or Escape closes it. How long the others have to answer
-  shows once the claim is out, in the banner below. While a claim is pending, a dark banner says what is claimed with
-  its countdown on the right, the claimer's cards lie face up at their
-  seat, no card can be played, the players who still have to answer get
-  **Accept** / **Reject**, two equal buttons, at once (both of them,
-  neither waits for the other; one reject ends it) and the claimer
-  **Withdraw**. Under them the countdown in words: "Answer within 0:07"
-  for those who still have to answer, "Waiting for East and West · 0:07"
-  for everyone else, then "Time is up: no answer counts as no.", when its
-  buttons disable. A reject or withdrawal toasts
+  shows once the claim is out, in the claim's own dialog. While a claim
+  is pending (#186) no card can be played, the claimer's cards lie face
+  up at their seat, and everyone at the table (dummy and a kibitzer too)
+  sees a second small dialog in the middle of the screen, over the table,
+  which doesn't move when it opens or closes: the title **Claim**, the
+  claim in one line ("South claims 9 of 9", "You claim 4 of 5", "East
+  concedes all 5") with what it makes of the contract from the claimer's
+  side ("4♠ +1", red when it goes down), a ring counting down the 10 s
+  ("0:07" inside, red under 4 s; none for a claim without a deadline),
+  the claimer's cards on one row in bridge order, who has answered (✓
+  accepted, … to answer, "you" for you), then the buttons: **Accept**
+  (orange) / **Reject** for the players who still have to answer, at once
+  (both of them, neither waits for the other; one reject ends it), and
+  **Withdraw** for the claimer, all disabled once the time is up. After
+  you accept, the buttons go and "Waiting for West…" shows. The claimer
+  and those still to answer can't put it away (it lasts 10 s at most);
+  anyone else closes it with its **X**, the backdrop or Escape, for that
+  claim only. It closes by itself when the claim goes. A reject or
+  withdrawal toasts
   ("South's claim is off. Play on: no claim until the next card.") and
   play goes on; so does a claim nobody answered in time ("Nobody answered:
   the claim is off. Play on: no claim until the next card."). Until the
@@ -721,7 +731,8 @@ It is the same table, read-only:
   until then. No **Ask**.
 - **The play**: dummy at its seat once the opening lead is made (South's
   dummy across the bottom), the trick, the last trick, the vulnerability
-  and the contract in the corners, a pending claim's banner and cards.
+  and the contract in the corners, a pending claim's cards and its
+  dialog, without buttons (the **X** closes it).
 - **The end**: the result dialog, without the vote (no **Deal next
   board**, no **Review**: a kibitzer may only review boards they played).
 - **Not shown**: no hand of your own, no bidding box, no Claim, no chat
