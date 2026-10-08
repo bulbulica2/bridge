@@ -34,7 +34,12 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/117-contract-under-vulnerability` (after #210, the
+> branch `bulbulica2/119-lead-tricks-on-the-cards` (after #212, the opening lead's figures on the
+> leader's own cards in the board review: before the lead each card
+> carries a small pill with the tricks the defence makes double dummy if
+> it is led, the best leads green and the lead made ringed amber, the
+> card row under the stepper gone and one line in words left there;
+> after #210, the
 > contract and the tricks in the table's top-left corner under the
 > vulnerability, **Last trick** alone top right; after #204, your hand's **HCP**
 > in the table's bottom-right corner while bidding with three robots;

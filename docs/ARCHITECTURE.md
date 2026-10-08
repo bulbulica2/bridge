@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/117-contract-under-vulnerability`._
+_Status as of branch `bulbulica2/119-lead-tricks-on-the-cards`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -998,7 +998,7 @@ lobby's cards show with a **Watch** button.
 | `BoardResultPanel` | a finished board's result in the review (#162), as a navy hero card: who declared (`declaredText`: "You declared", "radu declared", "E-W declared"), the contract and its result ("2♣ +2", the suffix green, red when down), the tricks ("10 tricks · by claim"), your score big on the right (N-S's, tagged, for someone who didn't play it) and, once another table has played it, "Against the other tables 67 %" with an amber bar |
 | `BoardResultDialog`, `ResultPill` | the play page's finished board (#174): a centred `ion-modal` (`result-dialog`, at most 420 px wide, as tall as its content, no breakpoints) with the result ("4♠ by South +1", "11 tricks · by claim", your side's score big), the matchpoints with a bar (`extras`), up to `OTHER_TABLES_MAX` (4) other tables (`otherTableRows`, yours tinted, **Compare with other tables** when there are more), one `doubleDummyLine` once `ready`, and the footer: a ring counting down `nextBoardAt`, **Deal next board** (`vote`; then "Waiting for bob…", the humans not in `ready`), and nothing else: no Leave or Review (#188, the header has both). `othersLoading` / `ddLoading` hold a skeleton line. With `setOver` (the set's number, after its last board) it shows that board's result like any other, with no countdown and no vote, and the line "Set 1 is over: its results are under the table." (#191). The X emits `close`, as the backdrop and Escape do (`did-dismiss` while still open); the content stays until it has finished closing. `ResultPill` is the "Result · 0:12" pill in the table's top-right corner that opens it again |
 | `SetStrip` | a set's boards as tiles, B1–B4: your side's matchpoints on each board finished (`setStripTiles` in `utils/sets.ts`; "—" while no other table has played it), the board on now tinted ("now" until it is finished), light under a board's result or `onTable` on a navy card (Your table) |
-| `DoubleDummyTable`, `LeadAnalysis` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the results page, or a note while it is being solved; `compact` (#180) is the grid alone, small, on a white card, no title, note or legend, and nothing at all until it is `ready`: the review's bottom-right table corner; the opening leader's cards each with the tricks declarer makes after that lead, the lead made raised, the best ones ringed, then in words: see [Double dummy](#double-dummy) |
+| `DoubleDummyTable` | a board's double dummy table (declarers N E S W down the side, ♣ ♦ ♥ ♠ NT across, tricks; `highlight` marks the contract played) on the results page, or a note while it is being solved; `compact` (#180) is the grid alone, small, on a white card, no title, note or legend, and nothing at all until it is `ready`: the review's bottom-right table corner: see [Double dummy](#double-dummy) |
 | `BoardReviewModal` | the table's finished boards reviewed and exported over the play page (**Last board**, #97): see [Reviewing at the table](#reviewing-at-the-table) |
 | `SetResultsPanel` | once the set is over (also on `/sets/:id`), in the same navy card as a board's result: who won from your side, whom a robot replaced and why ("you" for the viewer it replaced), each board with your side's score and matchpoints (opening its review), and the set's matchpoints for your side (never a summed score); no time used (#191). The play page draws it under the table (`setResultsBelow`: `endedSet` and `showStart`), never above it |
 | `SetMinutesPicker` | the time for a set, 8 / 12 / 16 / 20 minutes, as a four-way segmented control (an `ion-segment`, `v-model`, `label`): the lobby's **Play now with robots** and `TableSettingsDialog` |
@@ -1096,8 +1096,8 @@ storage refuses, gets Large).
 One CSS variable, `--card-w`, sizes every card: `PlayingCard` draws its
 height (17/12 of the width) and its corner (a rank 0.38 and a suit 0.32 of
 the width, small enough that "10" fits the 44 px a hand leaves showing)
-from it, and `HandView`,
-`TrickArea` and `LeadAnalysis` set the same value on themselves so the
+from it, and `HandView` and
+`TrickArea` set the same value on themselves so the
 overlaps and the trick's cross agree with the cards. Its value,
 `cardWidthCss`, is the setting's width capped by `--card-max` where the
 room is short: on a phone (below 576 px) a hand's cards are 72 px (1.5 ×
@@ -1326,7 +1326,16 @@ board's results they are refused (403) until you have finished the board.
 Where it shows: `BoardReview` (the review page and the play page's review
 modal) has a `compact` `DoubleDummyTable` in the table's bottom-right
 corner before the opening lead, the contract played marked (nothing while
-pending or unavailable, #180), and `LeadAnalysis` under the stepper; `BoardResultsPage` has the table above the results, your
+pending or unavailable, #180), and, before the lead too, a pill on each of
+the opening leader's cards with the tricks the defence makes after that
+lead (#212: `13 − tricks`, `leadMarks` in `src/utils/doubleDummy.ts`,
+`BridgeTable`'s `leadMarks` → that seat's `DummyColumns` `marks`; best
+leads green, the lead made ringed amber, `leadMarkLabel` as each card's
+`aria-label`; the hand a step larger, two suits by two at a side seat of a
+table under 600 px, the review holding the table's step-0 height once the
+lead is made so the stepper stays put), with the same in words under the
+stepper (`leadSummary(…, 'defence')`; the exports keep declarer's
+wording); `BoardResultsPage` has the table above the results, your
 contract marked; the play page, once a board is `finished`, reads the table
 and the result dialog gives one line, "Double dummy: 4♠ by South makes 10",
 once it is ready (a skeleton line until `useDoubleDummy`'s `settled`: ready,

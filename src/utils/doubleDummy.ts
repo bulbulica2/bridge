@@ -2,7 +2,7 @@ import type { BoardResult, Card, PlayedCard, Strain } from '@/services/game';
 import type { DoubleDummy, DoubleDummyTable, LeadTricks } from '@/services/history';
 import type { Seat } from '@/services/tables';
 import { SEAT_NAMES, STRAINS, callLabel, strainSymbol } from '@/utils/auction';
-import { HAND_SUITS, rankLabel, sortHand, SUIT_SYMBOLS } from '@/utils/cards';
+import { HAND_SUITS, rankLabel, sortHand, SUIT_NAMES, SUIT_SYMBOLS } from '@/utils/cards';
 
 // A finished board's double dummy analysis, worked out by the backend's
 // solver (bridge_backend docs/GAME-RULES.md §6, Double dummy): this only
@@ -119,32 +119,81 @@ export function bestLeads(leads: LeadTricks[]): { tricks: number; cards: Card[] 
   return { tricks, cards };
 }
 
+// Whose tricks a lead's figure counts: declarer's (as the backend gives
+// them, and as the exports word them) or the defence's (13 less, as the
+// review's pills show them, #212).
+export type LeadSide = 'declarer' | 'defence';
+
+// The tricks the defence makes double dummy after a lead that leaves
+// declarer `declarerTricks`.
+export function defenceTricks(declarerTricks: number): number {
+  return 13 - declarerTricks;
+}
+
 // The opening lead in words: "Your lead ♠K: declarer can make 10. Best was
 // ♥2: 9." (another seat's: "West's lead …"), or that it was the best there
 // was. With no lead made (a claim before it, an unrecorded play), only the
-// best ones.
+// best ones. With `side` 'defence' the same counted for the defence: "Your
+// lead ♠K: the defence can make 3. Best was ♥2: 4."
 export function leadSummary(
   leads: LeadTricks[],
   lead: PlayedCard | null,
   mySeat: Seat | null,
+  side: LeadSide = 'declarer',
 ): string | null {
   const best = bestLeads(leads);
   if (!best) {
     return null;
   }
+  const who = side === 'declarer' ? 'declarer' : 'the defence';
+  const count = (tricks: number) => (side === 'declarer' ? tricks : defenceTricks(tricks));
   if (leads.every((l) => l.tricks === best.tricks)) {
-    return `Every lead lets declarer make ${best.tricks}.`;
+    return `Every lead lets ${who} make ${count(best.tricks)}.`;
   }
-  const bestText = `${orList(best.cards)}: ${best.tricks}`;
+  const bestText = `${orList(best.cards)}: ${count(best.tricks)}`;
   const made = lead ? leads.find((l) => l.card.id === lead.card.id) : undefined;
   if (!lead || !made) {
     return `Best lead ${bestText}.`;
   }
   const whose = lead.seat === mySeat ? 'Your' : `${SEAT_NAMES[lead.seat]}'s`;
-  const start = `${whose} lead ${cardName(made.card)}: declarer can make ${made.tricks}.`;
+  const start = `${whose} lead ${cardName(made.card)}: ${who} can make ${count(made.tricks)}.`;
   return made.tricks === best.tricks
     ? `${start} That was one of the best leads.`
     : `${start} Best was ${bestText}.`;
+}
+
+// What one of the opening leader's cards is worth as the lead, for the
+// pill on it in the review (#212): the defence's tricks after it, whether
+// it is one of the best leads (the most for the defence), and whether it
+// is the lead made.
+export interface LeadMark {
+  tricks: number;
+  best: boolean;
+  led: boolean;
+}
+
+// Every lead's mark, by card id.
+export function leadMarks(leads: LeadTricks[], lead: PlayedCard | null): Record<number, LeadMark> {
+  const best = bestLeads(leads);
+  return Object.fromEntries(
+    leads.map((l) => [
+      l.card.id,
+      { tricks: defenceTricks(l.tricks), best: l.tricks === best?.tricks, led: lead?.card.id === l.card.id },
+    ]),
+  );
+}
+
+// A marked card for a screen reader: "King of spades: the defence makes 4,
+// the lead made, a best lead".
+export function leadMarkLabel(card: Card, mark: LeadMark): string {
+  const parts = [`${card.rank_name} of ${SUIT_NAMES[card.suit]}: the defence makes ${mark.tricks}`];
+  if (mark.led) {
+    parts.push('the lead made');
+  }
+  if (mark.best) {
+    parts.push('a best lead');
+  }
+  return parts.join(', ');
 }
 
 // The table as text columns for the text export: a header, then one row

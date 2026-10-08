@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/117-contract-under-vulnerability`._
+_Status as of branch `bulbulica2/119-lead-tricks-on-the-cards`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -965,9 +965,17 @@ Before the opening lead the middle of the table holds the **auction**,
 with every alert of the board (public once it is over) marked and popped
 up as on the play page, and the bottom-right corner a small **double
 dummy** grid (declarers N E S W down, ♣ ♦ ♥ ♠ NT across, this contract's
-cell marked), only once the backend has solved it. From the first card
-the middle shows the trick instead and the grid goes; back at the start
-both return. The middle keeps one height for both, and the grid's corner
+cell marked), only once the backend has solved it, and the **opening
+leader's cards** (declarer's left, wherever they sit) each carry a small
+pill right after the rank (#212): the tricks the **defence** makes double
+dummy if that card is led (13 less declarer's), green for the best leads,
+the lead made ringed amber, each said in full to a screen reader ("King
+of spades: the defence makes 4, a best lead"). That hand is drawn a step
+larger while the pills show; on a narrow table, at a side seat, its suits
+lie two by two so the middle keeps its room. From the first card
+the middle shows the trick instead, the grid and the pills go; back at
+the start they return. The table keeps the height it had before the lead,
+so the stepper never moves. The middle keeps one height for both, and the grid's corner
 keeps its room (beside your hand, or on a narrow phone in a row of its own
 under it), so nothing moves. A stepper moves card by card or a trick at a time (start, previous
 trick, previous card, next card, next trick, end); the hands lose their
@@ -978,12 +986,10 @@ replay reaches the end, and **Results** (header) / **Results at every
 table** go back to the board's results. The page is as wide as the play
 page (832 px at most), so the table reads the same.
 
-Under the stepper, the result (at the end), then the **opening lead**
-(#119), once the double dummy analysis is ready: the leader's cards as the
-hand is held, each with the tricks declarer makes after that lead, the
-lead made raised, the best leads (fewest tricks for declarer) ringed
-green, and in words ("Your lead ♠K: declarer can make 10. Best was ♥2:
-9."), and the board's whole chat (#102), partner's messages to the
+Under the stepper, the result (at the end), then the **opening lead** in
+words (#119, #212), once the double dummy analysis is ready, counted for
+the defence like the pills ("Your lead ♠K: the defence can make 3. Best
+was ♥2: 4."), and the board's whole chat (#102), partner's messages to the
 opponents included, since the board is over. While the backend is still
 solving the board, or on a server without the solver, the review says
 nothing about it (the corner stays empty); a pending one is read once
