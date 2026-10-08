@@ -104,6 +104,20 @@ export function trickBySide(
   return sides;
 }
 
+// When each side's card came in the trick, laid out like trickBySide: 0 for
+// the lead, 3 for the last card, null for a seat that hasn't played. The
+// table stacks the cards by it, the last card played on top (#201).
+export function trickOrder(
+  cards: PlayedCard[],
+  mySeat: Seat | null,
+): Record<ScreenSide, number | null> {
+  const order: Record<ScreenSide, number | null> = { bottom: null, left: null, top: null, right: null };
+  cards.forEach(({ seat }, index) => {
+    order[screenSide(seat, mySeat)] = index;
+  });
+  return order;
+}
+
 // The seat whose card wins the trick so far (GAME-RULES.md §5): the highest
 // trump played, else the highest card of the suit led. Null for an empty
 // trick. Only a hint for the table's ring: the backend says who won.

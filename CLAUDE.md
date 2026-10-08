@@ -629,7 +629,17 @@ The user's standing rule (#91): **no task may leave code coverage under
   sheet or review modal is open or the view is left (`onIonViewWillLeave`), and a key it
   already fired for isn't re-armed. `trickBySide()` places a
   trick's cards by seat for `TrickArea.vue`, which fills `BridgeTable`'s
-  `centre` slot. `dummy_hand` is public only after the opening lead.
+  `centre` slot; `trickOrder()` gives each side its card's place in the
+  order of play (null before it plays), bound as the slot's `z-index`
+  (index + 1, the lead lowest, the last card on top; an empty slot and
+  the dashed `.my-slot` 0), the same in `spread` (#201). The slots sit
+  where `src/utils/trickLayout.ts` says (`TRICK_SLOTS`, inline
+  `--x`/`--y` in cards, a `TRICK_WIDTH` 2.6 × `TRICK_HEIGHT` 2.4 box,
+  `--card-max` `100cqi / 2.6`): a pinwheel, top pushed left, bottom
+  right, only top/left and bottom/right overlapping, never on an
+  `INDEX_AREA` (`tests/unit/trickLayout.spec.ts` checks all 24 orders).
+  The winner's ring is `.win-ring`, its own element at the winner's
+  slot over every card (z-index 5), never the card raised. `dummy_hand` is public only after the opening lead.
   `BridgeTable` lays it across the top for declarer, where it can be tapped,
   on **one row** (#172: `HandView`'s `singleRow`, also for a robot
   declarer's hand; `useElementWidth` on the hand, `src/utils/handRow.ts`:
