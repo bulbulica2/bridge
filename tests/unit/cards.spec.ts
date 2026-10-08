@@ -222,5 +222,17 @@ describe('vulnerability', () => {
     expect(green.text()).toBe('Nobody vulnerable')
     expect(green.find('.vul-label').classes()).toContain('vul-label-green')
     expect(green.find('.vul-dot').exists()).toBe(false)
+    expect(green.find('.vul-label').classes()).not.toContain('vul-label-compact')
+  })
+
+  test("compact for the table's corner, the same words", () => {
+    const compact = mount(VulnerabilityLabel, { props: { vulnerable: 'N-S E-W', mySeat: 'N', compact: true } })
+
+    expect(compact.text()).toBe('Both (you too)')
+    expect(compact.find('.vul-label').classes()).toEqual(
+      expect.arrayContaining(['vul-label-red', 'vul-label-compact']),
+    )
+    // The pill's colour says it in a narrow corner: no dot.
+    expect(compact.find('.vul-dot').exists()).toBe(false)
   })
 })

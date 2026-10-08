@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/97-nicer-form-inputs`._
+_Status as of branch `bulbulica2/98-board-info-in-the-table-corners`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -369,7 +369,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim sheet with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button top left, Board 1 of 4 under it, the contract bar without the declarer/dummy line);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim sheet with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D);
 **Compare** by #30. Entered from the detail page,
 automatically when a board is dealt, or from **Open the game table** before
 anyone has pressed Start. The header's **Table** button goes back to the
@@ -382,8 +382,9 @@ nothing on this page drives them. On a robot's turn its seat reads
 "robot-1 is thinking…". Robots are badged at their seat and in the
 next-board box, and count as having asked for the next board, so your
 **Deal now** deals it at once instead of waiting out the countdown. When your robot partner wins the contract, it stays
-declarer and you stay dummy, but **you play the hand**: the contract bar
-says "robot-1 declares 4♠ — you play the hand", declarer's cards (yours
+declarer and you stay dummy, but **you play the hand**: the contract in
+the table's top-right corner says **you play it** under the tricks,
+declarer's cards (yours
 alone to see) lie across the top from the end of the auction, and on its
 turn you tap one of them ("Play: your turn from North's hand."), on yours
 one of your own. Forced cards play themselves on both hands, and you claim
@@ -408,7 +409,7 @@ side's seats red, the call awaited a "?" ringed orange. **Start** and
 Daylight's colours). On a screen 1100 px wide or more, once the page's
 column has 560 px for it (with the menu pinned and the chat open, from
 about 1240 px), the page is up to 1040 px wide and the table spreads out:
-the board tile in its top-left corner, partner at the top, the opponents'
+partner at the top, the opponents'
 plates on the left and right (upright while the table is under 760 px
 wide), you at the bottom with your hand under the table. During the
 auction the auction grid sits in the table's centre with your bidding
@@ -442,32 +443,41 @@ off for 5 s; while they work, pull to refresh is the only manual reload
 (#76).
 
 Play goes in **sets of four boards** (#73): Start deals board 1, **Next
-board** boards 2 to 4, and after the fourth the set is over. The top-left
-corner says where the table is: **Board 2 of 4** (**· set over** once it
-is), under the Auction button (#165). The page never shows the set's
-number or the board's number in the database.
+board** boards 2 to 4, and after the fourth the set is over. The header
+says where the table is (below). The page never shows the board's number
+in the database.
 
-**The top-left corner** (#151, #160, #165). A pill for the whole board
-(auction, play and once finished) says who is vulnerable, in words:
-**Nobody vulnerable** in green, else red: **Vul: E-W** for the other side,
-**Vulnerable: N-S (you)** for yours, **Both (you too)**. Beside it, on a
-phone as on a desktop, the **Auction** button, there from the first call
-until the board is over: hovering it with a mouse pops up the auction
-grid (chips, the vulnerable side's seats red, alerts "!", questions "?")
-and moving away hides it; a tap opens it and a tap outside (or Escape)
-closes it. While the board is on, an opponent's call in it still offers
-**Ask what it means** and **Ask in the chat**. Under the pill, on a
-phone, a **Dealer West** pill, and under the button **Board 2 of 4**.
-From 1100 px wide the **board tile** (BBO's: the board's place in its set,
-1–4, in a navy square, the vulnerable sides red, "DEALER W") stands
-before them instead of the dealer pill, or in the wide table's corner.
-The plates keep a red/green top edge, and the table's centre says
-**Board 2 of 4**, the dealer and the same words until the first trick
-takes its place.
+**The table's corners** (#151, #160, #165, #171). Nothing sits above the
+table or under your hand: the board's details lie in the four corners of
+the navy table, beside partner and you, on a phone as on a desktop, so
+the table, the trick, your hand and the bidding box fit one screen. They
+take no room of their own (the table keeps its height from card to card)
+and never cover a seat, dummy or the trick; on a phone their words wrap to
+two short lines.
+- **Top left**, from the deal to the end of the board: who is
+  vulnerable, in words, as a small pill: **Nobody vulnerable** in green,
+  else red: **Vul: E-W** for the other side, **Vulnerable: N-S (you)**
+  for yours, **Both (you too)**.
+- **Top right**, through the play: the contract, **2♠ by North**
+  (**4♥X by East** doubled), and the tricks, **NS 3 · EW 2**; for a robot
+  declarer's dummy a third line, **you play it**. Empty during the
+  auction.
+- **Bottom left**, from the first call until the board is over: the
+  **Auction** button. Hovering it with a mouse pops up the auction grid
+  above it (chips, the vulnerable side's seats red, alerts "!", questions
+  "?") and moving away hides it; a tap opens it and a tap outside (or
+  Escape) closes it. While the board is on, an opponent's call in it
+  still offers **Ask what it means** and **Ask in the chat**.
+- **Bottom right**, during the play: **Claim** (below).
 
-**The header** reads the table's name and the board's place in its set,
-**Friday club · Board 2 of 4** (#161), never the board's number in the
-database; just the name before the first deal.
+The dealer is the **D** on their plate; the plates keep a red/green top
+edge, and the table's centre says **Board 2 of 4**, the dealer and the
+same words until the first trick takes its place.
+
+**The header** reads the table's name over the board's place in its set,
+**Board 2 of 4 · Set 3** (**· set over** once it is; #161, #171), never
+the board's number in the database; just the name before the first
+deal.
 
 **The turn clock** (#130, bb#120; its line #161). The player the board
 waits for has **one minute** to call, play or act on a claim. One line
@@ -558,12 +568,12 @@ What it shows by phase:
   toast and a sheet to type the answer, which then shows like an
   explanation (closed, the sheet comes back from **Answer** in the call's
   pop-up). Once the auction is over the grid leaves the page: the
-  **Auction** button top left is the only way to see it, and asking still
+  **Auction** button in the table's bottom-left corner is the only way to see it, and asking still
   works there during the play. The pop-up also offers **Ask in the chat**
   (below).
-- **play**: the contract bar, **5♣ by East** (**doubled** /
-  **redoubled** when it is) and the tricks won, **NS 0 · EW 0**, with no
-  declarer/dummy line (#165), the current trick in the
+- **play**: in the table's top-right corner the contract, **5♣ by
+  East** (**5♣X**, **5♣XX** when doubled or redoubled), and the tricks
+  won, **NS 0 · EW 0**, with no declarer/dummy line (#165, #171), the current trick in the
   centre, dummy's cards once the opening lead is made, trumps on the left
   and the colours still alternating (4♠: ♠ ♥ ♣ ♦, 3♦: ♦ ♠ ♥ ♣, NT: ♥ ♣ ♦
   ♠; a robot declarer's cards, for its dummy, the same way). From the second
@@ -583,8 +593,8 @@ What it shows by phase:
   are dimmed, but they tap the one left themselves. Opening the claim sheet or the board review, a claim or any new card on the
   table stops the countdown.
   Anyone but dummy can **Claim** some of the tricks left (or **Concede**
-  them) with the solid navy **Claim** button at the bottom left under the
-  hand. The claim sheet (#161) says "7 tricks left · you have 4 · 4♠ needs
+  them) with the small **Claim** button in the table's bottom-right
+  corner (#171). The claim sheet (#161) says "7 tricks left · you have 4 · 4♠ needs
   10" and has a tile per number, four a row, from all the tricks left
   down to 0, each with what it makes of the contract ("4♠ +1", "4♠ −2" in
   red) and your side's score ("+450", "−100"), worked out on the page as a
@@ -609,9 +619,9 @@ What it shows by phase:
   play goes on; so does a claim nobody answered in time ("Nobody answered:
   the claim is off. Play on: no claim until the next card."). Until the
   next card is played nobody at the table may claim: **Claim** stays,
-  grey and disabled as **Claim · locked**, with "The claim was refused:
-  play a card before claiming again." under it, and comes back with the
-  next card. If the backend's
+  grey, as **Claim · locked**; tapping or hovering it pops up "The claim
+  was refused: play a card before claiming again.", and it comes back
+  with the next card. If the backend's
   update hasn't come 2 s after the deadline, the page rereads the game.
   The last accept finishes the board.
 - **finished**: the result at a glance (#100, Daylight's look by #162).
@@ -942,7 +952,7 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans), bb#
 
 | Piece | Where | Calls |
 |---|---|---|
-| `AppHeader` | every page | none (reads the auth store; **Your table** from the tables store's `myTable` via `useYourTable`; the menu button collapses the pinned menu; `BanBanner` under it while you are banned) |
+| `AppHeader` | every page | none (reads the auth store; **Your table** from the tables store's `myTable` via `useYourTable`; the menu button collapses the pinned menu; `BanBanner` under it while you are banned; an optional second line under the title, the play page's **Board 2 of 4 · Set 3**, #171) |
 | `BanNotice` | the app shell | none (shows `auth.banNotice` after `UserBanned`, goes to Login) |
 | `BanUserForm` | User profile, profile sheet (admins) | `users.ban()` → `POST /users/{id}/ban` |
 | `AppMenu` | the app shell | none (reads the auth store; **Your table** first while seated, via `useYourTable`) |

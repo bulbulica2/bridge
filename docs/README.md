@@ -33,7 +33,13 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/97-nicer-form-inputs` (after
+> branch `bulbulica2/98-board-info-in-the-table-corners` (after
+> #171, the play page's board details in the table's four corners: who
+> is vulnerable top left, the contract and the tricks top right, the
+> **Auction** button bottom left and a small **Claim** bottom right (its
+> "locked" note in a pop-up), with "Board 1 of 4 · Set 3" in the header
+> and a D on the dealer's plate, so nothing sits above the table or under
+> the hand any more; after
 > #170, Daylight's form fields: a 48 px boxed field with its label above,
 > a focus ring, a red error state and a muted disabled one, autofill in
 > the field's own colours instead of the browser's yellow, a show/hide

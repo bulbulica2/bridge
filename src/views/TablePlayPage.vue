@@ -1,6 +1,6 @@
 <template>
   <ion-page>
-    <AppHeader :title="headerTitle">
+    <AppHeader :title="headerTitle" :subtitle="headerSubtitle">
       <template #end>
         <!-- The board's chat, with how many messages came since we looked. -->
         <ion-button
@@ -40,9 +40,8 @@
       </aside>
 
       <!-- A wide screen with room for it (#163): the table takes boards
-           A/B's layout (BridgeTable's `wide`), the board tile in its corner
-           and, during the auction, the auction and the bidding box in its
-           centre. -->
+           A/B's layout (BridgeTable's `wide`) and, during the auction, the
+           auction and the bidding box in its centre. -->
       <div
         ref="playEl"
         class="play"
@@ -76,76 +75,6 @@
             <span>Refreshing…</span>
           </div>
 
-          <!-- The top-left corner (#165): on a wide screen the board tile
-               (its place in the set, dealer, vulnerable sides); then who is
-               vulnerable, in words, for the whole board (#151), with the
-               Auction button beside it from the first call on (the only
-               place the auction shows once the bidding is over); under them
-               the dealer on a phone, and the board's place in its set under
-               the button. Both rows keep their height from call to call. -->
-          <div v-if="playing.set || vulnerable !== null" class="board-bar">
-            <BoardTile
-              v-if="vulnerable !== null && playing.board && !wideTable"
-              :board="playing.board"
-              :position="playing.set?.board ?? null"
-              class="board-tile-wide"
-            />
-            <div class="board-corner" :class="{ 'board-corner-dealt': vulnerable !== null }">
-              <VulnerabilityLabel
-                v-if="vulnerable !== null"
-                class="corner-vul"
-                :vulnerable="vulnerable"
-                :my-seat="mySeat"
-              />
-              <AuctionPopover
-                v-if="auctionButton"
-                class="corner-auction"
-                :auction="playing.auction!"
-                :board="playing.board"
-                :my-seat="mySeat"
-                :turn="playing.phase === 'auction' ? playing.turn : null"
-                :players="players"
-                :live="playing.phase !== 'finished'"
-                :busy="noting"
-                :bidding="playing.phase === 'auction'"
-                v-on="auctionEvents"
-              />
-              <span v-if="vulnerable !== null && playing.board" class="dealer-pill corner-dealer">
-                Dealer {{ SEAT_NAMES[playing.board.dealer] }}
-              </span>
-              <p
-                v-if="playing.set"
-                class="set-bar corner-set"
-                :class="{ 'set-bar-over': shownSet?.finished }"
-              >
-                {{ boardPosition(playing.set) }}<template v-if="shownSet?.finished"> · set over</template>
-              </p>
-            </div>
-          </div>
-
-          <!-- The end of the auction: the contract ("5♣ by East") and the
-               tricks, above the table for the whole play. -->
-          <section
-            v-if="playing.phase === 'play' && playing.contract"
-            class="outcome"
-            aria-live="polite"
-          >
-            <p class="outcome-title">
-              <CallLabel :bid="playing.contract.bid" />{{ doubledSuffix(playing.contract.doubled) }}
-              by {{ SEAT_NAMES[playing.contract.declarer] }}
-            </p>
-            <!-- A robot declarer hands its game to us, its dummy. -->
-            <p v-if="forDeclarer" class="outcome-you">
-              {{ players[playing.contract.declarer]?.username }} declares
-              <CallLabel :bid="playing.contract.bid" />{{ doubledSuffix(playing.contract.doubled) }}
-              — you play the hand
-            </p>
-            <p v-if="playing.tricks_won" class="tricks-won">
-              <span>NS {{ playing.tricks_won.ns }}</span>
-              <span aria-hidden="true">·</span>
-              <span>EW {{ playing.tricks_won.ew }}</span>
-            </p>
-          </section>
           <!-- A claim waiting for its answers: play stops until it is settled. -->
           <ClaimPanel
             v-if="pendingClaim"
@@ -274,8 +203,66 @@
             @select="player = $event"
             @play="playCard"
           >
-            <template v-if="wideTable && vulnerable !== null && playing.board" #corner>
-              <BoardTile :board="playing.board" :position="playing.set?.board ?? null" />
+            <!-- The board's details in the table's corners (#171), where
+                 they take no room of their own: who is vulnerable, in
+                 words, for the whole board (#151) top left; the contract
+                 and the tricks through the play top right; the Auction
+                 button from the first call on (the only place the auction
+                 shows once the bidding is over) bottom left; Claim bottom
+                 right. The board's place in its set is in the header, the
+                 dealer the D on their plate. -->
+            <template #top-left>
+              <VulnerabilityLabel
+                v-if="vulnerable !== null"
+                class="corner-vul"
+                compact
+                :vulnerable="vulnerable"
+                :my-seat="mySeat"
+              />
+            </template>
+            <template #top-right>
+              <div class="corner-contract" aria-live="polite">
+                <template v-if="playing.phase === 'play' && playing.contract">
+                  <p class="contract-line">
+                    <CallLabel :bid="playing.contract.bid" />{{ doubledMark(playing.contract.doubled) }}
+                    by {{ SEAT_NAMES[playing.contract.declarer] }}
+                  </p>
+                  <p v-if="playing.tricks_won" class="tricks-won">
+                    <span>NS {{ playing.tricks_won.ns }}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>EW {{ playing.tricks_won.ew }}</span>
+                  </p>
+                  <!-- A robot declarer hands its game to us, its dummy. -->
+                  <p v-if="forDeclarer" class="contract-you">you play it</p>
+                </template>
+              </div>
+            </template>
+            <template #bottom-left>
+              <AuctionPopover
+                v-if="auctionButton"
+                class="corner-auction"
+                :auction="playing.auction!"
+                :board="playing.board"
+                :my-seat="mySeat"
+                :turn="playing.phase === 'auction' ? playing.turn : null"
+                :players="players"
+                :live="playing.phase !== 'finished'"
+                :busy="noting"
+                :bidding="playing.phase === 'auction'"
+                v-on="auctionEvents"
+              />
+            </template>
+            <!-- Ending the play early: any player but dummy, while no claim
+                 is pending. After a refused claim, nobody claims until the
+                 next card: the button stays, grey ("Claim · locked"), and
+                 says why when tapped. -->
+            <template #bottom-right>
+              <ClaimButton
+                v-if="mayClaim || claimBlocked"
+                :locked="claimBlocked"
+                :disabled="sendingCard !== null || claiming"
+                @claim="claimOpen = true"
+              />
             </template>
 
             <p class="waiting-title">
@@ -385,22 +372,6 @@
             </div>
           </section>
 
-          <!-- Ending the play early: any player but dummy, while no claim is
-               pending; solid navy, at the bottom left under the hand. After
-               a refused claim, nobody claims until the next card: the
-               button stays, grey ("Claim · locked"), with a note. -->
-          <div v-if="mayClaim || claimBlocked" class="claim-row">
-            <ion-button
-              class="claim-button"
-              :class="{ 'is-locked': claimBlocked }"
-              :disabled="claimBlocked || sendingCard !== null || claiming"
-              @click="claimOpen = mayClaim"
-            >
-              {{ claimBlocked ? 'Claim · locked' : 'Claim' }}
-            </ion-button>
-            <p v-if="claimBlocked" class="claim-locked-note">{{ CLAIM_LOCKED_TEXT }}</p>
-          </div>
-
           <template v-if="canBid && !auctionCentre">
             <BiddingBox v-if="game.bids.length > 0" v-bind="biddingProps" v-on="biddingEvents" />
             <div v-else class="bids-missing">
@@ -489,9 +460,9 @@ import BiddingBox from '@/components/BiddingBox.vue';
 import BoardChat from '@/components/BoardChat.vue';
 import BoardResultPanel from '@/components/BoardResultPanel.vue';
 import BoardReviewModal from '@/components/BoardReviewModal.vue';
-import BoardTile from '@/components/BoardTile.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
+import ClaimButton from '@/components/ClaimButton.vue';
 import ClaimPanel from '@/components/ClaimPanel.vue';
 import ClaimSheet from '@/components/ClaimSheet.vue';
 import ExplainCallSheet from '@/components/ExplainCallSheet.vue';
@@ -525,9 +496,9 @@ import type { ChatTo } from '@/services/chat';
 import type { AlertDraft, Bid, Card, Claim, PlayedCard, Playing, Trick, Vulnerability } from '@/services/game';
 import type { PublicUser, SearchedUser } from '@/services/users';
 import { openQuestion } from '@/utils/alerts';
-import { SEAT_NAMES, contractLabel, doubledSuffix } from '@/utils/auction';
+import { SEAT_NAMES, contractLabel } from '@/utils/auction';
 import { SUIT_SYMBOLS, rankLabel } from '@/utils/cards';
-import { CLAIM_LOCKED_TEXT, canClaim, claimLocked, claimOffText, claimSeatOf, tricksLeft } from '@/utils/claim';
+import { canClaim, claimLocked, claimOffText, claimSeatOf, tricksLeft } from '@/utils/claim';
 import {
   autoPlaysForced,
   cardsToPlay,
@@ -538,9 +509,9 @@ import {
 } from '@/utils/play';
 import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
 import { playingExtras } from '@/utils/export';
-import { resultSummary } from '@/utils/result';
+import { doubledMark, resultSummary } from '@/utils/result';
 import { confirmLeave, confirmRemove, heldNotice, removeCost } from '@/utils/seatMove';
-import { boardPosition, currentSet } from '@/utils/sets';
+import { boardPosition, currentSet, setLabel } from '@/utils/sets';
 import { reviewChoices } from '@/utils/review';
 import type { SeenBoard } from '@/utils/review';
 import { startNeeded } from '@/utils/start';
@@ -1057,12 +1028,19 @@ const chatEvents = {
   'clear-about': () => (chat.about = null),
 };
 
-// The table's name and the board's place in its set ("Friday club · Board 2
-// of 4"), never the board's number in the database.
-const headerTitle = computed(() => {
-  const set = playing.value?.phase === 'waiting' ? null : playing.value?.set;
-  const name = table.value?.name || (tableId.value ? `Table #${tableId.value}` : 'Table');
-  return set ? `${name} · ${boardPosition(set)}` : name;
+// The table's name, and under it the board's place in its set ("Board 2 of
+// 4 · Set 3", "· set over" once it is), never the board's number in the
+// database (#171).
+const headerTitle = computed(
+  () => table.value?.name || (tableId.value ? `Table #${tableId.value}` : 'Table'),
+);
+
+const headerSubtitle = computed(() => {
+  const set = playing.value?.set;
+  if (!set) {
+    return null;
+  }
+  return `${setLabel(set)}${shownSet.value?.finished ? ' · set over' : ''}`;
 });
 
 onIonViewWillEnter(() => {
@@ -1962,125 +1940,49 @@ async function refresh(event: CustomEvent) {
   color: var(--ion-color-medium);
 }
 
-.outcome .tricks-won {
+/* The contract and the tricks in the table's top-right corner (#171):
+   white on the navy, right-aligned, wrapping to short lines in a narrow
+   corner. */
+.corner-contract {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 6px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  color: var(--bridge-on-table);
+  font-size: 0.875rem;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.corner-contract p {
+  margin: 0;
+}
+
+.contract-line {
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 
-.board-bar {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0 0 10px;
+/* Hearts and diamonds stay readable on the navy. */
+.contract-line :deep(.call.red) {
+  color: var(--bridge-on-table-bad);
 }
 
-/* The vulnerability pill and the Auction button on one row, at every
-   width; under them the dealer (a phone's) and the board's place in its
-   set, under the button. Both rows are there for the whole board: before
-   the first call the pill holds the row's height. */
-.board-corner {
+.corner-contract .tricks-won {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.board-corner.board-corner-dealt {
-  display: grid;
-  grid-template-columns: auto auto;
-  grid-template-areas:
-    'vul auction'
-    'dealer set';
-  justify-content: start;
-  justify-items: start;
-  align-items: center;
-  gap: 6px 8px;
-}
-
-.corner-vul {
-  grid-area: vul;
-}
-
-.corner-auction {
-  grid-area: auction;
-}
-
-.corner-dealer {
-  grid-area: dealer;
-}
-
-.corner-set {
-  grid-area: set;
-}
-
-.dealer-pill {
-  display: inline-flex;
-  align-items: center;
-  box-sizing: border-box;
-  min-height: 32px;
-  padding: 0 12px;
-  border-radius: var(--bridge-radius-pill);
-  background: var(--bridge-chip);
-  color: var(--bridge-ink);
-  font-size: 0.95rem;
+  justify-content: flex-end;
+  gap: 0 6px;
+  font-family: var(--bridge-font-numbers);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-/* The board tile on a wide screen, the dealer pill on a narrower one. */
-.board-tile-wide {
-  display: none;
-}
-
-@media (min-width: 1100px) {
-  .board-tile-wide {
-    display: grid;
-  }
-
-  .dealer-pill {
-    display: none;
-  }
-}
-
-.set-bar {
-  margin: 0;
-  font-size: 0.85rem;
+.contract-you {
+  font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--ion-color-primary);
-}
-
-.set-bar-over {
-  color: var(--ion-color-medium);
-}
-
-.outcome {
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--bridge-navy-tint);
-  color: var(--bridge-navy-tint-text);
-  text-align: center;
-}
-
-.outcome p {
-  margin: 0;
-}
-
-.outcome-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-
-.outcome .outcome-you {
-  margin-top: 4px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--ion-color-primary);
+  color: var(--bridge-on-table-accent);
 }
 
 .bids-missing {
@@ -2094,25 +1996,5 @@ async function refresh(event: CustomEvent) {
   align-items: center;
   justify-content: center;
   gap: 8px;
-}
-
-/* Claim at its own width, at the bottom left under the hand. */
-.claim-row {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  margin: 0 0 16px;
-}
-
-.claim-button {
-  margin: 0;
-  min-width: 120px;
-}
-
-.claim-locked-note {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--ion-color-medium);
 }
 </style>

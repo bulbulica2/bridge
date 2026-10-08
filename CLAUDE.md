@@ -153,7 +153,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   before). `ion-menu-toggle` stays: Ionic ignores it for a menu shown in a
   split pane. Every page wraps its content in `<ion-page>` and uses
   `src/components/AppHeader.vue` (menu button, the **Your table** button,
-  `title` prop, an `end` slot for per-page header actions, and an
+  `title` prop (+ optional `subtitle`, a smaller second line: the play
+  page's set, #171), an `end` slot for per-page header actions, and an
   "Account" button linking to `/account` that the header itself renders
   whenever the auth store says somebody is logged in (icon only below
   576 px while Your table shows), and `BanBanner.vue` under the toolbar
@@ -326,20 +327,37 @@ The user's standing rule (#91): **no task may leave code coverage under
   (#151, #160): `vulnerabilityText(vulnerable, mySeat)` → `{text, red}`
   ("Nobody vulnerable" green; red "Vul: E-W" for the other side or no
   seat, "Vulnerable: N-S (you)", "Both (you too)"), drawn by
-  `VulnerabilityLabel.vue` as a pill top left above the table (the play
-  page's `.board-bar`, auction/play/finished: `.board-corner`, a 2×2 grid
-  (#165), the pill and `AuctionPopover.vue` (the **Auction** button,
-  `auctionButton`: from the first call to the end of the board, the
-  `AuctionHistory` grid in a `usePopover` pop-up, `live` until finished,
-  `bidding` during the auction, `auctionEvents` passed on) on one row at
-  every width, under them a `.dealer-pill` "Dealer West" below 1100 px
-  and `.set-bar` `boardPosition(set)` ("Board 2 of 4", `sets.ts`, no set
-  number) under the button; before them `BoardTile.vue`, BBO's board
-  tile, from 1100 px, holding the board's place in its set (`position`,
-  never `board.number`); `BoardReview`'s `.board-bar`;
-  `BoardResultsPage`'s `.board-info`), `BridgeTable`'s centre line and
+  `VulnerabilityLabel.vue` as a pill (the play page's table corner,
+  below; `BoardReview`'s `.board-bar`; `BoardResultsPage`'s
+  `.board-info`), `BridgeTable`'s centre line and
   `BoardPrintout`'s meta line (its `mySeat` prop, text only); the seat
-  stripes stay (the plate's top edge). The detail page moves a
+  stripes stay (the plate's top edge). **The table's corners** (#171,
+  after #165's `.board-bar`): no bar above the play page's table, no
+  `.outcome` section, no `.claim-row` under the hand. `BridgeTable` has
+  four slots, `top-left`/`top-right`/`bottom-left`/`bottom-right`, each
+  in a `.corner.corner-<name>` absolutely placed over the panel's corner
+  (`--corner-w` = `clamp(84px, 24cqi, 128px)`, the wide table's
+  `clamp(120px, 18cqi, 190px)`, the table a container once
+  `.with-corners`), so they add no row height (#133 holds); the top and
+  bottom seats' `.plate-row` keep `--corner-w` + `--corner-gap` clear as
+  padding. The play page passes all four at every width (contents
+  `v-if`'d): top-left `VulnerabilityLabel` `compact` (28 px, 12.5 px
+  text that wraps, no dot) while `vulnerable` (auction/play/finished);
+  top-right `.corner-contract` (`aria-live`, always there, empty but in
+  the play): `.contract-line` `CallLabel` + `doubledMark` ("4♥X by
+  East", red strains `--bridge-on-table-bad`), `.tricks-won` "NS 0 · EW
+  0" in Barlow, `.contract-you` "you play it" for `forDeclarer`;
+  bottom-left `AuctionPopover.vue` (the **Auction** button,
+  `auctionButton`: from the first call to the end of the board, the
+  `AuctionHistory` grid in a `usePopover` pop-up opening upward, `live`
+  until finished, `bidding` during the auction, `auctionEvents` passed
+  on; its icon hidden in a table under 420 px); bottom-right
+  `ClaimButton.vue` (Claims, below). The board's place in its set is
+  `AppHeader`'s `subtitle` (the play page's `headerSubtitle`: `setLabel`
+  "Board 2 of 4 · Set 3" + " · set over" from `currentSet`, whenever
+  `playing.set`; the `title` is the table's name alone); the dealer is
+  `BridgeTable`'s `.dealer` "D" on the plate (`role="img"`,
+  `aria-label="dealer"`); the board tile is gone. The detail page moves a
   seated player to `/play` when `board_id` changes to a new board.
   `Playing.declarer_hand` is a robot declarer's remaining cards, only for
   its human dummy (null otherwise, and once `finished`); the same channel's
@@ -426,7 +444,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   `AuctionHistory` draws each call with `AuctionCallCell.vue`: alerted =
   amber ring + "!", questioned = blue ring + "?", the pop-up (a dark
   card; `src/composables/usePopover.ts`, shared with
-  `LastTrickPopover` and `AuctionPopover`: mouse hover, tap toggles, Escape / tap outside)
+  `LastTrickPopover`, `AuctionPopover` and `ClaimButton`: mouse hover, tap toggles, Escape / tap outside;
+  `nudge` keeps it off the side edges, `drop` brings one opening upward
+  below the screen's top)
   titled "East alerted 2♦" ("You alerted 2♣" for your own, "Partner
   alerted 2♣" for partner's, "2♦ by West" / "Your 2♣" unalerted) shows
   `alertText()` ("Alerted, no explanation given." when empty, plain
@@ -531,11 +551,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   dummy, whose own hand is the same cards. For a robot declarer's dummy,
   `BridgeTable`'s `declarer` prop (+ `declarerPlayable`,
   `declarerForcedId`) lays `declarer_hand` across the top the same way,
-  from the end of the auction; the contract bar adds "robot-1 declares 4♠
-  — you play the hand". `current_trick` empties as soon
+  from the end of the auction; the contract's corner adds "you play
+  it". `current_trick` empties as soon
   as a trick's fourth card lands, so the page holds that trick (the last of
   `tricks`) with its winner for 2 s before clearing it, but only when seen
-  live. The contract bar above the table carries `tricks_won`. Under the
+  live. The contract's top-right corner carries `tricks_won`. Under the
   trick in progress, `LastTrickPopover.vue` (from the second trick on, not
   while a trick is held) pops up the last of `tricks` in a `TrickArea`
   with `spread` (#70: no overlap, a seat tag per card, nudged sideways to
@@ -574,11 +594,17 @@ The user's standing rule (#91): **no task may leave code coverage under
   state's `claim_locked` (HTTP and compact `PlayingUpdated` alike,
   `expandPlaying` passes it through) until the next card clears it;
   `canClaim` is false then, `claimLocked(state, seat)` says who would
-  claim but for it, and the play page keeps Claim disabled and grey as
-  "Claim · locked" with `CLAIM_LOCKED_TEXT` under it (the sheet closes
-  through `mayClaim`); a 409 for it toasts and reloads like any other.
-  Claim is a solid navy button at its own width under the hand
-  (`.claim-row`, bottom left). `ClaimSheet.vue` is the sheet (#161:
+  claim but for it, and the play page keeps Claim grey as "Claim ·
+  locked" (the sheet closes through `mayClaim`); a 409 for it toasts and
+  reloads like any other. Claim is `ClaimButton.vue` in `BridgeTable`'s
+  bottom-right corner (#171, `mayClaim || claimBlocked`): a native
+  `.claim-button`, light on the navy, 36 px with a `::before` making the
+  tap area 44 px, `claim` event (→ `claimOpen`), `disabled` while a card
+  or claim is in flight; `locked` (`claimBlocked`) gives `is-locked`,
+  `aria-disabled`, and a tap or a mouse hover toggles a `usePopover`
+  pop-up above it, `.claim-locked-note` (`role="tooltip"`, kept in the
+  DOM with `v-show` as the button's `aria-describedby`) holding
+  `CLAIM_LOCKED_TEXT`; unlocking closes it. `ClaimSheet.vue` is the sheet (#161:
   `claimSummary` "7 tricks left · you have 4 · 4♠ needs 10", tiles 4 a
   row from the tricks left down to 0 (`data-tricks`, `.pick-count`), each
   with `claimOutcome(state, seat, n)` (`{result: "4♠ +1", down, score:
@@ -686,9 +712,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   boards sends only that, so read it through `currentSet(table, playing)` in
   `src/utils/sets.ts`, which merges both copies (a higher id wins; the
   longer `replaced`). The
-  play page shows `boardPosition` ("Board 2 of 4") top left and in the
-  header, the detail page `setLabel` ("Board 2 of 4 · Set 3") while a set
-  runs. `getSet(id)` (`GET /sets/{id}`, in
+  play page shows `setLabel` ("Board 2 of 4 · Set 3") under the table's
+  name in the header and `boardPosition` ("Board 2 of 4") in the table's
+  centre line, the detail page `setLabel` while a set runs. `getSet(id)` (`GET /sets/{id}`, in
   `src/services/history.ts`: finished `boards` with `matchpoints`/`top`,
   `totals`, `winner`; 403 unless a player of it or finished all its
   boards) is cached by the history store's `loadSet` (replaced on every
@@ -1131,16 +1157,16 @@ The user's standing rule (#91): **no task may leave code coverage under
   `--playable-ring` amber and white `--call-chip-*` for what lies on it.
   `TrickArea`'s `trump` rings `winningSoFar()` (`src/utils/play.ts`) and
   `mySlot` draws a dashed `.my-slot`. #161 did the play page during a
-  board: `TurnClockLine`, the header (`headerTitle` "<table> · Board 2
-  of 4" from `playing.set`, never `board.number`; the name alone in
-  `waiting`), the chat badge in `action`, Claim, `ClaimSheet`'s tiles,
+  board: `TurnClockLine`, the header (since #171 the table's name over
+  `headerSubtitle`, never `board.number`), the chat badge in `action`,
+  Claim, `ClaimSheet`'s tiles,
   `ClaimPanel`'s banner (tokens `--bridge-on-popup-clock`/`-ok`) and
   `HandView`'s `.forced-tag`; nothing draws a card back yet. #165 did the
-  top-left corner (above, Vulnerability in words) in place of #161's
-  contract chip and phone bar: no `AuctionHistory` on the page once the
-  auction is over (the Auction button only), the contract bar
-  (`.outcome`) only "5♣ by East" + `tricks_won` (and `.outcome-you` for a
-  robot declarer's dummy), no declarer/dummy line, and no
+  top-left corner (which #171 moved into the table's corners, above,
+  Vulnerability in words) in place of #161's contract chip and phone
+  bar: no `AuctionHistory` on the page once the auction is over (the
+  Auction button only), the contract only "5♣ by East" + `tricks_won`,
+  no declarer/dummy line, and no
   `board.number` anywhere on the play page: `BridgeTable`'s
   `boardLabel` (the centre's first line; left out "Board 7", the play
   page passes `boardPosition` or null). #162 did the finished board and the lobby
@@ -1161,9 +1187,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   specs stay narrow unless they stub it); then `.play-wide` (1040 px,
   the chat `clamp()` at 1040 + 656 = 1696 px), `BridgeTable`'s `wide`
   (`.table-wide`, `auto minmax(0, 1fr) auto`, its own container
-  `bridge-table`: side plates upright under 760 px) with the
-  `BoardTile` in its `corner` slot (`.with-corner`: top seat in column 2;
-  the board bar's tile hidden), and during the auction (`auctionCentre`)
+  `bridge-table`: side plates upright under 760 px) with the same four
+  corners, and during the auction (`auctionCentre`)
   the `#centre` slot is `.centre-auction`: `AuctionHistory` +
   `BiddingBox` (or `.bids-missing`), shared with the below-table copies
   through `liveAuctionProps`/`auctionEvents`/`biddingProps`/

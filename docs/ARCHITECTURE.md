@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/97-nicer-form-inputs`._
+_Status as of branch `bulbulica2/98-board-info-in-the-table-corners`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -35,7 +35,7 @@ views (pages)  ──call──▶  Pinia stores  ──call──▶  services 
 | `src/components/` | shared pieces: `AppHeader`, `AppMenu`, the game table and cards, sheets, history list |
 | `src/stores/` | Pinia stores, one per domain: `auth`, `tables`, `game`, `history`, `users` |
 | `src/services/` | axios calls per domain, plus `http.ts` (the axios instance), `echo.ts` (the websocket) and `liveStatus.ts` (whether live updates reach the table) |
-| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board and each seat's time for the set, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button, the play page's Auction button and the auction's calls, kept off the screen's edges and a `data-right-edge` panel), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved), `useElementWidth` (an element's width as it is resized: the play page's column, for the wide table), `useSteadyHeight` (an element held at its tallest: a hand, the wide table's auction) |
+| `src/composables/` | `useUserSearch` (debounced user lookup), `useForcedPlay` (the countdown that plays a forced card), `useNow` (a ticking clock for the turn, claim and next-board countdowns), `useStaleDeadline` (rereads the game when a turn's, a claim's or the next board's deadline passes with no update), `useTurnClock` (the turn clock of a board and each seat's time for the set, ticking), `useTurnTitle` (the tab's title while your turn waits and the tab is hidden), `useLiveStatus` (live updates on or off, for the table pages' Refresh), `useYourTable` (the header's and menu's shortcut to the user's table), `usePopover` (the hover-or-tap pop-up of the Last trick button, the play page's Auction and locked Claim buttons and the auction's calls, kept off the screen's edges and a `data-right-edge` panel, and brought down below the screen's top when it opens upward), `useDoubleDummy` (a board's double dummy table, read once more if it is still being solved), `useElementWidth` (an element's width as it is resized: the play page's column, for the wide table), `useSteadyHeight` (an element held at its tallest: a hand, the wide table's auction) |
 | `src/directives/` | `ionEvent.ts`: `v-ion-event:ion-refresh="refresh"` listens for an Ionic event on the element itself (pull-to-refresh, the history's infinite scroll); see [Ionic events](#ionic-events) |
 | `src/utils/` | pure helpers: errors, toasts, cards, auction and play rules, results, seat-move wording, bans, expanding a compact `PlayingUpdated` (`compact.ts`), the turn clock (`turnClock.ts`), the set clock (`setClock.ts`), a player's stats in words (`stats.ts`), the backend's length limits (`limits.ts`), the menu's collapse preference (`menu.ts`), the wide table's minimum column (`layout.ts`) |
 | `src/theme/` | the Daylight design tokens (`variables.css`), the shared button and font rules (`daylight.css`), the global toast styles, the shared form fields (`forms.css`) and the print stylesheet |
@@ -76,7 +76,8 @@ wrapper, which passes while the app is broken.
 (`content-id="main-content"`); the menu's `content-id` must match that id.
 Every page wraps its content in `<ion-page>` and starts with
 `<AppHeader title="…">`, which draws the menu button, the **Your table**
-button (below), the title, an `end` slot for page actions and, while
+button (below), the title (with an optional `subtitle` line under it,
+the play page's **Board 2 of 4 · Set 3**), an `end` slot for page actions and, while
 somebody is logged in, an **Account** button. While the logged-in user is
 banned, `AppHeader` also shows `BanBanner` under its toolbar (**You are
 banned until 12 Oct 2026: <reason>**), so the ban is on every page.
@@ -213,9 +214,7 @@ whatever the table is waiting for.
   inputs keep their own layout.
 
 The play page during a board (#161) has the **turn clock line**
-(`TurnClockLine`), the header **<table> · Board 2 of 4** with the chat's
-orange unread badge, Claim as a solid navy button at its own width under
-the hand (grey **Claim · locked** while claims are locked), the **claim
+(`TurnClockLine`), the chat's orange unread badge in the header, the **claim
 sheet**'s tiles with each number's result and score (`contractScore` in
 `src/utils/result.ts`, `claimOutcome` in `claim.ts`), the pending claim
 as a dark banner, and a forced card's **plays in 3** on the card itself.
@@ -254,8 +253,7 @@ plates' avatar. **The wide table**: on a screen 1100 px wide or more whose
 column still has 560 px (`WIDE_TABLE_MIN_PX` in `src/utils/layout.ts`,
 measured by `useElementWidth`, a `ResizeObserver`), the play page is
 1040 px wide at most and `BridgeTable` gets `wide` (boards A/B's layout,
-in Daylight's colours): the board tile in its top-left corner (`corner`
-slot), partner top centre, the opponents' plates on the sides (upright
+in Daylight's colours): partner top centre, the opponents' plates on the sides (upright
 while the table itself is under 760 px, a container query) and, during
 the auction, the auction and the bidding box in the table's centre,
 which keeps the height it reached until the next board
@@ -263,20 +261,41 @@ which keeps the height it reached until the next board
 play is dummy and the trick, as before. Narrower, the table keeps the
 layout it has on a tablet, the auction below it.
 
-The play page's top-left corner (#165, in place of #161's contract chip
-and phone bar): the vulnerability pill with the **Auction** button
-beside it (`AuctionPopover`, from the first call to the end of the
-board: the auction grid in a pop-up, `usePopover`, with Ask / Ask in the
-chat while the board is on), and under them the dealer pill (below
-1100 px) and **Board 2 of 4** (`boardPosition` in `src/utils/sets.ts`)
-under the button. Once the auction is over the button is the only place
-the auction shows: no grid below the hand in the play or once finished.
-The board's number in the database is gone from the play page: the
-header reads **<table> · Board 2 of 4**, `BoardTile` holds the board's
-place in its set (`position`), and `BridgeTable`'s centre line is
-`boardLabel` ("Board 2 of 4", none outside a set; a review keeps
-"Board 7"). The contract bar is **5♣ by East** and **NS 0 · EW 0**
-(plus a robot declarer's dummy's line), with no declarer/dummy line.
+**The board's details in the table's corners** (#171, after #165's
+top-left bar): nothing sits above or under the table any more, so the
+table, the trick and the hand fit one screen. `BridgeTable` has four
+corner slots, `top-left`, `top-right`, `bottom-left` and `bottom-right`,
+laid over the navy panel's corners beside partner and you at every
+width. They take no row height (absolutely placed; the table is a
+container, and a corner is `--corner-w` wide at most: a share of the
+table's width, 84 px on a phone up to 128 px, or 120–190 px on the wide
+table), and partner's and your plates keep that width clear on both
+sides, so nothing covers a plate, dummy or the trick and the table keeps
+its height from card to card (#133). The play page fills them:
+- top left, the vulnerability as `VulnerabilityLabel`'s `compact` pill
+  (28 px, smaller words that may wrap, no dot), from the deal to the end
+  of the board;
+- top right, through the play, **5♣ by East** (`CallLabel` + the doubled
+  mark, **4♥X by East**) over **NS 0 · EW 0** in Barlow, and **you play
+  it** for a robot declarer's dummy, white on the navy and `aria-live`
+  (empty during the auction);
+- bottom left, the **Auction** button (`AuctionPopover`, from the first
+  call to the end of the board: the auction grid in a pop-up that opens
+  upward, `usePopover`, with Ask / Ask in the chat while the board is
+  on). Once the auction is over it is the only place the auction shows;
+- bottom right, **Claim** (`ClaimButton`): small, 36 px with a 44 px tap
+  area; locked after a refused claim it reads **Claim · locked** in grey
+  and a tap or a hover shows why in a pop-up, which is also its
+  `aria-describedby`.
+
+The board's place in its set is the header's second line,
+**Board 2 of 4 · Set 3** (`AppHeader`'s `subtitle`, `setLabel` in
+`src/utils/sets.ts`, **· set over** once it is), under the table's name;
+the dealer is the **D** on their plate (`aria-label` "dealer"). The board
+tile and the dealer pill are gone, and so is the board's number in the
+database: `BridgeTable`'s centre line is `boardLabel` ("Board 2 of 4",
+none outside a set; a review keeps "Board 7"). The review keeps its own
+bar above its table.
 
 ## Routes and the guard
 
@@ -722,8 +741,10 @@ works ([RUNNING.md](RUNNING.md) says the worker must run).
   card (bb#115): the state's `claim_locked` is true meanwhile (over HTTP
   and in the compact `PlayingUpdated`, which `expandPlaying` passes
   through), `canClaim()` says no, and the play page keeps the **Claim**
-  button disabled and grey, reading **Claim · locked**, with a note ("The
-  claim was refused: play a card before claiming again."). The next card's `PlayingUpdated` clears it by itself;
+  button in the table's corner grey, reading **Claim · locked**
+  (`aria-disabled`); a tap or a hover shows why in a small pop-up ("The
+  claim was refused: play a card before claiming again."), which is also
+  the button's `aria-describedby`. The next card's `PlayingUpdated` clears it by itself;
   a claim sent anyway gets the backend's 409, toasted with a reread like
   any other.
 
@@ -851,10 +872,10 @@ arrives, and the app falls back to what each request returns.
 
 | Component | Shows |
 |---|---|
-| `BridgeTable` | Daylight's navy panel (#160) with the four seats, rotated so **you are always at the bottom**, partner and you across its width, the opponents left and right. Each seat is a **plate**: avatar (two initials; a robot's icon, `avatar-robot`), name (opens the profile sheet), seat, the `AdminBadge`, and each human's time for the set as a pill (`banks`: grey idle, white while it runs, red under a minute, none for a robot or an admin). The seat on turn is ringed orange, an away seat's plate is red, a seat that pressed Start gets a green tick (`ready`, the play page's seats while Start is awaited), an empty seat is dashed ("Empty · North"); the plate's top edge is red/green for vulnerability. During the auction each seat's **last call** sits beside its plate as a chip (`calls`), an opponent's alerted one ringed amber with "!" (partner's never during the auction); whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`); the centre's first line while it shows the board is `boardLabel` (the play page's "Board 2 of 4", none outside a set, #165; left out, "Board 7"); with `wide` (#163) the wide screen's layout and a `corner` slot top left (the board tile) |
-| `VulnerabilityLabel` | who is vulnerable in words (`vulnerabilityText`), Daylight's pill: green **Nobody vulnerable**, else red with a dot, **Vul: E-W** for the other side, **Vulnerable: N-S (you)** for yours, **Both (you too)**; top left above the table on the play page (beside a **Dealer West** pill on a phone) and in `BoardReview`, and on the board results page (#151, #160) |
-| `BoardTile` | the board as BBO draws it, on the play page from 1100 px wide in place of the dealer pill (in the wide table's top-left corner, #163): the board's place in its set (`position`, 1–4; never its number in the database, #165, and none outside a set) in a navy square, N/E/S/W round it (a vulnerable side red), "DEALER W" under it |
-| `AuctionPopover` | the play page's **Auction** button top left, beside the vulnerability pill (#165), from the first call to the end of the board: the `AuctionHistory` grid in a pop-up (`usePopover`: a mouse hovering opens it, a tap toggles it, a tap outside or Escape closes it), passing on `ask` / `explain` / `chat`, so Ask and Ask in the chat work there while the board is on |
+| `BridgeTable` | Daylight's navy panel (#160) with the four seats, rotated so **you are always at the bottom**, partner and you across its width, the opponents left and right. Each seat is a **plate**: avatar (two initials; a robot's icon, `avatar-robot`), name (opens the profile sheet), seat, the `AdminBadge`, and each human's time for the set as a pill (`banks`: grey idle, white while it runs, red under a minute, none for a robot or an admin). The seat on turn is ringed orange, an away seat's plate is red, a seat that pressed Start gets a green tick (`ready`, the play page's seats while Start is awaited), an empty seat is dashed ("Empty · North"); the plate's top edge is red/green for vulnerability. During the auction each seat's **last call** sits beside its plate as a chip (`calls`), an opponent's alerted one ringed amber with "!" (partner's never during the auction); whose turn (while there is a turn, every seat keeps a `turn-slot` line for the label, filled on the seat on turn only, so the table's height doesn't follow the turn round, #133); dummy's cards and a robot declarer's cards trumps first (`trump`, the contract's strain); a robot declarer's cards for its dummy (`declarer`); a claimer's cards; the finished deal (or, in a replay, what is left of it); a seat away mid-set dashed and tagged with its clock, **away · 0:42** (`away`: seat → `AwayTag`, drawn by `AwaySeatTag`); the dealer's plate has a **D** (`aria-label` "dealer"); the centre's first line while it shows the board is `boardLabel` (the play page's "Board 2 of 4", none outside a set, #165; left out, "Board 7"); with `wide` (#163) the wide screen's layout; four corner slots, `top-left`, `top-right`, `bottom-left`, `bottom-right` (#171), laid over the panel's corners at every width without taking a row's height, partner's and your plates keeping them clear |
+| `VulnerabilityLabel` | who is vulnerable in words (`vulnerabilityText`), Daylight's pill: green **Nobody vulnerable**, else red with a dot, **Vul: E-W** for the other side, **Vulnerable: N-S (you)** for yours, **Both (you too)**; in `BoardReview` and on the board results page (#151, #160), and `compact` (28 px, smaller words that may wrap, no dot) in the play page's top-left table corner (#171) |
+| `AuctionPopover` | the play page's **Auction** button in the table's bottom-left corner (#165, #171), from the first call to the end of the board: the `AuctionHistory` grid in a pop-up opening upward (`usePopover`: a mouse hovering opens it, a tap toggles it, a tap outside or Escape closes it), passing on `ask` / `explain` / `chat`, so Ask and Ask in the chat work there while the board is on |
+| `ClaimButton` | the play page's **Claim** in the table's bottom-right corner (#171): a light 36 px button with a 44 px tap area, `claim` on a tap, `disabled` while a card or a claim is in flight; `locked` after a refused claim, it reads **Claim · locked** in grey (`aria-disabled`) and a tap or a hover opens a small pop-up above it with `CLAIM_LOCKED_TEXT` (`usePopover`), always in the DOM as the button's `aria-describedby` |
 | `OfflineRefresh` | the note and **Refresh** at the bottom of the play page (and the detail page), only after live updates have been off for 5 s (`useLiveStatus`) |
 | `AwayNotice` | Daylight's orange-tint banner (#163): one line while others are away mid-set, with no countdown (the seats' tags have it): "Away players are replaced by a robot when their clock runs out." (only admins away: the table waits for them); with `held`, your own held seat counting down (detail page, Tables, Home) |
 | `AwaySeatTag` | an away seat's tag: "away · 0:42" to its `replace_at`, red in the last 15 s, "replacing…" at 0, a plain "away" for an admin (`BridgeTable`, the detail page's compass) |
