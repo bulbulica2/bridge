@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
@@ -620,6 +622,41 @@ describe('BoardReviewModal', () => {
     await wrapper.get('.close-review').trigger('click')
     expect(wrapper.emitted('close')).toHaveLength(2)
     wrapper.unmount()
+  })
+
+  test('is the board review dialog; the backdrop or Escape close it, as Close does', async () => {
+    answer(review(42, 7))
+    const wrapper = mountModal()
+    await flushPromises()
+    const modal = wrapper.findComponent(modalStub)
+    expect(modal.classes()).toContain('board-review-modal')
+
+    modal.vm.$emit('didDismiss')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    await wrapper.get('.close-review').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  test('is sized as a dialog: 90 % of the height, rounded, over a backdrop', () => {
+    const source = readFileSync(resolve(__dirname, '../../src/components/BoardReviewModal.vue'), 'utf8')
+    const css = source.slice(source.indexOf('<style')).replace(/\/\*[\s\S]*?\*\//g, '')
+    const rule = (selector: string, from = 0) => {
+      const start = css.indexOf(`${selector} {`, from)
+      expect(start).toBeGreaterThan(-1)
+      return css.slice(start, css.indexOf('}', start))
+    }
+
+    const base = rule('ion-modal.board-review-modal')
+    expect(base).toContain('--height: 90vh;')
+    expect(base).toContain('--width: min(100%, 880px);')
+    expect(base).toContain('--border-radius: 16px;')
+    expect(base).toContain('--box-shadow: 0 12px 40px var(--bridge-shadow-strong);')
+    expect(base).toContain('--backdrop-opacity: var(--ion-backdrop-opacity, 0.4);')
+    expect(rule('ion-modal.board-review-modal', css.indexOf('@supports (height: 1dvh)'))).toContain('--height: 90dvh;')
+    expect(rule('ion-modal.board-review-modal', css.indexOf('@media (max-width: 767.98px)'))).toContain(
+      '--width: calc(100% - 16px);',
+    )
   })
 
   test('exports and prints the board shown; closing drops the printout', async () => {

@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/105-claim-answer-dialog`._
+_Status as of branch `bulbulica2/106-review-modal-size`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -664,15 +664,19 @@ read again (every message is public then), and it stays in the board's
 review.
 
 **Board review at the table** (#97): once a board of this table has been
-finished, **Last board** (header) opens the board review in a full-height
-sheet over the game, at any phase: the same replay and Export as
+finished, **Last board** (header) opens the board review in a dialog
+over the game, at any phase (#187: centred, 90 % of the screen's height
+with 5 % free above and below at every size, the phone included, 16 px
+corners, the page dimmed around it; up to 880 px wide, below 768 px 8 px
+of backdrop each side; the header stays put and the review scrolls inside;
+Close, the backdrop or Escape close it): the same replay and Export as
 [Board review](#board-review--playingsid), without leaving the table. It
 opens on the latest finished board, with a switcher (**Board 5**,
 **Board 6** …) for the set's other finished boards; on a set's first board
 it offers the previous set's last. The game goes on underneath; when it
 waits for you ("Your turn to bid", "Your turn to play", "A claim waits for
 your answer", "Your Start: …") a
-banner in the sheet says so with **To the table**. A forced card doesn't
+banner in the dialog says so with **To the table**. A forced card doesn't
 play itself while it is open, and leaving the page closes it. It fits a
 360 px screen.
 

@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/105-claim-answer-dialog`._
+_Status as of branch `bulbulica2/106-review-modal-size`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -1304,8 +1304,14 @@ deal (all four hands). Its rules, all in `TablePlayPage`:
 The play page reviews the table's finished boards without leaving it
 (#97): **Last board** in its header (and **Review** in a finished board's
 result dialog, which steps aside while the review is open) opens
-`BoardReviewModal`, a full-height
-`ion-modal` with the same `BoardReview` and Export. The game goes on
+`BoardReviewModal`, a centred
+`ion-modal` with the same `BoardReview` and Export. It is a dialog, not a
+sheet (#187): `--height` 90 % of the screen (`90dvh` where the browser has
+`dvh`, else `90vh`, so 5 % stays free above and below, Ionic's full-screen
+phone modal included), `--width` `min(100%, 880px)` (below 768 px
+`calc(100% - 16px)`), 16 px corners and the result and claim dialogs'
+shadow and backdrop; its header stays put and `ion-content` scrolls. Close,
+the backdrop and Escape all end in `did-dismiss` → `close`. The game goes on
 underneath: `PlayingUpdated` keeps arriving and the page keeps drawing it.
 Which boards it offers is `reviewChoices()` in `src/utils/review.ts`:
 
