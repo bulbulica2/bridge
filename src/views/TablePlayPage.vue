@@ -121,20 +121,6 @@
             <span>Refreshing…</span>
           </div>
 
-          <!-- A claim waiting for its answers: play stops until it is settled.
-               A finished board's result is in its dialog (below), over the
-               deal on the table. -->
-          <ClaimPanel
-            v-if="pendingClaim"
-            :state="pendingClaim"
-            :my-seat="mySeat"
-            :acts-for="claimSeat"
-            :players="players"
-            :busy="claiming"
-            @accept="answerClaim(true)"
-            @reject="answerClaim(false)"
-            @withdraw="withdrawClaim"
-          />
           <!-- A set that ended mid-board (a player taken out of it): no
                board is left on the table, but its results are. -->
           <SetResultsPanel
@@ -438,6 +424,20 @@
         @claim="sendClaim"
         @close="claimOpen = false"
       />
+      <!-- A claim waiting for its answers (#186): a dialog over the table,
+           which never moves for it. Play stops until it is settled. -->
+      <ClaimAnswerDialog
+        :open="claimAnswerOpen"
+        :state="pendingClaim"
+        :my-seat="mySeat"
+        :acts-for="claimSeat"
+        :players="players"
+        :busy="claiming"
+        @accept="answerClaim(true)"
+        @reject="answerClaim(false)"
+        @withdraw="withdrawClaim"
+        @close="claimDismissed = claimKey"
+      />
       <ExplainCallSheet
         :open="explaining !== null"
         :call="explaining"
@@ -529,7 +529,7 @@ import BoardReviewModal from '@/components/BoardReviewModal.vue';
 import BridgeTable from '@/components/BridgeTable.vue';
 import CallLabel from '@/components/CallLabel.vue';
 import ClaimButton from '@/components/ClaimButton.vue';
-import ClaimPanel from '@/components/ClaimPanel.vue';
+import ClaimAnswerDialog from '@/components/ClaimAnswerDialog.vue';
 import ClaimSheet from '@/components/ClaimSheet.vue';
 import ExplainCallSheet from '@/components/ExplainCallSheet.vue';
 import HandView from '@/components/HandView.vue';
@@ -821,6 +821,22 @@ const pendingClaim = computed(() => {
   const state = playing.value;
   return state?.phase === 'play' && state.claim ? (state as Playing & { claim: Claim }) : null;
 });
+
+// The pending claim, told apart from the next one: the dialog put away
+// (the X, the backdrop) stays away for this claim only. Nobody claims twice
+// before the next card (`claim_locked`), so the cards played tell them apart.
+const claimKey = computed(() => {
+  const state = pendingClaim.value;
+  return state
+    ? `${state.playing_id}:${state.tricks?.length ?? 0}:${state.current_trick?.length ?? 0}:${state.claim.seat}`
+    : null;
+});
+const claimDismissed = ref<string | null>(null);
+// Everyone at the table sees it, a kibitzer too; never over the review or
+// with the view left.
+const claimAnswerOpen = computed(
+  () => claimKey.value !== null && viewActive.value && !reviewOpen.value && claimDismissed.value !== claimKey.value,
+);
 
 // The Claim button: any player but dummy (unless dummy plays for a robot
 // declarer), while no claim is pending and none was refused since the last
@@ -2036,6 +2052,7 @@ async function closeOverlays() {
   settingsOpen.value = false;
   reviewOpen.value = false;
   resultDismissed.value = finishedId.value;
+  claimDismissed.value = claimKey.value;
   claimOpen.value = false;
   explainIndex.value = null;
   seatingAt.value = null;

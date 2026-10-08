@@ -7,6 +7,7 @@ import type { ActionSheetButton } from '@ionic/vue'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import AuctionHistory from '@/components/AuctionHistory.vue'
 import BoardResultDialog from '@/components/BoardResultDialog.vue'
+import ClaimAnswerDialog from '@/components/ClaimAnswerDialog.vue'
 import TableSettingsDialog from '@/components/TableSettingsDialog.vue'
 import * as echo from '@/services/echo'
 import * as gameService from '@/services/game'
@@ -312,8 +313,12 @@ describe('watching mode', () => {
     const claim = { seat: 'S' as Seat, tricks: 3, hand: hand('S').slice(1), accepted: [], expires_at: '' }
     const wrapper = await mountPage(makeTable(), playing({ claim, dummy_hand: hand('S').slice(1) }))
 
-    expect(wrapper.find('[aria-label="Pending claim"]').exists()).toBe(true)
+    // The dialog, read-only and closable: a kibitzer has nothing to answer.
+    expect(wrapper.findComponent(ClaimAnswerDialog).props('open')).toBe(true)
+    expect(wrapper.findComponent(ClaimAnswerDialog).props('mySeat')).toBeNull()
+    expect(wrapper.get('.claim-answer-text').text()).toBe('South claims 3 of 12')
     expect(wrapper.find('.claim-buttons').exists()).toBe(false)
+    expect(wrapper.find('.claim-answer-close').exists()).toBe(true)
     expect(wrapper.find('.side-bottom .claim-hand, .side-bottom .dummy-hand').exists()).toBe(true)
   })
 

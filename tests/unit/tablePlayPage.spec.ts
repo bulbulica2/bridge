@@ -8,7 +8,7 @@ import { pullToRefresh } from './ionEvents'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import BiddingBox from '@/components/BiddingBox.vue'
 import BoardReviewModal from '@/components/BoardReviewModal.vue'
-import ClaimPanel from '@/components/ClaimPanel.vue'
+import ClaimAnswerDialog from '@/components/ClaimAnswerDialog.vue'
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue'
 import BoardResultDialog from '@/components/BoardResultDialog.vue'
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue'
@@ -637,14 +637,100 @@ describe('TablePlayPage claims and Start', () => {
     const wrapper = await mountPage(claimed)
     vi.mocked(gameService.withdrawClaim).mockResolvedValue({ ...claimed, claim: null })
 
-    await emitFrom(wrapper, ClaimPanel, 'withdraw')
+    await emitFrom(wrapper, ClaimAnswerDialog, 'withdraw')
     expect(gameService.withdrawClaim).toHaveBeenCalledWith(5)
 
     useGameStore().applyPlayingUpdate(5, claimed)
     await flushPromises()
     vi.mocked(gameService.withdrawClaim).mockRejectedValue(new Error('offline'))
-    await emitFrom(wrapper, ClaimPanel, 'withdraw')
+    await emitFrom(wrapper, ClaimAnswerDialog, 'withdraw')
     expect(showToast).toHaveBeenCalledWith('Your claim could not be withdrawn. Please try again.', 'danger')
+  })
+
+  // South declares; East and West answer a claim.
+  function inPlay(claim: Playing['claim'], overrides: Partial<Playing> = {}): Playing {
+    return auction({
+      phase: 'play',
+      contract: { bid: pass, doubled: 0, declarer: 'S', dummy: 'N' } as unknown as Playing['contract'],
+      tricks: [],
+      current_trick: [],
+      tricks_won: { ns: 0, ew: 0 },
+      dummy_hand: hand('N'),
+      claim,
+      ...overrides,
+    })
+  }
+  const southClaims = { seat: 'S' as Seat, tricks: 13, hand: hand('S'), accepted: [] as Seat[], expires_at: '' }
+  const answerOpen = (wrapper: VueWrapper) => wrapper.findComponent(ClaimAnswerDialog).props('open')
+
+  test('a pending claim is a dialog over the table, nothing above it, and closes when the claim goes', async () => {
+    const wrapper = await mountPage(inPlay(null))
+    expect(answerOpen(wrapper)).toBe(false)
+    const table = () => wrapper.get('.play .bridge-table').element
+    const before = table().previousElementSibling
+
+    useGameStore().applyPlayingUpdate(5, inPlay(southClaims))
+    await flushPromises()
+
+    expect(answerOpen(wrapper)).toBe(true)
+    expect(wrapper.findComponent(ClaimAnswerDialog).props('state')?.claim).toEqual(southClaims)
+    // Nothing of the claim's in the page's column: the table stays put.
+    expect(wrapper.find('.play .claim-answer-dialog').exists()).toBe(false)
+    expect(wrapper.find('.play [aria-label="Pending claim"]').exists()).toBe(false)
+    expect(table().previousElementSibling).toBe(before)
+
+    useGameStore().applyPlayingUpdate(5, inPlay(null, { current_trick: [{ seat: 'S', card: hand('S')[0] }] }))
+    await flushPromises()
+    expect(answerOpen(wrapper)).toBe(false)
+  })
+
+  test('the review takes its place while open', async () => {
+    const wrapper = await mountPage(inPlay(southClaims))
+    expect(answerOpen(wrapper)).toBe(true)
+
+    await emitFrom(wrapper, BoardResultDialog, 'review')
+    expect(wrapper.findComponent(BoardReviewModal).props('open')).toBe(true)
+    expect(answerOpen(wrapper)).toBe(false)
+
+    await emitFrom(wrapper, BoardReviewModal, 'close')
+    expect(answerOpen(wrapper)).toBe(true)
+  })
+
+  test('put away by one with nothing to do, it stays away for that claim only', async () => {
+    const eastClaims = { ...southClaims, seat: 'E' as Seat, tricks: 0, hand: hand('E'), accepted: ['S'] as Seat[] }
+    const wrapper = await mountPage(inPlay(eastClaims))
+    expect(answerOpen(wrapper)).toBe(true)
+
+    await emitFrom(wrapper, ClaimAnswerDialog, 'close')
+    expect(answerOpen(wrapper)).toBe(false)
+    // The same claim, one more answer in: still away.
+    useGameStore().applyPlayingUpdate(5, inPlay({ ...eastClaims, accepted: ['S', 'W'] }))
+    await flushPromises()
+    expect(answerOpen(wrapper)).toBe(false)
+
+    // A card later, another claim: it opens again.
+    const played = { current_trick: [{ seat: 'S' as Seat, card: hand('S')[0] }] }
+    useGameStore().applyPlayingUpdate(5, inPlay(null, played))
+    await flushPromises()
+    useGameStore().applyPlayingUpdate(5, inPlay({ ...eastClaims, seat: 'W', hand: hand('W') }, played))
+    await flushPromises()
+    expect(answerOpen(wrapper)).toBe(true)
+  })
+
+  test('it closes before a confirmation, as the other dialogs do', async () => {
+    const wrapper = await mountPage(inPlay(southClaims))
+    let openWhenAsked: unknown = null
+    vi.mocked(confirmLeave).mockImplementation(async () => {
+      openWhenAsked = answerOpen(wrapper)
+      return false
+    })
+
+    await wrapper.get('.leave-table').trigger('click')
+    await flushPromises()
+
+    expect(confirmLeave).toHaveBeenCalled()
+    expect(openWhenAsked).toBe(false)
+    expect(answerOpen(wrapper)).toBe(false)
   })
 
   test('takes a Start back, and tells a refusal', async () => {
