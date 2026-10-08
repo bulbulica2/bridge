@@ -1084,6 +1084,8 @@ describe('TablePlayPage after a set', () => {
     const sheet = await openProfile(wrapper, 'N')
     expect(sheet.props('player')).toEqual(ROBOTS.N)
     expect(sheet.props('removable')).toBe(true)
+    // The set is over: nothing blocks it (#190).
+    expect(sheet.props('removeBlocked')).toBe(false)
     // Never on our own seat: that is Leave.
     await openProfile(wrapper, 'S')
     expect(wrapper.findComponent(PlayerProfileSheet).props('removable')).toBe(false)
@@ -1242,6 +1244,76 @@ describe('TablePlayPage after a set', () => {
     expect(tablesService.removePlayer).not.toHaveBeenCalled()
     expect(showToast).toHaveBeenCalledWith('Could not remove that player. Please try again.', 'danger')
     expect(logged).toHaveBeenCalledWith(expect.any(TypeError))
+  })
+
+  // #190, bb#147: nobody is taken out while the set runs.
+  const robotsAnd = { ...ROBOTS, S: PLAYERS.S }
+  const midBoard = () => auction({ players: robotsAnd, set: { ...running, board: 3 } })
+  const betweenBoards = () =>
+    ({
+      ...finished(),
+      players: robotsAnd,
+      set: { ...running, board: 3 },
+      next_board_at: new Date(Date.now() + 10_000).toISOString(),
+    }) as Playing
+
+  test('mid-board, a robot\'s Remove is greyed out and asks nothing', async () => {
+    const wrapper = await mountPage(midBoard(), robotTable())
+
+    const sheet = await openProfile(wrapper, 'N')
+    expect(sheet.props('removable')).toBe(true)
+    expect(sheet.props('removeBlocked')).toBe(true)
+    await remove(wrapper, ROBOTS.N)
+
+    expect(confirmRemove).not.toHaveBeenCalled()
+    expect(tablesService.removePlayer).not.toHaveBeenCalled()
+    expect(showToast).not.toHaveBeenCalled()
+  })
+
+  test('between two boards of the set, too', async () => {
+    const wrapper = await mountPage(betweenBoards(), robotTable())
+
+    expect((await openProfile(wrapper, 'E')).props('removeBlocked')).toBe(true)
+    await remove(wrapper, ROBOTS.E)
+
+    expect(confirmRemove).not.toHaveBeenCalled()
+    expect(tablesService.removePlayer).not.toHaveBeenCalled()
+  })
+
+  test('an admin still removes mid-set', async () => {
+    useAuthStore().user = { id: 3, name: 'Cy', username: 'cy', email: 'cy@example.com', is_admin: true }
+    const wrapper = await mountPage(midBoard(), robotTable())
+    vi.mocked(confirmRemove).mockResolvedValue(false)
+
+    expect((await openProfile(wrapper, 'N')).props('removeBlocked')).toBe(false)
+    await remove(wrapper, ROBOTS.N)
+
+    expect(confirmRemove).toHaveBeenCalledTimes(1)
+  })
+
+  test('nothing is blocked for a player one may not remove anyway', async () => {
+    const wrapper = await mountPage(midBoard(), robotTable())
+
+    const sheet = await openProfile(wrapper, 'S')
+    expect(sheet.props('removable')).toBe(false)
+    expect(sheet.props('removeBlocked')).toBe(false)
+  })
+
+  test('a set started meanwhile: the 409 is told and the table read again', async () => {
+    const wrapper = await mountPage(lastBoard(), robotTable())
+    vi.mocked(confirmRemove).mockResolvedValue(true)
+    vi.mocked(tablesService.removePlayer).mockRejectedValue(
+      axiosError(409, "You can't remove a player in the middle of a set: wait until it is over."),
+    )
+    vi.mocked(tablesService.getTable).mockClear()
+
+    await remove(wrapper, ROBOTS.E)
+
+    expect(showToast).toHaveBeenCalledWith(
+      "You can't remove a player in the middle of a set: wait until it is over.",
+      'danger',
+    )
+    expect(tablesService.getTable).toHaveBeenCalledWith(5)
   })
 
   test('an expired session on Remove goes to log in', async () => {

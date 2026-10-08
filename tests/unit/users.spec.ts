@@ -226,6 +226,91 @@ describe('PlayerProfileSheet', () => {
     expect(wrapper.getComponent('.profile-remove').props('disabled')).toBe(true)
     expect(wrapper.get('.profile-remove').find('ion-spinner').exists()).toBe(true)
   })
+
+  // #190: mid-set Remove is greyed out and says why instead. The note is
+  // there all along (v-show), shown only while open.
+  const shown = (note: { element: Element }) => !(note.element as HTMLElement).style.display
+
+  test('a blocked Remove removes nobody and tells why on a tap', async () => {
+    answer(ann)
+    const wrapper = mount(PlayerProfileSheet, {
+      props: { player: ann, removable: true, removeBlocked: true, busy: true },
+      global: { stubs: { IonModal: modalStub, 'ion-modal': modalStub } },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const button = wrapper.get('.profile-remove')
+    const note = wrapper.get('.profile-remove-note')
+
+    expect(button.classes()).toContain('is-locked')
+    expect(button.attributes('aria-disabled')).toBe('true')
+    expect(button.attributes('aria-describedby')).toBe(note.attributes('id'))
+    expect(wrapper.getComponent('.profile-remove').props('disabled')).toBe(false)
+    expect(wrapper.getComponent('.profile-remove').props('color')).toBe('medium')
+    expect(button.find('ion-spinner').exists()).toBe(false)
+    expect(note.attributes('role')).toBe('tooltip')
+    expect(note.text()).toBe("They're still playing: you can remove a player once the set is over.")
+    expect(shown(note)).toBe(false)
+
+    await button.trigger('click')
+    expect(shown(note)).toBe(true)
+    expect(button.attributes('aria-expanded')).toBe('true')
+    await button.trigger('click')
+    expect(shown(note)).toBe(false)
+    expect(wrapper.emitted('remove')).toBeUndefined()
+
+    // Escape closes it and gives the focus back to the button.
+    await button.trigger('click')
+    const el = button.element as HTMLElement
+    el.tabIndex = 0
+    el.focus()
+    const focus = vi.spyOn(el, 'focus')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(shown(note)).toBe(false)
+    expect(focus).toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  test('a mouse hovering a blocked Remove shows why; touch leaves it to the tap', async () => {
+    answer(ann)
+    const wrapper = mountSheet(ann)
+    await wrapper.setProps({ removable: true, removeBlocked: true })
+    await flushPromises()
+    const peek = wrapper.get('.profile-remove-peek')
+    const note = wrapper.get('.profile-remove-note')
+
+    await peek.trigger('pointerenter', { pointerType: 'touch' })
+    expect(shown(note)).toBe(false)
+    await peek.trigger('pointerenter', { pointerType: 'mouse' })
+    expect(shown(note)).toBe(true)
+    await peek.trigger('pointerleave', { pointerType: 'mouse' })
+    expect(shown(note)).toBe(false)
+    expect(wrapper.emitted('remove')).toBeUndefined()
+  })
+
+  test('the set ending turns Remove back to normal and closes the note', async () => {
+    answer(ann)
+    const wrapper = mountSheet(ann)
+    await wrapper.setProps({ removable: true, removeBlocked: true })
+    await flushPromises()
+    await wrapper.get('.profile-remove').trigger('click')
+    expect(shown(wrapper.get('.profile-remove-note'))).toBe(true)
+
+    await wrapper.setProps({ removeBlocked: false })
+    const button = wrapper.get('.profile-remove')
+    expect(wrapper.find('.profile-remove-note').exists()).toBe(false)
+    expect(button.classes()).not.toContain('is-locked')
+    expect(button.attributes('aria-disabled')).toBeUndefined()
+    expect(button.attributes('aria-describedby')).toBeUndefined()
+    expect(wrapper.getComponent('.profile-remove').props('color')).toBe('danger')
+
+    // Blocked again (the next set): the note starts closed.
+    await wrapper.setProps({ removeBlocked: true })
+    expect(shown(wrapper.get('.profile-remove-note'))).toBe(false)
+    await wrapper.get('.profile-remove').trigger('click')
+    expect(wrapper.emitted('remove')).toBeUndefined()
+  })
 })
 
 const jo: SearchedUser = {

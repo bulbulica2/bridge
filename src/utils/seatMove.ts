@@ -1,11 +1,11 @@
 import { alertController } from '@ionic/vue';
 import type { Phase, PublicPlaying } from '@/services/game';
-import { UNATTENDED_MINUTES } from '@/services/tables';
+import { UNATTENDED_MINUTES, canRemove } from '@/services/tables';
 import type { BroadcastTable, Seat, Table } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
 import { AWAY_REPLACE_SECONDS, isAway } from '@/utils/away';
 import type { SetAtStake } from '@/utils/away';
-import { currentSet } from '@/utils/sets';
+import { currentSet, runningSet } from '@/utils/sets';
 
 // How long a held seat is kept, whoever's turn it is (bb#138), and what it
 // costs meanwhile.
@@ -203,6 +203,32 @@ export async function confirmLeave(
     ],
   );
   return role === 'destructive';
+}
+
+/** Why the profile sheet's Remove is greyed out mid-set (#190). */
+export const REMOVE_BLOCKED_TEXT = "They're still playing: you can remove a player once the set is over.";
+
+/**
+ * Whether `viewer` could take `user` out (`canRemove`) but not now: the
+ * table's set is running (a board on, or between its boards), and the
+ * backend refuses a kick then with a 409 (bridge_backend docs/API.md,
+ * DELETE /tables/{table}/seats/{user}, bb#147). An admin still may, to stop
+ * cheating, and so may anyone a robot of an unattended table, where nobody
+ * human is playing. A hint; the backend's 409 has the final say.
+ */
+export function removeBlocked(
+  table: Table,
+  playing: PublicPlaying | null,
+  user: PublicUser,
+  viewer: Pick<PublicUser, 'id' | 'is_admin'> | null,
+): boolean {
+  if (!canRemove(table, user, viewer) || viewer?.is_admin) {
+    return false;
+  }
+  if (table.unattended_since !== null && user.is_robot) {
+    return false;
+  }
+  return runningSet(table, playing) !== null;
 }
 
 /**

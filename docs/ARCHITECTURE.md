@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/108-board-number-in-set`._
+_Status as of branch `bulbulica2/109-no-remove-mid-set`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -591,6 +591,14 @@ A few backend rules the stores rely on:
   seat); `whoIsLeft()` / `leaveNote()` in `utils/seatMove.ts` word what
   leaving does, and `removeCost()` / `confirmRemove()` there word and ask
   before a Remove (the game table's profile sheet, #121, #181).
+  `removeBlocked(table, playing, user, viewer)` there (#190) says when a
+  Remove `canRemove()` allows must wait: while the table's set is running
+  (`runningSet()`), since the backend then refuses a kick with a 409
+  (bb#147), except for an admin viewer and for a robot of an unattended
+  table. The play page passes it to the profile sheet
+  (`profileRemoveBlocked`), whose Remove is then greyed out
+  (`is-locked`, `aria-disabled`) with `REMOVE_BLOCKED_TEXT` in a
+  `usePopover` tooltip, and `removePlayer` refuses it without asking.
 - **Admins' seats** (#77, bb#78): `is_admin` is public on every seat's
   user. Only another admin may remove an admin, never the moderator, so
   `canRemove()` gives an admin's seat Remove only when the viewer is an

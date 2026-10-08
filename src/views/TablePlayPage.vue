@@ -390,6 +390,7 @@
       <PlayerProfileSheet
         :player="player"
         :removable="profileRemovable"
+        :remove-blocked="profileRemoveBlocked"
         :busy="seatBusy"
         @remove="removePlayer"
         @close="player = null"
@@ -574,7 +575,7 @@ import {
 import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
 import { playingExtras } from '@/utils/export';
 import { doubledMark, resultSummary } from '@/utils/result';
-import { confirmLeave, confirmMove, confirmRemove, heldNotice, removeCost } from '@/utils/seatMove';
+import { confirmLeave, confirmMove, confirmRemove, heldNotice, removeBlocked, removeCost } from '@/utils/seatMove';
 import { setClockText, setMinutesShort } from '@/utils/setClock';
 import { boardPosition, currentSet, runningSet, setLabel } from '@/utils/sets';
 import { reviewChoices } from '@/utils/review';
@@ -1054,6 +1055,15 @@ const profileRemovable = computed(() => {
   const current = table.value;
   const held = current?.seats.find((s) => s.user_id === player.value?.id);
   return !!current && !!held && canRemove(current, held.user, auth.user);
+});
+
+// ...but not while the set is running (#190, bb#147): Remove greyed out,
+// with the reason. An admin still may, as may anyone a robot of an
+// unattended table.
+const profileRemoveBlocked = computed(() => {
+  const current = table.value;
+  const held = current?.seats.find((s) => s.user_id === player.value?.id);
+  return !!current && !!held && removeBlocked(current, playing.value, held.user, auth.user);
 });
 
 // A seat being taken, filled or emptied: one at a time.
@@ -2059,11 +2069,16 @@ async function closeOverlays() {
 
 // A manager takes a player out from their profile sheet (#181; anyone a
 // robot of an unattended table). The sheet closes before the confirmation,
-// which is inside the try, so nothing fails unseen (#121).
+// which is inside the try, so nothing fails unseen (#121). Never mid-set
+// (#190): the sheet's Remove is greyed out then, so nothing is asked; a set
+// that started meanwhile is the backend's 409, told like any refusal.
 async function removePlayer(target: PublicUser) {
   const current = table.value;
   const held = current?.seats.find((s) => s.user_id === target.id);
   if (!current || !held || fillingSeat.value !== null) {
+    return;
+  }
+  if (removeBlocked(current, playing.value, held.user, auth.user)) {
     return;
   }
   const { seat, user } = held;
@@ -2086,7 +2101,8 @@ async function removePlayer(target: PublicUser) {
       ionRouter.navigate('/login', 'root', 'replace');
       return;
     }
-    // 403: we no longer manage the table. 404: they already left.
+    // 403: we no longer manage the table. 404: they already left. 409: a
+    // set started meanwhile.
     logUnexpected(e);
     showToast(errorMessage(e, 'Could not remove that player. Please try again.'), 'danger');
     await tablesStore.loadTable(tableId.value).catch(() => {

@@ -267,7 +267,17 @@ The user's standing rule (#91): **no task may leave code coverage under
   `PlayerProfileSheet` (`removable` = `profileRemovable`, `canRemove` for
   a player seated there; `remove` → the page's `removePlayer`:
   `closeOverlays`, `confirmRemove` + `removeCost` inside the `try`, a
-  deleted table → `/tables`). The
+  deleted table → `/tables`). **No Remove mid-set** (#190, bb#147):
+  `removeBlocked(table, playing, user, viewer)` in `src/utils/seatMove.ts`
+  (not beside `canRemove`: `utils/sets.ts` imports `services/tables.ts`)
+  is true when `canRemove` allows it but `runningSet()` is set, except an
+  admin viewer and a robot of an unattended table; the page's
+  `profileRemoveBlocked` → the sheet's `removeBlocked`: Remove greyed
+  (`is-locked`, `color="medium"`, `aria-disabled`, never emits `remove`),
+  a tap or mouse hover toggling a `usePopover` `.profile-remove-note`
+  (`role="tooltip"`, `v-show`, the button's `aria-describedby`) with
+  `REMOVE_BLOCKED_TEXT`, closed when it unblocks; `removePlayer` returns
+  without asking for a blocked one, and a 409 is toasted + `loadTable`. The
   channel payload is typed `BroadcastTable`, `Table` adds `can_manage`.
   "Seat a player" opens `src/components/SeatPlayerSheet.vue`, a search over
   `GET /users?search=` (`searchUsers` in `src/services/users.ts`) through

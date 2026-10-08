@@ -50,19 +50,47 @@
           </ion-button>
         </template>
 
-        <!-- The page confirms and sends it (canRemove said it may). -->
-        <ion-button
+        <!-- The page confirms and sends it (canRemove said it may). Mid-set
+             it is greyed out (`removeBlocked`, #190): tapped or hovered, it
+             says why in a small pop-up above it (usePopover), which is also
+             its description for a screen reader, and removes nobody. -->
+        <div
           v-if="removable"
-          expand="block"
-          color="danger"
-          fill="outline"
-          class="profile-remove"
-          :disabled="busy"
-          @click="emit('remove', player!)"
+          ref="root"
+          class="profile-remove-peek"
+          @pointerenter="removeBlocked && hover(true, $event)"
+          @pointerleave="hover(false, $event)"
         >
-          <ion-spinner v-if="busy" name="crescent" />
-          <span v-else>Remove from the table</span>
-        </ion-button>
+          <ion-button
+            :ref="setButton"
+            expand="block"
+            :color="removeBlocked ? 'medium' : 'danger'"
+            fill="outline"
+            class="profile-remove"
+            :class="{ 'is-locked': removeBlocked }"
+            :disabled="busy && !removeBlocked"
+            :aria-disabled="removeBlocked ? 'true' : undefined"
+            :aria-describedby="removeBlocked ? noteId : undefined"
+            :aria-expanded="removeBlocked ? open : undefined"
+            @click="tapRemove"
+          >
+            <ion-spinner v-if="busy && !removeBlocked" name="crescent" />
+            <span v-else>Remove from the table</span>
+          </ion-button>
+          <!-- Always there while blocked, so the button's aria-describedby
+               finds it; shown only while open. -->
+          <span
+            v-if="removeBlocked"
+            v-show="open"
+            :id="noteId"
+            ref="popup"
+            class="profile-remove-note"
+            role="tooltip"
+            :style="{ '--nudge': `${nudge}px`, '--drop': `${drop}px` }"
+          >
+            <span class="profile-remove-box">{{ REMOVE_BLOCKED_TEXT }}</span>
+          </span>
+        </div>
 
         <!-- A robot has no page of its own: nothing more to see there. -->
         <ion-button v-if="!gone && !shown.is_robot" expand="block" fill="outline" @click="openPage">
@@ -74,28 +102,32 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue';
+import { nextTick, ref, useId, watch } from 'vue';
 import { IonModal, IonContent, IonButton, IonSpinner, IonText, useIonRouter } from '@ionic/vue';
 import BanUserForm from '@/components/BanUserForm.vue';
 import AdminBadge from '@/components/AdminBadge.vue';
 import PlayerAvatar from '@/components/PlayerAvatar.vue';
 import PlayerStats from '@/components/PlayerStats.vue';
 import RobotBadge from '@/components/RobotBadge.vue';
+import { usePopover } from '@/composables/usePopover';
 import { useAuthStore } from '@/stores/auth';
 import { useUsersStore } from '@/stores/users';
 import type { PublicUser } from '@/services/users';
 import { banDate, canBan } from '@/utils/ban';
 import { errorMessage, statusOf } from '@/utils/errors';
+import { REMOVE_BLOCKED_TEXT } from '@/utils/seatMove';
 
 const props = withDefaults(
   defineProps<{
     player: PublicUser | null;
     // The viewer may take this player out of the table (canRemove).
     removable?: boolean;
+    // ...but not now: the set is running (removeBlocked, #190).
+    removeBlocked?: boolean;
     // That removal on its way.
     busy?: boolean;
   }>(),
-  { removable: false, busy: false },
+  { removable: false, removeBlocked: false, busy: false },
 );
 const emit = defineEmits<{ close: []; remove: [player: PublicUser] }>();
 
@@ -112,6 +144,33 @@ const gone = ref(false);
 // An admin has the ban form open.
 const banning = ref(false);
 const stats = ref<InstanceType<typeof PlayerStats> | null>(null);
+
+const { root, button, popup, open, nudge, drop, hover, toggle, close } = usePopover();
+const noteId = `remove-blocked-${useId()}`;
+
+// The ion-button's element, for the pop-up's Escape to give focus back to.
+function setButton(el: unknown) {
+  button.value = (el as { $el?: HTMLElement } | null)?.$el ?? null;
+}
+
+// Blocked, a tap says why; else the page confirms and removes.
+function tapRemove() {
+  if (props.removeBlocked) {
+    toggle();
+  } else if (props.player) {
+    emit('remove', props.player);
+  }
+}
+
+// The set is over (or another player opened): nothing left to explain.
+watch(
+  () => [props.removeBlocked, props.player] as const,
+  ([blocked]) => {
+    if (!blocked) {
+      close();
+    }
+  },
+);
 
 watch(
   () => props.player,
@@ -247,8 +306,44 @@ function openPage() {
 
 .ban-form,
 .ban-open,
-.profile-remove {
+.profile-remove-peek {
   margin-bottom: 12px;
+}
+
+.profile-remove-peek {
+  position: relative;
+}
+
+/* Mid-set: grey like a disabled outline button, but it still answers a tap. */
+.profile-remove.is-locked {
+  --border-color: var(--bridge-line);
+  --color: var(--bridge-disabled-text);
+  --ion-color-base: var(--bridge-disabled-text);
+  cursor: help;
+}
+
+/* Above the button; kept clear of the screen's edges. */
+.profile-remove-note {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  z-index: 30;
+  box-sizing: border-box;
+  width: min(280px, calc(100vw - 16px));
+  padding-bottom: 8px;
+  transform: translate(calc(-50% + var(--nudge, 0px)), var(--drop, 0px));
+}
+
+.profile-remove-box {
+  display: block;
+  padding: 10px 12px;
+  border-radius: var(--bridge-radius-button);
+  background: var(--bridge-popup);
+  color: var(--bridge-on-popup);
+  box-shadow: 0 4px 16px var(--bridge-shadow-strong);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  text-align: left;
 }
 
 /* The sheet's buttons: Daylight's 48 px, side by side with room. */

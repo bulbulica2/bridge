@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/108-board-number-in-set`._
+_Status as of branch `bulbulica2/109-no-remove-mid-set`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -474,15 +474,21 @@ table**. Leave and Remove close the review, the profile sheet, a phone's
 chat sheet and any other sheet before asking; a failure is toasted and
 logged, never silent.
 
-**Players and Remove** (#24, #16, #77, #181). Tapping a player's name on
-the table opens their profile sheet. For a manager (`can_manage`: the
-moderator or an admin, bb#74) it has **Remove from the table** for
+**Players and Remove** (#24, #16, #77, #181, #190). Tapping a player's
+name on the table opens their profile sheet. For a manager (`can_manage`:
+the moderator or an admin, bb#74) it has **Remove from the table** for
 everyone but yourself, confirmed first; an **admin**'s seat only for
 another admin, never the moderator (bb#78); while only robots sit at a
-table (`unattended_since`), anyone may remove a robot. A 403 or 404 toasts
-the backend's reason and reads the table again; removing the last robot of
-an unattended table deletes it and goes back to `/tables`. Nothing on the
-table itself removes anybody.
+table (`unattended_since`), anyone may remove a robot. **Not while the
+set is running** (#190, bb#147: a board on, or between the boards of a
+set): the button stays but greyed out (`aria-disabled`), and a tap or a
+mouse hover shows "They're still playing: you can remove a player once
+the set is over." above it instead of asking; it turns normal as soon as
+the set is over. An admin still removes mid-set (to stop cheating), and
+anyone still removes a robot of an unattended table. A 403, 404 or 409 (a
+set that started meanwhile) toasts the backend's reason and reads the
+table again; removing the last robot of an unattended table deletes it
+and goes back to `/tables`. Nothing on the table itself removes anybody.
 
 What it shows by phase:
 - **waiting**: the table itself is the waiting room (below, **Before a
@@ -1044,7 +1050,7 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans), bb#
 | `BanUserForm` | User profile, profile sheet (admins) | `users.ban()` → `POST /users/{id}/ban` |
 | `AppMenu` | the app shell | none (reads the auth store; **Your table** first while seated, via `useYourTable`) |
 | `BoardReview` | Board review, Play (`BoardReviewModal`) | none (given the review from `history.loadReview`) |
-| `PlayerProfileSheet` | Tables, Play, Board review; headed by the player's avatar (#163) | `users.load()` → `GET /users/{id}`; one line of stats ("48 boards · 65 % won · avg 56.0 %", none for a robot) via `PlayerStats` → `GET /users/{id}/stats`; **Ban** for admins (`BanUserForm`); at the game table a manager's **Remove from the table** (`removable`, the page sends it, #181) |
+| `PlayerProfileSheet` | Tables, Play, Board review; headed by the player's avatar (#163) | `users.load()` → `GET /users/{id}`; one line of stats ("48 boards · 65 % won · avg 56.0 %", none for a robot) via `PlayerStats` → `GET /users/{id}/stats`; **Ban** for admins (`BanUserForm`); at the game table a manager's **Remove from the table** (`removable`, the page sends it, #181), greyed out mid-set with the reason in a pop-up (`removeBlocked`, #190) |
 | `PlayerStats` | User profile, Account, profile sheet (one line) | `users.loadStats()` → `GET /users/{id}/stats` or `GET /api/user/stats` (#131) |
 | `PlayerAvatar` | profile sheet, each search result (#163) | none |
 | `StartBox` | Play (the table's centre while the next board waits for Start, #181): the waiting line, **Start** / **Cancel**, the Start timer's countdown | none (the page sends Start; reads `ready` / `start_deadline` from the table) |
