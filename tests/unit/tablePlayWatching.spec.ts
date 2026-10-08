@@ -1,9 +1,7 @@
-import { VueWrapper, flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonActionSheet } from '@ionic/vue'
-import type { ActionSheetButton } from '@ionic/vue'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import AuctionHistory from '@/components/AuctionHistory.vue'
 import BoardResultDialog from '@/components/BoardResultDialog.vue'
@@ -230,10 +228,6 @@ async function mountPage(table: Table, state: Playing | Error = watched()) {
   return wrapper
 }
 
-function sheetButtons(wrapper: VueWrapper) {
-  return wrapper.findComponent(IonActionSheet).props('buttons') as ActionSheetButton[]
-}
-
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
@@ -390,14 +384,15 @@ describe('sitting down', () => {
 
     await wrapper.get('.bridge-table [data-seat="W"] .seat-empty-button').trigger('click')
     await flushPromises()
-    const buttons = sheetButtons(wrapper)
-    expect(buttons.map((b) => b.text)).toEqual(['Sit here · West', 'Cancel'])
+    // The same menu at the plate as for a player (#192).
+    const buttons = wrapper.findAll('.bridge-table .seat-menu[data-seat="W"] [role="menuitem"]')
+    expect(buttons.map((b) => b.text())).toEqual(['Sit here'])
 
     const joined = makeTable(['N', 'E', 'S'], { board_id: null })
     joined.seats.push({ ...joined.seats[0], id: 9, user_id: 9, seat: 'W', user: { ...PLAYERS.W, id: 9, username: 'zed' } })
     joined.free_seats = []
     vi.mocked(tablesService.joinSeat).mockResolvedValue(joined)
-    await buttons[0].handler!()
+    await buttons[0].trigger('click')
     await flushPromises()
 
     expect(tablesService.joinSeat).toHaveBeenCalledWith(5, 'W')

@@ -2,8 +2,7 @@ import { VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonActionSheet, IonRefresher } from '@ionic/vue'
-import type { ActionSheetButton } from '@ionic/vue'
+import { IonRefresher } from '@ionic/vue'
 import { pullToRefresh } from './ionEvents'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import BiddingBox from '@/components/BiddingBox.vue'
@@ -11,6 +10,7 @@ import BoardReviewModal from '@/components/BoardReviewModal.vue'
 import ClaimAnswerDialog from '@/components/ClaimAnswerDialog.vue'
 import PlayerProfileSheet from '@/components/PlayerProfileSheet.vue'
 import BoardResultDialog from '@/components/BoardResultDialog.vue'
+import SeatMenu from '@/components/SeatMenu.vue'
 import SeatPlayerSheet from '@/components/SeatPlayerSheet.vue'
 import StartBox from '@/components/StartBox.vue'
 import * as gameService from '@/services/game'
@@ -198,25 +198,29 @@ async function emitFrom(wrapper: VueWrapper, component: object, event: string, .
   await flushPromises()
 }
 
-// An empty seat's action sheet (#181): open it by tapping the seat, press
-// one of its buttons as Ionic would (the handler).
-function sheet(wrapper: VueWrapper) {
-  return wrapper.findComponent(IonActionSheet)
+// An empty seat's menu at its plate (#181, #192): open it by tapping the
+// seat, press one of its options.
+function menu(wrapper: VueWrapper) {
+  return wrapper.findComponent(SeatMenu)
 }
 
-function sheetButtons(wrapper: VueWrapper) {
-  return (sheet(wrapper).props('buttons') as ActionSheetButton[]).map((b) => b.text)
+function menuItems(wrapper: VueWrapper) {
+  return menu(wrapper).findAll('[role="menuitem"]').map((b) => b.text())
+}
+
+function plate(wrapper: VueWrapper, seat: Seat) {
+  return wrapper.get(`.bridge-table [data-seat="${seat}"] .seat-empty-button`)
 }
 
 async function openSeat(wrapper: VueWrapper, seat: Seat) {
-  await wrapper.get(`.bridge-table [data-seat="${seat}"] .seat-empty-button`).trigger('click')
+  await plate(wrapper, seat).trigger('click')
   await flushPromises()
 }
 
 async function pressButton(wrapper: VueWrapper, text: string) {
-  const button = (sheet(wrapper).props('buttons') as ActionSheetButton[]).find((b) => b.text === text)
+  const button = menu(wrapper).findAll('[role="menuitem"]').find((b) => b.text() === text)
   expect(button, text).toBeDefined()
-  await button!.handler!()
+  await button!.trigger('click')
   await flushPromises()
 }
 
@@ -761,7 +765,7 @@ describe('TablePlayPage claims and Start', () => {
 })
 
 // Left alone after the other three were freed (#117): a manager fills the
-// empty seats from the table itself, an empty seat's action sheet (#181).
+// empty seats from the table itself, an empty seat's menu (#181, #192).
 describe('TablePlayPage filling empty seats', () => {
   const waiting = () => auction({ phase: 'waiting', board: null, turn: null, acting_user_id: null, hand: [] })
 
@@ -781,24 +785,47 @@ describe('TablePlayPage filling empty seats', () => {
 
   const robot = { id: 90, name: 'Robot', username: 'robot-1', description: null, is_robot: true }
 
-  test('each empty seat on the table opens its action sheet; a manager may fill it', async () => {
+  test('each empty seat on the table opens its menu at its plate; a manager may fill it', async () => {
     const wrapper = await mountPage(waiting(), alone(true))
 
     const empty = wrapper.findAll('.bridge-table .seat-empty-button')
     expect(empty.map((b) => b.text())).toEqual(['Empty · North', 'Empty · West', 'Empty · East'])
-    expect(sheet(wrapper).props('isOpen')).toBe(false)
+    expect(empty.map((b) => b.attributes('aria-haspopup'))).toEqual(['menu', 'menu', 'menu'])
+    expect(wrapper.find('.seat-menu').exists()).toBe(false)
+    // No action sheet any more (#192).
+    expect(wrapper.find('ion-action-sheet').exists()).toBe(false)
 
     await openSeat(wrapper, 'E')
-    expect(sheet(wrapper).props('isOpen')).toBe(true)
-    expect(sheet(wrapper).props('header')).toBe('East is free')
+    expect(menu(wrapper).props()).toMatchObject({
+      seat: 'E',
+      anchor: plate(wrapper, 'E').element,
+      side: 'right',
+      moveHere: true,
+      canManage: true,
+    })
+    // Inside the table, so the table doesn't move.
+    expect(wrapper.find('.bridge-table .seat-menu-layer .seat-menu').exists()).toBe(true)
+    expect(menu(wrapper).get('.seat-menu-title').text()).toBe('East is free')
+    expect(plate(wrapper, 'E').attributes('aria-expanded')).toBe('true')
+    expect(plate(wrapper, 'N').attributes('aria-expanded')).toBe('false')
     // We sit here already: moving is a seat change.
-    expect(sheetButtons(wrapper)).toEqual(['Move here · East', 'Seat a player', 'Add robot', 'Cancel'])
+    expect(menuItems(wrapper)).toEqual(['Move here', 'Seat a player…', 'Add robot'])
 
-    // Dismissed (an action sheet is presented through Ionic's controller,
-    // which the wrapper hears and re-emits as didDismiss): closed again.
-    sheet(wrapper).vm.$emit('didDismiss')
+    // Another empty seat: the menu moves there.
+    await openSeat(wrapper, 'N')
+    expect(menu(wrapper).props()).toMatchObject({ seat: 'N', side: 'top', anchor: plate(wrapper, 'N').element })
+    expect(plate(wrapper, 'E').attributes('aria-expanded')).toBe('false')
+
+    // The same seat again closes it.
+    await openSeat(wrapper, 'N')
+    expect(wrapper.find('.seat-menu').exists()).toBe(false)
+
+    // Escape closes it too.
+    await openSeat(wrapper, 'W')
+    expect(menu(wrapper).props('side')).toBe('left')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
-    expect(sheet(wrapper).props('isOpen')).toBe(false)
+    expect(wrapper.find('.seat-menu').exists()).toBe(false)
   })
 
   test('nobody else gets Seat a player and Add robot', async () => {
@@ -806,7 +833,41 @@ describe('TablePlayPage filling empty seats', () => {
 
     await openSeat(wrapper, 'N')
 
-    expect(sheetButtons(wrapper)).toEqual(['Move here · North', 'Cancel'])
+    expect(menuItems(wrapper)).toEqual(['Move here'])
+  })
+
+  test('the menu closes once its seat is taken meanwhile', async () => {
+    const table = alone(true)
+    const wrapper = await mountPage(waiting(), table)
+    await openSeat(wrapper, 'N')
+    expect(wrapper.find('.seat-menu').exists()).toBe(true)
+
+    // Another seat taken: still open.
+    vi.mocked(tablesService.getTable).mockResolvedValue(withSeat(table, 'E', robot))
+    await useTablesStore().loadTable(5)
+    await flushPromises()
+    expect(wrapper.find('.seat-menu').exists()).toBe(true)
+
+    vi.mocked(tablesService.getTable).mockResolvedValue(withSeat(withSeat(table, 'E', robot), 'N', robot))
+    await useTablesStore().loadTable(5)
+    await flushPromises()
+    expect(wrapper.find('.seat-menu').exists()).toBe(false)
+  })
+
+  test('the menu closes before a confirmation, as the sheets do', async () => {
+    const wrapper = await mountPage(waiting(), alone(true))
+    await openSeat(wrapper, 'N')
+    let openWhenAsked: unknown = null
+    vi.mocked(confirmLeave).mockImplementation(async () => {
+      openWhenAsked = wrapper.find('.seat-menu').exists()
+      return false
+    })
+
+    await wrapper.get('.leave-table').trigger('click')
+    await flushPromises()
+
+    expect(confirmLeave).toHaveBeenCalled()
+    expect(openWhenAsked).toBe(false)
   })
 
   test('Add robot seats one and says so', async () => {
@@ -827,9 +888,11 @@ describe('TablePlayPage filling empty seats', () => {
 
     await press(wrapper, 'N', 'Add robot')
     expect(wrapper.get('.bridge-table [data-seat="E"] .seat-empty-button').attributes('disabled')).toBeDefined()
-    // The sheet still open: its buttons wait too.
-    await pressButton(wrapper, 'Add robot')
-    await pressButton(wrapper, 'Move here · North')
+    // Picked, the menu closed; anything else asked of it waits too.
+    expect(wrapper.find('.seat-menu').exists()).toBe(false)
+    menu(wrapper).vm.$emit('robot', 'E')
+    menu(wrapper).vm.$emit('sit', 'E')
+    await flushPromises()
 
     expect(tablesService.seatRobot).toHaveBeenCalledTimes(1)
     expect(tablesService.joinSeat).not.toHaveBeenCalled()
@@ -841,7 +904,7 @@ describe('TablePlayPage filling empty seats', () => {
     const ann = { id: 1, name: 'Ann', username: 'ann', seated: false }
     vi.mocked(tablesService.seatUser).mockResolvedValue(withSeat(table, 'E', PLAYERS.N))
 
-    await press(wrapper, 'E', 'Seat a player')
+    await press(wrapper, 'E', 'Seat a player…')
     expect(wrapper.findComponent(SeatPlayerSheet).props('seat')).toBe('E')
     await emitFrom(wrapper, SeatPlayerSheet, 'select', ann)
 
@@ -858,7 +921,7 @@ describe('TablePlayPage filling empty seats', () => {
       seats: table.seats.map((s) => ({ ...s, seat: 'W' as Seat })),
     })
 
-    await press(wrapper, 'W', 'Seat a player')
+    await press(wrapper, 'W', 'Seat a player…')
     await emitFrom(wrapper, SeatPlayerSheet, 'select', { id: 3, name: 'Cy', username: 'cy', seated: true })
 
     expect(tablesService.joinSeat).toHaveBeenCalledWith(5, 'W')
@@ -872,7 +935,7 @@ describe('TablePlayPage filling empty seats', () => {
     vi.mocked(tablesService.joinSeat).mockResolvedValue(moved)
     vi.mocked(tablesService.getTable).mockResolvedValue(moved)
 
-    await press(wrapper, 'W', 'Move here · West')
+    await press(wrapper, 'W', 'Move here')
 
     expect(tablesService.joinSeat).toHaveBeenCalledWith(5, 'W')
     // Asked nothing: a seat change at this table costs nothing.
@@ -888,7 +951,7 @@ describe('TablePlayPage filling empty seats', () => {
     vi.mocked(tablesService.getTable).mockClear()
     vi.mocked(tablesService.joinSeat).mockRejectedValue(axiosError(409, 'That seat is taken.'))
 
-    await press(wrapper, 'N', 'Move here · North')
+    await press(wrapper, 'N', 'Move here')
 
     expect(showToast).toHaveBeenCalledWith('That seat is taken.', 'danger')
     expect(tablesService.getTable).toHaveBeenCalledWith(5)
@@ -898,7 +961,7 @@ describe('TablePlayPage filling empty seats', () => {
   test('a pick after the search closed seats nobody', async () => {
     const wrapper = await mountPage(waiting(), alone(true))
 
-    await press(wrapper, 'E', 'Seat a player')
+    await press(wrapper, 'E', 'Seat a player…')
     await emitFrom(wrapper, SeatPlayerSheet, 'close')
     await emitFrom(wrapper, SeatPlayerSheet, 'select', { id: 1, name: 'Ann', username: 'ann', seated: false })
 
@@ -922,7 +985,7 @@ describe('TablePlayPage filling empty seats', () => {
     vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
     vi.mocked(tablesService.seatUser).mockRejectedValue(axiosError(403, 'You do not manage this table.'))
 
-    await press(wrapper, 'N', 'Seat a player')
+    await press(wrapper, 'N', 'Seat a player…')
     await emitFrom(wrapper, SeatPlayerSheet, 'select', { id: 1, name: 'Ann', username: 'ann', seated: false })
 
     expect(showToast).toHaveBeenCalledWith('You do not manage this table.', 'danger')
@@ -935,7 +998,7 @@ describe('TablePlayPage filling empty seats', () => {
     vi.mocked(tablesService.getTable).mockRejectedValue(new Error('offline'))
     vi.mocked(tablesService.joinSeat).mockRejectedValue(new Error('offline'))
 
-    await press(wrapper, 'N', 'Move here · North')
+    await press(wrapper, 'N', 'Move here')
 
     expect(showToast).toHaveBeenCalledWith('Could not take that seat. Please try again.', 'danger')
     expect(wrapper.findComponent(StartBox).exists()).toBe(true)
@@ -948,7 +1011,7 @@ describe('TablePlayPage filling empty seats', () => {
     vi.mocked(tablesService.joinSeat).mockRejectedValue(axiosError(401))
 
     await press(wrapper, 'N', 'Add robot')
-    await press(wrapper, 'E', 'Move here · East')
+    await press(wrapper, 'E', 'Move here')
 
     expect(navigate).toHaveBeenCalledTimes(2)
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')

@@ -7,7 +7,7 @@
        none). The seat on turn is ringed orange, an away seat's plate is red
        with its clock ("away · 0:42", AwaySeatTag), a seat that pressed
        Start (`ready`) has a green tick and an empty one is dashed (a
-       button with `seatable`, the `empty` event). Once a
+       button with `seatable`, the `empty` event, its menu at the plate). Once a
        board is dealt each seat is striped red when its side is vulnerable
        and green when it is not. During the auction each seat's last call
        sits by its plate (`calls`), an opponent's alerted one with the amber
@@ -137,14 +137,17 @@
         </div>
         <!-- An empty seat, a button where the page offers to fill it
              (`seatable`: the waiting table's Sit here / Seat a player / Add
-             robot, #181). -->
+             robot, #181), in a menu opened at this plate (`empty` with the
+             plate and its side, the `menu` slot, #192). -->
         <button
           v-else-if="seatable"
           type="button"
           class="seat-empty seat-empty-button"
           :aria-label="`Empty seat, ${SEAT_NAMES[seatOn[side]]}`"
+          aria-haspopup="menu"
+          :aria-expanded="menuSeat === seatOn[side] ? 'true' : 'false'"
           :disabled="busy"
-          @click="emit('empty', seatOn[side])"
+          @click="emit('empty', seatOn[side], $event.currentTarget as HTMLElement, side)"
         >
           Empty · {{ SEAT_NAMES[seatOn[side]] }}
         </button>
@@ -228,6 +231,9 @@
       </template>
       <slot v-else />
     </div>
+
+    <!-- Laid over the whole table (SeatMenu's layer): an empty seat's menu. -->
+    <slot name="menu" />
   </div>
 </template>
 
@@ -313,6 +319,8 @@ const props = withDefaults(
     // Each empty seat is a button (the `empty` event) the page answers with
     // what may be done with it.
     seatable?: boolean;
+    // The empty seat whose menu is open (its plate says so).
+    menuSeat?: Seat | null;
     busy?: boolean;
     sendingId?: number | null;
   }>(),
@@ -339,12 +347,17 @@ const props = withDefaults(
     wide: false,
     bottomRightRoom: false,
     seatable: false,
+    menuSeat: null,
     busy: false,
     sendingId: null,
   },
 );
 
-const emit = defineEmits<{ select: [user: PublicUser]; play: [card: Card]; empty: [seat: Seat] }>();
+const emit = defineEmits<{
+  select: [user: PublicUser];
+  play: [card: Card];
+  empty: [seat: Seat, plate: HTMLElement, side: ScreenSide];
+}>();
 
 const SIDES: ScreenSide[] = ['top', 'left', 'right', 'bottom'];
 const CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;

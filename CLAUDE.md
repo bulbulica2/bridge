@@ -268,10 +268,26 @@ The user's standing rule (#91): **no task may leave code coverage under
   retries `CAN_MANAGE_RETRIES` (3) times `CAN_MANAGE_RETRY_MS` (3 s) apart
   while the table is watched (#117). On the play page (#181) an empty
   seat is `BridgeTable`'s `seatable` button (`.seat-empty-button`,
-  `empty` event → `seatMenu`), opening an `ion-action-sheet`
-  (`seatMenuButtons`: "Sit here · West" / "Move here · West" → `sit()`,
-  `confirmMove` off another table, then `load()`; for `can_manage` also
-  "Seat a player" → `seatingAt` / "Add robot"), the fills run by the
+  `aria-haspopup="menu"`, `aria-expanded` from `menuSeat`; `empty`
+  event `(seat, plate, side)` → `openSeatMenu`: `seatMenu` `{seat,
+  plate, side}`, the same seat again closes it, another moves it),
+  opening `SeatMenu.vue` at that plate (#192, no action sheet), drawn in
+  `BridgeTable`'s `menu` slot as an absolute `.seat-menu-layer` over the
+  whole table (z-index 40, above the corners), so the table never moves;
+  `placeSeatMenu` (`src/utils/seatMenu.ts`) puts it below the top seat,
+  above the bottom one, inside a side seat (West's to its right, East's
+  to its left; below when there is no room beside it), centred on the
+  plate, kept 8 px off the screen's edges, its arrow (`--arrow`) on the
+  plate; placed after measuring (`is-placed`), again on `resize`. Its
+  content: "North is free" (the `role="menu"`'s `aria-labelledby`), 44 px
+  `menuitem`s **Sit here** / **Move here** (`moveHere` = `seatedHere`) →
+  `sit()`, `confirmMove` off another table, then `load()`; for
+  `can_manage` also **Seat a player…** → `seatingAt` / **Add robot** →
+  `addRobot`. Focus goes to the first option; arrows/Home/End move, a
+  pick or Escape closes and refocuses the plate, Tab or a pointerdown
+  outside (not on the plate) closes. The page's watch closes it once the
+  seat is taken (a `TableUpdated`, `loadTable`) or nothing is seatable;
+  `closeOverlays` and leaving the view close it too. The fills run by the
   page's `fillSeat` (picking yourself is a `join`; a refusal toasts and
   `loadTable`s, 401 → login) with its own `SeatPlayerSheet` (#117), one
   at a time (`fillingSeat`, `seatBusy`). Remove is in
@@ -305,7 +321,7 @@ The user's standing rule (#91): **no task may leave code coverage under
   but deals nothing, so the page goes to `/tables/:id/play`, where the
   creator's Start deals (robots are always ready); a manager adds one
   with the store's `seatRobot(id, seat)` ("Add robot" in an empty seat's
-  action sheet).
+  menu).
   The backend moves them (a queued job per `PlayingUpdated`, about 1 s
   apart; `queue:work` must run) through the same rules as a human, so the
   SPA only shows them: a robot's icon as the avatar on every plate

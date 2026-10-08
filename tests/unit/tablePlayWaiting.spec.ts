@@ -2,8 +2,6 @@ import { VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
-import { IonActionSheet } from '@ionic/vue'
-import type { ActionSheetButton } from '@ionic/vue'
 import { pickSegment } from './ionEvents'
 import TablePlayPage from '@/views/TablePlayPage.vue'
 import StartBox from '@/components/StartBox.vue'
@@ -185,14 +183,11 @@ function timed(table: Table, seat: Seat, deadline: string): Table {
   return { ...table, seats: table.seats.map((s) => (s.seat === seat ? { ...s, start_deadline: deadline } : s)) }
 }
 
-function sheetButtons(wrapper: VueWrapper) {
-  return wrapper.findComponent(IonActionSheet).props('buttons') as ActionSheetButton[]
-}
-
+// An empty seat's menu at its plate (#192): tap the seat, then the option.
 async function press(wrapper: VueWrapper, seat: Seat, text: string) {
   await wrapper.get(`.bridge-table [data-seat="${seat}"] .seat-empty-button`).trigger('click')
   await flushPromises()
-  await sheetButtons(wrapper).find((b) => b.text === text)!.handler!()
+  await wrapper.findAll('.seat-menu [role="menuitem"]').find((b) => b.text() === text)!.trigger('click')
   await flushPromises()
 }
 
@@ -439,7 +434,7 @@ describe('somebody not seated here', () => {
     expect(wrapper.find('.unattended').exists()).toBe(false)
 
     vi.mocked(confirmMove).mockResolvedValue(false)
-    await press(wrapper, 'S', 'Sit here · South')
+    await press(wrapper, 'S', 'Sit here')
     expect(confirmMove).toHaveBeenCalled()
     expect(tablesService.joinSeat).not.toHaveBeenCalled()
 
@@ -448,7 +443,7 @@ describe('somebody not seated here', () => {
     vi.mocked(tablesService.joinSeat).mockResolvedValue(makeTable(TWO_HUMANS))
     vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(TWO_HUMANS)])
     vi.mocked(gameService.getPlaying).mockResolvedValue(waiting())
-    await press(wrapper, 'S', 'Sit here · South')
+    await press(wrapper, 'S', 'Sit here')
 
     expect(tablesService.joinSeat).toHaveBeenCalledWith(5, 'S')
     expect(wrapper.find('.not-seated').exists()).toBe(false)
@@ -460,7 +455,7 @@ describe('somebody not seated here', () => {
     vi.mocked(tablesService.joinSeat).mockResolvedValue(makeTable(TWO_HUMANS))
     vi.mocked(gameService.getPlaying).mockResolvedValue(waiting())
 
-    await press(wrapper, 'S', 'Sit here · South')
+    await press(wrapper, 'S', 'Sit here')
 
     expect(confirmMove).not.toHaveBeenCalled()
     expect(tablesService.joinSeat).toHaveBeenCalledWith(5, 'S')

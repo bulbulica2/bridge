@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/113-bridge4u-name`._
+_Status as of branch `bulbulica2/111-seat-menu-at-the-seat`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -719,11 +719,15 @@ their seats, or a set over), the game table shows it on the table itself:
   Tables (the backend's `UnseatedFromTable`, or the `TableUpdated` that
   frees the seat, whichever comes first).
 - **An empty seat** is a dashed **Empty · West** button: tapping it
-  opens a small action sheet with **Sit here · West** (**Move here ·
-  West** when you sit here already; moving off another table asks first)
-  and, for a manager, **Seat a player** (a search over all users, robots
-  never listed) and **Add robot**. A refusal is toasted and the table
-  read again.
+  opens a small menu right at that seat, pointing at it (#192: below
+  North, above South, to the inside of West and East, never off the
+  screen, laid over the table so nothing moves): "West is free", then
+  **Sit here** (**Move here** when you sit here already; moving off
+  another table asks first) and, for a manager, **Seat a player…** (a
+  search over all users, robots never listed) and **Add robot**. A tap
+  outside, Escape or a pick closes it, as does the seat being taken
+  meanwhile; tapping another empty seat moves it there. A refusal is
+  toasted and the table read again.
 - **The time for a set** (#143, bb#131) sits in the table's top-right
   corner while no set runs: a manager's **gear** ("⚙ 16 min") opens a
   small **Table settings** dialog with the 8 / 12 / 16 / 20 minutes
@@ -801,7 +805,7 @@ watching mode instead.
 | `game.next()` (**Deal next board**, the result dialog's vote, optional) | `POST /tables/{id}/playing/next` |
 | `tables.start()`, `tables.cancelStart()` | `POST /tables/{id}/start`, `DELETE /tables/{id}/start`; the Start that deals answers with the new board, so it is drawn without another read |
 | `tables.join()` (an empty seat's Sit here / Move here) | `POST /tables/{id}/seats` (then `GET /tables` after a move off another table, and the board read again) |
-| `tables.seatRobot()`, `tables.seatUser()` (managers, an empty seat's action sheet, #117) | `POST /tables/{id}/seats/robots`, `GET /users?search=` + `POST /tables/{id}/seats/users` (picking yourself is `tables.join()`, `POST /tables/{id}/seats`); a refusal toasts and rereads the table |
+| `tables.seatRobot()`, `tables.seatUser()` (managers, an empty seat's menu, #117, #192) | `POST /tables/{id}/seats/robots`, `GET /users?search=` + `POST /tables/{id}/seats/users` (picking yourself is `tables.join()`, `POST /tables/{id}/seats`); a refusal toasts and rereads the table |
 | `tables.removePlayer()` (the profile sheet's Remove) | `DELETE /tables/{id}/seats/{user}` |
 | `tables.updateSettings()` (the gear's dialog) | `PATCH /tables/{id}` (`set_minutes` or `allow_kibitzers`) |
 | `tables.watch()` (**Watch** when not seated), `tables.stopWatching()` (**Stop watching**) | `POST /tables/{id}/kibitzers`, `DELETE /tables/{id}/kibitzers` |
@@ -1062,7 +1066,8 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans), bb#
 | `TableSettingsDialog` | Play (the gear in the table's corner, a manager's, between sets) | none (the page sends `tables.updateSettings()` → `PATCH /tables/{id}`) |
 | `RobotBadge` | profile sheet | none (`is_robot` on the user; the plates show a robot's icon, the lobby's compass a blue seat) |
 | `AdminBadge` | Play (every plate), profile sheet, User profile | none (`is_admin` on the user, #77) |
-| `SeatPlayerSheet` | Play (managers, an empty seat's action sheet) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
+| `SeatMenu` | Play (an empty seat tapped, #192): Sit here / Move here, a manager's Seat a player… and Add robot | none (the page sits, seats or adds a robot) |
+| `SeatPlayerSheet` | Play (managers, an empty seat's menu) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
 | `SetResultsPanel` | Play (set over, under the table), Set results | none (given the set from `history.loadSet`) |
 | `SetStrip` | Play (finished board), Tables and Home (Your table) | none (the set's tiles, from `history.sets`) |
