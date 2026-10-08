@@ -3,6 +3,7 @@
     <AppHeader title="Create account" />
     <ion-content :fullscreen="true" class="ion-padding">
       <div class="bridge-form-page">
+        <p class="bridge-form-brand">{{ APP_NAME }}</p>
         <div class="bridge-form-card">
           <form class="bridge-form" @submit.prevent="submit">
             <ion-input
@@ -116,6 +117,7 @@ import {
 } from '@ionic/vue';
 import AppHeader from '@/components/AppHeader.vue';
 import { navigateAndSettle } from '@/router/loading';
+import { APP_NAME } from '@/utils/brand';
 import { formErrors } from '@/utils/errors';
 import { NAME_MAX, USERNAME_MAX } from '@/utils/limits';
 import { showWelcomeToast } from '@/utils/toast';

@@ -1,6 +1,6 @@
 # Running the frontend locally
 
-_Last verified: branch `bulbulica2/103-straight-to-the-game-table`._
+_Last verified: branch `bulbulica2/113-bridge4u-name`._
 
 Requirements: Node.js 18 or newer (Vite 5 needs it; 23 works) with npm
 (`.nvmrc` names 22, the LTS that CI uses; `nvm use` picks it up), and
@@ -257,8 +257,22 @@ renaming a job means updating that rule too.
 
 `capacitor.config.ts` declares `webDir: 'dist'`, so native apps are built
 from the production build, not the dev server: `npm run build`, then
-`npx cap sync`. No `android/` or `ios/` project has been added yet, and the
-app id is still the starter's `io.ionic.starter`.
+`npx cap sync`. No `android/` or `ios/` project has been added yet; the
+app is `Bridge4U`, id `com.bridge4u.app` (#198).
+
+## Icons and the web app manifest
+
+Everything in `public/` is served as is from the site's root (#198):
+`favicon.svg` (the B4U mark: the table navy with an orange 4) with
+`favicon.png` (64 px) as the fallback, `apple-touch-icon.png` (180 px,
+square: iOS rounds it), and `manifest.webmanifest` (`name` Bridge4U,
+`short_name` B4U, the navy `theme_color`, the ground `background_color`,
+`icon-192.png` and `icon-512.png`), linked from `index.html`, so
+Chrome's **Install app** offers Bridge4U with the B4U icon. The PNGs are
+drawn from the SVG's shapes; change the SVG and redraw them all
+together. `index.html` and the manifest spell the name out (they are
+served before any code runs); `tests/unit/brand.spec.ts` checks them
+against `src/utils/brand.ts`.
 
 Smoke test, once everything runs: http://localhost:3000 shows Home, and
 logging in as the admin lands on Account with a welcome toast.

@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/110-set-results-under-the-table`._
+_Status as of branch `bulbulica2/113-bridge4u-name`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -70,6 +70,15 @@ these components by dispatching the element's real event
 wrapper, which passes while the app is broken.
 
 ## App shell
+
+**The name** (#198): the app is **Bridge4U**, **B4U** where room is
+tight, tagline "Bridge for you": `APP_NAME`, `APP_SHORT_NAME` and
+`APP_TAGLINE` in `src/utils/brand.ts`, which the guest Home's heading,
+the menu's title, the guest forms' line above the card
+(`.bridge-form-brand` in `forms.css`) and the turn title read. Only
+`index.html` (the tab's `<title>`, the description, the icons) and
+`public/manifest.webmanifest` spell it out, being served before any
+code runs (see [`RUNNING.md`](RUNNING.md#icons-and-the-web-app-manifest)).
 
 `App.vue` wraps `AppMenu` (the left `ion-menu`) and
 `<ion-router-outlet id="main-content">` in an `ion-split-pane`
@@ -834,7 +843,8 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
   the game once.
 - **The ping**: while the tab is hidden and the board the game store
   holds waits for you, `useTurnTitle` (run by `App.vue`) sets the tab's
-  title to "● Your turn (0:42) – Bridge", and puts it back once the turn
+  title to "● Your turn (0:42) – Bridge4U" (`turnTitle`, from `APP_NAME`),
+  and puts the page's own title back once the turn
   is taken or the tab shows. The **Your table** shortcut counts it down
   too.
 - **Away**: the backend marks a player with no sign of life for a minute

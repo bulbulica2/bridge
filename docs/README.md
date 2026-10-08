@@ -1,9 +1,10 @@
-# Bridge Frontend Docs
+# Bridge4U Frontend Docs
 
 [![CI](https://github.com/bulbulica2/bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/bulbulica2/bridge/actions/workflows/ci.yml)
 
-Living documentation for the `bridge` single-page app (SPA): the Ionic Vue 3
-client that players use to log in, sit at a table, bid, play and compare
+Living documentation for **Bridge4U** ("Bridge for you", **B4U** for
+short), the `bridge` single-page app (SPA): the Ionic Vue 3 client that
+players use to log in, sit at a table, bid, play and compare
 their results. It talks to the `bridge_backend` API over HTTP (Sanctum
 session cookies) and gets live table updates over websockets (Laravel
 Reverb).
@@ -33,7 +34,10 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/104-kibitzers` (after #182, kibitzers: a table
+> branch `bulbulica2/113-bridge4u-name` (after #198, the app's name:
+> Bridge4U in the browser tab, on the guest Home, the menu and the guest
+> forms, the B4U icon, and a web app manifest so the site installs as
+> Bridge4U; after #182, kibitzers: a table
 > that allows it can be watched without a seat from the lobby's Watch,
 > read-only, and a player the Start timer unseats stays as a kibitzer;
 > after #181, one

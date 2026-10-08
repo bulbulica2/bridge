@@ -19,6 +19,7 @@ import {
   turnUrgent,
 } from '@/utils/turnClock'
 import type { TurnClock } from '@/utils/turnClock'
+import { APP_NAME } from '@/utils/brand'
 
 const NOW = Date.parse('2026-10-05T12:00:00.000Z')
 
@@ -122,7 +123,7 @@ describe('the turn clock', () => {
   })
 
   test("the tab's title", () => {
-    expect(turnTitle({ seconds: 42, mine: true, seat: 'E' }, 'Bridge')).toBe('● Your turn (0:42) – Bridge')
+    expect(turnTitle({ seconds: 42, mine: true, seat: 'E' })).toBe('● Your turn (0:42) – Bridge4U')
   })
 })
 
@@ -199,7 +200,7 @@ describe('useTurnTitle', () => {
     setActivePinia(createPinia())
     visibility = 'visible'
     vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility)
-    document.title = 'Bridge'
+    document.title = APP_NAME
     useAuthStore().user = { id: 2, name: 'Bob', username: 'bob', email: 'bob@example.com' }
   })
 
@@ -218,19 +219,19 @@ describe('useTurnTitle', () => {
     hold(state())
     const scope = effectScope()
     scope.run(() => useTurnTitle())
-    expect(document.title).toBe('Bridge')
+    expect(document.title).toBe(APP_NAME)
 
     setVisibility('hidden')
     await nextTick()
-    expect(document.title).toBe('● Your turn (0:42) – Bridge')
+    expect(document.title).toBe('● Your turn (0:42) – Bridge4U')
 
     vi.advanceTimersByTime(2000)
     await nextTick()
-    expect(document.title).toBe('● Your turn (0:40) – Bridge')
+    expect(document.title).toBe('● Your turn (0:40) – Bridge4U')
 
     setVisibility('visible')
     await nextTick()
-    expect(document.title).toBe('Bridge')
+    expect(document.title).toBe(APP_NAME)
     scope.stop()
   })
 
@@ -244,7 +245,7 @@ describe('useTurnTitle', () => {
 
     hold(state({ turn: 'S', acting_user_id: 3, turn_deadline: inSeconds(60) }))
     await nextTick()
-    expect(document.title).toBe('Bridge')
+    expect(document.title).toBe(APP_NAME)
     scope.stop()
   })
 
@@ -254,15 +255,15 @@ describe('useTurnTitle', () => {
     scope.run(() => useTurnTitle())
     setVisibility('hidden')
     await nextTick()
-    expect(document.title).toBe('Bridge')
+    expect(document.title).toBe(APP_NAME)
 
     hold(state({ turn_deadline: null }))
     await nextTick()
-    expect(document.title).toBe('Bridge')
+    expect(document.title).toBe(APP_NAME)
 
     hold(null)
     await nextTick()
-    expect(document.title).toBe('Bridge')
+    expect(document.title).toBe(APP_NAME)
     scope.stop()
   })
 
@@ -275,11 +276,11 @@ describe('useTurnTitle', () => {
     expect(document.title).toContain('Your turn')
 
     scope.stop()
-    expect(document.title).toBe('Bridge')
+    expect(document.title).toBe(APP_NAME)
     setVisibility('visible')
     setVisibility('hidden')
     await nextTick()
-    expect(document.title).toBe('Bridge')
+    expect(document.title).toBe(APP_NAME)
   })
 
   test('a page opened hidden starts out hidden', async () => {
@@ -289,7 +290,7 @@ describe('useTurnTitle', () => {
     scope.run(() => useTurnTitle())
     await nextTick()
 
-    expect(document.title).toBe('● Your turn (0:42) – Bridge')
+    expect(document.title).toBe('● Your turn (0:42) – Bridge4U')
     scope.stop()
   })
 })
