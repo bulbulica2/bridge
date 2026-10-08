@@ -121,14 +121,6 @@
             <span>Refreshing…</span>
           </div>
 
-          <!-- A set that ended mid-board (a player taken out of it): no
-               board is left on the table, but its results are. -->
-          <SetResultsPanel
-            v-if="playing.phase === 'waiting' && endedSet"
-            :set="endedSet"
-            :my-seat="mySeat"
-          />
-
           <!-- Our own seat left mid-set or marked away: opening the table
                brings us back by itself (load), this says so until the
                backend takes the mark back. -->
@@ -383,6 +375,13 @@
             </div>
           </template>
 
+          <!-- The set is over and the table waits for Start (#191): its
+               results under the table, whether it ended mid-board or on its
+               last board, until the next set's first deal. Never above the
+               table, which keeps its place from the waiting state through
+               the next deal. -->
+          <SetResultsPanel v-if="setResultsBelow" class="set-results-below" :set="endedSet!" :my-seat="mySeat" />
+
           <OfflineRefresh :table-id="tableId" :disabled="loading" @refresh="load()" />
         </template>
       </div>
@@ -462,12 +461,14 @@
           <BoardChat v-if="chatSheet" v-bind="chatProps" v-model:draft="chatDraft" v-on="chatEvents" />
         </ion-content>
       </ion-modal>
-      <!-- The finished board's result (or, after a set's last board, the
-           set's), its countdown and the vote to deal the next board now. -->
+      <!-- The finished board's result, its countdown and the vote to deal
+           the next board now. After a set's last board, the board's result
+           with no vote and a line pointing to the set's results under the
+           table. -->
       <BoardResultDialog
         :open="resultOpen"
         :result="playing?.result ?? null"
-        :set="endedSet"
+        :set-over="endedSet?.number ?? null"
         :my-seat="mySeat"
         :players="players"
         :extras="boardExtras"
@@ -1172,8 +1173,8 @@ const othersSettled = computed(() => {
   return !!id && (othersSettledFor.value === id || !!history.results[id]);
 });
 
-// The set is over and its results are in: they replace the board's result.
-// Nothing to show for a set broken off before any board was finished.
+// The set is over and its results are in. Nothing to show for a set broken
+// off before any board was finished.
 const endedSet = computed(() => {
   const results = setResults.value;
   if (!shownSet.value?.finished || !results?.finished) {
@@ -1181,6 +1182,9 @@ const endedSet = computed(() => {
   }
   return results.boards.length > 0 ? results : null;
 });
+// Under the table while it waits for the next set's Start (#191); the next
+// set's first deal ends both.
+const setResultsBelow = computed(() => endedSet.value !== null && showStart.value);
 
 // The finished board whose result the dialog shows (#174).
 const finishedId = computed(() =>
@@ -1192,8 +1196,8 @@ const resultDismissed = ref<number | null>(null);
 // The board whose dialog has waited long enough for its other tables.
 const resultWaited = ref<number | null>(null);
 // Its rows read, so it opens without jumping: the other tables, and after
-// a set's last board the set's results. Or RESULT_WAIT_MS gone by: the
-// rows still missing hold a skeleton line.
+// a set's last board the set's results (for its "Set 1 is over" line). Or
+// RESULT_WAIT_MS gone by: the rows still missing hold a skeleton line.
 const resultSettled = computed(
   () => othersSettled.value && (!shownSet.value?.finished || endedSet.value !== null),
 );
@@ -2335,6 +2339,11 @@ async function refresh(event: CustomEvent) {
 
 .my-hand {
   margin: 8px 0 16px;
+}
+
+/* A set's results under the table between sets (#191). */
+.play .set-results-below {
+  margin-top: 16px;
 }
 
 /* The table's time for a set in its top-right corner between sets: a

@@ -763,9 +763,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   nobody named by `SEAT_NAMES`), "Dealing…" when nobody is left or at 0;
   nothing else in the footer (#188: no Leave, which mid-set only marks
   the player away, and no Review, 15 s being no time for one; the
-  header's Leave and Last board do both). With `set`
-  (`endedSet`) it shows "Set results" + `SetResultsPanel`, no vote. The
-  page: `finishedId` (the finished `playing_id` with a result);
+  header's Leave and Last board do both). With `setOver`
+  (`endedSet?.number`, after a set's last board) it shows that board's
+  result like any other, no vote, plus `.dialog-set-over` "Set 1 is over:
+  its results are under the table." (#191: no `set` prop, no
+  `SetResultsPanel` in it). The page: `finishedId` (the finished `playing_id` with a result);
   `resultOpen` = `finishedId` && `viewActive` && !`reviewOpen` &&
   `resultDismissed` ≠ it && (`resultSettled` (`othersSettled`: the
   page's `loadResults` settled for the board, `othersSettledFor`, or
@@ -834,9 +836,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   read, 403/404 drop it). The play page reads it once per finished board
   and when the set ends (keyed, failures ignored: a newcomer gets 403),
   feeds the result dialog's matchpoints and, once the set is over
-  (`endedSet`), the dialog shows `SetResultsPanel.vue` instead of the
-  board (in `waiting`, for a set ended mid-board, the page shows it; the
-  same navy hero card, #162), with `StartBox` in the table's centre. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
+  (`endedSet`) and the table waits for Start (`showStart`), the page's
+  `setResultsBelow` draws `SetResultsPanel.vue` (`.set-results-below`, the
+  same navy hero card, #162) **under the table**, never above it (#191:
+  the table never moves), for a set ended mid-board or on its last board,
+  until the next set's first deal, with `StartBox` in the table's centre. `sets.ts` also has `setWinnerText`/`setWon` (from the viewer's
   side), `replacementsOf` (`?? []`), `replacedText(entry, mine)` ("East
   didn't play in time: a robot took their seat." / "You didn't play in
   time: a robot took your seat."; `SetResultsPanel` lists one per
@@ -893,8 +897,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   earlier of the move's minute and the bank's end. `src/utils/setClock.ts`:
   `bankLeft`, `setBanks(state, now)` (only `actingSeat`'s runs, and only
   while `turnDeadline` is set; `{seconds, running, low}`, `low` under
-  `SET_LOW_SECONDS` 60), `bankLabel`, `setClockText`, `timeUsedText`,
-  `timeUsedRows` (`SetResultsPanel`'s "Time used"). Running out is a
+  `SET_LOW_SECONDS` 60), `bankLabel`, `setClockText`, `setMinutesShort`.
+  No time used anywhere (#191): `SetResults.time_used` is typed, never
+  drawn. Running out is a
   replacement with reason `set_time` ("East ran out of time for the set:
   a robot took their seat.", `REPLACED_WHY` in `sets.ts`; stats' reason
   "out of time for the set").

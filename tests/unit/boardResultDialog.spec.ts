@@ -4,7 +4,7 @@ import { nextTick } from 'vue'
 import BoardResultDialog from '@/components/BoardResultDialog.vue'
 import ResultPill from '@/components/ResultPill.vue'
 import type { Bid, BoardResult } from '@/services/game'
-import type { BoardResults, DoubleDummy, SetResults } from '@/services/history'
+import type { BoardResults, DoubleDummy } from '@/services/history'
 import type { Seat } from '@/services/tables'
 import type { PublicUser } from '@/services/users'
 import { OTHER_TABLES_MAX } from '@/utils/result'
@@ -83,32 +83,6 @@ const READY: DoubleDummy = {
     S: { C: 7, D: 5, H: 6, S: 10, NT: 6 },
     W: { C: 5, D: 7, H: 6, S: 3, NT: 6 },
   },
-}
-
-function setOver(): SetResults {
-  return {
-    id: 5,
-    number: 3,
-    table_id: 9,
-    of: 4,
-    boards_dealt: 4,
-    started_at: '2026-10-08T11:00:00Z',
-    finished_at: '2026-10-08T12:00:00Z',
-    finished: true,
-    ended: 'completed',
-    replaced: [],
-    players: { N: PEOPLE.N!, E: PEOPLE.E!, S: PEOPLE.S!, W: PEOPLE.W! },
-    boards: [1, 2, 3, 4].map((position) => ({
-      ...result(),
-      position,
-      playing_id: 40 + position,
-      board: { id: position, number: position, dealer: 'N' as const, vulnerable: '' as const },
-      top: 2,
-      matchpoints: { ns: 1, ew: 1 },
-    })),
-    totals: { score: { ns: 1800, ew: -1800 }, matchpoints: { ns: 4, ew: 4 }, top: 8 },
-    winner: null,
-  }
 }
 
 const modalStub = {
@@ -202,7 +176,7 @@ describe('BoardResultDialog: the result', () => {
     expect(mountDialog({ extras: { matchpoints: { ns: 0, ew: 0 }, top: 0 } }).find('.dialog-mp').exists()).toBe(false)
   })
 
-  test('without a result or a set, only the frame', () => {
+  test('without a result, only the frame', () => {
     const wrapper = mountDialog({ result: null })
 
     expect(wrapper.find('.dialog-hero').exists()).toBe(false)
@@ -340,18 +314,35 @@ describe('BoardResultDialog: the countdown and the vote', () => {
 })
 
 describe("BoardResultDialog after a set's last board", () => {
-  test("the set's results, with no countdown and no vote", () => {
+  test("that board's result like any other, the set-over line, no countdown and no vote (#191)", () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
-    const wrapper = mountDialog({ set: setOver(), vote: true, nextBoardAt: inSeconds(10) })
+    const wrapper = mountDialog({
+      setOver: 3,
+      others: others(3),
+      playingId: 42,
+      boardId: 7,
+      doubleDummy: READY,
+      vote: true,
+      nextBoardAt: inSeconds(10),
+    })
 
-    expect(wrapper.get('.result-title').text()).toBe('Set results')
-    expect(wrapper.get('.set-results .set-title').text()).toBe('Set 3 over')
-    expect(wrapper.findAll('.set-board')).toHaveLength(4)
-    expect(wrapper.find('.dialog-hero').exists()).toBe(false)
+    expect(wrapper.get('.result-title').text()).toBe('Board result')
+    expect(wrapper.get('.dialog-contract').text()).toBe('4♠ by South +1')
+    expect(wrapper.get('.dialog-score-value').text()).toBe('+450')
+    expect(wrapper.findAll('.others-row:not(.others-head)')).toHaveLength(3)
+    expect(wrapper.get('.dialog-dd').text()).toContain('Double dummy')
+    expect(wrapper.get('.dialog-set-over').text()).toBe('Set 3 is over: its results are under the table.')
+    // The set's own results are under the table, never here.
+    expect(wrapper.find('.set-results').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'SetResultsPanel' }).exists()).toBe(false)
     expect(wrapper.find('.vote').exists()).toBe(false)
     expect(wrapper.find('.result-foot').exists()).toBe(false)
     noLeaveOrReview(wrapper)
+  })
+
+  test('any other board: no set-over line', () => {
+    expect(mountDialog().find('.dialog-set-over').exists()).toBe(false)
   })
 })
 

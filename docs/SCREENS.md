@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/109-no-remove-mid-set`._
+_Status as of branch `bulbulica2/110-set-results-under-the-table`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -622,21 +622,25 @@ What it shows by phase:
   countdown and no vote, and Start in the table's centre deals the
   next board once everyone has pressed it. The header's **Last board**
   reviews the board just played at any time.
-- **set over** (after the fourth board, or earlier when it is broken off
-  between boards): the same dialog shows the set's results instead of the
-  board (#174), in the navy card (#162): who won, from your side ("You
-  won the set.", "You lost the set."), whom a robot replaced and why
-  ("East didn't play in time: a robot took their seat."), the four boards
-  (number, contract and declarer, result, your side's score and
-  matchpoint %, each opening its review), the totals and the time each
-  player used, with no countdown and no vote (after the set's last board
-  it waits for the set's results rather than show the board first).
-  Start is in the table's centre: everyone's Start opens the next set,
-  **Board 1 of 4**. A set that ended mid-board (a player
-  taken out of it) shows its results on the page once the table is back
-  to waiting. They update live for all four: the set ending arrives with
-  the last card's `PlayingUpdated` (or the `TableUpdated` that broke it
-  off), and the page then reads the set again.
+- **set over** (after the fourth board, or earlier when it is broken off):
+  the set's results go **under the table** (#191), never above it, so the
+  table never moves: in the navy card (#162), who won, from your side
+  ("You won the set.", "You lost the set.", "Abandoned: no winner."), whom
+  a robot replaced and why ("East didn't play in time: a robot took their
+  seat."), the boards (their place in the set, contract and declarer,
+  result, your side's score and matchpoint %, each opening its review) and
+  the set's matchpoints. They stay while the table waits for Start (in the
+  table's centre: everyone's Start opens the next set, **Board 1 of 4**)
+  and go once its first board is dealt. After the set's fourth board the
+  result dialog shows **that board's result** like any other (contract,
+  score, other tables, double dummy), with no countdown and no vote, and
+  the line "Set 1 is over: its results are under the table." (it waits
+  for the set's results first, 1 s at most). A set that ended mid-board
+  (a player taken out of it) shows its results under the table once it is
+  back to waiting. They update live for all four: the set ending arrives
+  with the last card's `PlayingUpdated` (or the `TableUpdated` that broke
+  it off), and the page then reads the set again. No time used is shown
+  (#191): the set clock lives on the plates while the set runs.
 
 **Board chat** (#102): from the first deal on, the board's chat is on
 show beside the table on a screen 1100 px wide or more (Daylight's look,
@@ -866,16 +870,14 @@ it, else N-S's, also when a robot finished it for you), whom a robot
 replaced and why, each board ("Board 1"…"Board 4", its place in the set,
 #189) opening its review (contract in table notation, your side's score and matchpoints), and the set's
 matchpoints for your side ("62 %", with "5 of 8") instead of a summed
-score, or "No other table has played these boards yet." (#100). Under it,
-**Time used**: each person's time used of their time for the set ("10:48
-of 16:00"; for a seat a robot took over, its player's up to then, #143). A
-403 or 404 shows as a reason on the page.
+score, or "No other table has played these boards yet." (#100). No time
+used (#191). A 403 or 404 shows as a reason on the page.
 
 | Calls | Endpoint |
 |---|---|
 | `history.loadSet()` | `GET /sets/{id}` |
 
-Backend: bb#75, bb#131 (`time_used`).
+Backend: bb#75.
 
 ## Board results — `/boards/:id/results`
 
@@ -1059,7 +1061,7 @@ Backend: bb#21 (public profiles), bb#43 (other users' boards), bb#77 (bans), bb#
 | `AdminBadge` | Play (every plate), profile sheet, User profile | none (`is_admin` on the user, #77) |
 | `SeatPlayerSheet` | Play (managers, an empty seat's action sheet) | `useUserSearch` → `GET /users?search=` (300 ms debounce, 2 characters minimum) |
 | `HistoryList` | My boards, User profile | `history.loadHistory` / `loadMore` |
-| `SetResultsPanel` | Play (set over), Set results | none (given the set from `history.loadSet`) |
+| `SetResultsPanel` | Play (set over, under the table), Set results | none (given the set from `history.loadSet`) |
 | `SetStrip` | Play (finished board), Tables and Home (Your table) | none (the set's tiles, from `history.sets`) |
 | `YourTableHero` | Tables, Home | `history.loadSet()` → `GET /sets/{id}` once a board of the running set is finished |
 | `TableCard` | Tables | none (one open table with its mini compass) |
