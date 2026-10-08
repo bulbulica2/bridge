@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/115-robot-partner-alerts`._
+_Status as of branch `bulbulica2/116-hcp-with-robots`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -298,7 +298,12 @@ its height from card to card (#133). The play page fills them:
 - bottom right, **Claim** (`ClaimButton`): small, 36 px with a 44 px tap
   area; locked after a refused claim it reads **Claim · locked** in grey
   and a tap or a hover shows why in a pop-up, which is also its
-  `aria-describedby`.
+  `aria-describedby`. During the auction, only when the other three
+  seats are all robots (`players[seat].is_robot`), the same corner holds
+  `.corner-hcp` instead (#204): the viewer's hand's high card points,
+  **21 HCP** (`hcp(cards)` in `src/utils/cards.ts`: A 4, K 3, Q 2, J 1 on
+  the backend's ranks), `aria-label` "21 high card points"; gone once the
+  auction ends, and never for a kibitzer (no hand).
 
 The board's place in its set is the header's second line,
 **Board 2 of 4 · Set 3** (`AppHeader`'s `subtitle`, `setLabel` in

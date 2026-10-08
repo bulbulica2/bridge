@@ -375,7 +375,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   defaults to `HAND_SUITS` ♥ ♣ ♦ ♠, the viewer's own hand; `BridgeTable`'s
   `trump` (the contract's strain) gives dummy and a robot declarer's cards
   `suitOrder(trump)`, that cycle rotated trumps first, #118), rank labels
-  (the backend skips 11: `12`=J … `15`=A), seat rotation and
+  (the backend skips 11: `12`=J … `15`=A), `hcp(cards)` (A 4, K 3, Q 2,
+  J 1, #204), seat rotation and
   vulnerability live in `src/utils/cards.ts`. Vulnerability in words
   (#151, #160): `vulnerabilityText(vulnerable, mySeat)` → `{text, red}`
   ("Nobody vulnerable" green; red "Vul: E-W" for the other side or no
@@ -414,7 +415,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   `AuctionHistory` grid in a `usePopover` pop-up opening upward, `live`
   until finished, `bidding` during the auction, `auctionEvents` passed
   on; its icon hidden in a table under 420 px); bottom-right
-  `ClaimButton.vue` (Claims, below). The board's place in its set is
+  `ClaimButton.vue` (Claims, below), or during the auction, only when
+  every seat but `mySeat` is `players[seat].is_robot` (#204, the page's
+  `handHcp`, null for a kibitzer: no hand), `.corner-hcp` "21 HCP"
+  (`aria-label` "21 high card points", Barlow, `--bridge-on-table`),
+  gone once the auction ends. The board's place in its set is
   `AppHeader`'s `subtitle` (the play page's `headerSubtitle`: `setLabel`
   "Board 2 of 4 · Set 3" + " · set over" from `currentSet`, whenever
   `playing.set`; the `title` is the table's name alone); the dealer is

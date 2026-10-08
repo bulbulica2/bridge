@@ -7,6 +7,7 @@ import type { Card, Strain, Suit, Vulnerability } from '@/services/game'
 import type { Seat } from '@/services/tables'
 import {
   groupBySuit,
+  hcp,
   isVulnerable,
   longestSuit,
   HAND_SUITS,
@@ -133,6 +134,45 @@ describe('suit columns', () => {
     expect(wrapper.findAll('.column')[0].findAll('.filler')).toHaveLength(3)
     expect(wrapper.findAll('.column')[2].find('.void').exists()).toBe(true)
     expect(wrapper.findAll('.filler').every((f) => f.attributes('aria-hidden') === 'true')).toBe(true)
+  })
+})
+
+describe('high card points', () => {
+  const card = (suit: Suit, rank: number, id = rank): Card => ({ id, suit, rank, rank_name: '' })
+
+  test('an empty hand has none', () => {
+    expect(hcp([])).toBe(0)
+  })
+
+  test('tens and below count nothing', () => {
+    expect(hcp([2, 5, 8, 10].map((rank) => card('S', rank)))).toBe(0)
+  })
+
+  test('3 aces, 1 king, 2 queens and 2 jacks are 21', () => {
+    const cards = [
+      card('S', 15),
+      card('H', 15),
+      card('D', 15),
+      card('C', 14),
+      card('S', 13),
+      card('H', 13),
+      card('D', 12),
+      card('C', 12),
+      card('S', 2),
+      card('H', 3),
+      card('D', 4),
+      card('C', 5),
+      card('S', 6),
+    ]
+
+    expect(hcp(cards)).toBe(21)
+  })
+
+  test('the most a hand holds is 37', () => {
+    // Four aces, four kings, four queens and a jack: 13 cards.
+    const cards = (['S', 'H', 'D', 'C'] as Suit[]).flatMap((suit) => [13, 14, 15].map((rank) => card(suit, rank)))
+
+    expect(hcp([...cards, card('S', 12)])).toBe(37)
   })
 })
 

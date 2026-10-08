@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/115-robot-partner-alerts`._
+_Status as of branch `bulbulica2/116-hcp-with-robots`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -286,7 +286,7 @@ table), #27 (bidding), #28 (card play), #29 (board result and next board),
 pop-up), #68 (Start), #69 (forced cards for declarer only), #70 (readable last
 trick), #72 (no next board "for everyone"), #73 (sets of four boards), #74 (away
 mid-set), #130 (the turn clock, needs bb#120), #143 (the set clock, needs bb#131), #95 (you play a robot partner's contract, needs bb#94),
-#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140), #186 (a pending claim in a dialog, so the table never moves), #196 (Last trick in the table's top-right corner), #203 (a robot partner's alerts during the auction, needs bb#152);
+#101 (bid alerts, needs bb#100), #135 (partner's alerts after the auction, needs bb#124), #102 (board chat, needs bb#101), #151 (vulnerability in words), #153 (the chat open by default), #160 (Daylight: the navy table with seat plates, the new cards, call chips, the board tile and the two-tap bidding box), #161 (Daylight during a board: the turn clock line, the header, the claim tiles with scores, the claim banner), #163 (the wide table, the Start box's plates, the away banner and the chat's look), #165 (the Auction button, the board's place in its set, the contract without the declarer/dummy line), #171 (the board's details in the table's corners, the set in the header, the dealer's D), #172 (dummy on one row), #173 (the claim as a small centred dialog), #174 (the board's result in a dialog with the countdown and the vote, 15 s with bb#140), #186 (a pending claim in a dialog, so the table never moves), #196 (Last trick in the table's top-right corner), #203 (a robot partner's alerts during the auction, needs bb#152), #204 (your HCP in the bottom-right corner while bidding with three robots);
 **Compare** by #30; the table's one page (the waiting table, Remove in the
 profile, Leave in the header, the set time's gear, the Start timer) by
 #181, needs bb#142; watching mode (kibitzers) by #182, needs bb#143.
@@ -404,7 +404,11 @@ first card, so nothing moves when **Last trick** appears.
   "?") and moving away hides it; a tap opens it and a tap outside (or
   Escape) closes it. While the board is on, an opponent's call in it
   still offers **Ask what it means** and **Ask in the chat**.
-- **Bottom right**, during the play: **Claim** (below).
+- **Bottom right**, during the play: **Claim** (below). During the
+  auction at a table where the other three seats are all robots (#204),
+  your hand's high card points instead, **21 HCP** (A 4, K 3, Q 2, J 1),
+  white in Barlow, from the deal until the last call; never with another
+  human at the table, after the auction, or for a kibitzer.
 
 The dealer is the **D** on their plate; the plates keep a red/green top
 edge, and the table's centre says **Board 2 of 4**, the dealer and the

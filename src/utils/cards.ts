@@ -64,7 +64,15 @@ export function longestSuit(cards: Card[]): number {
   return Math.max(0, ...SUITS.map((suit) => cards.filter((c) => c.suit === suit).length));
 }
 
-export type ScreenSide = 'bottom' | 'left' | 'top' | 'right';
+// High card points (#204): A 4, K 3, Q 2, J 1, on the backend's ranks
+// (15 = A … 12 = J, no 11).
+const HCP: Record<number, number> = { 12: 1, 13: 2, 14: 3, 15: 4 };
+
+export function hcp(cards: Card[]): number {
+  return cards.reduce((sum, card) => sum + (HCP[card.rank] ?? 0), 0);
+}
+
+export type ScreenSide ='bottom' | 'left' | 'top' | 'right';
 
 // Where a seat sits on screen for a viewer at `mySeat`, who is always drawn at
 // the bottom (as South): play goes clockwise N → E → S → W, so the next seat
