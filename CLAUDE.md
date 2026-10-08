@@ -214,8 +214,11 @@ The user's standing rule (#91): **no task may leave code coverage under
   and `POST /tables/{id}/seats/robots` `{seat}` that seats a robot: 403 for
   non-managers, 409 for a taken seat, and `POST`/`DELETE /tables/{id}/start`,
   see Start below, and the manager-only `PATCH /tables/{id}`
-  `{set_minutes}` (`updateTable`, the store's `updateSettings`): 403 for
-  non-managers, 409 mid-set, see the set clock below)
+  `{set_minutes?, allow_kibitzers?}` (`updateTable`, the store's
+  `updateSettings`): 403 for non-managers, 409 mid-set, see the set clock
+  and Kibitzers below, and `POST`/`DELETE /tables/{id}/kibitzers`
+  (`watchTable`/`unwatchTable`, the store's `watch`/`stopWatching`, see
+  Kibitzers))
   and `src/stores/tables.ts` keeps both the list (`tables`) and the table the detail
   page is showing (`currentTable`), syncing a changed table into both.
   `create` seeds `currentTable`, and `openTable(id)` (the detail and play
@@ -407,11 +410,16 @@ The user's standing rule (#91): **no task may leave code coverage under
   `UnseatedFromTable` `{table_id, reason: 'start_timeout'|'kibitzers_off',
   kibitzing}` (`UnseatedFromTableEvent` in `services/tables.ts`,
   `listenToUser`'s ninth handler, the game store hands it to the tables
-  store's `applyUnseated`: only `start_timeout` and only while still
-  watching that table → `unwatchTable`, `withoutMe` on the held copies,
-  `kickedFrom`, `START_TIMEOUT_NOTICE`; `kibitzing` waits for #182 and
-  counts as false), or the `TableUpdated` freeing a seat whose held copy
-  had `start_deadline` (same notice), whichever comes first; the play
+  store's `applyUnseated`: `start_timeout` only while still watching that
+  table and not already kibitzing it → `withoutMe` on the held copies,
+  then with `kibitzing` → `kibitzingId`, the channel kept,
+  `START_WATCHING_NOTICE` and `game.load` (`startWatchingHere`; the page
+  stays, in watching mode), else `unwatchTable`, `kickedFrom`,
+  `START_TIMEOUT_NOTICE`; `kibitzers_off` see Kibitzers), or the
+  `TableUpdated` freeing a seat whose held copy had `start_deadline`
+  (`timedOut` in `applyTableUpdate`: with the update's `allow_kibitzers`
+  the same watching path, set before the game store sees the update so it
+  doesn't clear, else the same notice), whichever comes first; the play
   page's `kickedFrom` watch goes to `/tables`. A `TableUpdated` that
   clears our own `ready` while `set_minutes` changed (`startRevoked`)
   toasts `startRevokedText(minutes)` ("The set time changed to 8 min:
@@ -1108,15 +1116,68 @@ The user's standing rule (#91): **no task may leave code coverage under
   `src/components/PlayerProfileSheet.vue`, a bottom-sheet `ion-modal` that
   shows the embedded copy at once, refreshes it from the store, and links to
   `/users/:id`. The own record with its email stays the auth store's `User`.
+- **Kibitzers** (#182, bb#143, backend `docs/API.md` Kibitzers): a
+  kibitzer watches a table without a seat, seeing only the public state.
+  `BroadcastTable.allow_kibitzers` (the table's choice: `createTable`'s
+  `allow_kibitzers`, the lobby's two start cards' **Allow kibitzers**
+  `ion-toggle`s, on by default; a manager's `updateSettings({allow_kibitzers})`
+  from `TableSettingsDialog`'s `.kibitzers-toggle` (`allowKibitzers` prop,
+  `kibitzers` event → the play page's `changeKibitzers`, refusals toasted
+  + `loadTable` + `minutesKey`), its corner's `.corner-kibitzers` "Kibitzers
+  allowed"/"No kibitzers" for everyone while `settingsCorner`) and
+  `kibitzers` (the count). The tables store: `kibitzingId`; `watch(id)`
+  (`watchTable` service, `syncTable` + `currentTable`, the channel via
+  `watchTable(id)`, then `kibitzingId`), `stopWatching()` (channel first,
+  then `DELETE`; 409/404 swallowed), `resumeWatching(id)` (the play page's
+  `load()` when the board answered and `!seatedHere`: a reload while
+  watching); `followSeat` keeps a watched table followed and clears
+  `kibitzingId` once seated (`join`, `create`, a manager seating us: also
+  `applyTableUpdate`'s seated branch); `join`'s `movedFrom` ignores a
+  table only watched; `load()` drops watching when the list lacks the
+  table or it no longer allows it (`stillWatchable`); `shouldBeat` pauses
+  a kibitzer while hidden even mid-set; a refused beat while watching
+  (`lostWatch`: 403 → `WATCH_IDLE_NOTICE`, 404 → `WATCHED_GONE_NOTICE`)
+  and a `catchUp` 404 go through `sendAway` (unwatch, `kickedFrom`,
+  `announceRemoval`); `applyTableUpdate` keeps a kibitzer (the game store's
+  `applyTableUpdate` doesn't clear while `kibitzingId` is the table), and
+  `allow_kibitzers` going false, or `UnseatedFromTable` `kibitzers_off`,
+  is `sendAway(KIBITZERS_OFF_NOTICE)`. `myTable` stays the seated table.
+  A kibitzer's `GET /tables/{id}/playing` has `my_seat`, `hand`,
+  `declarer_hand` null and, mid-board, `alert: {explanation: null}`
+  (`AuctionCallCell` with `live` and no seat shows `KIBITZER_ALERT`). The
+  lobby: `TableCard`'s `.table-card-foot` ("2 watching" `.table-card-kibitzers`;
+  `.table-card-watch` **Watch** while `allow_kibitzers`, not `mine`, not
+  banned; `watching` → "Watching" `.is-watching`, `watchBusy` spins; `watch`
+  event), `TablesPage`'s `watch(table)` (`leaveToWatch`: seated elsewhere →
+  `stakeOf` held → toast `watchBlockedText`, else `confirmWatch` +
+  `tables.leave`; a 409 reloads the list and asks once more; then
+  `/tables/:id/play`; `watching` disables every card until
+  `onIonViewDidLeave`). The play page's **watching mode** (`watching` =
+  `kibitzingId === tableId && !seatedHere`; `mySeat` null): South at the
+  bottom (`BridgeTable`'s `cardsSide` lets dummy/claim lie at the bottom
+  seat when `mySeat` is null, dummy as a single-row `HandView`), no
+  `.my-hand`, bidding box, Claim, chat (`chatOn` and `chat.follow` need
+  `seatedHere`), Last board or review (`reviewable` empty, no
+  `findReviewable` or set read), `my-slot` off, `resultVote` false; the
+  header's `.watching-pill` and `.stop-watching` (`stopWatching()`,
+  errors toasted, then `game.clear()` and `/tables`); `watchSit` (no
+  `runningSet`) makes `waitingRoom` (= `showStart || watchSit`) draw the
+  table's seats `seatable` (**Sit here**, a `join`); the not-seated view's
+  `.watch-table` (`allow_kibitzers`, not banned, not seated elsewhere) →
+  `watchHere` → `load(false)`.
 - **Realtime (Reverb)**: `src/services/echo.ts` holds one lazily created
   Laravel Echo instance (`broadcaster: 'reverb'`, `VITE_REVERB_*` in `.env`)
   whose `authorizer` signs private channels via `POST /broadcasting/auth`
   through the shared `http` instance (Echo's own authorizer skips
   `X-XSRF-TOKEN`). `private-table.{id}` admits only players seated there
-  (403 otherwise) and the server never ends a subscription, so the tables
-  store owns it: `watchTable(id)` / `unwatchTable()` follow the user's seat
-  after create, join, a move, a leave and every load, and logout disconnects
-  the socket. The same channel carries `PlayingUpdated`, which the tables
+  and its kibitzers (403 otherwise) and the server never ends a
+  subscription, so the tables store owns it: `watchTable(id)` /
+  `unwatchTable()` (which also clears `kibitzingId`) follow the user's
+  seat after create, join, a move, a leave and every load, or the table
+  watched (`watch`, `stopWatching`, `resumeWatching`), and logout
+  disconnects the socket. A kibitzer gets no `HandDealt`,
+  `DeclarerHandShown`, `CallAlerted`, `CallQuestioned`,
+  `AuctionAlertsShown` or `BoardMessageSent`. The same channel carries `PlayingUpdated`, which the tables
   store hands to the game store. Alerts never use it (partner would see
   them during the auction): `CallAlerted` `{table_id, playing_id, index,
   explanation}` goes to each human opponent's user channel (all four
@@ -1128,8 +1189,8 @@ The user's standing rule (#91): **no task may leave code coverage under
   human who may read it, the sender included (see Board chat). Each
   `TableUpdated` carries the whole table and **replaces** it
   via the store's sync path; one that no longer seats the user (outside their
-  own seat request) is a kick: toast, unsubscribe, and `kickedFrom` makes the
-  play page go back to `/tables`; `UnseatedFromTable` on the user channel
+  own seat request, and not a table they watch) is a kick: toast,
+  unsubscribe, and `kickedFrom` makes the play page go back to `/tables`; `UnseatedFromTable` on the user channel
   ends a seat the same way (see Start). After a reconnect the watched table is
   refetched once. The Tables list has no channel and stays refresh-only.
   Every broadcast fits in 10 KB (backend `docs/API.md`, Message size):
@@ -1152,8 +1213,9 @@ The user's standing rule (#91): **no task may leave code coverage under
   for as long as it watches a table (`watchTable`/`unwatchTable` start and
   stop it, so leave, kick, move and logout end it too), never for a held
   seat. It pauses while `document.visibilityState` is hidden, except
-  mid-set (`midSet`, bb#76: going quiet there marks us away; a beat that
-  finds the set over while hidden stops it); on return it beats at once, refetches
+  mid-set for a seat (`midSet`, bb#76: going quiet there marks us away; a
+  beat that finds the set over while hidden stops it; a kibitzer pauses
+  regardless); on return it beats at once, refetches
   the table and the game state, and a seat lost meanwhile (or a 403/404 from
   a beat) is told as `IDLE_NOTICE` and sets `kickedFrom`. A removal noticed
   while hidden keeps its toast until the page shows again.

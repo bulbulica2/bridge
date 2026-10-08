@@ -3,14 +3,14 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { AxiosError, AxiosHeaders } from 'axios'
 import { IonInput } from '@ionic/vue'
-import { pickSegment } from './ionEvents'
+import { flipToggle, pickSegment } from './ionEvents'
 import SetMinutesPicker from '@/components/SetMinutesPicker.vue'
 import TablesPage from '@/views/TablesPage.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
 import { useTablesStore } from '@/stores/tables'
 import * as tablesService from '@/services/tables'
-import { confirmLeave, confirmMove } from '@/utils/seatMove'
+import { confirmLeave, confirmMove, confirmWatch, watchBlockedText } from '@/utils/seatMove'
 import { showToast } from '@/utils/toast'
 import type { Seat, Table } from '@/services/tables'
 
@@ -19,12 +19,15 @@ vi.mock('@/services/tables', async (importOriginal) => ({
   listTables: vi.fn(),
   createTable: vi.fn(),
   joinSeat: vi.fn(),
+  leaveSeat: vi.fn(),
+  watchTable: vi.fn(),
   sendHeartbeat: vi.fn(),
 }))
 vi.mock('@/utils/seatMove', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/utils/seatMove')>()),
   confirmMove: vi.fn(),
   confirmLeave: vi.fn(),
+  confirmWatch: vi.fn(),
 }))
 vi.mock('@/utils/toast', () => ({ showToast: vi.fn() }))
 vi.mock('@/services/echo', () => ({
@@ -43,10 +46,10 @@ vi.mock('@ionic/vue', async (importOriginal) => ({
 
 const ana = { id: 1, name: 'Ana', username: 'ana', email: 'ana@example.com' }
 
-function axiosError(status: number): AxiosError {
+function axiosError(status: number, message = 'Unauthenticated.'): AxiosError {
   const config = { headers: new AxiosHeaders() }
   const error = new AxiosError('Request failed', 'ERR_BAD_REQUEST', config)
-  error.response = { status, data: { message: 'Unauthenticated.' }, statusText: '', headers: {}, config }
+  error.response = { status, data: { message }, statusText: '', headers: {}, config }
   return error
 }
 
@@ -232,7 +235,7 @@ describe('TablesPage.vue starting a table', () => {
     await wrapper.get('.deal-me-in').trigger('click')
     await flushPromises()
 
-    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true, set_minutes: 16 })
+    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true, set_minutes: 16, allow_kibitzers: true })
     expect(navigate).toHaveBeenCalledWith('/tables/3/play', 'forward', 'push')
     // The table page draws from this copy rather than fetching the table again.
     expect(useTablesStore().currentTable).toEqual(full)
@@ -253,7 +256,7 @@ describe('TablesPage.vue starting a table', () => {
     await wrapper.get('.deal-me-in').trigger('click')
     await flushPromises()
 
-    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true, set_minutes: 12 })
+    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: true, set_minutes: 12, allow_kibitzers: true })
     // The next table starts from the default again.
     expect(wrapper.findComponent(SetMinutesPicker).props('modelValue')).toBe(16)
   })
@@ -267,7 +270,7 @@ describe('TablesPage.vue starting a table', () => {
     await wrapper.get('form.start-friends').trigger('submit')
     await flushPromises()
 
-    expect(tablesService.createTable).toHaveBeenCalledWith({ name: 'Sunday pairs', robots: false })
+    expect(tablesService.createTable).toHaveBeenCalledWith({ name: 'Sunday pairs', robots: false, allow_kibitzers: true })
     expect(navigate).toHaveBeenCalledWith('/tables/3/play', 'forward', 'push')
     expect(useTablesStore().tables.map((t) => t.id)).toEqual([3])
   })
@@ -279,7 +282,7 @@ describe('TablesPage.vue starting a table', () => {
     await wrapper.get('form.start-friends').trigger('submit')
     await flushPromises()
 
-    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: false })
+    expect(tablesService.createTable).toHaveBeenCalledWith({ name: null, robots: false, allow_kibitzers: true })
   })
 
   test('both cards wait while one is creating, its own button spinning', async () => {
@@ -500,5 +503,212 @@ describe('TablesPage.vue your table', () => {
 
     expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
     expect(showToast).not.toHaveBeenCalled()
+  })
+})
+
+describe('TablesPage.vue kibitzers (#182)', () => {
+  // A set remembered by an earlier test would have the list's load read it.
+  beforeEach(() => localStorage.clear())
+
+  const watchable = (id: number, extra: Partial<Table> = {}) =>
+    makeTable(id, { N: 'bob', E: 'robot-1', S: 'carl', W: 'dan' }, { allow_kibitzers: true, kibitzers: 0, ...extra })
+
+  test('a card offers Watch where the table allows it, and says how many watch', () => {
+    const wrapper = mountWith([
+      watchable(1, { kibitzers: 2 }),
+      watchable(2, { allow_kibitzers: false, kibitzers: 1 }),
+      watchable(3),
+      makeTable(4, { S: 'ana' }, { allow_kibitzers: true, kibitzers: 0 }),
+    ])
+
+    expect(card(wrapper, 1).get('.table-card-kibitzers').text()).toBe('2 watching')
+    expect(card(wrapper, 1).get('.table-card-watch').text()).toBe('Watch')
+    expect(card(wrapper, 1).get('.table-card-watch').attributes('aria-label')).toBe('Watch Table 1')
+    // Not allowed: no Watch, the count still told.
+    expect(card(wrapper, 2).find('.table-card-watch').exists()).toBe(false)
+    expect(card(wrapper, 2).get('.table-card-kibitzers').text()).toBe('1 watching')
+    // Nobody watching: no count.
+    expect(card(wrapper, 3).find('.table-card-kibitzers').exists()).toBe(false)
+    expect(card(wrapper, 3).find('.table-card-watch').exists()).toBe(true)
+    // Our own table: we play there, nothing to watch.
+    expect(card(wrapper, 4).find('.table-card-foot').exists()).toBe(false)
+  })
+
+  test('no Watch while banned', () => {
+    useAuthStore().user = { ...ana, ban: { reason: 'Rude.', until: '2026-12-01T00:00:00Z', banned_at: '2026-10-01T00:00:00Z' } }
+    const wrapper = mountWith([watchable(1)])
+
+    expect(card(wrapper, 1).find('.table-card-watch').exists()).toBe(false)
+  })
+
+  test('Watch watches the table and opens it; the card then reads Watching', async () => {
+    vi.mocked(tablesService.watchTable).mockResolvedValue(watchable(1, { kibitzers: 1 }))
+    const wrapper = mountWith([watchable(1)])
+
+    await card(wrapper, 1).get('.table-card-watch').trigger('click')
+    await flushPromises()
+
+    expect(tablesService.watchTable).toHaveBeenCalledWith(1)
+    expect(navigate).toHaveBeenCalledWith('/tables/1/play', 'forward', 'push')
+    expect(useTablesStore().kibitzingId).toBe(1)
+    expect(card(wrapper, 1).get('.table-card-watch').attributes('aria-label')).toBe('Back to watching Table 1')
+    // Every Sit and Watch waits until the page has gone, still spinning.
+    expect(card(wrapper, 1).find('.table-card-watch ion-spinner').exists()).toBe(true)
+    expect(card(wrapper, 1).get('.table-card-watch').attributes('disabled')).toBeDefined()
+  })
+
+  test('the table we watch already reads Watching', () => {
+    useTablesStore().kibitzingId = 1
+    const wrapper = mountWith([watchable(1)])
+
+    expect(card(wrapper, 1).get('.table-card-watch').text()).toBe('Watching')
+    expect(card(wrapper, 1).get('.table-card-watch').classes()).toContain('is-watching')
+  })
+
+  test('Watch spins while on its way, every other Watch waiting', async () => {
+    vi.mocked(tablesService.watchTable).mockReturnValue(new Promise(() => {}))
+    const wrapper = mountWith([watchable(1), watchable(2)])
+
+    await card(wrapper, 1).get('.table-card-watch').trigger('click')
+    await flushPromises()
+
+    expect(card(wrapper, 1).find('.table-card-watch ion-spinner').exists()).toBe(true)
+    expect(card(wrapper, 2).get('.table-card-watch').attributes('disabled')).toBeDefined()
+    // A second Watch on its way is ignored.
+    wrapper.findAllComponents({ name: 'TableCard' })[1].vm.$emit('watch')
+    await flushPromises()
+    expect(tablesService.watchTable).toHaveBeenCalledTimes(1)
+  })
+
+  test('seated at another table: leaving it is confirmed first, then Watch', async () => {
+    const mine = makeTable(7, { S: 'ana', N: 'bob' }, { allow_kibitzers: true, kibitzers: 0 })
+    vi.mocked(confirmWatch).mockResolvedValue(true)
+    vi.mocked(tablesService.leaveSeat).mockResolvedValue(makeTable(7, { N: 'bob' }))
+    vi.mocked(tablesService.watchTable).mockResolvedValue(watchable(1))
+    const wrapper = mountWith([mine, watchable(1)])
+
+    await card(wrapper, 1).get('.table-card-watch').trigger('click')
+    await flushPromises()
+
+    expect(confirmWatch).toHaveBeenCalledWith(mine, expect.objectContaining({ id: 1 }), 1, null, null, null)
+    expect(tablesService.leaveSeat).toHaveBeenCalledWith(7)
+    expect(tablesService.watchTable).toHaveBeenCalledWith(1)
+    expect(navigate).toHaveBeenCalledWith('/tables/1/play', 'forward', 'push')
+  })
+
+  test('seated elsewhere and cancelled: nothing', async () => {
+    vi.mocked(confirmWatch).mockResolvedValue(false)
+    const wrapper = mountWith([makeTable(7, { S: 'ana' }), watchable(1)])
+
+    await card(wrapper, 1).get('.table-card-watch').trigger('click')
+    await flushPromises()
+
+    expect(tablesService.leaveSeat).not.toHaveBeenCalled()
+    expect(tablesService.watchTable).not.toHaveBeenCalled()
+    expect(card(wrapper, 1).get('.table-card-watch').attributes('disabled')).toBeUndefined()
+  })
+
+  test('mid-set the seat would only be held: Watch says why and stays', async () => {
+    const running = { id: 4, number: 2, board: 1, of: 4, finished: false, ended: null, replaced: [] }
+    const mine = makeTable(7, { S: 'ana', N: 'bob' }, { board_id: 9, set: running })
+    const wrapper = mountWith([mine, watchable(1)])
+
+    await card(wrapper, 1).get('.table-card-watch').trigger('click')
+    await flushPromises()
+
+    expect(showToast).toHaveBeenCalledWith(watchBlockedText(mine, { number: 2 }), 'warning')
+    expect(watchBlockedText(mine, { number: 2 })).toBe(
+      "You're in the middle of set 2 at Table 7: you can watch another table once it's over.",
+    )
+    expect(confirmWatch).not.toHaveBeenCalled()
+    expect(tablesService.watchTable).not.toHaveBeenCalled()
+  })
+
+  test('a 409 (a seat the list did not know of): the list is read, leaving confirmed, Watch again', async () => {
+    const mine = makeTable(7, { S: 'ana' })
+    vi.mocked(tablesService.watchTable)
+      .mockRejectedValueOnce(axiosError(409, 'You are seated at a table: leave your seat before watching one.'))
+      .mockResolvedValueOnce(watchable(1))
+    vi.mocked(tablesService.listTables).mockResolvedValue([mine, watchable(1)])
+    vi.mocked(tablesService.leaveSeat).mockResolvedValue({ table_deleted: true })
+    vi.mocked(confirmWatch).mockResolvedValue(true)
+    const wrapper = mountWith([watchable(1)])
+
+    await card(wrapper, 1).get('.table-card-watch').trigger('click')
+    await flushPromises()
+
+    expect(confirmWatch).toHaveBeenCalledTimes(1)
+    expect(tablesService.leaveSeat).toHaveBeenCalledWith(7)
+    expect(tablesService.watchTable).toHaveBeenCalledTimes(2)
+    expect(navigate).toHaveBeenCalledWith('/tables/1/play', 'forward', 'push')
+  })
+
+  test('a 409 and then cancelled: nothing more', async () => {
+    vi.mocked(tablesService.watchTable).mockRejectedValue(axiosError(409))
+    vi.mocked(tablesService.listTables).mockResolvedValue([makeTable(7, { S: 'ana' }), watchable(1)])
+    vi.mocked(confirmWatch).mockResolvedValue(false)
+    const wrapper = mountWith([watchable(1)])
+
+    await card(wrapper, 1).get('.table-card-watch').trigger('click')
+    await flushPromises()
+
+    expect(tablesService.watchTable).toHaveBeenCalledTimes(1)
+    expect(showToast).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  test('a 409 the list cannot explain, or a 403: told', async () => {
+    const seated = 'You are seated at a table: leave your seat before watching one.'
+    vi.mocked(tablesService.watchTable).mockRejectedValue(axiosError(409, seated))
+    vi.mocked(tablesService.listTables).mockResolvedValue([watchable(1)])
+    const wrapper = mountWith([watchable(1)])
+
+    await card(wrapper, 1).get('.table-card-watch').trigger('click')
+    await flushPromises()
+    expect(showToast).toHaveBeenCalledWith(seated, 'danger')
+
+    const refused = 'This table does not allow kibitzers.'
+    vi.mocked(tablesService.watchTable).mockRejectedValue(axiosError(403, refused))
+    await card(wrapper, 1).get('.table-card-watch').trigger('click')
+    await flushPromises()
+    expect(showToast).toHaveBeenCalledWith(refused, 'danger')
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  test('a 401 goes to the login page', async () => {
+    vi.mocked(tablesService.watchTable).mockRejectedValue(axiosError(401))
+    const wrapper = mountWith([watchable(1)])
+
+    await card(wrapper, 1).get('.table-card-watch').trigger('click')
+    await flushPromises()
+
+    expect(navigate).toHaveBeenCalledWith('/login', 'root', 'replace')
+    expect(showToast).not.toHaveBeenCalled()
+  })
+
+  test('both start cards have Allow kibitzers, on until turned off, sent with the table', async () => {
+    vi.mocked(tablesService.createTable).mockResolvedValue(makeTable(3, { S: 'ana' }))
+    const wrapper = mountWith([])
+    expect(wrapper.findAll('.kibitzers-toggle').map((t) => t.text())).toEqual(['Allow kibitzers', 'Allow kibitzers'])
+
+    await flipToggle(wrapper, false, '.start-robots .kibitzers-toggle')
+    await wrapper.get('.deal-me-in').trigger('click')
+    await flushPromises()
+    expect(tablesService.createTable).toHaveBeenLastCalledWith({
+      name: null,
+      robots: true,
+      set_minutes: 16,
+      allow_kibitzers: false,
+    })
+
+    await flipToggle(wrapper, false, '.start-friends .kibitzers-toggle')
+    await wrapper.get('form.start-friends').trigger('submit')
+    await flushPromises()
+    expect(tablesService.createTable).toHaveBeenLastCalledWith({ name: null, robots: false, allow_kibitzers: false })
+
+    // The next table allows them again.
+    await wrapper.get('.deal-me-in').trigger('click')
+    await flushPromises()
+    expect(tablesService.createTable).toHaveBeenLastCalledWith(expect.objectContaining({ allow_kibitzers: true }))
   })
 })

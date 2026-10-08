@@ -53,6 +53,15 @@
                 label-id="create-set-minutes"
                 :disabled="creating !== null"
               />
+              <!-- People without a seat may watch it (#182), on by default. -->
+              <ion-toggle
+                v-model="allowKibitzers.robots"
+                class="kibitzers-toggle"
+                justify="space-between"
+                :disabled="creating !== null"
+              >
+                Allow kibitzers
+              </ion-toggle>
               <ion-text v-if="createError.robots" color="danger">
                 <p class="error">{{ createError.robots }}</p>
               </ion-text>
@@ -78,6 +87,14 @@
                 :maxlength="TABLE_NAME_MAX"
                 placeholder="Sunday pairs"
               />
+              <ion-toggle
+                v-model="allowKibitzers.friends"
+                class="kibitzers-toggle"
+                justify="space-between"
+                :disabled="creating !== null"
+              >
+                Allow kibitzers
+              </ion-toggle>
               <ion-text v-if="createError.friends" color="danger">
                 <p class="error">{{ createError.friends }}</p>
               </ion-text>
@@ -139,12 +156,15 @@
                   :table="table"
                   :me="me"
                   :mine="table.id === myTableId"
-                  :busy="joining !== null"
+                  :busy="joining !== null || watching !== null"
                   :joining="joiningSeat(table.id)"
                   :banned="auth.isBanned"
+                  :watching="tablesStore.kibitzingId === table.id"
+                  :watch-busy="watching === table.id"
                   :now="now"
                   @join="join(table, $event)"
                   @player="player = $event"
+                  @watch="watch(table)"
                 />
               </div>
             </template>
@@ -174,6 +194,7 @@ import {
   IonText,
   IonSpinner,
   IonSkeletonText,
+  IonToggle,
   onIonViewWillEnter,
   onIonViewDidLeave,
   useIonRouter,
@@ -197,7 +218,7 @@ import { errorMessage, logUnexpected, statusOf } from '@/utils/errors';
 import { TABLE_NAME_MAX } from '@/utils/limits';
 import { TABLE_FILTERS, filterCounts, matchesFilter } from '@/utils/lobby';
 import type { TableFilter } from '@/utils/lobby';
-import { confirmLeave, confirmMove, heldNotice } from '@/utils/seatMove';
+import { confirmLeave, confirmMove, confirmWatch, heldNotice, watchBlockedText } from '@/utils/seatMove';
 import { showToast } from '@/utils/toast';
 
 const tablesStore = useTablesStore();
@@ -226,6 +247,10 @@ const creating = ref<CreateKind | null>(null);
 const createError = ref<Record<CreateKind, string>>({ robots: '', friends: '' });
 const name = ref('');
 const setMinutes = ref<SetMinutes>(DEFAULT_SET_MINUTES);
+// Each start card's Allow kibitzers switch (#182), on until turned off.
+const allowKibitzers = ref<Record<CreateKind, boolean>>({ robots: true, friends: true });
+// The table Watch is on its way to.
+const watching = ref<number | null>(null);
 // The seated player whose profile sheet is open.
 const player = ref<PublicUser | null>(null);
 // The open tables' chip, and the time the cards' minutes are told from (as
@@ -254,6 +279,7 @@ onIonViewWillEnter(async () => {
 // second tap can't land while the page changes; back on the list they work again.
 onIonViewDidLeave(() => {
   joining.value = null;
+  watching.value = null;
 });
 
 async function load() {
@@ -315,6 +341,71 @@ async function join(table: Table, seat: Seat) {
   ionRouter.navigate(`/tables/${joined.id}/play`, 'forward', 'push');
 }
 
+// Watch a table without a seat (#182), then open it. Never from a seat: one
+// at another table is left first (confirmed like Leave), and a 409 (a seat
+// the list didn't know of yet) reads the list again and asks the same. The
+// buttons stay disabled until the page has gone, as for a seat.
+async function watch(table: Table) {
+  if (watching.value !== null) {
+    return;
+  }
+  player.value = null;
+  watching.value = table.id;
+  try {
+    if (!(await leaveToWatch(table))) {
+      watching.value = null;
+      return;
+    }
+    try {
+      await tablesStore.watch(table.id);
+    } catch (e) {
+      if (statusOf(e) !== 409) {
+        throw e;
+      }
+      await tablesStore.load();
+      if (!tablesStore.myTable) {
+        throw e;
+      }
+      if (!(await leaveToWatch(table))) {
+        watching.value = null;
+        return;
+      }
+      await tablesStore.watch(table.id);
+    }
+  } catch (e) {
+    watching.value = null;
+    if (statusOf(e) === 401) {
+      ionRouter.navigate('/login', 'root', 'replace');
+      return;
+    }
+    logUnexpected(e);
+    await showToast(errorMessage(e, 'Could not watch that table. Please try again.'), 'danger');
+    return;
+  }
+  ionRouter.navigate(`/tables/${table.id}/play`, 'forward', 'push');
+}
+
+// Our seat elsewhere, given up to watch `table`: true once nothing is in the
+// way. Mid-set the seat would only be held (still a seat), so it says why
+// and stays.
+async function leaveToWatch(table: Table): Promise<boolean> {
+  const from = tablesStore.myTable;
+  if (!from || !me.value || from.id === table.id) {
+    return true;
+  }
+  const stake = tablesStore.stakeOf(from);
+  if (stake?.held) {
+    await showToast(watchBlockedText(from, stake), 'warning');
+    return false;
+  }
+  const board = game.tableId === from.id ? (game.playing?.board?.number ?? null) : null;
+  if (!(await confirmWatch(from, table, me.value, game.phaseOf(from.id), board, stake))) {
+    return false;
+  }
+  await tablesStore.leave(from.id);
+  return true;
+}
+
 // Getting up without opening the table: the same confirmation as on its
 // pages, inside the try so nothing fails unseen. The store updates the list.
 async function leave(table: Table) {
@@ -352,13 +443,22 @@ async function leave(table: Table) {
 // "Deal me in": a table of our own with three robots, at the picked time
 // for a set.
 function createWithRobots() {
-  return create('robots', { name: null, robots: true, set_minutes: setMinutes.value });
+  return create('robots', {
+    name: null,
+    robots: true,
+    set_minutes: setMinutes.value,
+    allow_kibitzers: allowKibitzers.value.robots,
+  });
 }
 
 // A named table (the name is optional) for people to join; its time for a
 // set is the backend's default until its manager changes it at the table.
 function createForFriends() {
-  return create('friends', { name: name.value.trim() || null, robots: false });
+  return create('friends', {
+    name: name.value.trim() || null,
+    robots: false,
+    allow_kibitzers: allowKibitzers.value.friends,
+  });
 }
 
 async function create(kind: CreateKind, payload: CreateTablePayload) {
@@ -368,6 +468,7 @@ async function create(kind: CreateKind, payload: CreateTablePayload) {
     const table = await tablesStore.create(payload);
     name.value = '';
     setMinutes.value = DEFAULT_SET_MINUTES;
+    allowKibitzers.value[kind] = true;
     // The creator sits there already: straight to the game table (#181),
     // where Start, the seats and Seat a player / Add robot are (with robots
     // the table is full, but nothing is dealt until Start). Not awaited: the
@@ -456,6 +557,11 @@ async function create(kind: CreateKind, payload: CreateTablePayload) {
 .create-table {
   --border-color: var(--ion-color-primary);
   --color: var(--ion-color-primary);
+}
+
+.kibitzers-toggle {
+  min-height: 44px;
+  font-weight: 700;
 }
 
 .table-name-input {

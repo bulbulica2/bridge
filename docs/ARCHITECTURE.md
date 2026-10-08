@@ -1,6 +1,6 @@
 # Frontend architecture
 
-_Status as of branch `bulbulica2/103-straight-to-the-game-table`._
+_Status as of branch `bulbulica2/104-kibitzers`._
 
 How the SPA is put together, for a developer joining the project. The
 per-page detail is in [`SCREENS.md`](SCREENS.md); endpoint shapes are in
@@ -397,8 +397,8 @@ and [`AUTH.md` Bans](https://github.com/bulbulica2/bridge_backend/blob/main/docs
 | Store | Holds | Main actions |
 |---|---|---|
 | `auth` | `user` (own record, with email, `is_admin` and `ban`), `ban` / `isBanned`, `banNotice` (a ban that just threw you out) | `login`, `register`, `logout`, `loadSession`, `updateProfile`, password reset, `applyBan`, `dismissBanNotice` |
-| `tables` | `tables` (the list), `currentTable` (the one the game table shows), `myTable`, `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `replacedFrom` (a set a robot took your seat over in) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `removePlayer`, `seatUser`, `seatRobot`, `updateSettings` (a manager's time for a set), `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissReplaced`, `applyUnseated` (`UnseatedFromTable`), `clear` (on logout); owns the table channel and the heartbeat |
-| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned` / `AuctionAlertsShown`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
+| `tables` | `tables` (the list), `currentTable` (the one the game table shows), `myTable` (the seated table only), `kibitzingId` (the table you watch without a seat, #182), `kickedFrom`, `heldTableId` (your seat held after a Leave mid-set), `replacedFrom` (a set a robot took your seat over in) | `load`, `loadTable`, `openTable`, `create`, `join`, `leave`, `watch`, `stopWatching`, `resumeWatching` (a reload while watching), `removePlayer`, `seatUser`, `seatRobot`, `updateSettings` (a manager's time for a set and Allow kibitzers), `start`, `cancelStart`, `seatedTable`, `findSeat` (the router's lookup for **Your table**), `comeBack`, `stakeOf`, `dismissReplaced`, `applyUnseated` (`UnseatedFromTable`), `clear` (on logout); owns the table channel and the heartbeat, for a seat or a kibitzer's place |
+| `game` | one table's game: `tableId`, `playing` (public state + your hand, and a robot declarer's hand when you are its dummy; a kibitzer's has neither, and `my_seat` null), the bid and card lists | `load`, `adopt`, `loadBids`, `loadCards`, `call` (with an optional alert), `askAboutCall`, `explainCall`, `play`, `claim`, `respondToClaim`, `withdrawClaim`, `next`, `phaseOf`; expands and applies `PlayingUpdated` (`receivePlayingUpdate`), applies `HandDealt` / `DeclarerHandShown` / `CallAlerted` / `CallQuestioned` / `AuctionAlertsShown`, hands `BoardMessageSent` to `chat` (`applyBoardMessage`); keeps the board's known alerts by call index (see [Alerts](#alerts)) |
 | `chat` | the chat of the board the play page shows: `tableId`, `playingId`, `messages`, `open` (the panel on show), `keepOpen` (the player's choice beside the table, `bridge.chatOpen`), `about` (the call a message is about), `unread` | `follow` (the play page's board: read, emptied for a new board, read again once finished), `load`, `receive`, `send`, `setOpen`, `setKeepOpen`, `askAbout`, `clear`; see [Board chat](#board-chat) |
 | `history` | finished boards per owner (`null` = you, a number = another user), results per board, double dummy tables per board, results per set, reviews per playing | `loadHistory`, `loadMore`, `loadResults`, `loadDoubleDummy`, `loadSet`, `loadReview` |
 | `users` | public profiles by id (with `ban`/`bans` for an admin), players' stats by id (your own under your id) | `load`, `loadStats` (a number, or `null` for your own; read again every time a page shows them, since they change after every board; a 404 drops the cached ones), `ban`, `liftBan`, `clear` (on logout) |
@@ -454,7 +454,7 @@ so every extra request on the way in delays the one the page needs:
 | Service | Endpoints (see [backend `API.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md)) |
 |---|---|
 | `auth.ts` | `/sanctum/csrf-cookie`, `POST /login`, `/register`, `/logout`, `/forgot-password`, `/reset-password`, `GET` / `PATCH /api/user` |
-| `tables.ts` | `GET` / `POST /tables`, `GET` / `PATCH /tables/{id}`, `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
+| `tables.ts` | `GET` / `POST /tables`, `GET` / `PATCH /tables/{id}`, `POST` / `DELETE /tables/{id}/kibitzers` (`watchTable` / `unwatchTable`), `POST` / `DELETE /tables/{id}/seats`, `POST /tables/{id}/seats/users`, `POST /tables/{id}/seats/robots`, `DELETE /tables/{id}/seats/{user}`, `POST` / `DELETE /tables/{id}/start`, `POST /tables/{id}/heartbeat` |
 | `game.ts` | `GET /tables/{id}/playing`, `GET /bids`, `GET /cards`, `POST /tables/{id}/calls`, `POST /tables/{id}/calls/{index}/question`, `PUT /tables/{id}/calls/{index}/explanation`, `POST /tables/{id}/cards`, `POST` / `DELETE /tables/{id}/claim`, `POST /tables/{id}/claim/response`, `POST /tables/{id}/playing/next` |
 | `history.ts` | `GET /api/user/playings`, `GET /users/{id}/playings`, `GET /boards/{id}/results`, `GET /boards/{id}/double-dummy`, `GET /playings/{id}`, `GET /sets/{id}` |
 | `users.ts` | `GET /users/{id}`, `GET /users?search=`, `POST` / `DELETE /users/{id}/ban`, `GET /users/{id}/stats` (`getUserStats`), `GET /api/user/stats` (`getMyStats`) |
@@ -664,13 +664,15 @@ doesn't send the XSRF header Sanctum wants.
 
 | Channel | Who owns it | Events |
 |---|---|---|
-| `private-table.{id}` | `tables` store, following your seat | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state in its compact shape, expanded by the `game` store) |
-| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call; in the play, anyone's answer), `CallQuestioned` (an opponent asks what your call means), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read: handed to the `chat` store), `UnseatedFromTable` (your seat was freed without you asking, the Start timer: handed to `tables.applyUnseated`), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
+| `private-table.{id}` | `tables` store, following your seat (or the table you watch) | `TableUpdated` (the whole table, replaces it), `PlayingUpdated` (public game state in its compact shape, expanded by the `game` store) |
+| `private-App.Models.User.{id}` | `game` store, from login to logout (started and stopped by `auth`) | `HandDealt` (your cards for a new board), `DeclarerHandShown` (a robot declarer's cards, for you, its dummy, to play), `CallAlerted` (an opponent alerted or explained a call; in the play, anyone's answer), `CallQuestioned` (an opponent asks what your call means), `AuctionAlertsShown` (partner's alerts, once the auction is over), `BoardMessageSent` (a chat message you may read: handed to the `chat` store), `UnseatedFromTable` (your seat, or your place as a kibitzer, taken away without you asking: handed to `tables.applyUnseated`), `UserBanned` (an admin banned you: handed to `auth.applyBan`) |
 
-- The table channel only admits players seated there, and the server never
-  ends a subscription. So the `tables` store subscribes and unsubscribes
-  itself as your seat changes: after create, join, move, leave and every
-  load.
+- The table channel only admits players seated there and its kibitzers,
+  and the server never ends a subscription. So the `tables` store
+  subscribes and unsubscribes itself as your seat changes: after create,
+  join, move, leave and every load, and when you start or stop watching.
+  A kibitzer gets nothing on the user channel but `UnseatedFromTable`
+  (and `UserBanned`): no hand, no alert, no chat.
 - A `TableUpdated` that no longer seats you (and wasn't your own request)
   means a manager removed you: a toast, the channel is dropped, and the
   game table goes back to `/tables` (to the set's results when a robot
@@ -681,8 +683,15 @@ doesn't send the XSRF header Sanctum wants.
   `start_timeout`, if the store still follows that table (the
   `TableUpdated` hasn't come yet), `applyUnseated` drops your seat from
   its copies, leaves the channel, sets `kickedFrom` and toasts; the
-  `TableUpdated` after it is then ignored. `kibitzing` (watching the table
-  instead) waits for the kibitzers card (#182) and is treated as false.
+  `TableUpdated` after it is then ignored. With `kibitzing: true` (the
+  table allows kibitzers) you watch it instead: the channel stays,
+  `kibitzingId` is set, the game is read again as a kibitzer's and the
+  page stays ("You didn't press Start in time: you're watching the table
+  now."). The `TableUpdated` freeing your timed seat says the same when it
+  comes first (its `allow_kibitzers` decides). `kibitzers_off` (a manager
+  turned kibitzers off while you watched) leaves the channel, toasts and
+  sends the page back to `/tables`, as does a `TableUpdated` whose
+  `allow_kibitzers` went false.
 - Mid-set, `TableUpdated` also says who is away (`away_since` per seat),
   who is back, and a robot taking a seat over (the seat's new `user`,
   `set.replaced`).
@@ -765,7 +774,11 @@ works ([RUNNING.md](RUNNING.md) says the worker must run).
 **Heartbeat.** The backend frees the seats of players who went quiet. While
 the `tables` store watches a table it sends `POST /tables/{id}/heartbeat`
 every 30 s, and stops when it stops watching (leave, kick, move, logout).
-Outside a set it pauses while the browser tab is hidden. **In the middle
+Outside a set it pauses while the browser tab is hidden (a kibitzer's
+pauses mid-set too: there is no seat to be marked away from). A heartbeat
+refused while watching (403: your place was dropped as idle; 404: the
+table went) ends watching with a toast and sends the game table back to
+`/tables`. **In the middle
 of a set it keeps beating while hidden** (what bb#76 asks for): there,
 three quiet minutes cost your side the set, and switching tabs while
 partner thinks isn't leaving. When the tab shows again it beats at once
@@ -879,6 +892,38 @@ more. The SPA never keeps a clock of its own, it only reads the deadline
 
 Without Reverb and a queue worker running on the backend, none of this
 arrives, and the app falls back to what each request returns.
+
+## Kibitzers
+
+A **kibitzer** (#182, backend
+[`API.md`, Kibitzers](https://github.com/bulbulica2/bridge_backend/blob/main/docs/API.md#kibitzers))
+watches a table without a seat. A table allows it or not
+(`allow_kibitzers`, set when created and changed by a manager between
+sets); every table payload counts its kibitzers (`kibitzers`), which the
+lobby's cards show with a **Watch** button.
+
+- `tables.watch(id)` (`POST /tables/{id}/kibitzers`) sets `kibitzingId`
+  and follows the table's channel and heartbeat as for a seat; watching
+  another table gives the first one up. `stopWatching()` leaves the
+  channel and then sends `DELETE /tables/{id}/kibitzers` (a 409 or 404 is
+  the same outcome). Never from a seat: the backend refuses (409), so the
+  lobby leaves your seat first, after asking (`confirmWatch` in
+  `seatMove.ts`).
+- Sitting down anywhere (a join, a create, a manager seating you) ends
+  watching; `myTable` (and so **Your table**) only ever names the seated
+  table.
+- The game state a kibitzer reads is the public one: `my_seat`, `hand`
+  and `declarer_hand` null, an alerted call's explanation null until the
+  board is over. A reload doesn't remember `kibitzingId`: the play page
+  calls `resumeWatching(id)` when `GET /tables/{id}/playing` answers and
+  the table doesn't seat you.
+- The play page's **watching mode** (`watching`: `kibitzingId` is this
+  table and you don't sit there) draws the table from South's side with no
+  hand, bidding box, Claim or chat, the result dialog without its vote,
+  the header's **Watching** pill and **Stop watching**, and, between sets
+  only, **Sit here** on an empty seat. `BridgeTable` with no `mySeat` lays
+  dummy (and a claimer's cards) at the bottom seat too; `AuctionCallCell`
+  with no seat says the explanation shows once the board is over.
 
 ## The game screen
 

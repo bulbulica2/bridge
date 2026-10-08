@@ -5,7 +5,9 @@
        of the four seats: names, robots blue, away players red, the viewer
        orange, an empty seat a dashed "Sit N" that takes it (`join`; a move
        from another table is confirmed by the page). Tapping a player opens
-       their profile (`player`). -->
+       their profile (`player`). Under it, how many watch the table ("2
+       watching") and, where the table allows it and we don't sit there,
+       Watch (`watch`: as a kibitzer, #182). -->
   <article class="table-card" :class="{ 'table-card-mine': mine }">
     <div class="table-card-head">
       <div class="table-card-title">
@@ -50,12 +52,32 @@
       </div>
       <span class="compass-middle" aria-hidden="true">♠</span>
     </div>
+
+    <div v-if="table.kibitzers > 0 || watchable" class="table-card-foot">
+      <span v-if="table.kibitzers > 0" class="table-card-kibitzers">
+        <ion-icon :icon="eyeOutline" aria-hidden="true" />
+        {{ table.kibitzers }} watching
+      </span>
+      <button
+        v-if="watchable"
+        type="button"
+        class="table-card-watch"
+        :class="{ 'is-watching': watching }"
+        :disabled="busy"
+        :aria-label="watching ? `Back to watching ${name}` : `Watch ${name}`"
+        @click="emit('watch')"
+      >
+        <ion-spinner v-if="watchBusy" name="crescent" />
+        <span v-else>{{ watching ? 'Watching' : 'Watch' }}</span>
+      </button>
+    </div>
   </article>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { IonSpinner } from '@ionic/vue';
+import { IonIcon, IonSpinner } from '@ionic/vue';
+import { eyeOutline } from 'ionicons/icons';
 import { SEATS } from '@/services/tables';
 import type { BroadcastTable, Seat } from '@/services/tables';
 import type { PublicUser } from '@/services/users';
@@ -73,13 +95,29 @@ const props = withDefaults(
     // The seat being taken here, spinning.
     joining?: Seat | null;
     banned?: boolean;
+    // The table we watch without a seat (#182).
+    watching?: boolean;
+    // Watch on its way here, spinning.
+    watchBusy?: boolean;
     // Now, for the unattended table's minutes (the page's clock).
     now?: number;
   }>(),
-  { mine: false, busy: false, joining: null, banned: false, now: () => Date.now() },
+  {
+    mine: false,
+    busy: false,
+    joining: null,
+    banned: false,
+    watching: false,
+    watchBusy: false,
+    now: () => Date.now(),
+  },
 );
 
-const emit = defineEmits<{ join: [seat: Seat]; player: [user: PublicUser] }>();
+const emit = defineEmits<{ join: [seat: Seat]; player: [user: PublicUser]; watch: [] }>();
+
+// Watch: where the table allows kibitzers, never at our own table, nor for
+// a banned user.
+const watchable = computed(() => props.table.allow_kibitzers && !props.mine && !props.banned);
 
 const name = computed(() => props.table.name || `Table #${props.table.id}`);
 const meta = computed(() => tableMeta(props.table, props.now));
@@ -277,6 +315,53 @@ a.table-card-name:hover {
   cursor: default;
 }
 
+/* Who watches, and Watch, under the compass. */
+.table-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.table-card-kibitzers {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--bridge-muted);
+}
+
+.table-card-watch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  height: 36px;
+  margin-left: auto;
+  padding: 0 14px;
+  border: 1.5px solid var(--ion-color-primary);
+  border-radius: var(--bridge-radius-pill);
+  background: transparent;
+  color: var(--ion-color-primary);
+  font: 700 0.875rem var(--bridge-font);
+  cursor: pointer;
+}
+
+/* The table we watch already: a tap goes back to it. */
+.table-card-watch.is-watching {
+  background: var(--bridge-navy-tint);
+  color: var(--bridge-navy-tint-text);
+  border-color: transparent;
+}
+
+.table-card-watch:disabled {
+  border-color: var(--bridge-control);
+  color: var(--bridge-disabled-text);
+  cursor: default;
+}
+
+.table-card-watch ion-spinner,
 .compass-sit ion-spinner {
   width: 18px;
   height: 18px;

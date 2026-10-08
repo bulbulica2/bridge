@@ -33,7 +33,10 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/103-straight-to-the-game-table` (after #181, one
+> branch `bulbulica2/104-kibitzers` (after #182, kibitzers: a table
+> that allows it can be watched without a seat from the lobby's Watch,
+> read-only, and a player the Start timer unseats stays as a kibitzer;
+> after #181, one
 > page per table: joining or creating a table goes straight to the game
 > table, which is the waiting room before a board, with Start and the
 > Start timer's countdown in its centre, an empty seat's action sheet,

@@ -14,7 +14,9 @@
        "!". Once dummy is face up its cards lie at its seat: across the top
        when the viewer is declarer (who plays them from there), in suit
        columns on a side seat for a defender, and not at all when the viewer
-       is dummy, whose own hand below is the same cards. A robot declarer's
+       is dummy, whose own hand below is the same cards. A kibitzer
+       (`mySeat` null, #182) has no hand below: dummy (and a claimer) at the
+       bottom seat lie there like anywhere else. A robot declarer's
        dummy, who plays declarer's game, has declarer's cards (`declarer`,
        theirs alone to see) across the top instead. While a claim is
        pending, the claimer's cards lie face up at their seat (the viewer's
@@ -112,7 +114,7 @@
                 aria-label="dealer"
               >D</span>
               <span v-if="side === 'bottom' && mySeat" class="seat-you">you</span>
-              <span v-if="dummy && dummy.seat === seatOn[side] && side !== 'bottom'" class="seat-dummy">
+              <span v-if="dummy && dummy.seat === seatOn[side] && (side !== 'bottom' || !mySeat)" class="seat-dummy">
                 dummy
               </span>
               <span v-if="declarerSide === side" class="seat-dummy">declarer</span>
@@ -173,7 +175,7 @@
 
       <template v-if="dummySide === side">
         <HandView
-          v-if="side === 'top'"
+          v-if="side === 'top' || side === 'bottom'"
           class="dummy-hand"
           :cards="dummy!.cards"
           label="Dummy's hand"
@@ -357,32 +359,24 @@ const seatOn = computed(
 
 const trumpOrder = computed(() => suitOrder(props.trump));
 
+// The side `seat` is drawn on, unless it is the viewer's own, whose cards
+// are below the table: for a kibitzer (no seat) the bottom one too.
+function cardsSide(seat: Seat | undefined): ScreenSide | null {
+  const side = seat ? SIDES.find((s) => seatOn.value[s] === seat) : undefined;
+  return side && (side !== 'bottom' || props.mySeat === null) ? side : null;
+}
+
 // Where dummy's cards are drawn: nowhere for dummy themselves (their own hand
 // is below the table).
-const dummySide = computed<ScreenSide | null>(() => {
-  const dummy = props.dummy;
-  if (!dummy) {
-    return null;
-  }
-  const side = SIDES.find((s) => seatOn.value[s] === dummy.seat);
-  return side && side !== 'bottom' ? side : null;
-});
+const dummySide = computed<ScreenSide | null>(() => cardsSide(props.dummy?.seat));
 
 // Where a robot declarer's cards are drawn for its dummy: opposite them,
 // across the top.
-const declarerSide = computed<ScreenSide | null>(() => {
-  const declarer = props.declarer;
-  const side = declarer ? SIDES.find((s) => seatOn.value[s] === declarer.seat) : undefined;
-  return side && side !== 'bottom' ? side : null;
-});
+const declarerSide = computed<ScreenSide | null>(() => cardsSide(props.declarer?.seat));
 
 // Where the claimer's cards are drawn: nowhere when the claimer is the
 // viewer, whose own hand is below the table.
-const claimSide = computed<ScreenSide | null>(() => {
-  const claim = props.claim;
-  const side = claim ? SIDES.find((s) => seatOn.value[s] === claim.seat) : undefined;
-  return side && side !== 'bottom' ? side : null;
-});
+const claimSide = computed<ScreenSide | null>(() => cardsSide(props.claim?.seat));
 
 // Each seat's latest call, while the auction lasts.
 const lastCalls = computed(() => {

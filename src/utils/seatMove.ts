@@ -256,3 +256,34 @@ export async function confirmRemove(
 export function heldNotice(): string {
   return `You left in the middle of a set. ${AWAY_COST}`;
 }
+
+/**
+ * Watching a table (#182) is never done from a seat: the backend refuses
+ * (409) while we sit anywhere. So Watch from another table's seat leaves it
+ * first, with Leave's own words for what that costs; in the middle of a set
+ * a Leave only holds the seat, which still counts as seated, so there is
+ * nothing to offer (`watchBlockedText` says why instead).
+ */
+export async function confirmWatch(
+  from: Table,
+  to: Pick<Table, 'id' | 'name'>,
+  userId: number,
+  phase: Phase | null = null,
+  boardNumber: number | null = null,
+  stake: SetAtStake | null = null,
+) {
+  const role = await ask(
+    `Leave ${tableLabel(from)} to watch ${tableLabel(to)}?`,
+    leaveMessage(from, userId, phase, boardNumber, stake),
+    [
+      { text: 'Cancel', role: 'cancel' },
+      { text: 'Leave and watch', role: 'destructive' },
+    ],
+  );
+  return role === 'destructive';
+}
+
+// Why Watch can't be had from a seat held in the middle of a set.
+export function watchBlockedText(from: Pick<Table, 'id' | 'name'>, stake: Pick<SetAtStake, 'number'>): string {
+  return `You're in the middle of set ${stake.number} at ${tableLabel(from)}: you can watch another table once it's over.`;
+}

@@ -82,6 +82,7 @@ const wrappers: [string, () => Promise<unknown>, Method, string, unknown, boolea
   ['listTables', () => tables.listTables(), 'get', '/tables', undefined, false],
   ['createTable', () => tables.createTable({ robots: true }), 'post', '/tables', { seat: 'S', robots: true }, true],
   ['createTable at a given seat', () => tables.createTable({ seat: 'E' }), 'post', '/tables', { seat: 'E' }, true],
+  ['createTable without kibitzers', () => tables.createTable({ allow_kibitzers: false }), 'post', '/tables', { seat: 'S', allow_kibitzers: false }, true],
   [
     'createTable with a time for the set',
     () => tables.createTable({ set_minutes: 8 }),
@@ -91,6 +92,9 @@ const wrappers: [string, () => Promise<unknown>, Method, string, unknown, boolea
     true,
   ],
   ['updateTable', () => tables.updateTable(3, { set_minutes: 20 }), 'patch', '/tables/3', { set_minutes: 20 }, true],
+  ['updateTable kibitzers', () => tables.updateTable(3, { allow_kibitzers: false }), 'patch', '/tables/3', { allow_kibitzers: false }, true],
+  ['watchTable', () => tables.watchTable(3), 'post', '/tables/3/kibitzers', undefined, true],
+  ['unwatchTable', () => tables.unwatchTable(3), 'delete', '/tables/3/kibitzers', undefined, true],
   ['joinSeat', () => tables.joinSeat(3, 'E'), 'post', '/tables/3/seats', { seat: 'E' }, true],
   ['getTable', () => tables.getTable(3), 'get', '/tables/3', undefined, false],
   ['leaveSeat', () => tables.leaveSeat(3), 'delete', '/tables/3/seats', undefined, true],

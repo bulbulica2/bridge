@@ -41,8 +41,9 @@ export interface TableSeat {
 
 // `UnseatedFromTable` on the user's own channel: we were sent away from a
 // table without asking (bridge_backend docs/API.md, Event UnseatedFromTable).
-// `start_timeout`: the Start timer ran out on our seat. `kibitzing`: we now
-// watch the table instead (the kibitzers, #182); until then it is ignored.
+// `start_timeout`: the Start timer ran out on our seat; `kibitzing` says
+// whether we now watch the table instead (it allows kibitzers).
+// `kibitzers_off`: we were watching and a manager stopped allowing it.
 export interface UnseatedFromTableEvent {
   table_id: number;
   reason: 'start_timeout' | 'kibitzers_off';
@@ -66,10 +67,16 @@ export interface BroadcastTable {
   // clock, bb#131): the next set's while one is going on, which keeps its
   // own (`set.minutes`). A manager changes it between sets (updateTable).
   set_minutes: SetMinutes;
+  // Whether people without a seat may watch the table (kibitzers, #182): a
+  // manager changes it between sets, like `set_minutes`. Turning it off
+  // sends everyone watching away (`UnseatedFromTable` `kibitzers_off`).
+  allow_kibitzers: boolean;
   created_at: string;
   updated_at: string;
   seats: TableSeat[];
   free_seats: Seat[];
+  // How many people watch the table without a seat.
+  kibitzers: number;
   // The set the table is on, or the one it finished last; `board` is how
   // many of its boards have been dealt. Null before the first Start. A
   // board finishing sends no TableUpdated, so after the last board only the
@@ -92,6 +99,9 @@ export interface CreateTablePayload {
   robots?: boolean;
   // Each player's time for a set; the backend's default when left out.
   set_minutes?: SetMinutes;
+  // Whether people without a seat may watch; the backend's default (yes)
+  // when left out.
+  allow_kibitzers?: boolean;
 }
 
 // The lengths a set clock may have (Table::SET_MINUTES): each player's time
@@ -103,9 +113,11 @@ export type SetMinutes = (typeof SET_MINUTES)[number];
 
 export const DEFAULT_SET_MINUTES: SetMinutes = 16;
 
-// What a manager may change about a table.
+// What a manager may change about a table: either or both (a field left
+// out keeps its value).
 export interface TableSettings {
-  set_minutes: SetMinutes;
+  set_minutes?: SetMinutes;
+  allow_kibitzers?: boolean;
 }
 
 // BRIDGE_UNATTENDED_TABLE_MINUTES' default: how long a table with only robots
@@ -134,7 +146,8 @@ export async function createTable(payload: CreateTablePayload): Promise<Table> {
 
 // A manager changes the table's settings. 403 for anyone else, 409 while a
 // set is going on (a set copies `set_minutes` when it opens, so a change only
-// ever affects the next one).
+// ever affects the next one). `allow_kibitzers: false` sends everyone
+// watching away.
 export async function updateTable(tableId: number, settings: TableSettings): Promise<Table> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.patch<ApiResponse<Table>>(`/tables/${tableId}`, settings);
@@ -148,6 +161,24 @@ export async function updateTable(tableId: number, settings: TableSettings): Pro
 export async function joinSeat(tableId: number, seat: Seat): Promise<Table> {
   await http.get('/sanctum/csrf-cookie');
   const { data } = await http.post<ApiResponse<Table>>(`/tables/${tableId}/seats`, { seat });
+  return data.data;
+}
+
+// Watch the table without a seat, as a kibitzer (bridge_backend docs/API.md,
+// Kibitzers), and stop watching any other: its channel and its public game
+// state, never a hidden hand. 403 when the table doesn't allow kibitzers (or
+// for a banned user), 409 while the caller holds a seat anywhere, this table
+// included. Watching the table already watched changes nothing.
+export async function watchTable(tableId: number): Promise<Table> {
+  await http.get('/sanctum/csrf-cookie');
+  const { data } = await http.post<ApiResponse<Table>>(`/tables/${tableId}/kibitzers`);
+  return data.data;
+}
+
+// Stop watching it; 409 if we weren't.
+export async function unwatchTable(tableId: number): Promise<Table> {
+  await http.get('/sanctum/csrf-cookie');
+  const { data } = await http.delete<ApiResponse<Table>>(`/tables/${tableId}/kibitzers`);
   return data.data;
 }
 
@@ -181,12 +212,14 @@ export async function leaveSeat(tableId: number): Promise<SeatRemovalResult> {
   return data.data;
 }
 
-// "Still here": keeps the caller's seat from being freed as idle. The backend
+// "Still here": keeps the caller's seat (or a kibitzer's place) from being
+// freed as idle. The backend
 // frees a seat nobody has vouched for in a few minutes (through the normal
 // leave path) and, mid-set, marks a player away after a minute, so a seated
 // client sends this about every 30 s. It never resets the turn clock: only
 // playing does (bb#120). It also brings an away player back (a held seat after a Leave too).
-// 403 once the caller no longer sits here, 404 once the table is gone.
+// 403 once the caller no longer sits (or watches) here, 404 once the table
+// is gone.
 export async function sendHeartbeat(tableId: number): Promise<void> {
   await http.post(`/tables/${tableId}/heartbeat`);
 }
