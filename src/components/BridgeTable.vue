@@ -38,22 +38,22 @@
        double dummy grid, #180) the bottom-right corner is larger than a
        button: the viewer's whole seat, hand included, keeps clear of it,
        and a table too narrow for that gives it a row of its own under the
-       seat instead. With `topRightRoom` (the play page during the play,
-       whose top-right corner holds the contract, the tricks and Last trick,
-       #196) that corner lies in partner's seat, beside the plate and the
-       turn line: whatever is taller sets the row, so a hand across the top
-       and the right-hand seat start below it, never under it. -->
+       seat instead. With `topLeftRoom` (the play page during the play,
+       whose top-left corner holds who is vulnerable, the contract and the
+       tricks, #210) that corner lies in partner's seat, beside the plate
+       and the turn line: whatever is taller sets the row, so a hand across
+       the top and the left-hand seat start below it, never under it. -->
   <div
     class="bridge-table"
     :class="{
       'table-wide': wide,
       'with-corners': CORNERS.some((c) => $slots[c]),
       'room-bottom-right': bottomRightRoom && !!$slots['bottom-right'],
-      'room-top-right': roomTopRight,
+      'room-top-left': roomTopLeft,
     }"
   >
     <template v-for="corner in CORNERS" :key="corner">
-      <div v-if="$slots[corner] && !(corner === 'top-right' && roomTopRight)" class="corner" :class="`corner-${corner}`">
+      <div v-if="$slots[corner] && !(corner === 'top-left' && roomTopLeft)" class="corner" :class="`corner-${corner}`">
         <slot :name="corner" />
       </div>
     </template>
@@ -74,6 +74,11 @@
       ]"
       :data-seat="seatOn[side]"
     >
+      <!-- The top-left corner in partner's seat (`topLeftRoom`). -->
+      <div v-if="side === 'top' && roomTopLeft" class="corner corner-top-left">
+        <slot name="top-left" />
+      </div>
+
       <div class="plate-row">
         <div v-if="players[seatOn[side]]" class="plate">
           <span
@@ -170,11 +175,6 @@
             <span v-if="lastCallAlerted(seatOn[side])" class="alert-mark" aria-label="alerted">!</span>
           </span>
         </span>
-      </div>
-
-      <!-- The top-right corner in partner's seat (`topRightRoom`). -->
-      <div v-if="side === 'top' && roomTopRight" class="corner corner-top-right">
-        <slot name="top-right" />
       </div>
 
       <!-- While a board has a turn, every seat keeps a line for the turn
@@ -327,8 +327,8 @@ const props = withDefaults(
     wide?: boolean;
     // Room for a larger bottom-right corner (see the comment above).
     bottomRightRoom?: boolean;
-    // Room for a taller top-right corner, in partner's seat (see above).
-    topRightRoom?: boolean;
+    // Room for a taller top-left corner, in partner's seat (see above).
+    topLeftRoom?: boolean;
     // Each empty seat is a button (the `empty` event) the page answers with
     // what may be done with it.
     seatable?: boolean;
@@ -359,7 +359,7 @@ const props = withDefaults(
     boardLabel: null,
     wide: false,
     bottomRightRoom: false,
-    topRightRoom: false,
+    topLeftRoom: false,
     seatable: false,
     menuSeat: null,
     busy: false,
@@ -376,9 +376,9 @@ const emit = defineEmits<{
 const SIDES: ScreenSide[] = ['top', 'left', 'right', 'bottom'];
 const CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
 
-// The top-right corner drawn in partner's seat rather than over the panel.
+// The top-left corner drawn in partner's seat rather than over the panel.
 const slots: Slots = useSlots();
-const roomTopRight = computed<boolean>(() => props.topRightRoom && !!slots['top-right']);
+const roomTopLeft = computed<boolean>(() => props.topLeftRoom && !!slots['top-left']);
 
 const seatOn = computed(
   () =>
@@ -583,13 +583,13 @@ function turnLabel(side: ScreenSide): string {
   padding-inline: calc(var(--corner-w) + var(--corner-gap));
 }
 
-/* A taller top-right corner (`topRightRoom`, #196): partner's seat is a
-   grid, plate and turn line in the middle column, the corner in the right
-   one beside both (the left keeps the plate centred), and any hand in a
+/* A taller top-left corner (`topLeftRoom`, #210): partner's seat is a
+   grid, plate and turn line in the middle column, the corner in the left
+   one beside both (the right keeps the plate centred), and any hand in a
    row of its own across the seat below whichever is taller. The corner
    is where it would lie over the panel, since the seat spans the table's
-   padded width; the right-hand seat starts below the whole row. */
-.room-top-right .side-top {
+   padded width; the left-hand seat starts below the whole row. */
+.room-top-left .side-top {
   display: grid;
   grid-template-columns: var(--corner-w) minmax(0, 1fr) var(--corner-w);
   align-content: center;
@@ -597,32 +597,32 @@ function turnLabel(side: ScreenSide): string {
   gap: 6px var(--corner-gap);
 }
 
-.room-top-right .side-top > * {
+.room-top-left .side-top > * {
   grid-column: 1 / -1;
   grid-row: 3;
 }
 
-.room-top-right .side-top > .plate-row {
+.room-top-left .side-top > .plate-row {
   grid-column: 2;
   grid-row: 1;
   padding-inline: 0;
 }
 
-.room-top-right .side-top > .turn-slot {
+.room-top-left .side-top > .turn-slot {
   grid-column: 2;
   grid-row: 2;
 }
 
-.room-top-right .side-top > .corner-top-right {
+.room-top-left .side-top > .corner-top-left {
   position: static;
-  grid-column: 3;
+  grid-column: 1;
   grid-row: 1 / span 2;
   align-self: start;
-  justify-self: end;
+  justify-self: start;
 }
 
 /* A hand on one row takes the seat's width, as in the flex seat. */
-.room-top-right .side-top > .single-row {
+.room-top-left .side-top > .single-row {
   justify-self: stretch;
 }
 

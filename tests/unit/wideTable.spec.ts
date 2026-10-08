@@ -243,7 +243,7 @@ describe('the wide table on the play page', () => {
     const history = wrapper.findComponent(AuctionHistory)
     expect(history.element.closest('.centre')).toBeNull()
     expect(history.element.closest('.auction-popup')).not.toBeNull()
-    expect(wrapper.get('.corner-top-right .contract-line').text().replace(/\s+/g, ' ')).toBe('1♥ by East')
+    expect(wrapper.get('.corner-top-left .contract-line').text().replace(/\s+/g, ' ')).toBe('1♥ by East')
     expect(wrapper.find('.corner-bottom-right .claim-button').exists()).toBe(true)
   })
 

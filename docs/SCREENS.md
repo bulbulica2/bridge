@@ -1,6 +1,6 @@
 # Screens
 
-_Status as of branch `bulbulica2/118-no-turn-bar-in-review`._
+_Status as of branch `bulbulica2/117-contract-under-vulnerability`._
 
 Every page of the SPA: what it shows, which store actions it calls, which
 endpoints those reach, and which issues built it. `#N` is an issue in the
@@ -303,7 +303,7 @@ nothing on this page drives them. On a robot's turn its seat reads
 as having voted for the next board, so your **Deal next board** deals it
 at once instead of waiting out the countdown. When your robot partner wins the contract, it stays
 declarer and you stay dummy, but **you play the hand**: the contract in
-the table's top-right corner says **you play it** under the tricks,
+the table's top-left corner says **you play it** under the tricks,
 declarer's cards (yours
 alone to see) lie across the top from the end of the auction, and on its
 turn you tap one of them ("Play: your turn from North's hand."), on yours
@@ -346,7 +346,8 @@ under the table is there for the whole auction and play with room for two
 lines over its bar (empty while a claim's dialog says what is going on);
 and the trick's caption is always there under the trick. **Last trick**
 lives in the top-right corner, whose room is kept from the first card of
-the play (#196). So the table and your hand stay put on a phone as on a
+the play (#196), and the contract's corner keeps the same lines from the
+first card to the last (#210). So the table and your hand stay put on a phone as on a
 desktop.
 
 **Large cards** (#136): the cards are twice the old size unless the
@@ -382,22 +383,26 @@ the navy table, beside partner and you, on a phone as on a desktop, so
 the table, the trick, your hand and the bidding box fit one screen. They
 take no room of their own (the table keeps its height from card to card)
 and never cover a seat, dummy or the trick; on a phone their words wrap to
-two short lines. The top-right corner is the exception during the play:
-it is taller than partner's plate, so partner's seat makes room for it
-beside the plate (#196), and the right-hand seat and a hand across the
-top start below it rather than under it. That room is there from the
-first card, so nothing moves when **Last trick** appears.
+two short lines. The top-left corner is the exception during the play:
+with the contract under the pill it is taller than partner's plate, so
+partner's seat makes room for it beside the plate (#210, as #196 did for
+the top-right one), and the left-hand seat and a hand across the top
+start below it rather than under it. That room is there from the first
+card, so nothing moves from card to card.
 - **Top left**, from the deal to the end of the board: who is
   vulnerable, in words, as a small pill: **Nobody vulnerable** in green,
   else red: **Vul: E-W** for the other side, **Vulnerable: N-S (you)**
-  for yours, **Both (you too)**.
-- **Top right**, through the play: the contract, **2♠ by North**
-  (**4♥X by East** doubled), and the tricks, **NS 3 · EW 2**; for a robot
-  declarer's dummy a third line, **you play it**; under them, from the
-  second trick on, the **Last trick** button (#196: its icon and words,
-  the icon alone on a table under 420 px wide), whose pop-up opens
-  downward and to the left over the top and right seats. Empty during
-  the auction.
+  for yours, **Both (you too)**. Under it through the play, 6 px below
+  and left-aligned like it (#210): the contract, **2♠ by North**
+  (**4♥X by East** doubled), and the tricks, **NS 3 · EW 2** (one line
+  whatever the count); for a robot declarer's dummy a third line, **you
+  play it**. Nothing under the pill during the auction.
+- **Top right**, through the play: the **Last trick** button alone, from
+  the second trick on (#196: its icon and words, the icon alone on a
+  table under 420 px wide), whose pop-up opens downward and to the left
+  over the top and right seats; its room is kept on the first trick.
+  Between sets the table's time for a set (below), and on a finished
+  board the **Result** pill.
 - **Bottom left**, from the first call until the board is over: the
   **Auction** button. Hovering it with a mouse pops up the auction grid
   above it (chips, the vulnerable side's seats red, alerts "!", questions
@@ -537,9 +542,9 @@ What it shows by phase:
   **Auction** button in the table's bottom-left corner is the only way to see it, and asking still
   works there during the play. The pop-up also offers **Ask in the chat**
   (below).
-- **play**: in the table's top-right corner the contract, **5♣ by
+- **play**: in the table's top-left corner, under who is vulnerable, the contract, **5♣ by
   East** (**5♣X**, **5♣XX** when doubled or redoubled), and the tricks
-  won, **NS 0 · EW 0**, with no declarer/dummy line (#165, #171), the current trick in the
+  won, **NS 0 · EW 0**, with no declarer/dummy line (#165, #171, #210), the current trick in the
   centre (#201: each card in front of its seat, stacked in the order they
   were played, the lead at the bottom and the last card on top, whoever
   played it; the cards sit in a pinwheel, the top one a little to the
@@ -549,8 +554,8 @@ What it shows by phase:
   the box is the same size from the first card to the fourth), dummy's cards once the opening lead is made, trumps on the left
   and the colours still alternating (4♠: ♠ ♥ ♣ ♦, 3♦: ♦ ♠ ♥ ♣, NT: ♥ ♣ ♦
   ♠; a robot declarer's cards, for its dummy, the same way). From the second
-  trick on, a **Last trick** button sits in the table's top-right corner,
-  under the contract and the tricks (#196; the centre holds only the trick
+  trick on, a **Last trick** button sits alone in the table's top-right
+  corner (#196, #210; the centre holds only the trick
   in progress and its caption): hovering it with a mouse pops up the last
   trick's four cards below it and to its left (each at its seat, turned
   like the table and tagged N/E/S/W or **You**, spread apart so every rank
@@ -780,7 +785,8 @@ It is the same table, read-only:
   until then. No **Ask**.
 - **The play**: dummy at its seat once the opening lead is made (South's
   dummy across the bottom), the trick, the vulnerability and the contract
-  in the corners, **Last trick** under the contract as for a player, a pending claim's cards and its
+  in the corners as for a player (the contract under the vulnerability top
+  left, **Last trick** top right), a pending claim's cards and its
   dialog, without buttons (the **X** closes it).
 - **The end**: the result dialog, without the vote (no **Deal next
   board**, no **Review**: a kibitzer may only review boards they played).

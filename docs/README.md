@@ -34,7 +34,9 @@ instead of repeating them. How the robot players bid and play is in
 [`ROBOTS.md`](https://github.com/bulbulica2/bridge_backend/blob/main/docs/ROBOTS.md).
 
 > These describe the code as it is, not as planned. Status accurate as of
-> branch `bulbulica2/116-hcp-with-robots` (after #204, your hand's **HCP**
+> branch `bulbulica2/117-contract-under-vulnerability` (after #210, the
+> contract and the tricks in the table's top-left corner under the
+> vulnerability, **Last trick** alone top right; after #204, your hand's **HCP**
 > in the table's bottom-right corner while bidding with three robots;
 > after #196, **Last trick** in the table's
 > top-right corner under the contract, the centre left to the trick in

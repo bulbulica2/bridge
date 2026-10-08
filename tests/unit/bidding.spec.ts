@@ -405,7 +405,7 @@ describe('TablePlayPage bidding', () => {
       }),
     )
 
-    const contract = wrapper.get('.bridge-table .corner-top-right')
+    const contract = wrapper.get('.bridge-table .corner-top-left .corner-contract')
     expect(contract.get('.contract-line').text().replace(/\s+/g, ' ')).toBe('4♠X by North')
     expect(contract.findAll('.tricks-won span').map((s) => s.text())).toEqual(['NS 0', '·', 'EW 0'])
     expect(contract.text()).not.toContain('Declarer')
