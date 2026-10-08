@@ -10,6 +10,8 @@ import {
   leaveNote,
   leaveWarning,
   moveConsequences,
+  REMOVE_BLOCKED_TEXT,
+  removeBlocked,
   removeCost,
   removeMessage,
   robotTakesOver,
@@ -407,5 +409,70 @@ describe('removing a player', () => {
 
     dismissedWith = 'cancel'
     await expect(confirmRemove({ username: 'bob', is_robot: false }, 'E')).resolves.toBe(false)
+  })
+})
+
+// #190, bb#147: no Remove while the set is running, but for an admin and a
+// robot of an unattended table.
+describe('removeBlocked', () => {
+  const running: SetPosition = { id: 3, number: 3, board: 2, of: 4, finished: false, ended: null, replaced: [] }
+  const over: SetPosition = { ...running, board: 4, finished: true, ended: 'completed' }
+  const moderator = { id: 1, is_admin: false }
+  const admin = { id: 9, is_admin: true }
+
+  // The moderator (1) manages a table of 1, 2 and two robots.
+  function managed(set: SetPosition | null, boardId: number | null = null): Table {
+    return { ...makeTable({ N: 1, E: 2, S: 100, W: 101 }, { boardId }), can_manage: true, set }
+  }
+  const userAt = (table: Table, seat: Seat) => table.seats.find((s) => s.seat === seat)!.user
+  const board = (set: SetPosition | null) => ({ set }) as PublicPlaying
+
+  test('says why in words', () => {
+    expect(REMOVE_BLOCKED_TEXT).toBe("They're still playing: you can remove a player once the set is over.")
+  })
+
+  test('not before the first Start, nor once the set is over', () => {
+    const fresh = managed(null)
+    expect(removeBlocked(fresh, null, userAt(fresh, 'E'), moderator)).toBe(false)
+
+    const after = managed(over)
+    expect(removeBlocked(after, board(over), userAt(after, 'E'), moderator)).toBe(false)
+    // The board knows first that the set's last board ended.
+    const lagging = managed(running)
+    expect(removeBlocked(lagging, board(over), userAt(lagging, 'S'), moderator)).toBe(false)
+  })
+
+  test('during a board and between two boards of a set, players and robots alike', () => {
+    const during = managed(running, 7)
+    expect(removeBlocked(during, board(running), userAt(during, 'E'), moderator)).toBe(true)
+    expect(removeBlocked(during, board(running), userAt(during, 'S'), moderator)).toBe(true)
+
+    const between = managed(running)
+    expect(removeBlocked(between, null, userAt(between, 'W'), moderator)).toBe(true)
+    // A set the table's copy hasn't heard of yet, from the board.
+    const fresh = managed(null)
+    expect(removeBlocked(fresh, board(running), userAt(fresh, 'E'), moderator)).toBe(true)
+  })
+
+  test('an admin still may, mid-set', () => {
+    const table = managed(running, 7)
+    expect(removeBlocked(table, null, userAt(table, 'E'), admin)).toBe(false)
+  })
+
+  test('anyone still may take a robot of an unattended table', () => {
+    const table = {
+      ...managed(running, 7),
+      can_manage: false,
+      moderated_by: null,
+      unattended_since: '2026-10-08T10:00:00Z',
+    }
+    expect(removeBlocked(table, null, userAt(table, 'S'), { id: 5, is_admin: false })).toBe(false)
+  })
+
+  test('never for someone who may not remove them anyway', () => {
+    const table = managed(running, 7)
+    // Yourself (that is Leave), or without managing the table.
+    expect(removeBlocked(table, null, userAt(table, 'N'), moderator)).toBe(false)
+    expect(removeBlocked({ ...table, can_manage: false }, null, userAt(table, 'E'), moderator)).toBe(false)
   })
 })
